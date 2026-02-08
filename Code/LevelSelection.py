@@ -55,6 +55,7 @@ class LevelSelection:
         level_map = {
             (0, 0): 8,  # Top-left grid starts level 1
              (0, 1): 7,  # Top row, second column starts level 2
+             (1,1):6,
             # (0, 2): 3,
             # (1, 0): 4,
             # (1, 1): 5,

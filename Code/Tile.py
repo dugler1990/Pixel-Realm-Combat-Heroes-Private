@@ -19,6 +19,11 @@ class Tile(pygame.sprite.Sprite):
         self.valid_interaction_types = valid_interaction_types
         self.sprite_type = sprite_type
         y_offset = HITBOX_OFFSET[sprite_type]
+        
+        if surface is None:
+            surface = pygame.Surface((TILESIZE, TILESIZE))  # Default surface if None was passed
+
+        
         self.image = surface
         
         if sprite_type == "object":

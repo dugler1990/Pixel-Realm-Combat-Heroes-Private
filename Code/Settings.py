@@ -6,8 +6,12 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 # Game setup
 WIDTH = 1680
 HEIGHT = 950
-FPS = 20
+FPS = 30
 TILESIZE = 150
+
+# Debug settings
+DEBUG_DRAW_MASKS = True  # Draw collision masks for all entities and objects
+DEBUG_DRAW_EFFECT_RECTS = True  # Draw effect collision rects in red
 HITBOX_OFFSET = {
 	"player": -26,
 	"object": -40,

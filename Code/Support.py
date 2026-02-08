@@ -46,14 +46,9 @@ def frames_to_masks(animation_frames):
     masks = []
     #print(animation_frames)
     for frame in animation_frames:
-        # Convert the frame surface to a numpy array for efficient pixel manipulation
-        frame_array = pygame.surfarray.array2d(frame)
-        
-        # Create a mask array where non-transparent pixels are True (1) and transparent pixels are False (0)
-        mask_array = (frame_array != 0)
-        
-        # Convert the mask array to a pygame mask
-        mask = pygame.mask.from_threshold(frame, (0, 0, 0, 1), (255, 255, 255, 255))
+        # Use from_surface - it automatically creates mask from non-transparent pixels
+        # This correctly handles alpha transparency, unlike from_threshold
+        mask = pygame.mask.from_surface(frame)
         
         masks.append(mask)
     

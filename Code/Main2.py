@@ -1,6 +1,6 @@
 import pygame, sys
 from Settings import *
-from Level4 import Level4
+from Level4_tmxdev import Level4
 import os
 from StartMenu import StartMenu
 from PlayerSelection import PlayerSelection
@@ -11,6 +11,7 @@ import psutil
 
 level_8_layout_path = '../levels/Map8'
 level_7_layout_path = '../levels/Map7'
+level_6_layout_path = '../levels/tmx'
 
 class Game:
     def __init__(self):
@@ -63,6 +64,8 @@ class Game:
                 self.level = Level4( self.input_manager, player_info_dir, level_7_layout_path, player_stats )
             elif level_number == 8:
                 self.level = Level4( self.input_manager, player_info_dir, level_8_layout_path, player_stats )
+            elif level_number == 6:
+                self.level = Level4( self.input_manager, player_info_dir, level_6_layout_path, player_stats )
 
 
 
