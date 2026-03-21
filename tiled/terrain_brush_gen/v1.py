@@ -207,4 +207,5 @@ and not (
     print(f"Generated tileset saved as '{output_path}'")
 
 # Example usage
-generate_terrain_tileset("Ice 5.jpg", "Snow 5.jpg")
+generate_terrain_tileset("Lava 5.jpg","Rock 1.jpg")
+
