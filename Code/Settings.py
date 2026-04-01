@@ -34,6 +34,10 @@ BENCHMARK_AUTO_RUN_SECONDS = 0  # 0 means manual run (no auto-exit)
 BENCHMARK_WARMUP_SECONDS = 1.5
 BENCHMARK_SPAWN_MAX_RING = 3  # Keep benchmark entities near player center
 
+# Normal gameplay moving-entity broadphase defaults.
+ENTITY_BROADPHASE_BACKEND = "grid"  # "quadtree" | "grid"
+ENTITY_BROADPHASE_GRID_CELL_SIZE = 450
+
 # Debug settings
 DEBUG_DRAW_MASKS = True  # Draw collision masks for all entities and objects
 DEBUG_DRAW_EFFECT_RECTS = True  # Draw effect collision rects in red

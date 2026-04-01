@@ -149,6 +149,9 @@ class BenchmarkRuntimeState:
     matrix_prefix: str = "matrix"
     matrix_cap_sweep: bool = False
     matrix_cap_sweep_values: List[float] = field(default_factory=lambda: [8.0, 12.0, 16.0])
+    collision_mode: str = "simple_swarm"
+    matrix_collision_modes: List[str] = field(default_factory=lambda: ["legacy"])
+    simple_swarm_neighbor_limit: int = 4
     enemy_type: str = BENCHMARK_ENEMY_TYPE
     matrix_cases: List[Dict[str, object]] = field(default_factory=list)
     matrix_case_index: int = -1
@@ -211,6 +214,7 @@ class BenchmarkRuntimeState:
         row = {
             "run_label": self.run_label,
             "enemy_type": self.enemy_type,
+            "collision_mode": self.collision_mode,
             "backend": self.broadphase_backend,
             "grid_cell_size": self.grid_cell_size if self.broadphase_backend == "grid" else "",
             "entity_count": self.entity_count,
@@ -297,34 +301,38 @@ class BenchmarkRuntimeState:
                 ("on", True, True, None),
             ]
 
+        collision_modes = self.matrix_collision_modes or ["legacy"]
         for count in self.matrix_counts:
             for backend in self.matrix_backends:
-                for toggle_name, floor_enabled, cap_enabled, max_cap in variants:
-                    if str(backend) == "grid":
-                        for cell_size in self.grid_cell_sizes:
-                            case: Dict[str, object] = {
+                for collision_mode in collision_modes:
+                    for toggle_name, floor_enabled, cap_enabled, max_cap in variants:
+                        if str(backend) == "grid":
+                            for cell_size in self.grid_cell_sizes:
+                                case: Dict[str, object] = {
+                                    "entity_count": int(count),
+                                    "backend": str(backend),
+                                    "collision_mode": str(collision_mode),
+                                    "toggle_name": toggle_name,
+                                    "pushback_floor_enabled": floor_enabled,
+                                    "pushback_cap_enabled": cap_enabled,
+                                    "grid_cell_size": int(cell_size),
+                                }
+                                if max_cap is not None:
+                                    case["pushback_max_cap"] = max_cap
+                                self.matrix_cases.append(case)
+                        else:
+                            case = {
                                 "entity_count": int(count),
                                 "backend": str(backend),
+                                "collision_mode": str(collision_mode),
                                 "toggle_name": toggle_name,
                                 "pushback_floor_enabled": floor_enabled,
                                 "pushback_cap_enabled": cap_enabled,
-                                "grid_cell_size": int(cell_size),
+                                "grid_cell_size": None,
                             }
                             if max_cap is not None:
                                 case["pushback_max_cap"] = max_cap
                             self.matrix_cases.append(case)
-                    else:
-                        case = {
-                            "entity_count": int(count),
-                            "backend": str(backend),
-                            "toggle_name": toggle_name,
-                            "pushback_floor_enabled": floor_enabled,
-                            "pushback_cap_enabled": cap_enabled,
-                            "grid_cell_size": None,
-                        }
-                        if max_cap is not None:
-                            case["pushback_max_cap"] = max_cap
-                        self.matrix_cases.append(case)
         self.matrix_case_index = -1
 
     def begin_matrix(self):
@@ -340,6 +348,7 @@ class BenchmarkRuntimeState:
         case = self.matrix_cases[self.matrix_case_index]
         self.entity_count = int(case["entity_count"])
         self.broadphase_backend = str(case["backend"])
+        self.collision_mode = str(case.get("collision_mode", "legacy"))
         self.pushback_floor_enabled = bool(case["pushback_floor_enabled"])
         self.pushback_cap_enabled = bool(case["pushback_cap_enabled"])
         if "pushback_max_cap" in case and case["pushback_max_cap"] is not None:
@@ -353,7 +362,7 @@ class BenchmarkRuntimeState:
             self.grid_cell_size = int(case_cell_size)
         self.run_label = (
             f"{self.matrix_prefix}_{self.entity_count}_{self.broadphase_backend}_"
-            f"cell{self.grid_cell_size}_{case['toggle_name']}"
+            f"cell{self.grid_cell_size}_{self.collision_mode}_{case['toggle_name']}"
         )
         self.case_phase = "setup"
         return case
@@ -436,10 +445,18 @@ BENCHMARK_RUNTIME = BenchmarkRuntimeState(
     matrix_counts=_env_int_list("PRCH_BENCHMARK_MATRIX_COUNTS", [100, 150, 200, 250, 300]),
     matrix_backends=_env_str_list("PRCH_BENCHMARK_MATRIX_BACKENDS", ["quadtree", "grid"]),
     grid_cell_sizes=_env_int_list("PRCH_BENCHMARK_GRID_CELL_SIZES", [150, 300, 450]),
+    grid_cell_size=_env_int("PRCH_BENCHMARK_GRID_CELL_SIZE", 300),
     matrix_prefix=_env_str("PRCH_BENCHMARK_MATRIX_PREFIX", "matrix"),
     matrix_cap_sweep=_env_bool("PRCH_BENCHMARK_MATRIX_CAP_SWEEP", False),
     matrix_cap_sweep_values=_env_float_list(
         "PRCH_BENCHMARK_MATRIX_CAP_VALUES", [8.0, 12.0, 16.0]
+    ),
+    collision_mode=_env_str("PRCH_BENCHMARK_COLLISION_MODE", "simple_swarm"),
+    matrix_collision_modes=_env_str_list(
+        "PRCH_BENCHMARK_MATRIX_COLLISION_MODES", ["legacy"]
+    ),
+    simple_swarm_neighbor_limit=_env_int(
+        "PRCH_BENCHMARK_SIMPLE_SWARM_NEIGHBORS", 4
     ),
     enemy_type=_env_str("PRCH_BENCHMARK_ENEMY_TYPE", BENCHMARK_ENEMY_TYPE),
 )

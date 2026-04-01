@@ -865,19 +865,12 @@ class LayoutManager:
                                            bounding_rect=pygame.rect.Rect(0,0,self.csv_layout_width,self.csv_layout_height),
                                            manager = self.obstacle_quad_tree_manager ) # this would actually need the size of the map bounding_rect=(0, 0, HEIGHT, WIDTH)
         world_rect = pygame.rect.Rect(0, 0, self.csv_layout_width, self.csv_layout_height)
-        if self.benchmark_runtime.enabled:
-            self.entity_quad_tree_manager = None
-            self.entity_quad_tree = MovingEntityBroadphaseAdapter(
-                world_rect=world_rect,
-                backend=self.benchmark_runtime.broadphase_backend,
-                grid_cell_size=self.benchmark_runtime.grid_cell_size,
-            )
-        else:
-            self.entity_quad_tree_manager = QuadTreeManager()
-            self.entity_quad_tree = QuadTree(items = [],
-                                               depth=8,
-                                               bounding_rect=world_rect,
-                                               manager = self.entity_quad_tree_manager ) # this would actually need the size of the map bounding_rect=(0, 0, HEIGHT, WIDTH)
+        self.entity_quad_tree_manager = None
+        self.entity_quad_tree = MovingEntityBroadphaseAdapter(
+            world_rect=world_rect,
+            backend=self._entity_broadphase_backend(),
+            grid_cell_size=self._entity_broadphase_grid_cell_size(),
+        )
                 
 
         
@@ -907,9 +900,17 @@ class LayoutManager:
         self.visible_sprites.ground_surface = None
         self.visible_sprites.create_ground_surface()
 
+    def _entity_broadphase_backend(self):
+        if self.benchmark_runtime.enabled:
+            return self.benchmark_runtime.broadphase_backend
+        return ENTITY_BROADPHASE_BACKEND
+
+    def _entity_broadphase_grid_cell_size(self):
+        if self.benchmark_runtime.enabled:
+            return self.benchmark_runtime.grid_cell_size
+        return ENTITY_BROADPHASE_GRID_CELL_SIZE
+
     def switch_entity_broadphase_backend(self, backend_name, grid_cell_size=None):
-        if not self.benchmark_runtime.enabled:
-            return
         if not isinstance(self.entity_quad_tree, MovingEntityBroadphaseAdapter):
             return
 
@@ -930,8 +931,15 @@ class LayoutManager:
             current_items=current_items,
             grid_cell_size=grid_cell_size,
         )
+        if self.benchmark_runtime.enabled:
+            self.benchmark_runtime.broadphase_backend = self.entity_quad_tree.backend_name
+            self.benchmark_runtime.grid_cell_size = getattr(
+                self.entity_quad_tree,
+                "grid_cell_size",
+                self.benchmark_runtime.grid_cell_size,
+            )
         _tmx_layout_log.debug(
-            "Benchmark broadphase backend switched to %s (grid_cell_size=%s)",
+            "Entity broadphase backend switched to %s (grid_cell_size=%s)",
             self.entity_quad_tree.backend_name,
             getattr(self.entity_quad_tree, "grid_cell_size", None),
         )

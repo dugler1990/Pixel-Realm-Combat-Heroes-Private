@@ -6,6 +6,20 @@ from QuadTree import QuadTree, QuadTreeManager
 from benchmark_runtime import BENCHMARK_RUNTIME
 
 
+def _benchmark_metrics_active():
+    return BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled
+
+
+def _record_benchmark_maintenance(op):
+    if _benchmark_metrics_active():
+        BENCHMARK_RUNTIME.metrics.record_maintenance(op)
+
+
+def _record_benchmark_query(candidates):
+    if _benchmark_metrics_active():
+        BENCHMARK_RUNTIME.metrics.record_query(candidates)
+
+
 class DynamicUniformGridBroadphase:
     def __init__(self, world_rect: pygame.Rect, cell_size: int = 300):
         self.world_rect = pygame.Rect(world_rect)
@@ -15,15 +29,20 @@ class DynamicUniformGridBroadphase:
         self._items = {}  # item_id -> HashableRect-like
 
     def _cell_coords_for_rect(self, rect: pygame.Rect):
-        left = int(rect.left // self.cell_size)
-        right = int(rect.right // self.cell_size)
-        top = int(rect.top // self.cell_size)
-        bottom = int(rect.bottom // self.cell_size)
+        left, right, top, bottom = self._cell_bounds_for_rect(rect)
         cells = set()
         for cx in range(left, right + 1):
             for cy in range(top, bottom + 1):
                 cells.add((cx, cy))
         return cells
+
+    def _cell_bounds_for_rect(self, rect: pygame.Rect):
+        cell_size = self.cell_size
+        left = int(rect.left // cell_size)
+        right = int(rect.right // cell_size)
+        top = int(rect.top // cell_size)
+        bottom = int(rect.bottom // cell_size)
+        return left, right, top, bottom
 
     def upsert(self, item):
         item_id = item._id
@@ -42,7 +61,7 @@ class DynamicUniformGridBroadphase:
             self._item_cells[item_id] = new_cells
 
         self._items[item_id] = item
-        BENCHMARK_RUNTIME.metrics.record_maintenance("upsert")
+        _record_benchmark_maintenance("upsert")
 
     def remove(self, item_id):
         old_cells = self._item_cells.pop(item_id, set())
@@ -53,18 +72,23 @@ class DynamicUniformGridBroadphase:
                 if not bucket:
                     del self._cells[cell]
         self._items.pop(item_id, None)
-        BENCHMARK_RUNTIME.metrics.record_maintenance("remove")
+        _record_benchmark_maintenance("remove")
 
     def query(self, query_rect, query_id=-1):
         candidates = set()
-        for cell in self._cell_coords_for_rect(query_rect.rect):
-            for item_id in self._cells.get(cell, ()):
-                if item_id == query_id:
-                    continue
-                item = self._items.get(item_id)
-                if item is not None and item.rect.colliderect(query_rect.rect):
-                    candidates.add(item)
-        BENCHMARK_RUNTIME.metrics.record_query(len(candidates))
+        query_rect_rect = query_rect.rect
+        cells = self._cells
+        items = self._items
+        left, right, top, bottom = self._cell_bounds_for_rect(query_rect_rect)
+        for cx in range(left, right + 1):
+            for cy in range(top, bottom + 1):
+                for item_id in cells.get((cx, cy), ()):
+                    if item_id == query_id:
+                        continue
+                    item = items.get(item_id)
+                    if item is not None and item.rect.colliderect(query_rect_rect):
+                        candidates.add(item)
+        _record_benchmark_query(len(candidates))
         return candidates
 
 
@@ -75,15 +99,15 @@ class DynamicQuadtreeBroadphase:
 
     def upsert(self, item):
         self.tree.insert(item, alive=True, remove_existing=True)
-        BENCHMARK_RUNTIME.metrics.record_maintenance("upsert")
+        _record_benchmark_maintenance("upsert")
 
     def remove(self, item_id):
         self.manager.remove(item_id, remove_existing=True)
-        BENCHMARK_RUNTIME.metrics.record_maintenance("remove")
+        _record_benchmark_maintenance("remove")
 
     def query(self, query_rect, query_id=-1):
         hits = self.tree.hit(query_rect)
-        BENCHMARK_RUNTIME.metrics.record_query(len(hits))
+        _record_benchmark_query(len(hits))
         return hits
 
 
@@ -105,7 +129,8 @@ class MovingEntityBroadphaseAdapter:
             self.grid_cell_size = max(1, int(grid_cell_size))
 
         self.backend_name = backend
-        BENCHMARK_RUNTIME.broadphase_backend = backend
+        if BENCHMARK_RUNTIME.enabled:
+            BENCHMARK_RUNTIME.broadphase_backend = backend
         if backend == "grid":
             self.backend = DynamicUniformGridBroadphase(
                 self.world_rect,
@@ -130,7 +155,6 @@ class MovingEntityBroadphaseAdapter:
             self.backend.remove(item._id)
         if alive:
             self.backend.upsert(item)
-            BENCHMARK_RUNTIME.metrics.record_maintenance("insert")
 
     def upsert(self, entity):
         self.backend.upsert(entity)

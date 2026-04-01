@@ -221,27 +221,25 @@ class QuadTree(object):
             must possess left, top, right and bottom attributes.
         """
     
-        # Initialize an empty set for hits
         hits = set()
-    
-        # If there are items in the quad-tree
-        if self.items:
-            # Collect items that overlap with the rectangle
-            hits.update(item for item in self.items if item.rect.colliderect(rect) and item._id != rect._id)
-
-
-        # Recursively check the lower quadrants.
-        if self.nw and rect.left <= self.cx and rect.top <= self.cy:
-            hits |= self.nw.hit(rect)
-        if self.sw and rect.left <= self.cx and rect.bottom >= self.cy:
-            hits |= self.sw.hit(rect)
-        if self.ne and rect.right >= self.cx and rect.top <= self.cy:
-            hits |= self.ne.hit(rect)
-        if self.se and rect.right >= self.cx and rect.bottom >= self.cy:
-            hits |= self.se.hit(rect)
-            
-            
+        self._hit_into(rect, hits)
         return hits
+
+    def _hit_into(self, rect, hits):
+        """Accumulate hits into a single set to avoid recursive set churn."""
+        rect_id = rect._id
+        for item in self.items:
+            if item._id != rect_id and item.rect.colliderect(rect):
+                hits.add(item)
+
+        if self.nw and rect.left <= self.cx and rect.top <= self.cy:
+            self.nw._hit_into(rect, hits)
+        if self.sw and rect.left <= self.cx and rect.bottom >= self.cy:
+            self.sw._hit_into(rect, hits)
+        if self.ne and rect.right >= self.cx and rect.top <= self.cy:
+            self.ne._hit_into(rect, hits)
+        if self.se and rect.right >= self.cx and rect.bottom >= self.cy:
+            self.se._hit_into(rect, hits)
     
     
             

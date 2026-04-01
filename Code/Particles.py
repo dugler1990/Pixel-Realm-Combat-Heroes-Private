@@ -218,8 +218,11 @@ class ParticleEffect(pygame.sprite.Sprite):
 
         if self.is_moving:
             if self.quadtree:
-            # Update quadtree before moving
-                self.quadtree.manager.remove(self.id)
+                # Support both the legacy quadtree and the adapter broadphase.
+                if hasattr(self.quadtree, "remove"):
+                    self.quadtree.remove(self.id)
+                elif hasattr(self.quadtree, "manager"):
+                    self.quadtree.manager.remove(self.id)
           
             
             # Calculate movement if the particle is supposed to move
@@ -242,10 +245,16 @@ class ParticleEffect(pygame.sprite.Sprite):
             # Stop moving and kill the sprite if it has moved the intended distance
             if self.distance_moved >= self.total_distance:
                 if self.quadtree:
-                    self.quadtree.manager.remove( self.id )
+                    if hasattr(self.quadtree, "remove"):
+                        self.quadtree.remove(self.id)
+                    elif hasattr(self.quadtree, "manager"):
+                        self.quadtree.manager.remove(self.id)
                 self.kill()
         else:
             if self.frame_index >= len(self.frames)-1:
                 if self.quadtree:
-                    self.quadtree.manager.remove( self.id )    
+                    if hasattr(self.quadtree, "remove"):
+                        self.quadtree.remove(self.id)
+                    elif hasattr(self.quadtree, "manager"):
+                        self.quadtree.manager.remove(self.id)
                 self.kill()

@@ -54,7 +54,23 @@ def _backend_from_run_label(row):
     return row.get("backend", "") or ""
 
 
+def _collision_mode_from_row(row):
+    mode = row.get("collision_mode", "") or ""
+    if mode:
+        return mode
+    label = row.get("run_label", "") or ""
+    m = re.search(r"_cell\d+_([a-zA-Z0-9_]+)_(?:off|on|floor_only|cap[\d.]+|floor_cap[\d.]+)$", label)
+    if m:
+        return m.group(1)
+    return "legacy"
+
+
 def _variant_from_run_label(row):
+    if row.get("collision_mode"):
+        label = row.get("run_label", "") or ""
+        m = re.search(r"_cell\d+_[a-zA-Z0-9_]+_(.+)$", label)
+        if m:
+            return m.group(1)
     label = row.get("run_label", "") or ""
     m = re.search(r"_cell\d+_(.+)$", label)
     if m:
@@ -79,6 +95,7 @@ def run_matrix(
     cap_values=None,
     enemy_type=None,
     backends=None,
+    collision_modes=None,
 ):
     if grid_cell_sizes is None:
         grid_cell_sizes = GRID_CELL_SIZES
@@ -86,6 +103,8 @@ def run_matrix(
         cap_values = [8.0, 12.0, 16.0]
     if backends is None:
         backends = list(BACKENDS)
+    if collision_modes is None:
+        collision_modes = ["legacy"]
     code_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.normpath(os.path.join(code_dir, ".."))
     csv_path = os.path.normpath(os.path.join(code_dir, "..", "logs", "benchmark_metrics.csv"))
@@ -97,6 +116,7 @@ def run_matrix(
     # With cap sweep enabled in benchmark_runtime:
     # off, floor_only, cap{v}, floor_cap{v} for each v.
     variants = (2 + (2 * len(cap_values))) if cap_sweep else len(TOGGLE_MODES)
+    variants *= max(1, len(collision_modes))
     quadtree_cases = (
         len(COUNTS) * variants if "quadtree" in backends else 0
     )
@@ -120,6 +140,7 @@ def run_matrix(
             "PRCH_BENCHMARK_SEED": "1337",
             "PRCH_BENCHMARK_MATRIX_CAP_SWEEP": "1" if cap_sweep else "0",
             "PRCH_BENCHMARK_MATRIX_CAP_VALUES": ",".join(str(x) for x in cap_values),
+            "PRCH_BENCHMARK_MATRIX_COLLISION_MODES": ",".join(collision_modes),
         }
     )
     if enemy_type:
@@ -128,7 +149,7 @@ def run_matrix(
     print(
         f"[BENCH] Starting one-window matrix: cases={total_runs}, "
         f"seconds_per_case={auto_seconds}, warmup_seconds={warmup_seconds}, "
-        f"backends={backends}, grid_cell_sizes={grid_cell_sizes}, cap_sweep={cap_sweep}, "
+        f"backends={backends}, collision_modes={collision_modes}, grid_cell_sizes={grid_cell_sizes}, cap_sweep={cap_sweep}, "
         f"enemy_type={enemy_type or '(default)'}, prefix={run_prefix}"
     )
     proc = subprocess.run(
@@ -147,6 +168,7 @@ def run_matrix(
             _entity_count_from_run_label(r),
             _backend_from_run_label(r),
             int(float(r.get("grid_cell_size", 0) or 0)),
+            _collision_mode_from_row(r),
             _variant_from_run_label(r),
         )
     )
@@ -157,17 +179,18 @@ def run_matrix(
         print(f"[BENCH] Warning: expected {total_runs} rows, got {len(rows)}")
 
     header = (
-        "entity_count | backend | grid_cell_size | variant | avg_fps | p95_ms | "
+        "entity_count | backend | grid_cell_size | collision_mode | variant | avg_fps | p95_ms | "
         "queries | candidates | resolved | maint_u"
     )
     print("\nComparison table")
     print(header)
-    print("-|-|-|-|-|-|-|-|-|-")
+    print("-|-|-|-|-|-|-|-|-|-|-")
     for row in rows:
         grid_cell_size = row.get("grid_cell_size", "") or "-"
+        collision_mode = _collision_mode_from_row(row)
         variant = _variant_from_run_label(row)
         print(
-            f"{_entity_count_from_run_label(row)} | {_backend_from_run_label(row)} | {grid_cell_size} | {variant} | "
+            f"{_entity_count_from_run_label(row)} | {_backend_from_run_label(row)} | {grid_cell_size} | {collision_mode} | {variant} | "
             f"{_as_float(row, 'avg_fps'):.2f} | {_as_float(row, 'p95_frame_ms'):.2f} | "
             f"{_as_int(row, 'broadphase_queries')} | {_as_int(row, 'candidate_collisions')} | "
             f"{_as_int(row, 'resolved_collisions')} | {_as_int(row, 'maintenance_upsert')}"
@@ -177,12 +200,13 @@ def run_matrix(
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write("# Benchmark Comparison\n\n")
         f.write(header + "\n")
-        f.write("-|-|-|-|-|-|-|-|-|-\n")
+        f.write("-|-|-|-|-|-|-|-|-|-|-\n")
         for row in rows:
             grid_cell_size = row.get("grid_cell_size", "") or "-"
+            collision_mode = _collision_mode_from_row(row)
             variant = _variant_from_run_label(row)
             f.write(
-                f"{_entity_count_from_run_label(row)} | {_backend_from_run_label(row)} | {grid_cell_size} | {variant} | "
+                f"{_entity_count_from_run_label(row)} | {_backend_from_run_label(row)} | {grid_cell_size} | {collision_mode} | {variant} | "
                 f"{_as_float(row, 'avg_fps'):.2f} | {_as_float(row, 'p95_frame_ms'):.2f} | "
                 f"{_as_int(row, 'broadphase_queries')} | {_as_int(row, 'candidate_collisions')} | "
                 f"{_as_int(row, 'resolved_collisions')} | {_as_int(row, 'maintenance_upsert')}\n"
@@ -202,6 +226,7 @@ def summarize_from_csv(run_prefix, csv_path=None):
             _entity_count_from_run_label(r),
             _backend_from_run_label(r),
             int(float(r.get("grid_cell_size", 0) or 0)),
+            _collision_mode_from_row(r),
             _variant_from_run_label(r),
         )
     )
@@ -209,17 +234,18 @@ def summarize_from_csv(run_prefix, csv_path=None):
         print(f"No rows for prefix {run_prefix!r}")
         return 1
     header = (
-        "entity_count | backend | grid_cell_size | variant | avg_fps | p95_ms | "
+        "entity_count | backend | grid_cell_size | collision_mode | variant | avg_fps | p95_ms | "
         "queries | candidates | resolved | maint_u"
     )
     print("\nComparison table")
     print(header)
-    print("-|-|-|-|-|-|-|-|-|-")
+    print("-|-|-|-|-|-|-|-|-|-|-")
     for row in rows:
         grid_cell_size = row.get("grid_cell_size", "") or "-"
+        collision_mode = _collision_mode_from_row(row)
         variant = _variant_from_run_label(row)
         print(
-            f"{_entity_count_from_run_label(row)} | {_backend_from_run_label(row)} | {grid_cell_size} | {variant} | "
+            f"{_entity_count_from_run_label(row)} | {_backend_from_run_label(row)} | {grid_cell_size} | {collision_mode} | {variant} | "
             f"{_as_float(row, 'avg_fps'):.2f} | {_as_float(row, 'p95_frame_ms'):.2f} | "
             f"{_as_int(row, 'broadphase_queries')} | {_as_int(row, 'candidate_collisions')} | "
             f"{_as_int(row, 'resolved_collisions')} | {_as_int(row, 'maintenance_upsert')}"
@@ -269,6 +295,11 @@ if __name__ == "__main__":
     )
     ap.add_argument("--enemy", default=None, help="Enemy type for benchmark spawns, e.g. ice_ghost")
     ap.add_argument(
+        "--collision-modes",
+        default="legacy",
+        help="Comma-separated collision modes to benchmark, e.g. legacy,simple_swarm",
+    )
+    ap.add_argument(
         "--backends",
         default="quadtree,grid",
         help="Comma-separated broadphase backends to benchmark: quadtree, grid (grid-only: --backends grid)",
@@ -291,6 +322,9 @@ if __name__ == "__main__":
     backends = [b.strip() for b in args.backends.split(",") if b.strip()]
     if not backends:
         backends = list(BACKENDS)
+    collision_modes = [m.strip() for m in args.collision_modes.split(",") if m.strip()]
+    if not collision_modes:
+        collision_modes = ["legacy"]
     raise SystemExit(
         run_matrix(
             auto_seconds=args.seconds,
@@ -300,5 +334,6 @@ if __name__ == "__main__":
             cap_values=cap_vals,
             enemy_type=args.enemy,
             backends=backends,
+            collision_modes=collision_modes,
         )
     )

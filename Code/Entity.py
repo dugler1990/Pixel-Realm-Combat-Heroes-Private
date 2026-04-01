@@ -41,6 +41,7 @@ class Entity(pygame.sprite.Sprite):
         self.max_collision_distance_squared = 10000
         self.max_collision_distance = 10
         self.mask = None
+        self._collision_probe_rect = pygame.Rect(0, 0, 1, 1)
         # Flag to track whether move method has been called before
         self.move_not_called_before = True
         # Active effects tracking: {effect_area_id: effect_instance}
@@ -90,7 +91,8 @@ class Entity(pygame.sprite.Sprite):
      
         # Normalize direction if not zero
         input_direction = pygame.math.Vector2(0, 0)
-        if self.direction.magnitude() != 0:
+        direction_length_sq = self.direction.x * self.direction.x + self.direction.y * self.direction.y
+        if direction_length_sq > 0:
             input_direction = self.direction.normalize()
         
         # Surface effects (SlipperyEffect): one monotonic slippery_factor scale.
@@ -112,7 +114,7 @@ class Entity(pygame.sprite.Sprite):
             friction_multiplier = DEFAULT_FRICTION
         
         # Apply input acceleration
-        if input_direction.magnitude() > 0:
+        if input_direction.x != 0 or input_direction.y != 0:
             # Momentum-aware input response: split desired change into parallel/perpendicular components.
             # Weight affects response: heavier entities respond slower.
             weight_factor = 1.0 / self.weight  # Inverse relationship
@@ -129,7 +131,8 @@ class Entity(pygame.sprite.Sprite):
             target_velocity = input_direction * speed * MAX_VELOCITY_MULTIPLIER
             desired_delta = target_velocity - self.velocity
             # Momentum axis is current velocity direction; if too slow, fall back to current input.
-            if self.velocity.magnitude() > LOW_SPEED_MOMENTUM_EPS:
+            velocity_length_sq = self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y
+            if velocity_length_sq > (LOW_SPEED_MOMENTUM_EPS * LOW_SPEED_MOMENTUM_EPS):
                 momentum_axis = self.velocity.normalize()
             else:
                 momentum_axis = input_direction
@@ -145,7 +148,7 @@ class Entity(pygame.sprite.Sprite):
             # Higher mult = keep more speed when coasting; lower = lose speed faster.
             self.velocity *= friction_multiplier
             # Stop very small velocities to prevent jitter
-            if self.velocity.magnitude() < 0.1:
+            if (self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y) < 0.01:
                 self.velocity = pygame.math.Vector2(0, 0)
         
         # Apply velocity to position
@@ -169,6 +172,343 @@ class Entity(pygame.sprite.Sprite):
                         )
         
 
+
+    def _collision_mode(self):
+        mode = getattr(self.benchmark_runtime, "collision_mode", "simple_swarm")
+        if mode in {"legacy", "simple_swarm"}:
+            return mode
+        return "simple_swarm"
+
+    def _is_simple_swarm_enemy(self, entity=None):
+        target = self if entity is None else entity
+        return getattr(target, "sprite_type", None) == "enemy"
+
+    def _apply_benchmark_pushback_tuners(self, displacement):
+        if self.benchmark_runtime.enabled and self.benchmark_runtime.pushback_floor_enabled:
+            if abs(displacement) < self.benchmark_runtime.pushback_min_threshold:
+                displacement = 0.0
+        if self.benchmark_runtime.enabled and self.benchmark_runtime.pushback_cap_enabled:
+            displacement = max(
+                -self.benchmark_runtime.pushback_max_cap,
+                min(self.benchmark_runtime.pushback_max_cap, displacement),
+            )
+        return displacement
+
+    def _apply_entity_displacement(self, QuadTree, self_rect, self_hitbox, displacement_x, displacement_y):
+        new_left = self_hitbox.left + displacement_x
+        new_top = self_hitbox.top + displacement_y
+
+        self._collision_probe_rect.update(new_left, new_top, self_hitbox.width, self_hitbox.height)
+        obstacles_hit = QuadTree.hit(HashableRect(self._collision_probe_rect, self.id))
+        if obstacles_hit:
+            obstacle = next(iter(obstacles_hit))
+            if self_rect.left < obstacle.left:
+                self_hitbox.right = obstacle.left
+                self_hitbox.top = new_top
+            elif self_rect.left > obstacle.right:
+                self_hitbox.left = obstacle.right
+                self_hitbox.top = new_top
+            elif self_rect.top < obstacle.top:
+                self_hitbox.bottom = obstacle.top
+                self_hitbox.left = new_left
+            else:
+                self_hitbox.top = obstacle.bottom
+                self_hitbox.left = new_left
+        else:
+            self_hitbox.left += displacement_x
+            self_hitbox.top += displacement_y
+
+    def _resolve_obstacle_collisions(
+        self,
+        nearby_obstacles,
+        self_rect,
+        self_hitbox,
+        self_mask,
+        self_centerx,
+        self_centery,
+        speed,
+        mask_log,
+    ):
+        displacement_obstacles = 1
+        total_displacement_x = 0
+        total_displacement_y = 0
+        max_penetration_depth = 0
+
+        for obstacle in nearby_obstacles:
+            do_collision = True
+
+            if mask_log.isEnabledFor(logging.DEBUG):
+                parts = [
+                    "Obstacle collision - self.mask: %s, obstacle.mask: %s"
+                    % (self.mask is not None, getattr(obstacle, "mask", None) is not None),
+                ]
+                if self.mask:
+                    parts.append("  self.mask size: %s" % (self.mask.get_size(),))
+                if hasattr(obstacle, "mask") and obstacle.mask:
+                    parts.append("  obstacle.mask size: %s" % (obstacle.mask.get_size(),))
+                mask_log.debug("\n".join(parts))
+
+            obstacle_rect = obstacle.rect
+            if self_mask and obstacle.mask:
+                dx = obstacle_rect.x - self_rect.x
+                dy = obstacle_rect.y - self_rect.y
+
+                if mask_log.isEnabledFor(logging.DEBUG):
+                    entity_mask_size = self_mask.get_size()
+                    entity_rect_size = (self_rect.width, self_rect.height)
+                    obstacle_mask_size = obstacle.mask.get_size()
+                    obstacle_rect_size = (obstacle_rect.width, obstacle_rect.height)
+                    parts = [
+                        "  Entity rect: %s (x=%s, y=%s, w=%s, h=%s)"
+                        % (self_rect, self_rect.x, self_rect.y, self_rect.width, self_rect.height),
+                        "  Obstacle rect: %s (x=%s, y=%s, w=%s, h=%s)"
+                        % (
+                            obstacle_rect,
+                            obstacle_rect.x,
+                            obstacle_rect.y,
+                            obstacle_rect.width,
+                            obstacle_rect.height,
+                        ),
+                        "  Entity mask size: %s, Entity rect size: %s"
+                        % (entity_mask_size, entity_rect_size),
+                        "  Obstacle mask size: %s, Obstacle rect size: %s"
+                        % (obstacle_mask_size, obstacle_rect_size),
+                    ]
+                    if entity_mask_size != entity_rect_size:
+                        parts.append(
+                            "  WARNING: Entity mask size %s != rect size %s"
+                            % (entity_mask_size, entity_rect_size)
+                        )
+                    if obstacle_mask_size != obstacle_rect_size:
+                        parts.append(
+                            "  WARNING: Obstacle mask size %s != rect size %s"
+                            % (obstacle_mask_size, obstacle_rect_size)
+                        )
+                    parts.append("  Offset (dx, dy): (%s, %s)" % (dx, dy))
+                    mask_log.debug("\n".join(parts))
+
+                overlap = self_mask.overlap_area(obstacle.mask, (dx, dy))
+
+                if mask_log.isEnabledFor(logging.DEBUG):
+                    mask_log.debug(
+                        "  Mask overlap check - dx: %s, dy: %s, overlap: %s", dx, dy, overlap
+                    )
+
+                if overlap == 0:
+                    do_collision = False
+                    if mask_log.isEnabledFor(logging.DEBUG):
+                        mask_log.debug("  Mask filter worked - no collision (overlap == 0)")
+                else:
+                    if mask_log.isEnabledFor(logging.DEBUG):
+                        mask_log.debug(
+                            "  Mask collision confirmed - overlap: %s pixels", overlap
+                        )
+            else:
+                if mask_log.isEnabledFor(logging.DEBUG):
+                    mask_log.debug("  Skipping mask check - using rect collision")
+
+            if do_collision:
+                collision_normal = math.atan2(
+                    obstacle_rect.centery - self_centery, obstacle_rect.centerx - self_centerx
+                )
+                rebound_angle = collision_normal + math.pi
+
+                penetration_x = max(
+                    0, self_rect.right - obstacle_rect.left, obstacle_rect.right - self_rect.left
+                )
+                penetration_y = max(
+                    0, self_rect.bottom - obstacle_rect.top, obstacle_rect.bottom - self_rect.top
+                )
+                penetration_depth = math.sqrt(penetration_x ** 2 + penetration_y ** 2) ** 1.5
+
+                total_displacement_x += math.cos(rebound_angle)
+                total_displacement_y += math.sin(rebound_angle)
+                max_penetration_depth = max(max_penetration_depth, penetration_depth)
+
+        displacement_magnitude = math.sqrt(
+            total_displacement_x ** 2 + total_displacement_y ** 2
+        )
+        if displacement_magnitude > 0:
+            total_displacement_x /= displacement_magnitude
+            total_displacement_y /= displacement_magnitude
+
+        scaled_displacement = min(displacement_obstacles + max_penetration_depth, speed)
+        self_hitbox.left += scaled_displacement * total_displacement_x
+        self_hitbox.top += scaled_displacement * total_displacement_y
+
+    def _resolve_entity_collision_legacy(
+        self,
+        entity,
+        QuadTree,
+        self_rect,
+        self_hitbox,
+        self_mask,
+        self_centerx,
+        self_centery,
+        self_direction_mag,
+        self_collision_size,
+        displacement_obstacles,
+        base_displacement_entities,
+        exponent,
+    ):
+        do_colision = True
+        if self_mask and entity.mask:
+            entity_rect = entity.rect
+            dx = entity_rect.x - self_rect.x
+            dy = entity_rect.y - self_rect.y
+            overlap = self_mask.overlap_area(entity.mask, (dx, dy))
+            if overlap == 0:
+                do_colision = False
+
+        if do_colision and entity.direction:
+            entity_direction_mag = entity.direction.magnitude()
+            if entity_direction_mag == 0:
+                collision_normal = math.atan2(
+                    entity.rect.centery - self_centery, entity.rect.centerx - self_centerx
+                )
+                rebound_angle = collision_normal + math.pi
+                displacement_x = displacement_obstacles * math.cos(rebound_angle)
+                displacement_y = displacement_obstacles * math.sin(rebound_angle)
+                self_hitbox.left += displacement_x
+                self_hitbox.top += displacement_y
+                if self.benchmark_runtime.enabled:
+                    self.benchmark_runtime.metrics.record_collision_resolved()
+            else:
+                size_ratio = self_collision_size / (entity.rect.width * entity.rect.height)
+                displacement_entities = base_displacement_entities + base_displacement_entities * (
+                    1 + math.exp(exponent * (1 - size_ratio))
+                )
+                relative_velocity = self_direction_mag - entity_direction_mag
+                direction_dx = self_centerx - entity.rect.centerx
+                direction_dy = self_centery - entity.rect.centery
+                collision_normal = math.atan2(direction_dy, direction_dx)
+                rebound_angle = collision_normal
+                displacement_entities *= (
+                    1.5 if relative_velocity > 0 else 0.5 if relative_velocity < 0 else 1
+                )
+                displacement_entities = self._apply_benchmark_pushback_tuners(
+                    displacement_entities
+                )
+                displacement_x = displacement_entities * math.cos(rebound_angle)
+                displacement_y = displacement_entities * math.sin(rebound_angle)
+                self._apply_entity_displacement(
+                    QuadTree, self_rect, self_hitbox, displacement_x, displacement_y
+                )
+                if self.benchmark_runtime.enabled and displacement_entities != 0:
+                    self.benchmark_runtime.metrics.record_collision_resolved()
+
+    def _resolve_entity_collisions_legacy(
+        self,
+        nearby_entities,
+        QuadTree,
+        self_rect,
+        self_hitbox,
+        self_mask,
+        self_centerx,
+        self_centery,
+        self_direction_mag,
+        self_collision_size,
+        displacement_obstacles,
+        base_displacement_entities,
+        exponent,
+    ):
+        for entity in nearby_entities:
+            self._resolve_entity_collision_legacy(
+                entity,
+                QuadTree,
+                self_rect,
+                self_hitbox,
+                self_mask,
+                self_centerx,
+                self_centery,
+                self_direction_mag,
+                self_collision_size,
+                displacement_obstacles,
+                base_displacement_entities,
+                exponent,
+            )
+
+    def _resolve_entity_collisions_simple(
+        self,
+        nearby_entities,
+        QuadTree,
+        self_rect,
+        self_hitbox,
+        self_centerx,
+        self_centery,
+        self_direction_mag,
+        self_collision_size,
+        displacement_obstacles,
+        base_displacement_entities,
+        exponent,
+    ):
+        neighbor_limit = max(
+            1, int(getattr(self.benchmark_runtime, "simple_swarm_neighbor_limit", 4) or 4)
+        )
+        enemy_neighbors = []
+
+        for entity in nearby_entities:
+            if not self._is_simple_swarm_enemy(entity):
+                self._resolve_entity_collision_legacy(
+                    entity,
+                    QuadTree,
+                    self_rect,
+                    self_hitbox,
+                    self.mask,
+                    self_centerx,
+                    self_centery,
+                    self_direction_mag,
+                    self_collision_size,
+                    displacement_obstacles,
+                    base_displacement_entities,
+                    exponent,
+                )
+                continue
+
+            dx = self_centerx - entity.rect.centerx
+            dy = self_centery - entity.rect.centery
+            dist_sq = dx * dx + dy * dy
+            enemy_neighbors.append((dist_sq, dx, dy, entity))
+
+        enemy_neighbors.sort(key=lambda item: item[0])
+        for dist_sq, dx, dy, entity in enemy_neighbors[:neighbor_limit]:
+            self_radius = max(self_rect.width, self_rect.height) * 0.35
+            entity_radius = max(entity.rect.width, entity.rect.height) * 0.35
+            target_distance = self_radius + entity_radius
+
+            if dist_sq == 0:
+                dx = 1.0
+                dy = 0.0
+                dist_sq = 1.0
+
+            if dist_sq >= target_distance * target_distance:
+                continue
+
+            distance = math.sqrt(dist_sq)
+            if distance == 0:
+                distance = 1.0
+
+            overlap = max(0.0, target_distance - distance)
+            relative_velocity = self_direction_mag - entity.direction.magnitude()
+            displacement_entities = base_displacement_entities + (overlap * 0.35)
+            displacement_entities *= (
+                1.35 if relative_velocity > 0 else 0.65 if relative_velocity < 0 else 1.0
+            )
+            displacement_entities = self._apply_benchmark_pushback_tuners(
+                displacement_entities
+            )
+            if displacement_entities == 0:
+                continue
+
+            normal_x = dx / distance
+            normal_y = dy / distance
+            displacement_x = displacement_entities * normal_x
+            displacement_y = displacement_entities * normal_y
+            self._apply_entity_displacement(
+                QuadTree, self_rect, self_hitbox, displacement_x, displacement_y
+            )
+            if self.benchmark_runtime.enabled:
+                self.benchmark_runtime.metrics.record_collision_resolved()
 
     #@profile
     def collision(self, QuadTree, entity_quad_tree, speed = 0):# Speed is just to adjust displacement when colliding with objects so you dont go through
@@ -205,363 +545,68 @@ class Entity(pygame.sprite.Sprite):
         
             """
             
-            
-        # Define displacement for collision resolution with obstacles
-        displacement_obstacles = 1  
-        MAX_DISPLACEMENT = speed
-        
-        total_displacement_x = 0
-        total_displacement_y = 0
-        max_penetration_depth = 0
-        
-        # Define base displacement for entity collisions
-        base_displacement_entities = 1.1  # Adjust this value as needed
-        exponent = 4 # Adjust this exponent for the desired relationship
-        
-        
-        ## Handle effect collisions.
-        
-        
-        # Check for nearby obstacles using the QuadTree
-        nearby_obstacles = QuadTree.hit(HashableRect(self.rect, self.id))
-        nearby_entities = entity_quad_tree.hit(HashableRect(self.rect, self.id))
-        _mask_log = get_collision_mask_logger()
+        displacement_obstacles = 1
+        base_displacement_entities = 1.1
+        exponent = 4
 
-        # if hasattr(self,'type'):
-        #     if self.type == "player" :
-        #         print_mask(self.mask)
-        
-        
-        # if hasattr(self, 'monster_name'):
-        #     if self.monster_name == 'raccoon':
-            
-        #         print(self.monster_name)
-                #print(f"nearby obstacles : {nearby_obstacles}")
-                
-                #print(f"nearby entities : {nearby_entities}")
-        
-        
-        # Iterate over nearby obstacles (walls)
-        for obstacle in nearby_obstacles:
-            do_collision = True
+        self_rect = self.rect
+        self_hitbox = self.hitbox
+        self_mask = self.mask
+        self_centerx = self_rect.centerx
+        self_centery = self_rect.centery
+        self_direction = self.direction
+        self_direction_mag = self_direction.magnitude()
+        player_size_scale = 3.5 if getattr(self, "type", None) == "player" else 1.0
+        self_collision_size = (self_rect.width * self_rect.height) * player_size_scale
+        query_self = HashableRect(self_rect, self.id)
+        nearby_obstacles = QuadTree.hit(query_self)
+        nearby_entities = entity_quad_tree.hit(query_self)
+        mask_log = get_collision_mask_logger()
 
-            if _mask_log.isEnabledFor(logging.DEBUG):
-                parts = [
-                    "Obstacle collision - self.mask: %s, obstacle.mask: %s"
-                    % (self.mask is not None, getattr(obstacle, "mask", None) is not None),
-                ]
-                if self.mask:
-                    parts.append("  self.mask size: %s" % (self.mask.get_size(),))
-                if hasattr(obstacle, "mask") and obstacle.mask:
-                    parts.append("  obstacle.mask size: %s" % (obstacle.mask.get_size(),))
-                _mask_log.debug("\n".join(parts))
+        self._resolve_obstacle_collisions(
+            nearby_obstacles,
+            self_rect,
+            self_hitbox,
+            self_mask,
+            self_centerx,
+            self_centery,
+            speed,
+            mask_log,
+        )
 
-            if self.mask and obstacle.mask:
-                # Calculate the difference between the center positions of the two entities
-                dx = obstacle.rect.x - self.rect.x
-                dy = obstacle.rect.y - self.rect.y
+        if nearby_obstacles:
+            return
 
-                if _mask_log.isEnabledFor(logging.DEBUG):
-                    entity_mask_size = self.mask.get_size()
-                    entity_rect_size = (self.rect.width, self.rect.height)
-                    obstacle_mask_size = obstacle.mask.get_size()
-                    obstacle_rect_size = (obstacle.rect.width, obstacle.rect.height)
-                    parts = [
-                        "  Entity rect: %s (x=%s, y=%s, w=%s, h=%s)"
-                        % (self.rect, self.rect.x, self.rect.y, self.rect.width, self.rect.height),
-                        "  Obstacle rect: %s (x=%s, y=%s, w=%s, h=%s)"
-                        % (
-                            obstacle.rect,
-                            obstacle.rect.x,
-                            obstacle.rect.y,
-                            obstacle.rect.width,
-                            obstacle.rect.height,
-                        ),
-                        "  Entity mask size: %s, Entity rect size: %s"
-                        % (entity_mask_size, entity_rect_size),
-                        "  Obstacle mask size: %s, Obstacle rect size: %s"
-                        % (obstacle_mask_size, obstacle_rect_size),
-                    ]
-                    if entity_mask_size != entity_rect_size:
-                        parts.append(
-                            "  WARNING: Entity mask size %s != rect size %s"
-                            % (entity_mask_size, entity_rect_size)
-                        )
-                    if obstacle_mask_size != obstacle_rect_size:
-                        parts.append(
-                            "  WARNING: Obstacle mask size %s != rect size %s"
-                            % (obstacle_mask_size, obstacle_rect_size)
-                        )
-                    parts.append("  Offset (dx, dy): (%s, %s)" % (dx, dy))
-                    _mask_log.debug("\n".join(parts))
+        if self._collision_mode() == "simple_swarm" and self._is_simple_swarm_enemy():
+            self._resolve_entity_collisions_simple(
+                nearby_entities,
+                QuadTree,
+                self_rect,
+                self_hitbox,
+                self_centerx,
+                self_centery,
+                self_direction_mag,
+                self_collision_size,
+                displacement_obstacles,
+                base_displacement_entities,
+                exponent,
+            )
+            return
 
-                overlap = self.mask.overlap_area(obstacle.mask, (dx, dy))
-
-                if _mask_log.isEnabledFor(logging.DEBUG):
-                    _mask_log.debug(
-                        "  Mask overlap check - dx: %s, dy: %s, overlap: %s", dx, dy, overlap
-                    )
-
-                if overlap == 0:
-                    do_collision = False
-                    if _mask_log.isEnabledFor(logging.DEBUG):
-                        _mask_log.debug("  Mask filter worked - no collision (overlap == 0)")
-                else:
-                    if _mask_log.isEnabledFor(logging.DEBUG):
-                        _mask_log.debug(
-                            "  Mask collision confirmed - overlap: %s pixels", overlap
-                        )
-            else:
-                if _mask_log.isEnabledFor(logging.DEBUG):
-                    _mask_log.debug("  Skipping mask check - using rect collision")
-    
-            if do_collision:
-                # Calculate the angle of collision relative to the entity's movement direction
-                collision_normal = math.atan2(obstacle.rect.centery - self.rect.centery, obstacle.rect.centerx - self.rect.centerx)
-                rebound_angle = collision_normal + math.pi
-    
-                # Calculate the penetration depth
-                penetration_x = max(0, self.rect.right - obstacle.rect.left, obstacle.rect.right - self.rect.left)
-                penetration_y = max(0, self.rect.bottom - obstacle.rect.top, obstacle.rect.bottom - self.rect.top)
-                penetration_depth = math.sqrt(penetration_x**2 + penetration_y**2)**1.5
-    
-                # Update total displacement vector
-                total_displacement_x += math.cos(rebound_angle)
-                total_displacement_y += math.sin(rebound_angle)
-    
-                # Update the maximum penetration depth
-                max_penetration_depth = max(max_penetration_depth, penetration_depth)
-    
-        # Normalize the total displacement direction
-        displacement_magnitude = math.sqrt(total_displacement_x**2 + total_displacement_y**2)
-        if displacement_magnitude > 0:
-            total_displacement_x /= displacement_magnitude
-            total_displacement_y /= displacement_magnitude
-    
-        # Scale the displacement based on the maximum penetration depth
-        
-        # print(displacement_obstacles)
-        # print(max_penetration_depth)
-        # print(MAX_DISPLACEMENT)
-        
-        scaled_displacement = min(displacement_obstacles + max_penetration_depth, MAX_DISPLACEMENT)
-        # print("scaled_displacement")
-        # print(scaled_displacement)
-        # Apply the displacement to the entity's position
-        self.hitbox.left += scaled_displacement * total_displacement_x
-        self.hitbox.top += scaled_displacement * total_displacement_y
-        # if hasattr(self,'type'):
-        #     if self.type == "player" :
-                
-                
-        #         print(f"displacement x : {scaled_displacement * math.cos(total_displacement_x)}")
-        #         print(f"displacement y : {scaled_displacement * math.sin(total_displacement_y)}")
-                
-
-        # #print(dir(entity))
-        # if hasattr(self, 'monster_name'):
-        #     print("hey")
-        #     print(self.monster_name)
-        #     if self.monster_name == 'raccoon':
-        #         print(f"nearby_obstacles :{nearby_obstacles} ")
-        
-        # If not colliding with a wall, handle entity collisions
-        if not nearby_obstacles:
-            for entity in nearby_entities:
-                # Check if the other entity is stationary
-                
-                
-                # #print(dir(entity))
-                # if hasattr(self, 'monster_name'):
-                #     print("hey")
-                #     print(self.monster_name)
-                #     if self.monster_name == 'raccoon':
-                #         print(f"entity  direction :{entity.direction} ")
-                        
-                #         print(f"entity direction :{entity.direction.magnitude()} ")
-                        
-                #         print("self:")
-                #         print_mask(self.mask)
-                #         print("entity")
-                #         print_mask(entity.mask)
-                
-                """
-                so here , if the entity doesnt have a mask , because its nerby we collide, if it doesnt have a 
-                mask, we just collide it anyway
-                
-                at the moment all enemies have masks and player, no neutrals or objects.
-                
-                what it seems like to me though, is that the images with the alpha were already acting like masks
-                
-                regardless, it will be good to be able to play with how the mask collisions happen.
-                
-                """
-                
-                do_colision = True
-                if  self.mask and entity.mask:
-                    #print("self:")
-                    #print_mask(self.mask)
-                    #print("entity")
-                    #print_mask(entity.mask)
-                    # Calculate the difference between the center positions of the two entities
-                    dx = entity.rect.x - self.rect.x
-                    dy = entity.rect.y - self.rect.y
-
-                    overlap = self.mask.overlap_area( entity.mask, (dx,dy) )
-                    # print('overlap')
-                    # print(overlap)
-                    if overlap == 0 :
-                        
-                        #print("both masks exist")
-                        #print(overlap)
-                        do_colision = False
-                    
-                # if hasattr(entity, 'sprite_type'):
-                #     if entity.sprite_type == 'magic':
-                #         print(f"magic direction :{entity.direction} ") 
-                
-                
-                # if hasattr(entity, 'sprite_type'):
-                #     if entity.sprite_type == 'player':
-                #         print(f"player direction :{entity.direction} ") 
-                
-                    
-                if do_colision and entity.direction:
-                    
-                    
-                    if entity.direction.magnitude() == 0  :
-                        # second or is just because of an error, shouldnt exist, player can have None? particle maybe ?
-                    
-                        
-                        angle_radians = math.atan2(self.direction.y, self.direction.x)
-                        angle_degrees = math.degrees(angle_radians)
-                        
-                        
-                   
-                        
-                        # Calculate the angle between the entity's direction and the collision normal
-                        collision_normal = math.atan2(entity.rect.centery - self.rect.centery, entity.rect.centerx - self.rect.centerx)
-                        
-                        
-                        # if hasattr(entity, 'sprite_type'):
-                        #     if entity.sprite_type== 'Eskimo':
-                        #         print(f"stationary eskimo collision normal :{collision_normal} ")
-                        
-                        # Calculate the rebound angle (opposite angle)
-                        rebound_angle = collision_normal + math.pi 
-                        
-                        # Treat the stationary entity as an obstacle
-                        displacement_x = displacement_obstacles * math.cos(rebound_angle)
-                        displacement_y = displacement_obstacles * math.sin(rebound_angle)
-                        self.hitbox.left += displacement_x  
-                        self.hitbox.top += displacement_y
-                        if self.benchmark_runtime.enabled:
-                            self.benchmark_runtime.metrics.record_collision_resolved()
-                    else:
-                        # Calculate the size ratio of the colliding entities (for example, based on widths)
-                        
-                        
-                        # TODO: am planning to make player size bigger, also make the collision 
-                        #       size not just based on width.
-                        
-                        # It should also dobe the entity recieving the impact that gets this size adjustment
-                        #  right now its like bigger objects are bouncy, it should be more like knowckback.
-                        
-                        size = (self.rect.width*self.rect.height) 
-                        if hasattr(self,'type'):
-                            if self.type == "player" :
-                                size = (self.rect.width*self.rect.height) * 3.5
-                        
-                                
-                        size_ratio = size / (entity.rect.width*entity.rect.height)
-                        
-                        
-                        # Calculate the displacement based on the size ratio and apply it for entities
-                        displacement_entities = base_displacement_entities + base_displacement_entities * (1 + math.exp(exponent * (1 - size_ratio)))
-                        
-                        # Calculate relative velocity (speed) between the entities
-                        relative_velocity = self.direction.magnitude() - entity.direction.magnitude()
-                        
-                        # Calculate the direction vector from the other entity to self
-                        direction_vector = pygame.math.Vector2(self.rect.center) - pygame.math.Vector2(entity.rect.center)
-                        
-                        # Calculate the angle between the direction vector and the collision normal
-                        collision_normal = math.atan2(direction_vector.y, direction_vector.x)
-                        
-                        # Calculate the rebound angle based on the collision normal and relative velocity
-                        rebound_angle = collision_normal 
-                        #rebound_angle = collision_normal + math.pi
-                        #rebound_angle = rebound_angle % (2 * math.pi)
-                        
-                        # Adjust the displacement based on the relative velocity
-                        displacement_entities *= 1.5 if relative_velocity > 0 else 0.5 if relative_velocity < 0 else 1
-
-                        if self.benchmark_runtime.enabled and self.benchmark_runtime.pushback_floor_enabled:
-                            if abs(displacement_entities) < self.benchmark_runtime.pushback_min_threshold:
-                                displacement_entities = 0.0
-                        if self.benchmark_runtime.enabled and self.benchmark_runtime.pushback_cap_enabled:
-                            displacement_entities = max(
-                                -self.benchmark_runtime.pushback_max_cap,
-                                min(self.benchmark_runtime.pushback_max_cap, displacement_entities),
-                            )
-                        
-                        # Determine the direction of displacement based on the movement direction
-                        displacement_x = displacement_entities * math.cos(rebound_angle)
-                        displacement_y = displacement_entities * math.sin(rebound_angle)
-                        
-                        new_left = self.hitbox.left + displacement_x
-                        new_top = self.hitbox.top + displacement_y
-                        
-                        #Check if the new position collides with any obstacles
-                        obstacles_hit = QuadTree.hit(HashableRect(pygame.Rect(new_left, new_top, self.hitbox.width, self.hitbox.height), self.id))
-                        #obstacles_hit=False
-                        # if hasattr(self,'type'):
-                        #     if self.type == "player" :
-                        #         print(f"entity.direction: {entity.direction}")
-                        #         print(f"self.direction: {self.direction}")
-                        #         print(f"relative_velocity: {relative_velocity}")
-                        #         print(f"self.direction.magnitude() : {self.direction.magnitude() }")
-                        #         print(f"entity.direction.magnitude(): {entity.direction.magnitude()}")
-                        #         print(f"direction_vector: {direction_vector}")
-                        #         print(f"collision_normal: {collision_normal}")
-                        #         print(f"displacement_y: {displacement_y}")
-                        #         print(f"displacement_x: {displacement_x}")
-                            
-                        
-                        # If there are obstacles in the path, adjust the position
-                        if obstacles_hit:
-                            obstacle = next(iter(obstacles_hit))  # Get the closest obstacle
-                            if self.rect.left < obstacle.left:  # Intersection with left side
-                                self.hitbox.right = obstacle.left
-                                self.hitbox.top = new_top
-                            elif self.rect.left > obstacle.right:  # Intersection with right side
-                                self.hitbox.left = obstacle.right
-                                self.hitbox.top = new_top
-                            elif self.rect.top < obstacle.top:  # Intersection with top side
-                                self.hitbox.bottom = obstacle.top
-                                self.hitbox.left = new_left
-                            else:  # Intersection with bottom side
-                                self.hitbox.top = obstacle.bottom
-                                self.hitbox.left = new_left
-                        else:
-                            #Move the entity to the calculated new position
-                            self.hitbox.left += displacement_x
-                            self.hitbox.top += displacement_y
-                        if self.benchmark_runtime.enabled and displacement_entities != 0:
-                            self.benchmark_runtime.metrics.record_collision_resolved()
-                            
-                            
-                        
-                    #     if hasattr(entity, 'sprite_type'):
-                    #         if entity.sprite_type== 'PolarBear':
-                    #             print(f"Polarbear size_ratio :{size_ratio} ")
-                    #             print(f"Polarbear direction_vector :{direction_vector} ")
-                    #             print(f"Polarbear collision_normal :{collision_normal} ")
-                    #             print(f"Polarbear rebound_angle:{rebound_angle} ")
-                    #             print(f"Polarbear relative_velocity :{relative_velocity} ")
-                    #             print(f"Polarbear displace x :{displacement_x} ")
-                    #             print(f"Polarbear displace y :{displacement_y} ")
-                    # # Move the entity to the calculated new position
+        self._resolve_entity_collisions_legacy(
+            nearby_entities,
+            QuadTree,
+            self_rect,
+            self_hitbox,
+            self_mask,
+            self_centerx,
+            self_centery,
+            self_direction_mag,
+            self_collision_size,
+            displacement_obstacles,
+            base_displacement_entities,
+            exponent,
+        )
 
 
 
