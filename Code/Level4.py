@@ -8,6 +8,10 @@ from Item import Item
 from ItemVisual import ItemVisual
 import pygame
 from Settings import *
+from game_logging import get_debug_logger
+
+_game_flow_log = get_debug_logger("game_flow")
+_combat_log = get_debug_logger("combat")
 from Tile import Tile
 from Trigger import Trigger
 from Player import SpecificPlayer
@@ -1014,7 +1018,7 @@ class Level4:
         self.ui=UI()
         with open(f"{layouts_dir}/initial_layout_name.txt", "r") as file:
             initial_layout_dir = file.read().strip()
-        print(f"layout dir  : {layouts_dir}")
+        _game_flow_log.debug("layout dir  : %s", layouts_dir)
         try:
             with open(f"{layouts_dir}/layout_general_config.txt", "r") as file:
                 layout_general_config = file.read().strip()   # for now just indicates daylight, need to develop this .json format and files
@@ -1415,16 +1419,16 @@ class Level4:
         
         # TODO : implement quadtree ? its not particularly heavy part of the code...
         #      : implement mask collision
-        print("attack_sprites")
-        print(self.attack_sprites)
+        _combat_log.debug("attack_sprites")
+        _combat_log.debug("%s", self.attack_sprites)
         if self.attack_sprites:
 
             
             for attack_sprite in self.attack_sprites:
-                print("attack sprite position")
-                print( attack_sprite.rect.left )
-                print(  attack_sprite.rect.width)
-                print(  attack_sprite.rect.height)
+                _combat_log.debug("attack sprite position")
+                _combat_log.debug("%s", attack_sprite.rect.left)
+                _combat_log.debug("%s", attack_sprite.rect.width)
+                _combat_log.debug("%s", attack_sprite.rect.height)
                 collision_sprites = pygame.sprite.spritecollide(attack_sprite, self.attackable_sprites, False)
                 if collision_sprites:
                     for target_sprite in collision_sprites:
@@ -2134,17 +2138,8 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.window_width, self.window_height = self.display_surface.get_size()
         self.half_width = self.display_surface.get_size()[0] // 2
         self.half_height = self.display_surface.get_size()[1] // 2
-                
-                # Define the dimensions for the grass surface
-        grass_width = self.display_surface.get_width() - (2 * TILESIZE)
-        grass_height = self.display_surface.get_height() - (2 * TILESIZE)
-        
-        # Set up the grass surface as a subsurface of the display surface
-        self.grass_surface = self.display_surface.subsurface( (TILESIZE, TILESIZE, grass_width, grass_height) )
-        
-        self.grass_half_width = self.grass_surface.get_width() // 2
-        self.grass_half_height = self.grass_surface.get_height() // 2
-        
+
+        self._apply_grass_viewport()
         
         self.offset = pygame.math.Vector2()
         self.grass_offset = pygame.math.Vector2()
@@ -2155,12 +2150,26 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.update_grass_with_wind_frequency = 5000
         self.wind_last_affected_grass = 0
         self.t=0 # forgrass rotaryfunctin, name it better.
+        self.last_player_grass_force_center = None
+        self.grass_force_threshold_sq = 16  # 4px movement threshold before re-applying player force
         
         # Threading.
         self.executor = ThreadPoolExecutor(max_workers=4)
         self.lock = Lock()
         
         self.overhead_areas = overhead_areas
+
+    def _apply_grass_viewport(self):
+        W, H = self.display_surface.get_size()
+        p = GRASS_VIEWPORT_PERCENT / 100.0
+        gw = max(1, int(W * p))
+        gh = max(1, int(H * p))
+        x = (W - gw) // 2
+        y = (H - gh) // 2
+        clip_rect = pygame.Rect(x, y, gw, gh).clip(pygame.Rect(0, 0, W, H))
+        self.grass_surface = self.display_surface.subsurface(clip_rect)
+        self.grass_half_width = self.grass_surface.get_width() // 2
+        self.grass_half_height = self.grass_surface.get_height() // 2
 
     #@profile
     def update_parallel_inview(self, dt=None, weather=None, wind_force=(0, 0), num_threads=8, *args, **kwargs):
@@ -2187,25 +2196,33 @@ class YSortCameraGroup(pygame.sprite.Group):
 
     #@profile
     def update_parallel(self, obstruction_quad_tree,entity_quad_tree, dt=None, weather=None, wind_force=(0, 0), num_threads=1, *args, **kwargs):
-        #print("attempted parallel update")
-        #sprites_in_view = self.get_sprites_in_view()
-        sprite_batches = [self.sprites()[i::num_threads] for i in range(num_threads)]
-        futures = []
+        if num_threads <= 1:
+            updated_sprites = self._update_batch(
+                obstruction_quad_tree,
+                entity_quad_tree,
+                self.sprites(),
+                dt=dt,
+                lock=None,
+                weather=weather,
+            )
+        else:
+            sprite_batches = [self.sprites()[i::num_threads] for i in range(num_threads)]
+            futures = []
 
-        for batch in sprite_batches:
-            future = self.executor.submit(self.update_for_parallel,
-                                          obstruction_quad_tree,
-                                          entity_quad_tree,
-                                          batch,
-                                          dt,
-                                          self.lock,
-                                          weather,  # Pass down the weather information
-                                          wind_force,)
-            futures.append(future)
+            for batch in sprite_batches:
+                future = self.executor.submit(self.update_for_parallel,
+                                            obstruction_quad_tree,
+                                            entity_quad_tree,
+                                            batch,
+                                            dt,
+                                            self.lock,
+                                            weather,  # Pass down the weather information
+                                            wind_force,)
+                futures.append(future)
 
-        updated_sprites = []
-        for future in futures:
-            updated_sprites.extend(future.result())
+            updated_sprites = []
+            for future in futures:
+                updated_sprites.extend(future.result())
 
         # Extend with non-visible sprites
         #updated_sprites.extend(sprite for sprite in self.sprites() if sprite not in updated_sprites)
@@ -2214,45 +2231,9 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.sprites().clear()
         self.sprites().extend(updated_sprites)
 
-    def set_grass_render_window_size_with_timeofday(self,light_level):
-        #print("light_level!")
-        #print(light_level)
-        if light_level <= 1 and light_level > 0.75:
-                # Define the dimensions for the grass surface
-            grass_width = self.display_surface.get_width() - (2 * TILESIZE)
-            grass_height = self.display_surface.get_height() - (2 * TILESIZE)
-            
-            # Set up the grass surface as a subsurface of the display surface
-            self.grass_surface = self.display_surface.subsurface( (TILESIZE, TILESIZE, grass_width, grass_height) )
-            
-            self.grass_half_width = self.grass_surface.get_width() // 2
-            self.grass_half_height = self.grass_surface.get_height() // 2
-
-        # if light_level <= 0.75 and light_level > 0.5:
-        #         # Define the dimensions for the grass surface
-        #     grass_width = self.display_surface.get_width() - (2.5 * TILESIZE)
-        #     grass_height = self.display_surface.get_height() - (2.5 * TILESIZE)
-            
-        #     # Set up the grass surface as a subsurface of the display surface
-        #     self.grass_surface = self.display_surface.subsurface( (TILESIZE*1.25, TILESIZE*1.25, grass_width, grass_height) )
-            
-        #     self.grass_half_width = self.grass_surface.get_width() // 2
-        #     self.grass_half_height = self.grass_surface.get_height() // 2
-            
-        #print(light_level)
-        if light_level <= 0.5 :
-                # Define the dimensions for the grass surface
-            grass_width = self.display_surface.get_width() - (3 * TILESIZE)
-            grass_height = self.display_surface.get_height() - (3 * TILESIZE)
-            
-            # Set up the grass surface as a subsurface of the display surface
-            self.grass_surface = self.display_surface.subsurface( (TILESIZE*1.5, TILESIZE*1.5, grass_width, grass_height) )
-            
-            self.grass_half_width = self.grass_surface.get_width() // 2
-            self.grass_half_height = self.grass_surface.get_height() // 2
-            
-        #print(f"RESULTING WIDTH : {self.grass_half_width}")
-            
+    def set_grass_render_window_size_with_timeofday(self, light_level):
+        # Single percent-based viewport for all light levels (see GRASS_VIEWPORT_PERCENT).
+        self._apply_grass_viewport()
 
     def set_grass_grid(self,grass_grid):
         self.grass_grid = grass_grid
@@ -2284,7 +2265,14 @@ class YSortCameraGroup(pygame.sprite.Group):
         
         if self.ground_surface is None:
             self.create_ground_surface()
-            
+
+        W, H = self.display_surface.get_size()
+        self.window_width, self.window_height = W, H
+        self.half_width = W // 2
+        self.half_height = H // 2
+
+        self.set_grass_render_window_size_with_timeofday(light_intensity)
+
         self.offset.x = player.rect.centerx - self.half_width 
         self.offset.y = player.rect.centery - self.half_height
         self.grass_offset.x = player.rect.centerx - self.grass_half_width 
@@ -2293,9 +2281,6 @@ class YSortCameraGroup(pygame.sprite.Group):
         
         ground_rect = self.ground_surface.get_rect(topleft=(-self.offset.x, -self.offset.y))
         self.display_surface.blit(self.ground_surface, ground_rect.topleft)
-        
-        
-        self.set_grass_render_window_size_with_timeofday( light_intensity )
             
         #print(f" dt : {self.t}")
         self.t += dt*1500*wind_intensity
@@ -2303,7 +2288,16 @@ class YSortCameraGroup(pygame.sprite.Group):
         
         # if player on grass
         
-        self.grass_manager.apply_force( player.rect.center , 25 , 20)
+        player_center = player.rect.center
+        if self.last_player_grass_force_center is None:
+            self.grass_manager.apply_force(player_center, 25, 20)
+            self.last_player_grass_force_center = player_center
+        else:
+            dx = player_center[0] - self.last_player_grass_force_center[0]
+            dy = player_center[1] - self.last_player_grass_force_center[1]
+            if (dx * dx + dy * dy) >= self.grass_force_threshold_sq:
+                self.grass_manager.apply_force(player_center, 25, 20)
+                self.last_player_grass_force_center = player_center
         
         
         #print( self.grass_offset )
@@ -2352,31 +2346,63 @@ class YSortCameraGroup(pygame.sprite.Group):
                 sprite.update(weather, self.display_surface)
             else:
                 sprite.update(dt)
-    #@profile
-    def update_for_parallel(self,obstacle_quad_tree, entity_quad_tree, batch, dt=None,lock=None, weather=None, wind_force=(0, 0) , *args, **kwargs):
+    def _update_single_sprite(
+        self,
+        sprite,
+        obstacle_quad_tree,
+        entity_quad_tree,
+        dt=None,
+        weather=None,
+    ):
+        if isinstance(sprite, AnimatedEnvironmentSprite):  # keep legacy torch/weather behavior
+            if isinstance(sprite, Torch):
+                sprite.update(weather)
+            else:
+                sprite.update(weather)
+        elif isinstance(sprite, Entity):
+            sprite.update(
+                dt=dt,
+                QuadTree=obstacle_quad_tree,
+                entity_quad_tree=entity_quad_tree,
+            )
+        else:
+            sprite.update(dt=dt)
+
+    def _update_batch(
+        self,
+        obstacle_quad_tree,
+        entity_quad_tree,
+        batch,
+        dt=None,
+        lock=None,
+        weather=None,
+    ):
         updated_sprites = []
         for sprite in batch:
-            if isinstance(sprite, AnimatedEnvironmentSprite):# at some point i was passing display to torch, kept this if incase for now.
-                if isinstance(sprite,Torch):
-                    sprite.update(weather)
-                else:
-                    sprite.update(weather)
-            elif isinstance(sprite, Entity):
-                sprite.update(dt=dt,
-                              QuadTree= obstacle_quad_tree,
-                              entity_quad_tree = entity_quad_tree)
-            else:
-                sprite.update(dt=dt)
-            
-            # Acquire the lock before updating shared resources
-            lock.acquire()
-            try:
+            self._update_single_sprite(
+                sprite,
+                obstacle_quad_tree,
+                entity_quad_tree,
+                dt=dt,
+                weather=weather,
+            )
+            if lock is None:
                 updated_sprites.append(sprite)
-            finally:
-                # Always release the lock, even if an exception occurs
-                lock.release()
-                
+            else:
+                with lock:
+                    updated_sprites.append(sprite)
         return updated_sprites
+
+    #@profile
+    def update_for_parallel(self,obstacle_quad_tree, entity_quad_tree, batch, dt=None,lock=None, weather=None, wind_force=(0, 0) , *args, **kwargs):
+        return self._update_batch(
+            obstacle_quad_tree,
+            entity_quad_tree,
+            batch,
+            dt=dt,
+            lock=lock,
+            weather=weather,
+        )
                     
     def is_tile_in_view(self, tile_position):
         """

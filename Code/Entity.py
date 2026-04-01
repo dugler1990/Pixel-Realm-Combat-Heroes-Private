@@ -1,11 +1,13 @@
 from cmath import rect
+import logging
 import pygame
-from math import sin
 import os
 import math
 from hashRect import HashableRect
+from game_logging import get_collision_mask_logger
 from Support import print_mask
 from Effect import EFFECT_REGISTRY
+from benchmark_runtime import BENCHMARK_RUNTIME
 # This is for file (images specifically) importing (This line changes the directory to where the project is saved)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 MAX_DISPLACEMENT = 5.5
@@ -14,10 +16,19 @@ MAX_DISPLACEMENT = 5.5
 BASE_ACCELERATION = 0.4  # Base acceleration rate (higher = faster acceleration, lower = more control)
 DEFAULT_FRICTION = 0.5  # Default friction multiplier for normal movement (0.95 = 5% velocity loss per frame, minimal inertia)
 MAX_VELOCITY_MULTIPLIER = 1  # Max velocity can be this much higher than base speed
+# While holding input, extra damping when mean surface friction is below DEFAULT (see move())
+HELD_SURFACE_DRAG_BLEND = 0.72
+# Momentum-aware response gains for input-held movement.
+PARALLEL_RESPONSE_GAIN = 1.0  # How strongly velocity magnitude aligns along current momentum axis.
+PERP_RESPONSE_GAIN = 1.0  # How strongly velocity can rotate away from current momentum axis.
+SLIP_PARALLEL_SUPPRESSION = 0.12  # Mildly reduce along-momentum response on high-slip surfaces.
+SLIP_PERP_SUPPRESSION = 0.72  # Strongly reduce turning authority on high-slip surfaces (main drift control).
+LOW_SPEED_MOMENTUM_EPS = 0.1  # Use input axis as momentum axis below this speed.
 
 class Entity(pygame.sprite.Sprite):
     # Class-level variable to keep track of IDs
     id_counter = 0
+    benchmark_runtime = BENCHMARK_RUNTIME
     def __init__(self, groups, layout_callback_update_quad_tree = None):
         super().__init__(groups)
         Entity.id_counter += 1
@@ -34,6 +45,7 @@ class Entity(pygame.sprite.Sprite):
         self.move_not_called_before = True
         # Active effects tracking: {effect_area_id: effect_instance}
         self.active_effects = {}
+        self.fire_resistance = 0  # Reduces heat (and future fire) damage; can be set from stats later
         if layout_callback_update_quad_tree :
             self.layout_callback_update_quad_tree = layout_callback_update_quad_tree
         else:
@@ -81,62 +93,56 @@ class Entity(pygame.sprite.Sprite):
         if self.direction.magnitude() != 0:
             input_direction = self.direction.normalize()
         
-        # Calculate effective acceleration and friction multipliers from active effects
-        # Get MIN acceleration (most restrictive) and max friction (higher friction_multiplier = more slippery)
+        # Surface effects (SlipperyEffect): one monotonic slippery_factor scale.
+        # Acceleration: MIN (strictest surface wins when overlapping zones).
+        # Friction: arithmetic mean of each active effect's friction mult (avoids product blow-up when zones overlap).
         acceleration_multiplier = 1.0  # Start with normal (1.0)
-        friction_multiplier = DEFAULT_FRICTION  # Start with default normal friction
+        friction_samples = []
         
         for effect in self.active_effects.values():
             acc_mult = effect.get_acceleration_multiplier()
             fric_mult = effect.get_friction_multiplier()
-            if acc_mult < acceleration_multiplier:  # Use MINIMUM (most restrictive) for slippery surfaces
+            if acc_mult < acceleration_multiplier:
                 acceleration_multiplier = acc_mult
-            if fric_mult > friction_multiplier:  # Higher friction_multiplier = more slippery (less friction loss)
-                friction_multiplier = fric_mult
+            friction_samples.append(fric_mult)
         
-        # Apply traction physics: reduce acceleration more when turning than when moving straight
-        # This creates realistic drifting - you maintain forward momentum but can't turn quickly
-        effective_acceleration_multiplier = acceleration_multiplier
-        
-        if input_direction.magnitude() > 0 and self.velocity.magnitude() > 0.1:
-            # Calculate angle between velocity and input direction using dot product
-            # Normalize both vectors for accurate angle calculation
-            velocity_normalized = self.velocity.normalize()
-            input_normalized = input_direction.normalize()
-            
-            # Dot product gives cos(angle), so angle = arccos(dot)
-            # When vectors are parallel (moving straight): dot ≈ 1, angle ≈ 0°
-            # When vectors are perpendicular (turning): dot ≈ 0, angle ≈ 90°
-            dot_product = velocity_normalized.dot(input_normalized)
-            # Clamp dot product to [-1, 1] to avoid math domain errors
-            dot_product = max(-1.0, min(1.0, dot_product))
-            
-            # Calculate angle in radians (0° = parallel, 90° = perpendicular)
-            angle_radians = math.acos(dot_product)
-            
-            # Apply traction multiplier: reduce acceleration more for perpendicular components (turning)
-            # Formula: traction_multiplier = 1.0 - (1.0 - acceleration_multiplier) * sin(angle)
-            # When moving straight (angle ≈ 0°): sin(0) ≈ 0, minimal reduction
-            # When turning 90°: sin(90°) = 1, full reduction from slippery effect
-            sin_angle = math.sin(angle_radians)
-            traction_multiplier = 1.0 - (1.0 - acceleration_multiplier) * sin_angle
-            effective_acceleration_multiplier = traction_multiplier
+        if friction_samples:
+            friction_multiplier = sum(friction_samples) / len(friction_samples)
+        else:
+            friction_multiplier = DEFAULT_FRICTION
         
         # Apply input acceleration
         if input_direction.magnitude() > 0:
-            # Accelerate towards input direction
-            # Weight affects acceleration: heavier entities accelerate slower
+            # Momentum-aware input response: split desired change into parallel/perpendicular components.
+            # Weight affects response: heavier entities respond slower.
             weight_factor = 1.0 / self.weight  # Inverse relationship
-            acceleration = BASE_ACCELERATION * effective_acceleration_multiplier * weight_factor
+            base_response = BASE_ACCELERATION * weight_factor
+            # Derive a slip-strength proxy from mean friction; >DEFAULT means more slip.
+            slip_strength = 0.0
+            if friction_multiplier > DEFAULT_FRICTION:
+                slip_strength = (friction_multiplier - DEFAULT_FRICTION) / max(1e-6, (1.0 - DEFAULT_FRICTION))
+                slip_strength = max(0.0, min(1.0, slip_strength))
+            parallel_surface_response = acceleration_multiplier * (1.0 - SLIP_PARALLEL_SUPPRESSION * slip_strength)
+            perp_surface_response = acceleration_multiplier * (1.0 - SLIP_PERP_SUPPRESSION * slip_strength)
+            parallel_gain = base_response * PARALLEL_RESPONSE_GAIN * parallel_surface_response
+            perp_gain = base_response * PERP_RESPONSE_GAIN * perp_surface_response
             target_velocity = input_direction * speed * MAX_VELOCITY_MULTIPLIER
-            # Manually interpolate velocity towards target (acceleration)
-            velocity_delta = (target_velocity - self.velocity) * acceleration
-            self.velocity += velocity_delta
+            desired_delta = target_velocity - self.velocity
+            # Momentum axis is current velocity direction; if too slow, fall back to current input.
+            if self.velocity.magnitude() > LOW_SPEED_MOMENTUM_EPS:
+                momentum_axis = self.velocity.normalize()
+            else:
+                momentum_axis = input_direction
+            delta_parallel = momentum_axis * desired_delta.dot(momentum_axis)
+            delta_perp = desired_delta - delta_parallel
+            self.velocity += (delta_parallel * parallel_gain) + (delta_perp * perp_gain)
+            # Continuous drag while pushing if mean friction below DEFAULT; high-slip surfaces skip this.
+            if friction_multiplier < DEFAULT_FRICTION - 1e-9:
+                r = max(friction_multiplier / DEFAULT_FRICTION, 0.05)
+                self.velocity *= (1.0 - HELD_SURFACE_DRAG_BLEND) + HELD_SURFACE_DRAG_BLEND * r
         else:
-            # Apply friction when no input
-            # friction_multiplier directly multiplies velocity (lower = more slippery)
-            # Normal movement: DEFAULT_FRICTION (0.95 = 5% loss per frame)
-            # Slippery effects: lower multiplier (e.g., 0.98 = 2% loss per frame, more slippery)
+            # Apply friction when no input: velocity *= friction_multiplier each frame.
+            # Higher mult = keep more speed when coasting; lower = lose speed faster.
             self.velocity *= friction_multiplier
             # Stop very small velocities to prevent jitter
             if self.velocity.magnitude() < 0.1:
@@ -219,7 +225,8 @@ class Entity(pygame.sprite.Sprite):
         # Check for nearby obstacles using the QuadTree
         nearby_obstacles = QuadTree.hit(HashableRect(self.rect, self.id))
         nearby_entities = entity_quad_tree.hit(HashableRect(self.rect, self.id))
-        
+        _mask_log = get_collision_mask_logger()
+
         # if hasattr(self,'type'):
         #     if self.type == "player" :
         #         print_mask(self.mask)
@@ -237,56 +244,76 @@ class Entity(pygame.sprite.Sprite):
         # Iterate over nearby obstacles (walls)
         for obstacle in nearby_obstacles:
             do_collision = True
-            
-            # DEBUG: Log mask status to file
-            log_path = os.path.join(os.path.dirname(__file__), "mask_debug.log")
-            with open(log_path, "a") as f:
-                f.write(f"Obstacle collision - self.mask: {self.mask is not None}, obstacle.mask: {getattr(obstacle, 'mask', None) is not None}\n")
+
+            if _mask_log.isEnabledFor(logging.DEBUG):
+                parts = [
+                    "Obstacle collision - self.mask: %s, obstacle.mask: %s"
+                    % (self.mask is not None, getattr(obstacle, "mask", None) is not None),
+                ]
                 if self.mask:
-                    f.write(f"  self.mask size: {self.mask.get_size() if self.mask else 'None'}\n")
-                if hasattr(obstacle, 'mask') and obstacle.mask:
-                    f.write(f"  obstacle.mask size: {obstacle.mask.get_size() if obstacle.mask else 'None'}\n")
-            
+                    parts.append("  self.mask size: %s" % (self.mask.get_size(),))
+                if hasattr(obstacle, "mask") and obstacle.mask:
+                    parts.append("  obstacle.mask size: %s" % (obstacle.mask.get_size(),))
+                _mask_log.debug("\n".join(parts))
+
             if self.mask and obstacle.mask:
                 # Calculate the difference between the center positions of the two entities
                 dx = obstacle.rect.x - self.rect.x
                 dy = obstacle.rect.y - self.rect.y
-    
-                # DEBUG: Log detailed rect and mask info
-                with open(log_path, "a") as f:
+
+                if _mask_log.isEnabledFor(logging.DEBUG):
                     entity_mask_size = self.mask.get_size()
                     entity_rect_size = (self.rect.width, self.rect.height)
                     obstacle_mask_size = obstacle.mask.get_size()
                     obstacle_rect_size = (obstacle.rect.width, obstacle.rect.height)
-                    f.write(f"  Entity rect: {self.rect} (x={self.rect.x}, y={self.rect.y}, w={self.rect.width}, h={self.rect.height})\n")
-                    f.write(f"  Obstacle rect: {obstacle.rect} (x={obstacle.rect.x}, y={obstacle.rect.y}, w={obstacle.rect.width}, h={obstacle.rect.height})\n")
-                    f.write(f"  Entity mask size: {entity_mask_size}, Entity rect size: {entity_rect_size}\n")
-                    f.write(f"  Obstacle mask size: {obstacle_mask_size}, Obstacle rect size: {obstacle_rect_size}\n")
+                    parts = [
+                        "  Entity rect: %s (x=%s, y=%s, w=%s, h=%s)"
+                        % (self.rect, self.rect.x, self.rect.y, self.rect.width, self.rect.height),
+                        "  Obstacle rect: %s (x=%s, y=%s, w=%s, h=%s)"
+                        % (
+                            obstacle.rect,
+                            obstacle.rect.x,
+                            obstacle.rect.y,
+                            obstacle.rect.width,
+                            obstacle.rect.height,
+                        ),
+                        "  Entity mask size: %s, Entity rect size: %s"
+                        % (entity_mask_size, entity_rect_size),
+                        "  Obstacle mask size: %s, Obstacle rect size: %s"
+                        % (obstacle_mask_size, obstacle_rect_size),
+                    ]
                     if entity_mask_size != entity_rect_size:
-                        f.write(f"  WARNING: Entity mask size {entity_mask_size} != rect size {entity_rect_size}\n")
+                        parts.append(
+                            "  WARNING: Entity mask size %s != rect size %s"
+                            % (entity_mask_size, entity_rect_size)
+                        )
                     if obstacle_mask_size != obstacle_rect_size:
-                        f.write(f"  WARNING: Obstacle mask size {obstacle_mask_size} != rect size {obstacle_rect_size}\n")
-                    f.write(f"  Offset (dx, dy): ({dx}, {dy})\n")
-    
+                        parts.append(
+                            "  WARNING: Obstacle mask size %s != rect size %s"
+                            % (obstacle_mask_size, obstacle_rect_size)
+                        )
+                    parts.append("  Offset (dx, dy): (%s, %s)" % (dx, dy))
+                    _mask_log.debug("\n".join(parts))
+
                 overlap = self.mask.overlap_area(obstacle.mask, (dx, dy))
-                
-                # DEBUG: Log overlap result
-                with open(log_path, "a") as f:
-                    f.write(f"  Mask overlap check - dx: {dx}, dy: {dy}, overlap: {overlap}\n")
-                
+
+                if _mask_log.isEnabledFor(logging.DEBUG):
+                    _mask_log.debug(
+                        "  Mask overlap check - dx: %s, dy: %s, overlap: %s", dx, dy, overlap
+                    )
+
                 if overlap == 0:
                     do_collision = False
-                    # DEBUG: Log when mask filter works
-                    with open(log_path, "a") as f:
-                        f.write(f"  Mask filter worked - no collision (overlap == 0)\n")
+                    if _mask_log.isEnabledFor(logging.DEBUG):
+                        _mask_log.debug("  Mask filter worked - no collision (overlap == 0)")
                 else:
-                    # DEBUG: Log when collision is confirmed
-                    with open(log_path, "a") as f:
-                        f.write(f"  Mask collision confirmed - overlap: {overlap} pixels\n")
+                    if _mask_log.isEnabledFor(logging.DEBUG):
+                        _mask_log.debug(
+                            "  Mask collision confirmed - overlap: %s pixels", overlap
+                        )
             else:
-                # DEBUG: Log why mask check was skipped
-                with open(log_path, "a") as f:
-                    f.write(f"  Skipping mask check - using rect collision\n")
+                if _mask_log.isEnabledFor(logging.DEBUG):
+                    _mask_log.debug("  Skipping mask check - using rect collision")
     
             if do_collision:
                 # Calculate the angle of collision relative to the entity's movement direction
@@ -428,6 +455,8 @@ class Entity(pygame.sprite.Sprite):
                         displacement_y = displacement_obstacles * math.sin(rebound_angle)
                         self.hitbox.left += displacement_x  
                         self.hitbox.top += displacement_y
+                        if self.benchmark_runtime.enabled:
+                            self.benchmark_runtime.metrics.record_collision_resolved()
                     else:
                         # Calculate the size ratio of the colliding entities (for example, based on widths)
                         
@@ -466,6 +495,15 @@ class Entity(pygame.sprite.Sprite):
                         
                         # Adjust the displacement based on the relative velocity
                         displacement_entities *= 1.5 if relative_velocity > 0 else 0.5 if relative_velocity < 0 else 1
+
+                        if self.benchmark_runtime.enabled and self.benchmark_runtime.pushback_floor_enabled:
+                            if abs(displacement_entities) < self.benchmark_runtime.pushback_min_threshold:
+                                displacement_entities = 0.0
+                        if self.benchmark_runtime.enabled and self.benchmark_runtime.pushback_cap_enabled:
+                            displacement_entities = max(
+                                -self.benchmark_runtime.pushback_max_cap,
+                                min(self.benchmark_runtime.pushback_max_cap, displacement_entities),
+                            )
                         
                         # Determine the direction of displacement based on the movement direction
                         displacement_x = displacement_entities * math.cos(rebound_angle)
@@ -509,6 +547,8 @@ class Entity(pygame.sprite.Sprite):
                             #Move the entity to the calculated new position
                             self.hitbox.left += displacement_x
                             self.hitbox.top += displacement_y
+                        if self.benchmark_runtime.enabled and displacement_entities != 0:
+                            self.benchmark_runtime.metrics.record_collision_resolved()
                             
                             
                         
@@ -667,7 +707,9 @@ class Entity(pygame.sprite.Sprite):
         """
         if not effect_quad_trees:
             return
-        
+
+        _mask_log = get_collision_mask_logger()
+
         # Track currently colliding effect areas
         current_effect_area_ids = set()
         
@@ -681,16 +723,20 @@ class Entity(pygame.sprite.Sprite):
             # NARROW PHASE: For each nearby effect, check mask-on-mask collision
             for effect_area in nearby_effects:
                 do_collision = True  # Assume collision from broad phase
-                
-                # DEBUG: Log mask status for effects
-                log_path = os.path.join(os.path.dirname(__file__), "mask_debug.log")
-                with open(log_path, "a") as f:
-                    f.write(f"Effect collision - self.mask: {self.mask is not None}, effect_area.mask: {getattr(effect_area, 'mask', None) is not None}\n")
+
+                if _mask_log.isEnabledFor(logging.DEBUG):
+                    parts = [
+                        "Effect collision - self.mask: %s, effect_area.mask: %s"
+                        % (self.mask is not None, getattr(effect_area, "mask", None) is not None),
+                    ]
                     if self.mask:
-                        f.write(f"  self.mask size: {self.mask.get_size() if self.mask else 'None'}\n")
-                    if hasattr(effect_area, 'mask') and effect_area.mask:
-                        f.write(f"  effect_area.mask size: {effect_area.mask.get_size() if effect_area.mask else 'None'}\n")
-                
+                        parts.append("  self.mask size: %s" % (self.mask.get_size(),))
+                    if hasattr(effect_area, "mask") and effect_area.mask:
+                        parts.append(
+                            "  effect_area.mask size: %s" % (effect_area.mask.get_size(),)
+                        )
+                    _mask_log.debug("\n".join(parts))
+
                 # If both have masks, do precise mask-on-mask check (same as entity collisions)
                 if self.mask and effect_area.mask:
                     # Calculate offset using rect positions (same as entity collisions)
@@ -698,53 +744,106 @@ class Entity(pygame.sprite.Sprite):
                     # The rect positions represent where those surfaces are in world space
                     dx = effect_area.rect.x - self.rect.x
                     dy = effect_area.rect.y - self.rect.y
-                    
-                    # DEBUG: Log detailed rect and mask info
-                    with open(log_path, "a") as f:
-                        f.write(f"  Entity rect: {self.rect} (x={self.rect.x}, y={self.rect.y}, w={self.rect.width}, h={self.rect.height})\n")
-                        f.write(f"  Effect rect: {effect_area.rect} (x={effect_area.rect.x}, y={effect_area.rect.y}, w={effect_area.rect.width}, h={effect_area.rect.height})\n")
-                        f.write(f"  Entity mask size: {self.mask.get_size()}, Effect mask size: {effect_area.mask.get_size()}\n")
-                        f.write(f"  Entity rect size: ({self.rect.width}, {self.rect.height}), Effect rect size: ({effect_area.rect.width}, {effect_area.rect.height})\n")
-                        f.write(f"  Offset (dx, dy): ({dx}, {dy})\n")
-                        # Check if mask size matches rect size (they should match)
+
+                    if _mask_log.isEnabledFor(logging.DEBUG):
                         entity_mask_size = self.mask.get_size()
                         effect_mask_size = effect_area.mask.get_size()
+                        parts = [
+                            "  Entity rect: %s (x=%s, y=%s, w=%s, h=%s)"
+                            % (
+                                self.rect,
+                                self.rect.x,
+                                self.rect.y,
+                                self.rect.width,
+                                self.rect.height,
+                            ),
+                            "  Effect rect: %s (x=%s, y=%s, w=%s, h=%s)"
+                            % (
+                                effect_area.rect,
+                                effect_area.rect.x,
+                                effect_area.rect.y,
+                                effect_area.rect.width,
+                                effect_area.rect.height,
+                            ),
+                            "  Entity mask size: %s, Effect mask size: %s"
+                            % (entity_mask_size, effect_mask_size),
+                            "  Entity rect size: (%s, %s), Effect rect size: (%s, %s)"
+                            % (
+                                self.rect.width,
+                                self.rect.height,
+                                effect_area.rect.width,
+                                effect_area.rect.height,
+                            ),
+                            "  Offset (dx, dy): (%s, %s)" % (dx, dy),
+                        ]
                         if entity_mask_size != (self.rect.width, self.rect.height):
-                            f.write(f"  WARNING: Entity mask size {entity_mask_size} != rect size ({self.rect.width}, {self.rect.height})\n")
-                        if effect_mask_size != (effect_area.rect.width, effect_area.rect.height):
-                            f.write(f"  WARNING: Effect mask size {effect_mask_size} != rect size ({effect_area.rect.width}, {effect_area.rect.height})\n")
-                    
+                            parts.append(
+                                "  WARNING: Entity mask size %s != rect size (%s, %s)"
+                                % (
+                                    entity_mask_size,
+                                    self.rect.width,
+                                    self.rect.height,
+                                )
+                            )
+                        if effect_mask_size != (
+                            effect_area.rect.width,
+                            effect_area.rect.height,
+                        ):
+                            parts.append(
+                                "  WARNING: Effect mask size %s != rect size (%s, %s)"
+                                % (
+                                    effect_mask_size,
+                                    effect_area.rect.width,
+                                    effect_area.rect.height,
+                                )
+                            )
+                        _mask_log.debug("\n".join(parts))
+
                     overlap = self.mask.overlap_area(effect_area.mask, (dx, dy))
-                    
-                    # DEBUG: Log overlap result
-                    with open(log_path, "a") as f:
-                        f.write(f"  Mask overlap check - dx: {dx}, dy: {dy}, overlap: {overlap}\n")
-                        # Also try the reverse offset to see if that makes a difference
-                        reverse_overlap = effect_area.mask.overlap_area(self.mask, (-dx, -dy))
-                        f.write(f"  Reverse overlap check (effect->entity): overlap: {reverse_overlap}\n")
-                    
+
+                    if _mask_log.isEnabledFor(logging.DEBUG):
+                        reverse_overlap = effect_area.mask.overlap_area(
+                            self.mask, (-dx, -dy)
+                        )
+                        _mask_log.debug(
+                            "  Mask overlap check - dx: %s, dy: %s, overlap: %s",
+                            dx,
+                            dy,
+                            overlap,
+                        )
+                        _mask_log.debug(
+                            "  Reverse overlap check (effect->entity): overlap: %s",
+                            reverse_overlap,
+                        )
+
                     if overlap == 0:
                         do_collision = False  # No overlap, no collision
-                        # DEBUG: Log when mask filter works
-                        with open(log_path, "a") as f:
-                            f.write(f"  Mask filter worked - no collision (overlap == 0)\n")
+                        if _mask_log.isEnabledFor(logging.DEBUG):
+                            _mask_log.debug(
+                                "  Mask filter worked - no collision (overlap == 0)"
+                            )
                     else:
-                        # DEBUG: Log when collision is confirmed
-                        with open(log_path, "a") as f:
-                            f.write(f"  Mask collision confirmed - overlap: {overlap} pixels, effect_id: {effect_area._id}\n")
+                        if _mask_log.isEnabledFor(logging.DEBUG):
+                            _mask_log.debug(
+                                "  Mask collision confirmed - overlap: %s pixels, effect_id: %s",
+                                overlap,
+                                effect_area._id,
+                            )
                 else:
-                    # DEBUG: Log why mask check was skipped
-                    with open(log_path, "a") as f:
-                        f.write(f"  Skipping mask check for effect - using rect collision\n")
-                
+                    if _mask_log.isEnabledFor(logging.DEBUG):
+                        _mask_log.debug(
+                            "  Skipping mask check for effect - using rect collision"
+                        )
+
                 if do_collision:
                     effect_area_id = effect_area._id
                     current_effect_area_ids.add(effect_area_id)
-                    
-                    # DEBUG: Log which effects are currently colliding
-                    with open(log_path, "a") as f:
-                        f.write(f"  Effect in current_effect_area_ids: {effect_area_id}\n")
-                    
+
+                    if _mask_log.isEnabledFor(logging.DEBUG):
+                        _mask_log.debug(
+                            "  Effect in current_effect_area_ids: %s", effect_area_id
+                        )
+
                     # If effect not already active, create and apply it
                     if effect_area_id not in self.active_effects:
                         # Look up effect class from registry based on properties
@@ -753,13 +852,16 @@ class Entity(pygame.sprite.Sprite):
                             if prop_key in effect_area.properties:
                                 effect_instance = effect_class(effect_area.properties)
                                 break
-                        
+
                         if effect_instance:
                             self.active_effects[effect_area_id] = effect_instance
                             effect_instance.apply(self)
-                            # DEBUG: Log effect application with velocity
-                            with open(log_path, "a") as f:
-                                f.write(f"  Effect APPLIED: {effect_area_id}, velocity: {self.velocity}\n")
+                            if _mask_log.isEnabledFor(logging.DEBUG):
+                                _mask_log.debug(
+                                    "  Effect APPLIED: %s, velocity: %s",
+                                    effect_area_id,
+                                    self.velocity,
+                                )
         
         # Remove effects that are no longer colliding
         effects_to_remove = []
@@ -769,27 +871,45 @@ class Entity(pygame.sprite.Sprite):
                 if not effect_instance.should_persist_after_exit():
                     effect_instance.remove(self)
                     effects_to_remove.append(effect_area_id)
-                    # DEBUG: Log effect removal with timing
-                    log_path = os.path.join(os.path.dirname(__file__), "mask_debug.log")
-                    with open(log_path, "a") as f:
-                        f.write(f"  Effect REMOVED: {effect_area_id} (no longer colliding, velocity: {self.velocity})\n")
-                    # Apply normal friction when exiting (if slippery)
-                    if hasattr(effect_instance, 'slippery_factor'):
-                        # Velocity persists, normal friction will handle it
-                        pass
+                    if _mask_log.isEnabledFor(logging.DEBUG):
+                        _mask_log.debug(
+                            "  Effect REMOVED: %s (no longer colliding, velocity: %s)",
+                            effect_area_id,
+                            self.velocity,
+                        )
         
         # Remove effects that shouldn't persist
         for effect_area_id in effects_to_remove:
             del self.active_effects[effect_area_id]
         
-        # DEBUG: Log active effects and velocity after cleanup
-        log_path = os.path.join(os.path.dirname(__file__), "mask_debug.log")
-        with open(log_path, "a") as f:
+        if _mask_log.isEnabledFor(logging.DEBUG):
             if self.active_effects:
-                f.write(f"  Active effects after cleanup: {list(self.active_effects.keys())}, velocity: {self.velocity}\n")
+                _mask_log.debug(
+                    "  Active effects after cleanup: %s, velocity: %s",
+                    list(self.active_effects.keys()),
+                    self.velocity,
+                )
             elif effects_to_remove:
-                f.write(f"  All effects removed, velocity: {self.velocity}\n")
-          
+                _mask_log.debug(
+                    "  All effects removed, velocity: %s", self.velocity
+                )
+
+    def apply_environmental_damage(self, dt):
+        """Apply damage from active effects that provide environmental damage (e.g. heat)."""
+        #print(f"applying environmental damage")
+        #print(self.active_effects)
+        for effect in self.active_effects.values():
+            if hasattr(effect, 'get_environmental_damage'):
+                result = effect.get_environmental_damage(self, dt)
+                if result:
+                    amount, damage_type = result
+                    if amount > 0:
+                        self.take_environmental_damage(amount, damage_type)
+
+    def take_environmental_damage(self, amount, damage_type):
+        """Override in subclasses that have health. Base Entity does nothing."""
+        pass
+
     def line_rect_intersection(start_point, end_point, rect):
         x1, y1 = start_point
         x2, y2 = end_point

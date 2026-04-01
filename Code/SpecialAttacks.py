@@ -4,6 +4,9 @@ import pygame
 from functools import partial
 import math
 from Settings import TILESIZE
+from game_logging import get_debug_logger
+
+_combat_log = get_debug_logger("combat")
 
 
 
@@ -156,19 +159,28 @@ class SummonIceGhosts(SpecialAttack):
             return
 
         current_time = pygame.time.get_ticks()
-        print(f"udpate : current:{current_time}  start :{self.cast_start_time} cast_time = {self.cast_time}")
+        _combat_log.debug(
+            "udpate : current:%s  start :%s cast_time = %s",
+            current_time,
+            self.cast_start_time,
+            self.cast_time,
+        )
         if current_time - self.cast_start_time >= self.cast_time:
             damage_taken_during_cast = self.starting_health - enemy.health
-            print(f"damage taken : {damage_taken_during_cast}, thresh: {self.damage_threshold}")
+            _combat_log.debug(
+                "damage taken : %s, thresh: %s",
+                damage_taken_during_cast,
+                self.damage_threshold,
+            )
             if damage_taken_during_cast < self.damage_threshold:
                 num_ghosts_to_spawn = 3  # You can adjust this number as needed
                 for _ in range(num_ghosts_to_spawn):
                     
                     spawn_pos = self.generate_random_position(enemy.rect.center, self.spawn_radius)
-                    print(f"spawn pos  : {spawn_pos}")
+                    _combat_log.debug("spawn pos  : %s", spawn_pos)
                     context["spawn_enemy"](config = {'type': 'ice_ghost'},
                                         pos = spawn_pos)
-                    print("supposidly spawned ghost")
+                    _combat_log.debug("supposidly spawned ghost")
             self.is_casting = False
             enemy.status = 'idle'
             self.last_used_time = current_time

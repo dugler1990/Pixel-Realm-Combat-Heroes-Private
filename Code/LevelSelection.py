@@ -1,6 +1,8 @@
 import pygame
 import os
+from game_logging import get_debug_logger
 
+_game_flow_log = get_debug_logger("game_flow")
 class LevelSelection:
     def __init__(self, game, input_manager):
         self.game = game
@@ -65,9 +67,15 @@ class LevelSelection:
         if (row, col) in self.unlocked_levels_positions:
             selected_level = level_map.get((row, col))
             if selected_level:
-                print(f"Selected Level {selected_level} at Grid: {(row+1, col+1)}")
+                _game_flow_log.debug(
+                    "Selected Level %s at Grid: %s",
+                    selected_level,
+                    (row + 1, col + 1),
+                )
                 self.selected_level = selected_level
                 self.game.in_level_selection = False
             else:
-                print(f"Level at Grid {(row+1, col+1)} is not available.")
+                _game_flow_log.debug(
+                    "Level at Grid %s is not available.", (row + 1, col + 1)
+                )
 

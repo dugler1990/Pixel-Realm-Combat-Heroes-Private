@@ -1,0 +1,32 @@
+Goals : 
+
+1. Print the slippery factor in game.
+
+	--> So my first thought is lets do similar to "valid interactions" which already works. 
+	----> You just check constantly if there are "attributes to be applied"
+	--------> To know if your on it, you check quad tree, so these attributes need to be retrievable from quadtree
+	
+	1.1 make sure we are able to save these attributes in quadtree
+	1.2 check if we can print the attributes when we collide with them ( as player ) 
+	
+
+
+	### Im making some objects but they are solid black squares, not sure why tbh... its drawing the rects when it saves them like i thought
+	  # I also dont think it actually draws the areas yet... right ? 
+	  
+	  # ---> Im guessing the rect are being drawn because The effect layer in being interpreted as an object layer.... or just as an object .. ? being rendered ? 
+	  # ----> hmm i dont get it. 
+	  
+	  
+	  # ---> Lets try doing collision loguc with player and printing if its colliding.
+	  
+	  
+	  #           -> First we have to pass all the new effect layers around
+	  
+	  
+	  	# The player gets it passed to it, All entities do? 
+	  
+
+2. Make the slippery factor impact movement.
+
+	 

@@ -12,6 +12,7 @@ class Weather:
         self.light_level = 1  # Default to full daylight
         self.weather_type = 'snow'
         self.weather_intensity = 2
+        self.time_speed_multiplier = 1.0
         
     def update(self, dt):
         # Update the current time within the day
@@ -19,7 +20,7 @@ class Weather:
         time_increment = dt 
         #print(time_increment)
         # Update the current time within the day
-        self.current_time = (self.current_time + time_increment*10) % self.day_length
+        self.current_time = (self.current_time + time_increment * 10 * self.time_speed_multiplier) % self.day_length
 
         # Update wind, temperature, and light level based on the new time
         self.randomize_wind()

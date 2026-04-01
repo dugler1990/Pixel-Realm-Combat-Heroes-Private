@@ -1,5 +1,8 @@
 import pygame
+from game_logging import get_debug_logger
 from Entity import Entity
+
+_combat_log = get_debug_logger("combat")
 from Particles import AnimationPlayer, ParticleEffect
 from ImageCache import ImageCache
 
@@ -68,9 +71,9 @@ class Trap(Entity):
 
     def activate(self):
         self.animation_player.create_particles(self.effect_type, self.rect.center, self.groups)
-        print(f"IN ACTIVATE, trigger : {self.trigger}")
+        _combat_log.debug("IN ACTIVATE, trigger : %s", self.trigger)
         if self.trigger == 'proximity':
-            print("IN PROXIMITY ABOUT TO KILL")
+            _combat_log.debug("IN PROXIMITY ABOUT TO KILL")
             self.trigger_death_particles()
             self.kill()
 
@@ -82,7 +85,7 @@ class Trap(Entity):
 
     def trigger_death_particles(self):
         self.animation_player.create_particles(self.death_animation, self.rect.center, self.groups)
-        print("Trap destroyed")
+        _combat_log.debug("Trap destroyed")
 
 
 # Usage example, assuming ImageCache is properly initialized and ready to use

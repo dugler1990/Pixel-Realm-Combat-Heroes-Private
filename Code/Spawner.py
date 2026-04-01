@@ -2,8 +2,11 @@ import json
 import random
 import pygame
 from Enemy import Enemy  # Make sure to import your Enemy class
-from Settings import TILESIZE 
+from Settings import TILESIZE
+from game_logging import get_debug_logger
 from random import randint
+
+_spawner_log = get_debug_logger("spawner")
 from Eskimo import Eskimo
 from IceClone import IceClone
 from Trap import Trap
@@ -322,7 +325,7 @@ class Spawner:
              )
             self.neutral_characters.append(neutral_character)
         else:
-            print(f"Unknown neutral character type: {char_type}")
+            _spawner_log.debug("Unknown neutral character type: %s", char_type)
 
 
     def update(self, current_layout):

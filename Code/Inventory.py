@@ -1,5 +1,8 @@
 import pygame
 import math
+from game_logging import get_debug_logger
+
+_player_item_log = get_debug_logger("player_item")
 
 class InventorySlot:
     def __init__(self, rect, slot_type="general", angle=0):
@@ -7,6 +10,31 @@ class InventorySlot:
         self.slot_type = slot_type
         self.angle = angle
         self.item = None
+        self._cached_item_key = None
+        self._cached_item_surface = None
+
+    def _get_cached_item_surface(self):
+        if self.item is None:
+            self._cached_item_key = None
+            self._cached_item_surface = None
+            return None
+
+        item_path = getattr(self.item, "image_path", None)
+        if not item_path:
+            return None
+
+        cache_key = (item_path, self.rect.width, self.rect.height, self.angle)
+        if cache_key != self._cached_item_key:
+            item_image = pygame.image.load(item_path).convert_alpha()
+            item_image = pygame.transform.scale(
+                item_image, (self.rect.width, self.rect.height)
+            )
+            if self.angle != 0:
+                item_image = pygame.transform.rotate(item_image, self.angle)
+            self._cached_item_key = cache_key
+            self._cached_item_surface = item_image
+
+        return self._cached_item_surface
 
     def draw(self, screen):
         if self.angle != 0:
@@ -23,16 +51,9 @@ class InventorySlot:
             pygame.draw.rect(screen, color, self.rect, 2)
 
 
-                    # If there's an item in the slot, draw it
-        if self.item is not None:
-            item_image = pygame.image.load(self.item.image_path).convert_alpha()  # Load the item image
-            item_image = pygame.transform.scale(item_image, (self.rect.width, self.rect.height))  # Scale to fit the slot
-            
-            # If the slot is rotated, apply rotation
-            if self.angle != 0:
-                item_image = pygame.transform.rotate(item_image, self.angle)
-            
-            # Adjust image positioning based on rotation
+        # If there's an item in the slot, draw it (surface is cached by path/size/angle).
+        item_image = self._get_cached_item_surface()
+        if item_image is not None:
             if self.angle != 0:
                 screen.blit(item_image, item_image.get_rect(center=self.rect.center))
             else:
@@ -108,10 +129,12 @@ class Inventory:
         for slot in self.slots[backpack_start_index:]:
             if slot.item is None:  # Slot is empty
                 slot.item = item  # Assign the item to this slot
-                print(f"item assigned:{item}")
+                _player_item_log.debug("item assigned:%s", item)
                 return True  # Item was successfully added to the backpack
 
         # If no empty slot was found
-        print("Inventory is full.")  # Optional: Notify the player that the inventory is full
+        _player_item_log.debug(
+            "Inventory is full."
+        )  # Optional: Notify the player that the inventory is full
         return False  # Item could not be added
 

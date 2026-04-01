@@ -1,4 +1,7 @@
 from pygame import Rect
+from game_logging import get_debug_logger
+
+_quadtree_log = get_debug_logger("quadtree")
 
 class QuadTreeManager:
     def __init__(self):
@@ -191,19 +194,19 @@ class QuadTree(object):
     
     def print_all(self):
        """Recursively prints all items and nested items in the quadtree."""
-       print(f"Items in current node: {self.items}")
+       _quadtree_log.debug("Items in current node: %s", self.items)
    
        if self.nw:
-           print("Northwest sub-quadrant:")
+           _quadtree_log.debug("Northwest sub-quadrant:")
            self.nw.print_all()
        if self.ne:
-           print("Northeast sub-quadrant:")
+           _quadtree_log.debug("Northeast sub-quadrant:")
            self.ne.print_all()
        if self.se:
-           print("Southeast sub-quadrant:")
+           _quadtree_log.debug("Southeast sub-quadrant:")
            self.se.print_all()
        if self.sw:
-           print("Southwest sub-quadrant:")
+           _quadtree_log.debug("Southwest sub-quadrant:")
            self.sw.print_all()
     
     #@profile

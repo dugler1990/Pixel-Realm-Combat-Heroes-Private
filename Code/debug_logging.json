@@ -1,0 +1,74 @@
+{
+  "collision_mask": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/mask_collision.log",
+    "console": false
+  },
+  "tmx_effect_placement": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/effect_placement.log",
+    "console": false
+  },
+  "tmx_layout": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/tmx_layout.log",
+    "console": false
+  },
+  "animated_environment": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/animated_environment.log",
+    "console": false
+  },
+  "game_flow": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/game_flow.log",
+    "console": false
+  },
+  "combat": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/combat.log",
+    "console": false
+  },
+  "player_item": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/player_item.log",
+    "console": false
+  },
+  "spawner": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/spawner.log",
+    "console": false
+  },
+  "input": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/input.log",
+    "console": false
+  },
+  "mask_ascii": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/mask_ascii.log",
+    "console": false
+  },
+  "quadtree": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/quadtree.log",
+    "console": false
+  },
+  "effect_environmental": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/effect_environmental.log",
+    "console": false
+  }
+}

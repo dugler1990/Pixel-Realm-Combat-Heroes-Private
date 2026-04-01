@@ -100,7 +100,12 @@ class Friendly(Entity):
 
         #### 
 
-        self.masks = self.convert_animations_to_masks(self.animations)
+        self.masks = get_or_build_entity_masks(
+            self.monster_name,
+            self.animations,
+            self.animations_left_right_indicator,
+            skip_disk=False,
+        )
         self.mask = None
 
         # Player Interaction
@@ -198,55 +203,6 @@ class Friendly(Entity):
                 self.animations[status] = [pygame.transform.scale(frame, (int(frame.get_width() * scale_factor), int(frame.get_height() * scale_factor))) for frame in animations]
 
     
-    ## TODO: place this in support
-    def convert_animations_to_masks(self, animations_dict):
-        masks = {}
-        main_folder = "../Graphics/Masks"
-        os.makedirs(main_folder, exist_ok=True)
-    
-        if self.animations_left_right_indicator:
-            for key, animation_set_left_right in animations_dict.items():
-                monster_folder = os.path.join(main_folder, self.monster_name)
-                os.makedirs(monster_folder, exist_ok=True)
-                
-                masks_temp = {}
-                for left_right_key, animation_set in animation_set_left_right.items():
-                    direction_folder = os.path.join(monster_folder, left_right_key)
-                    os.makedirs(direction_folder, exist_ok=True)
-    
-                    mask_frames = frames_to_masks(animation_set)
-                    masks_temp[left_right_key] = mask_frames
-                    
-                    # Save each mask frame as an image
-                    for i, mask in enumerate(mask_frames):
-                        if mask is not None:  # Check if mask exists
-                            # Save the mask as an image
-                            image_path = os.path.join(direction_folder, f"{key}_{left_right_key}_mask_{i}.png")
-                            pygame.image.save(mask.to_surface(), image_path)
-                        
-                masks[key] = masks_temp
-        else:
-            for key, animation_set in animations_dict.items():
-                monster_folder = os.path.join(main_folder, self.monster_name)
-                os.makedirs(monster_folder, exist_ok=True)
-                
-                direction_folder = monster_folder
-    
-                mask_frames = frames_to_masks(animation_set)
-                masks[key] = {"default": mask_frames}
-                
-                # Save each mask frame as an image
-                for i, mask in enumerate(mask_frames):
-                    if mask is not None:  # Check if mask exists
-                        # Save the mask as an image
-                        image_path = os.path.join(direction_folder, f"{key}_mask_{i}.png")
-                        pygame.image.save(mask.to_surface(), image_path)
-        
-        return masks
-
-
-
-        
     def freeze(self, duration=3000):
         """Freeze the unit, stopping all movement and actions."""
         self.frozen = True

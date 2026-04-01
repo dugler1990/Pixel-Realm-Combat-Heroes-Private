@@ -1,7 +1,10 @@
 import pygame
 from Support import import_folder
 from Settings import *
+from game_logging import get_debug_logger
 from Entity import Entity
+
+_player_item_log = get_debug_logger("player_item")
 import os
 from Inventory import Inventory
 from PlayerConfiguration import PlayerConfiguration
@@ -31,6 +34,8 @@ class BasePlayer(Entity):
         
         #self.TILESIZE = TILESIZE * 0.4# hardcoded bs fix it.
         self.type = 'player'
+        # Set once in __init__ so update()/recovery never hit AttributeError (e.g. threaded sprite updates).
+        self.is_dead = False
         self.previous_tile = None
         self.power_level = 1
         self.inventory = Inventory(self, input_manager)
@@ -136,10 +141,6 @@ class BasePlayer(Entity):
     
 
     def get_damage(self, amount, attack_type=None):
-        
-        #print(f"made it to damage player , vulerable: {self.player.vulnerable}")
-        #print(amount)
-        
         if self.vulnerable:
             self.health -= amount
             self.vulnerable = False
@@ -148,10 +149,14 @@ class BasePlayer(Entity):
             if attack_type:
                 if attack_type != 'melee': ## TODO : a at the moment this is recieving attack type to do attack particles, 
                                                     # we do not have any attack particles for this so screw it.
-                                                    
-                    self.animation_player.create_particles(attack_type, self.player.rect.center, [self.layout_manager.visible_sprites])
+                    # LayoutManager is passed as obstacle_sprites; animation_player lives on level
+                    self.level.animation_player.create_particles(
+                        attack_type, self.rect.center, [self.obstacle_sprites.visible_sprites]
+                    )
 
-         
+    def take_environmental_damage(self, amount, damage_type):
+        """Apply environmental damage (e.g. heat); reuses vulnerability via get_damage. No attack_type so particle branch is skipped until environmental types are defined."""
+        self.get_damage(amount, None)
 
     # def get_damage(self, player, attack_type):
     #     if self.vulnerable:
@@ -207,10 +212,10 @@ class BasePlayer(Entity):
         
         
     def pickup_item(self, item):
-        print(f"item.effect_type:{item.effect_type}")
-        print(dir(item))
+        _player_item_log.debug("item.effect_type:%s", item.effect_type)
+        _player_item_log.debug("%s", dir(item))
         if hasattr(self,"TILESIZE"):
-            print(self.TILESIZE)
+            _player_item_log.debug("%s", self.TILESIZE)
         if item.effect_type == 'consumable':
             self.apply_item_effect(item.effect)  # A method to apply the item's effect (e.g., heal the player)
         else:
@@ -412,12 +417,15 @@ class BasePlayer(Entity):
 
     def player_death(self):
         if self.health <= 0:
-            sys.exit()
+            self.health = 0
+            self.is_dead = True
 
     def get_cost_by_index(self, index):
         return list(self.upgrade_cost.values())[index]
 
     def energy_recovery(self):
+        if self.is_dead or self.health <= 0:
+            return
         if self.energy < self.stats["energy"]:
             self.energy += 0.05 * self.stats["magic"]
         else:
@@ -425,6 +433,8 @@ class BasePlayer(Entity):
 
 
     def health_recovery(self):
+        if self.is_dead or self.health <= 0:
+            return
         if self.health < self.stats["health"]:
             self.health += 0.05 * self.stats["vitality"]
         else:
@@ -432,8 +442,9 @@ class BasePlayer(Entity):
 
 
     def update(self, QuadTree,entity_quad_tree, dt=None,layout_switch= False):#
-        
-    
+        if self.is_dead:
+            return
+
         #print(f"player attributes:{self.stats}")
     
         #print(self.rect.center[0]/TILESIZE)

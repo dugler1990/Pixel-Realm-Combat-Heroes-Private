@@ -29,8 +29,40 @@ from QuadTree import QuadTree
 from QuadTree import QuadTreeManager
 from hashRect import HashableRect
 from EffectArea import EffectArea
+from Torch import Torch
+from Tree import Tree
+from AnimationSprite import AnimationSprite
 import json
+import logging
 import math
+import os
+import random
+
+from game_logging import get_tmx_effect_placement_logger, get_tmx_layout_logger
+from benchmark_runtime import BENCHMARK_RUNTIME
+from benchmark_broadphase import MovingEntityBroadphaseAdapter
+from Entity import Entity
+
+_tmx_layout_log = get_tmx_layout_logger()
+
+# TMX tile object: custom property env_anim_type = "tree" | "torch" (case-insensitive).
+# Keyword maps 1:1 to sprite_animation_config (legacy Map7 tree1/torch1 paths).
+ENV_ANIM_REGISTRY = {
+    "torch": Torch,
+    "tree": Tree,
+}
+
+ENV_ANIM_SPRITE_CONFIG_BY_TYPE = {
+    "tree": {
+        "normal": "../levels/Map7/start/Objects/object_images/tree1/normal",
+        "strong_wind_left": "../levels/Map7/start/Objects/object_images/tree1/strong_wind_left",
+        "strong_wind_right": "../levels/Map7/start/Objects/object_images/tree1/strong_wind_right",
+    },
+    "torch": {
+        "normal": "../levels/Map7/start/Objects/object_images/torch1/normal",
+    },
+}
+
 
 class LayoutManager:
     
@@ -38,13 +70,15 @@ class LayoutManager:
                  selected_player_info_dir,
                  TILESIZE,
                  restore_persistent_enemies_callback=None,
-                 initialize_map_items_callback=None
+                 initialize_map_items_callback=None,
+                 benchmark_runtime=None,
                  ):
         # This class manages layouts of a level with triggers and logs
         self.start_map_layout(selected_player_info_dir = selected_player_info_dir,
                         TILESIZE = TILESIZE,
                         restore_persistent_enemies_callback=restore_persistent_enemies_callback,
                         initialize_map_items_callback=initialize_map_items_callback)
+        self.benchmark_runtime = benchmark_runtime or BENCHMARK_RUNTIME
 
     def start_map_layout(self,
                          selected_player_info_dir,
@@ -68,6 +102,7 @@ class LayoutManager:
     
         # Initialize grass manager
         self.grass_manager = GrassManager(grass_path="../Graphics/Grass", tile_size=TILESIZE, stiffness=600, max_unique=3, place_range=[0, 1])
+        self._grass_profiles = {}
     
         # Initialize sprite groups
         self.ground_sprites = pygame.sprite.Group()
@@ -142,10 +177,11 @@ class LayoutManager:
         #if alive:
         #print(f"alive : {alive}")
         # Add the obstacle sprite to the quadtree
-        self.entity_quad_tree.insert(obstacle_sprite, 
-                                     alive = alive,
-                                     remove_existing=remove_existing
-                                     )
+        self.entity_quad_tree.insert(
+            obstacle_sprite,
+            alive=alive,
+            remove_existing=remove_existing,
+        )
         
             # The above is quite confusing, the insert method actually doesnt insert if alive is false,
             # the insert method deletes every time, if remove_existing is true
@@ -158,10 +194,94 @@ class LayoutManager:
     def set_player(self, player):
         """Sets the player object for layout interaction."""
         self.player = player
+
+    def trigger_animation(self, frames, position, speed):
+        AnimationSprite(frames, position, speed, [self.visible_sprites])
+
     def set_spawner(self, spawner, layout_callback_update_quad_tree):
         """Sets the Spawner object for enemy management."""
         self.spawner = spawner  
         self.spawner.set_layout_callback_update_quad_tree( layout_callback_update_quad_tree )
+
+    def _load_grass_profiles(self, tmx_path):
+        """Load grass_profiles.json from layout folder first, else shared levels/tmx/."""
+        self._grass_profiles = {}
+        candidates = []
+        if tmx_path:
+            candidates.append(
+                os.path.normpath(os.path.join(os.path.abspath(tmx_path), "grass_profiles.json"))
+            )
+        _code_dir = os.path.dirname(os.path.abspath(__file__))
+        candidates.append(
+            os.path.normpath(os.path.join(_code_dir, "..", "levels", "tmx", "grass_profiles.json"))
+        )
+        for path in candidates:
+            if os.path.isfile(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        self._grass_profiles = data
+                    else:
+                        _tmx_layout_log.debug(
+                            "grass_profiles.json must be a JSON object, got %s: %s",
+                            type(data).__name__,
+                            path,
+                        )
+                    return
+                except (json.JSONDecodeError, OSError) as e:
+                    _tmx_layout_log.debug("Failed to load grass profiles from %s: %s", path, e)
+                    return
+        _tmx_layout_log.debug(
+            "No grass_profiles.json found; grass_profile on tiles will be ignored."
+        )
+
+    def _resolve_grass_profile(self, name):
+        """
+        Return (density, grass_options) for GrassManager.place_tile, or None on error.
+        """
+        if name is None:
+            return None
+        key = str(name).strip()
+        if not key:
+            return None
+        prof = self._grass_profiles.get(key)
+        if not prof:
+            _tmx_layout_log.debug(
+                "Unknown grass_profile=%r; add it to grass_profiles.json", key
+            )
+            return None
+        options = prof.get("grass_options")
+        if not isinstance(options, list) or len(options) == 0:
+            _tmx_layout_log.debug(
+                "grass_profile=%r needs non-empty grass_options list", key
+            )
+            return None
+        try:
+            options = [int(x) for x in options]
+        except (TypeError, ValueError):
+            _tmx_layout_log.debug("grass_profile=%r grass_options must be integers", key)
+            return None
+        if "density" in prof:
+            try:
+                density = max(1, int(prof["density"]))
+            except (TypeError, ValueError):
+                _tmx_layout_log.debug("grass_profile=%r has invalid density", key)
+                return None
+        else:
+            try:
+                mean = float(prof.get("density_mean", 40))
+                sigma = float(prof.get("density_sigma", 0))
+            except (TypeError, ValueError):
+                _tmx_layout_log.debug(
+                    "grass_profile=%r has invalid density_mean/density_sigma", key
+                )
+                return None
+            if sigma > 0:
+                density = max(1, round(random.gauss(mean, sigma)))
+            else:
+                density = max(1, int(mean))
+        return density, list(options)
 
 
 ## Create ground sprites:
@@ -175,44 +295,156 @@ class LayoutManager:
                                                                 # no clearbetter way to do it , i could manage the ids of layers..
         layer_number = str(tmx_ground_layer)[layer_number_posstart+1:layer_number_posend]   
         layer_number = int(layer_number)-1
-                                                       
+        layer_name_lower = getattr(tmx_ground_layer, "name", "").lower()
+        layer_has_grass = "grass" in layer_name_lower
+
         for tile in tmx_ground_layer.tiles():
-            
-            
-           
+            tile_properties = {}
             try:
-                tile_properties = self.tmxdata.get_tile_properties(tile[0],tile[1],layer_number)
+                raw_props = self.tmxdata.get_tile_properties(tile[0], tile[1], layer_number)
+                tile_properties = dict(raw_props) if raw_props else {}
                 valid_interaction_types = [tile_properties.get("valid_interaction_types")]
-            except:
+            except Exception:
                 valid_interaction_types = []
             gid = self.tmxdata.get_tile_gid(tile[0], tile[1], layer_number)
-            print(f"tile:{tile}")
-            print(gid)
-            
-            
-            surface =  self.tmxdata.get_tile_image(tile[0],tile[1],layer_number)
+            #print(f"tile:{tile}")
+            #print(gid)
+
+            surface = self.tmxdata.get_tile_image(tile[0], tile[1], layer_number)
+            if not surface:
+                continue
             surface = surface.copy()
-            
-            if surface:  # Ensure surface is not None
-                width, height = surface.get_size()  # Get original size
-                print(f"Original Size: {width}x{height}")  # Debugging
-            
-                surface = pygame.transform.scale(surface, (TILESIZE, TILESIZE))
-            
-            # if surface:
-            #     filename = f"tile_{tile[0]}_{tile[1]}.png"
-            #     pygame.image.save(surface, filename)
-            #     print(f"Saved tile ({tile[0]}, {tile[1]}) as {filename}")
-            
+
+            width, height = surface.get_size()  # Get original size
+            #print(f"Original Size: {width}x{height}")  # Debugging
+
+            surface = pygame.transform.scale(surface, (TILESIZE, TILESIZE))
+
             new_tile = Tile(pos = (tile[0]*TILESIZE,tile[1]*TILESIZE),# could refactor pos its used atleast twice here
                             groups = [self.ground_sprites],
                             sprite_type ='ground',
                             surface = surface, # only surface if imported with pygame func
                             valid_interaction_types = valid_interaction_types)
-            
+
             self.tile_map[(tile[0], tile[1])] = new_tile
-            
+
+            if layer_has_grass:
+                gp = tile_properties.get("grass_profile")
+                if gp is not None and str(gp).strip():
+                    resolved = self._resolve_grass_profile(gp)
+                    if resolved:
+                        density, grass_options = resolved
+                        tx, ty = tile[0], tile[1]
+                        self.grass_manager.place_tile(
+                            location=(tx, ty), density=density, grass_options=grass_options
+                        )
+                        grid = getattr(self, "grass_tile_grid", None)
+                        if grid is not None and 0 <= ty < len(grid) and 0 <= tx < len(grid[0]):
+                            grid[ty][tx] = True
+
         
+    def _game_rect_for_tmx_object(self, object_, tiled_tile_width, tiled_tile_height):
+        """Tiled object position/size to game-space pixel rect (x, y, w, h)."""
+        x_pos = (object_.x * TILESIZE) / tiled_tile_width
+        y_pos = (object_.y * TILESIZE) / tiled_tile_height
+        width_scaling_factor = TILESIZE / tiled_tile_width
+        height_scaling_factor = TILESIZE / tiled_tile_height
+        gw = object_.width * width_scaling_factor
+        gh = object_.height * height_scaling_factor
+        if gw <= 0 or gh <= 0:
+            gw = TILESIZE
+            gh = TILESIZE
+        return x_pos, y_pos, gw, gh
+
+    def _place_grass_cells_in_rect(self, x_pos, y_pos, gw, gh, density, grass_options):
+        """Fill all tile cells overlapping the axis-aligned rect; respects GrassManager first-wins."""
+        tx0 = int(math.floor(x_pos / TILESIZE))
+        ty0 = int(math.floor(y_pos / TILESIZE))
+        tx1 = int(math.floor((x_pos + gw - 1) / TILESIZE))
+        ty1 = int(math.floor((y_pos + gh - 1) / TILESIZE))
+        grid = getattr(self, "grass_tile_grid", None)
+        if grid is not None:
+            gh_rows = len(grid)
+            gw_cols = len(grid[0])
+            ty_lo = max(0, ty0)
+            ty_hi = min(ty1, gh_rows - 1)
+            tx_lo = max(0, tx0)
+            tx_hi = min(tx1, gw_cols - 1)
+        else:
+            ty_lo, ty_hi = ty0, ty1
+            tx_lo, tx_hi = tx0, tx1
+        for ty in range(ty_lo, ty_hi + 1):
+            for tx in range(tx_lo, tx_hi + 1):
+                self.grass_manager.place_tile(
+                    location=(tx, ty), density=density, grass_options=grass_options
+                )
+                if grid is not None and 0 <= ty < len(grid) and 0 <= tx < len(grid[0]):
+                    grid[ty][tx] = True
+
+    def create_grass_object_layer(self, tmx_object_layer):
+        """
+        Object layer whose name contains 'grass': each object needs grass_profile on the object.
+        Fills all tile cells overlapping the object's axis-aligned bbox (no Tile sprites).
+        """
+        layer_name = getattr(tmx_object_layer, "name", "")
+        tiled_tile_width = self.tmxdata.tilewidth
+        tiled_tile_height = self.tmxdata.tileheight
+
+        for object_ in tmx_object_layer:
+            raw_props = getattr(object_, "properties", None) or {}
+            props = dict(raw_props) if raw_props is not None else {}
+            gp = props.get("grass_profile")
+            if gp is None or not str(gp).strip():
+                _tmx_layout_log.debug(
+                    "Grass layer %r object missing grass_profile; skipping object",
+                    layer_name,
+                )
+                continue
+            resolved = self._resolve_grass_profile(gp)
+            if not resolved:
+                continue
+            density, grass_options = resolved
+            x_pos, y_pos, gw, gh = self._game_rect_for_tmx_object(
+                object_, tiled_tile_width, tiled_tile_height
+            )
+            self._place_grass_cells_in_rect(x_pos, y_pos, gw, gh, density, grass_options)
+
+    def _try_spawn_animated_env_object(self, object_, props, x_pos, y_pos, width_scaling_factor, height_scaling_factor):
+        """
+        If env_anim_type is tree or torch, spawn using ENV_ANIM_SPRITE_CONFIG_BY_TYPE.
+        On failure, log a warning and return False (caller may fall back to static tile).
+        """
+        env_type = props.get("env_anim_type")
+        if env_type is None or (isinstance(env_type, str) and not env_type.strip()):
+            return False
+        key = str(env_type).strip().lower()
+        cls = ENV_ANIM_REGISTRY.get(key)
+        if cls is None:
+            _tmx_layout_log.debug(
+                "Unknown env_anim_type=%r; expected one of %s",
+                env_type,
+                list(ENV_ANIM_REGISTRY),
+            )
+            return False
+        config = ENV_ANIM_SPRITE_CONFIG_BY_TYPE.get(key)
+        if not config:
+            _tmx_layout_log.debug(
+                "No sprite config wired for env_anim_type=%r.", key
+            )
+            return False
+        try:
+            cls((x_pos, y_pos), [self.visible_sprites, self.obstacle_sprites], config)
+            return True
+        except Exception as e:
+            _tmx_layout_log.debug(
+                "Failed to spawn %s at (%s, %s): %s",
+                cls.__name__,
+                x_pos,
+                y_pos,
+                e,
+            )
+            return False
+
     def create_object_layer( self,tmx_object_layer ):
         
         ## Fix discrepancy between tiled map tilesize and game tilesize
@@ -222,15 +454,21 @@ class LayoutManager:
         
         for object_ in tmx_object_layer:
         
-            image = object_.image
-
-                
             x_pos = (object_.x*TILESIZE ) / tiled_tile_width
             y_pos = (object_.y*TILESIZE ) / tiled_tile_height
-            
-
             width_scaling_factor = TILESIZE/tiled_tile_width
             height_scaling_factor = TILESIZE/tiled_tile_height
+
+            raw_props = getattr(object_, "properties", None) or {}
+            props = dict(raw_props) if raw_props is not None else {}
+
+            if self._try_spawn_animated_env_object(
+                object_, props, x_pos, y_pos, width_scaling_factor, height_scaling_factor
+            ):
+                continue
+
+            image = object_.image
+
             
             if image is not None:
                 # SCALE
@@ -291,22 +529,44 @@ class LayoutManager:
         # Your engine uses Tiled Y as top-left, so no subtract of height.
         rect = pygame.Rect(int(x_game), int(y_game), surf_w, surf_h)
     
-        # DEBUG: Log TMX position vs calculated position
-        import os
-        import math
-        
-        # Count mask pixels to verify ellipse is correct size
-        mask_pixel_count = mask.count() if mask else 0
-        expected_ellipse_area = math.pi * (surf_w / 2) * (surf_h / 2) if getattr(obj, "ellipse", False) else surf_w * surf_h
-        log_path = os.path.join(os.path.dirname(__file__), "effect_position_debug.log")
-        with open(log_path, "a") as f:
-            f.write(f"Effect {layer_name}_{idx}:\n")
-            f.write(f"  TMX raw: obj.x={obj.x}, obj.y={obj.y}, obj.width={obj.width}, obj.height={obj.height}\n")
-            f.write(f"  Scaling: sx={sx}, sy={sy}, TILESIZE={self.TILESIZE}, tilewidth={tw}, tileheight={th}\n")
-            f.write(f"  Calculated: x_game={x_game}, y_game={y_game}, w_game={w_game}, h_game={h_game}\n")
-            f.write(f"  Final rect: {rect} (surf_w={surf_w}, surf_h={surf_h})\n")
-            f.write(f"  Mask pixel count: {mask_pixel_count}, Expected ellipse area: {expected_ellipse_area:.1f}\n")
-            f.write(f"  Mask size: {mask.get_size() if mask else 'None'}\n\n")
+        _fx_log = get_tmx_effect_placement_logger()
+        if _fx_log.isEnabledFor(logging.DEBUG):
+            mask_pixel_count = mask.count() if mask else 0
+            expected_ellipse_area = (
+                math.pi * (surf_w / 2) * (surf_h / 2)
+                if getattr(obj, "ellipse", False)
+                else surf_w * surf_h
+            )
+            _fx_log.debug(
+                "Effect %s_%s:\n"
+                "  TMX raw: obj.x=%s, obj.y=%s, obj.width=%s, obj.height=%s\n"
+                "  Scaling: sx=%s, sy=%s, TILESIZE=%s, tilewidth=%s, tileheight=%s\n"
+                "  Calculated: x_game=%s, y_game=%s, w_game=%s, h_game=%s\n"
+                "  Final rect: %s (surf_w=%s, surf_h=%s)\n"
+                "  Mask pixel count: %s, Expected ellipse area: %.1f\n"
+                "  Mask size: %s",
+                layer_name,
+                idx,
+                obj.x,
+                obj.y,
+                obj.width,
+                obj.height,
+                sx,
+                sy,
+                self.TILESIZE,
+                tw,
+                th,
+                x_game,
+                y_game,
+                w_game,
+                h_game,
+                rect,
+                surf_w,
+                surf_h,
+                mask_pixel_count,
+                expected_ellipse_area,
+                mask.get_size() if mask else "None",
+            )
     
         # --- Properties ---
         props = dict(obj.properties) if hasattr(obj, "properties") else {}
@@ -326,6 +586,9 @@ class LayoutManager:
     
     
     def create_effect_layer(self, tmx_object_layer):
+        _fx_layer_log = get_tmx_effect_placement_logger()
+        _fx_layer_log.debug("creating effect layer")
+        _fx_layer_log.debug("%s", tmx_object_layer)
         items = []
         layer_name = getattr(tmx_object_layer, "name", f"effect_layer_{len(getattr(self,'effect_quad_trees',{}))}")
         for idx, obj in enumerate(tmx_object_layer):
@@ -362,7 +625,9 @@ class LayoutManager:
         Extracts spawner config properties and creates spawn areas.
         """
         if not hasattr(self, 'spawner'):
-            print("Warning: Spawner not set, cannot process spawner layer")
+            _tmx_layout_log.debug(
+                "Warning: Spawner not set, cannot process spawner layer"
+            )
             return
         
         layer_name = getattr(tmx_object_layer, "name", "spawner")
@@ -379,7 +644,6 @@ class LayoutManager:
             spawner_config = self._extract_spawner_config(props)
             
             if not spawner_config:
-                print(f"Warning: Spawner object missing required config properties, skipping")
                 continue
             
             # Generate spawn_matrix from object dimensions
@@ -393,41 +657,71 @@ class LayoutManager:
     
     def _extract_spawner_config(self, props):
         """
-        Extract spawner configuration from object properties.
-        Returns dict with spawner config or None if required properties missing.
+        Read a single Tiled property spawner_config: JSON string (or dict) with full spawner config.
+        Same shape as legacy *.json spawner files. Returns None on missing/invalid input.
         """
-        # Required properties
-        if 'enemy_spawn_weights' not in props:
+        raw = props.get("spawner_config")
+        if raw is None:
+            _tmx_layout_log.debug(
+                "Spawner object missing spawner_config property"
+            )
             return None
-        
-        # Handle enemy_spawn_weights - could be JSON string or dict
-        enemy_spawn_weights = props.get('enemy_spawn_weights')
-        if isinstance(enemy_spawn_weights, str):
+        if isinstance(raw, str) and not str(raw).strip():
+            _tmx_layout_log.debug("Spawner spawner_config is empty")
+            return None
+
+        if isinstance(raw, str):
             try:
-                enemy_spawn_weights = json.loads(enemy_spawn_weights)
-            except json.JSONDecodeError:
-                print(f"Warning: Could not parse enemy_spawn_weights as JSON: {enemy_spawn_weights}")
+                data = json.loads(raw)
+            except json.JSONDecodeError as e:
+                _tmx_layout_log.debug("Invalid spawner_config JSON: %s", e)
                 return None
-        
-        # Build spawner config dict
+        elif isinstance(raw, dict):
+            data = dict(raw)
+        else:
+            _tmx_layout_log.debug(
+                "spawner_config must be string or dict, got %s",
+                type(raw).__name__,
+            )
+            return None
+
+        if not isinstance(data, dict):
+            _tmx_layout_log.debug(
+                "spawner_config JSON must be an object at top level"
+            )
+            return None
+
+        weights = data.get("enemy_spawn_weights")
+        if weights is None:
+            _tmx_layout_log.debug(
+                "spawner_config must include enemy_spawn_weights"
+            )
+            return None
+        if isinstance(weights, str):
+            try:
+                weights = json.loads(weights)
+            except json.JSONDecodeError as e:
+                _tmx_layout_log.debug(
+                    "Could not parse enemy_spawn_weights as JSON: %s", e
+                )
+                return None
+        if not isinstance(weights, dict):
+            _tmx_layout_log.debug(
+                "enemy_spawn_weights must be an object (dict)"
+            )
+            return None
+
         config = {
-            'enemy_spawn_weights': enemy_spawn_weights,
-            'spawn_type': props.get('spawn_type', 'random_weights'),
-            'frequency': props.get('frequency', 10000),  # Default 10 seconds
-            'spawn_limit': props.get('spawn_limit', 60),
-            'spawn_number': props.get('spawn_number', 1)
+            "enemy_spawn_weights": weights,
+            "spawn_type": data.get("spawn_type", "random_weights"),
+            "frequency": data.get("frequency", 10000),
+            "spawn_limit": data.get("spawn_limit", 60),
+            "spawn_number": data.get("spawn_number", 1),
         }
-        
-        # Optional properties
-        if 'distance' in props:
-            config['distance'] = props.get('distance')
-        if 'time_scaled' in props:
-            config['time_scaled'] = props.get('time_scaled', False)
-        if 'scale_type' in props:
-            config['scale_type'] = props.get('scale_type')
-        if 'scale_max' in props:
-            config['scale_max'] = props.get('scale_max')
-        
+        for opt in ("distance", "time_scaled", "scale_type", "scale_max"):
+            if opt in data:
+                config[opt] = data[opt]
+
         return config
     
     def _generate_spawn_matrix(self, obj, tiled_tile_width, tiled_tile_height):
@@ -493,9 +787,14 @@ class LayoutManager:
         self.effect_quad_tree_managers = {}
         self.all_effect_areas = []  # Store all effect areas for debug visualization 
         
-        
-        
         self.tmxdata = load_pygame( tmx_path + '/map.tmx' )
+
+        # Fresh procedural grass for this map (LayoutManager reuses one GrassManager).
+        self.grass_manager.grass_tiles.clear()
+        self._load_grass_profiles(tmx_path)
+        self.grass_tile_grid = [
+            [None for _ in range(self.tmxdata.width)] for _ in range(self.tmxdata.height)
+        ]
         
         self.tmx_ground_layers = [  x  for x in  self.tmxdata.layers if type(x).__name__.find("TileLayer") != -1 ]
 
@@ -513,7 +812,9 @@ class LayoutManager:
 
         for layout in self.tmx_ground_layers:
 
-            self.create_ground_layer(layout)            
+            self.create_ground_layer(layout)
+
+        self.visible_sprites.set_grass_grid(self.grass_tile_grid)
 
         for layout in self.tmx_object_layers:
             # Check if layer name contains "Effect" OR if any object has no image (shape-based effects)
@@ -521,6 +822,7 @@ class LayoutManager:
             layer_name_lower = layer_name.lower()
             has_effect_name = layer_name.find("Effect") != -1
             has_spawner_name = layer_name_lower.find("spawner") != -1
+            has_grass_name = "grass" in layer_name_lower
             has_shape_objects = any(getattr(obj, "image", None) is None for obj in layout)
             
             if has_spawner_name:
@@ -528,7 +830,12 @@ class LayoutManager:
                 if hasattr(self, 'spawner'):
                     self.create_spawner_layer(layout)
                 else:
-                    print(f"Warning: Spawner layer '{layer_name}' found but spawner not set. Skipping spawner processing.")
+                    _tmx_layout_log.debug(
+                        "Warning: Spawner layer %r found but spawner not set. Skipping spawner processing.",
+                        layer_name,
+                    )
+            elif has_grass_name:
+                self.create_grass_object_layer(layout)
             elif has_effect_name or has_shape_objects:
                 self.create_effect_layer(layout)
             else:
@@ -557,11 +864,20 @@ class LayoutManager:
                                            depth=8,
                                            bounding_rect=pygame.rect.Rect(0,0,self.csv_layout_width,self.csv_layout_height),
                                            manager = self.obstacle_quad_tree_manager ) # this would actually need the size of the map bounding_rect=(0, 0, HEIGHT, WIDTH)
-        self.entity_quad_tree_manager = QuadTreeManager()
-        self.entity_quad_tree = QuadTree(items = [],
-                                           depth=8,
-                                           bounding_rect=pygame.rect.Rect(0,0,self.csv_layout_width,self.csv_layout_height),
-                                           manager = self.entity_quad_tree_manager ) # this would actually need the size of the map bounding_rect=(0, 0, HEIGHT, WIDTH)
+        world_rect = pygame.rect.Rect(0, 0, self.csv_layout_width, self.csv_layout_height)
+        if self.benchmark_runtime.enabled:
+            self.entity_quad_tree_manager = None
+            self.entity_quad_tree = MovingEntityBroadphaseAdapter(
+                world_rect=world_rect,
+                backend=self.benchmark_runtime.broadphase_backend,
+                grid_cell_size=self.benchmark_runtime.grid_cell_size,
+            )
+        else:
+            self.entity_quad_tree_manager = QuadTreeManager()
+            self.entity_quad_tree = QuadTree(items = [],
+                                               depth=8,
+                                               bounding_rect=world_rect,
+                                               manager = self.entity_quad_tree_manager ) # this would actually need the size of the map bounding_rect=(0, 0, HEIGHT, WIDTH)
                 
 
         
@@ -587,6 +903,38 @@ class LayoutManager:
                                entity_quad_tree= self.entity_quad_tree)
             self.visible_sprites.add(self.player) 
 
+        # Rebuild ground surface after layout reload (needed for F5 restart)
+        self.visible_sprites.ground_surface = None
+        self.visible_sprites.create_ground_surface()
+
+    def switch_entity_broadphase_backend(self, backend_name, grid_cell_size=None):
+        if not self.benchmark_runtime.enabled:
+            return
+        if not isinstance(self.entity_quad_tree, MovingEntityBroadphaseAdapter):
+            return
+
+        current_items = []
+        for sprite in self.visible_sprites.sprites():
+            if isinstance(sprite, Entity):
+                current_items.append(
+                    HashableRect(
+                        sprite.rect,
+                        sprite.id,
+                        sprite.direction,
+                        getattr(sprite, "sprite_type", None),
+                        getattr(sprite, "mask", None),
+                    )
+                )
+        self.entity_quad_tree.set_backend(
+            backend_name,
+            current_items=current_items,
+            grid_cell_size=grid_cell_size,
+        )
+        _tmx_layout_log.debug(
+            "Benchmark broadphase backend switched to %s (grid_cell_size=%s)",
+            self.entity_quad_tree.backend_name,
+            getattr(self.entity_quad_tree, "grid_cell_size", None),
+        )
         
         
         

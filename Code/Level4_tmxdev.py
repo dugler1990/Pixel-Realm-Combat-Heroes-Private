@@ -8,6 +8,9 @@ from Item import Item
 from ItemVisual import ItemVisual
 import pygame
 from Settings import *
+from game_logging import get_debug_logger
+
+_game_flow_log = get_debug_logger("game_flow")
 from Tile import Tile
 from Trigger import Trigger
 from Player import SpecificPlayer
@@ -22,6 +25,7 @@ from Magic import MagicPlayer
 from Evasion import EvasionPlayer
 from Upgrade import Upgrade
 import os
+import sys
 import random
 from AnimationSprite import AnimationSprite
 from Trap import Trap
@@ -43,6 +47,7 @@ from pygame.mask import from_surface
 from hashRect import HashableRect
 from Entity import Entity
 from tmx_layout_manager import LayoutManager
+from benchmark_runtime import BENCHMARK_RUNTIME
 #with open('triggers.json',r) as file
 #triggers = json.loads(file.read())
 
@@ -112,13 +117,30 @@ def mask_to_surface(mask, color, size):
 ### Layouts will be instanciated with a path to its triggers fill
 
        
-class Level4:
-    def __init__(self, input_manager,selected_player_info_dir, layouts_dir, player_stats ):
+DEV_STATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.dev_reload_state.json')
 
-        self.start_map(input_manager = input_manager,
-                       selected_player_info_dir = selected_player_info_dir,
-                       layouts_dir = layouts_dir,
-                       player_stats = player_stats )
+LAYOUT_TO_LEVEL = {
+    '../levels/tmx': 6,
+    '../levels/Map7': 7,
+    '../levels/Map8': 8,
+}
+
+
+class Level4:
+    def __init__(self, input_manager, selected_player_info_dir, layouts_dir, player_stats, level_number=None, game_settings=None):
+        self.level_number = level_number
+        self.game_settings = game_settings
+        self.benchmark_runtime = BENCHMARK_RUNTIME
+        self._benchmark_summary_written = False
+        self._benchmark_player_anchor = None
+        self._benchmark_walls = []
+        self._benchmark_wall_items = []
+        self._benchmark_walls_spawned = False
+        self._benchmark_wall_next_id = -1
+        self.start_map(input_manager=input_manager,
+                       selected_player_info_dir=selected_player_info_dir,
+                       layouts_dir=layouts_dir,
+                       player_stats=player_stats)
 
 
     def start_map(self,
@@ -156,6 +178,7 @@ class Level4:
         
         self.weather_overlay = WeatherOverlay(self.display_surface)
         self.game_paused = False
+        self.player_dead = False
         self.upgrade_menu_open = False
         self.inventory_open = False
         self.attack_selection_open = False 
@@ -169,7 +192,7 @@ class Level4:
         self.ui=UI()
         with open(f"{layouts_dir}/initial_layout_name.txt", "r") as file:
             initial_layout_dir = file.read().strip()
-        print(f"layout dir  : {layouts_dir}")
+        _game_flow_log.debug("layout dir  : %s", layouts_dir)
         try:
             with open(f"{layouts_dir}/layout_general_config.txt", "r") as file:
                 layout_general_config = file.read().strip()   # for now just indicates daylight, need to develop this .json format and files
@@ -200,7 +223,8 @@ class Level4:
                 #tmxdata,
                 TILESIZE, 
                 restore_persistent_enemies_callback=self.restore_persistent_enemies,
-                initialize_map_items_callback=self.initialize_map_items  # Pass the method reference directly
+                initialize_map_items_callback=self.initialize_map_items,  # Pass the method reference directly
+                benchmark_runtime=self.benchmark_runtime,
                 
                 )        
 
@@ -250,6 +274,8 @@ class Level4:
         
         self.layout_manager.set_player(self.player)
         self.weather = Weather()
+        if self.game_settings:
+            self.weather.time_speed_multiplier = self.game_settings.environment_speed
         
         
         self.upgrade = Upgrade(self.player, self.input_manager)
@@ -257,6 +283,9 @@ class Level4:
         self.magic_player = MagicPlayer(self.animation_player)
         self.evasion_player = EvasionPlayer(self.animation_player, self.create_trap)
         self.current_attack = None
+
+        if self.benchmark_runtime.enabled:
+            self._initialize_benchmark_mode()
 
         if restart:
             #print(f"Player position being set to {player_position} in start_map")
@@ -296,6 +325,213 @@ class Level4:
             
             if self.layout_manager.daytime_brightness_overlay:
                 self.layout_manager.daytime_brightness_overlay.set_display_surface(self.display_surface) # TODO: done separately in both restart and not restart....terrible
+
+    def _initialize_benchmark_mode(self):
+        random.seed(self.benchmark_runtime.seed)
+        self._apply_benchmark_player_survivability()
+        self._benchmark_summary_written = False
+        # Initialize benchmark arena boundaries once per level.
+        if not self._benchmark_walls_spawned:
+            self._spawn_benchmark_boundaries()
+            self._benchmark_walls_spawned = True
+        if self.benchmark_runtime.matrix_enabled:
+            self.benchmark_runtime.begin_matrix()
+            self._start_next_benchmark_case()
+        else:
+            self._spawn_benchmark_entities()
+            self.layout_manager.switch_entity_broadphase_backend(
+                self.benchmark_runtime.broadphase_backend,
+                grid_cell_size=self.benchmark_runtime.grid_cell_size,
+            )
+            self.benchmark_runtime.begin_warmup()
+            print(
+                f"[BENCH] Warmup started label={self.benchmark_runtime.run_label} "
+                f"count={self.benchmark_runtime.entity_count} "
+                f"backend={self.benchmark_runtime.broadphase_backend} "
+                f"grid_cell_size={self.benchmark_runtime.grid_cell_size} "
+                f"floor={self.benchmark_runtime.pushback_floor_enabled} "
+                f"cap={self.benchmark_runtime.pushback_cap_enabled} "
+                f"max_cap={self.benchmark_runtime.pushback_max_cap} "
+                f"enemy={self.benchmark_runtime.enemy_type} "
+                f"warmup_s={self.benchmark_runtime.warmup_seconds}",
+                flush=True,
+            )
+            _game_flow_log.debug(
+                "Benchmark mode ON: count=%s seed=%s backend=%s floor=%s cap=%s max_cap=%s enemy=%s",
+                self.benchmark_runtime.entity_count,
+                self.benchmark_runtime.seed,
+                self.benchmark_runtime.broadphase_backend,
+                self.benchmark_runtime.pushback_floor_enabled,
+                self.benchmark_runtime.pushback_cap_enabled,
+                self.benchmark_runtime.pushback_max_cap,
+                self.benchmark_runtime.enemy_type,
+            )
+
+    def _clear_benchmark_enemies(self):
+        for enemy in list(self.spawner.enemies):
+            enemy.kill()
+        self.spawner.enemies.clear()
+
+    def _start_next_benchmark_case(self):
+        case = self.benchmark_runtime.start_next_matrix_case()
+        if case is None:
+            print("[BENCH] Matrix complete. Exiting.", flush=True)
+            pygame.event.post(pygame.event.Event(pygame.QUIT))
+            return False
+        self._clear_benchmark_enemies()
+        self.layout_manager.switch_entity_broadphase_backend(
+            case["backend"],
+            grid_cell_size=case.get("grid_cell_size"),
+        )
+        self._spawn_benchmark_entities()
+        self.benchmark_runtime.begin_warmup()
+        current, total = self.benchmark_runtime.matrix_progress()
+        print(
+            f"[BENCH] Case {current}/{total} warmup label={self.benchmark_runtime.run_label} "
+            f"count={self.benchmark_runtime.entity_count} backend={self.benchmark_runtime.broadphase_backend} "
+            f"grid_cell_size={self.benchmark_runtime.grid_cell_size} "
+            f"floor={self.benchmark_runtime.pushback_floor_enabled} cap={self.benchmark_runtime.pushback_cap_enabled} "
+            f"max_cap={self.benchmark_runtime.pushback_max_cap} enemy={self.benchmark_runtime.enemy_type} "
+            f"warmup_s={self.benchmark_runtime.warmup_seconds}",
+            flush=True,
+        )
+        return True
+
+    def _apply_benchmark_player_survivability(self):
+        health_mult = max(1.0, float(BENCHMARK_PLAYER_HEALTH_MULTIPLIER))
+        boosted_max = int(max(self.player.stats.get("health", 1), 1) * health_mult)
+        # Benchmark-only guard: keep player effectively unkillable during stress tests.
+        boosted_max = max(boosted_max, 1_000_000)
+        self.player.stats["health"] = boosted_max
+        self.player.health = boosted_max
+
+    def _spawn_benchmark_boundaries(self):
+        """Spawn tile-based benchmark boundary walls around the anchored player."""
+        # Use the player's current center as the arena center in tile space.
+        center_tile_x = int(self.player.rect.centerx / TILESIZE)
+        center_tile_y = int(self.player.rect.centery / TILESIZE)
+
+        # Arena half-size in tiles (tunable). Keep well within 1..38 bounds used elsewhere.
+        # Reduced from 8 to 4 so the arena is much tighter.
+        radius_tiles = 4
+        min_tx = max(1, center_tile_x - radius_tiles)
+        max_tx = min(38, center_tile_x + radius_tiles)
+        min_ty = max(1, center_tile_y - radius_tiles)
+        max_ty = min(38, center_tile_y + radius_tiles)
+
+        # Clear previous references in case benchmark mode is reinitialized.
+        self._benchmark_walls.clear()
+        self._benchmark_wall_items.clear()
+
+        def spawn_wall_tile(tx, ty):
+            # Visible debug wall surface so benchmark containment is obvious on screen.
+            surface = pygame.Surface((TILESIZE, TILESIZE), pygame.SRCALPHA)
+            surface.fill((255, 0, 255, 140))
+            wall = Tile(
+                (int(tx * TILESIZE), int(ty * TILESIZE)),
+                [self.layout_manager.visible_sprites, self.layout_manager.obstacle_sprites],
+                "invisible",
+                surface=surface,
+            )
+            self._benchmark_walls.append(wall)
+            wall_item = HashableRect(
+                wall.rect,
+                _id=self._benchmark_wall_next_id,
+                mask=wall.mask,
+            )
+            self._benchmark_wall_next_id -= 1
+            self._benchmark_wall_items.append(wall_item)
+            # Register in obstacle quadtree used by entity obstacle collision.
+            self.layout_manager.obstacle_quad_tree.insert(
+                wall_item,
+                alive=True,
+                remove_existing=True,
+            )
+        perimeter_tiles = []
+        # Top and bottom rows.
+        for tx in range(min_tx, max_tx + 1):
+            perimeter_tiles.append((tx, min_ty))
+            perimeter_tiles.append((tx, max_ty))
+        # Left and right columns, excluding corners already added.
+        for ty in range(min_ty + 1, max_ty):
+            perimeter_tiles.append((min_tx, ty))
+            perimeter_tiles.append((max_tx, ty))
+        for tx, ty in perimeter_tiles:
+            spawn_wall_tile(tx, ty)
+        print(
+            f"[BENCH] Spawned arena walls radius_tiles={radius_tiles} tiles={len(perimeter_tiles)}",
+            flush=True,
+        )
+
+    def _restore_player_for_benchmark_spawn(self):
+        """Reset player to the layout spawn position before each benchmark spawn ring."""
+        if self._benchmark_player_anchor is None:
+            self._benchmark_player_anchor = self.player.hitbox.center
+        cx, cy = self._benchmark_player_anchor
+        self.player.hitbox.center = (cx, cy)
+        self.player.rect.center = self.player.hitbox.center
+        self.player.velocity.update(0, 0)
+        self.player.direction.update(0, 0)
+
+    def _spawn_benchmark_entities(self):
+        self._restore_player_for_benchmark_spawn()
+        target_count = max(0, int(self.benchmark_runtime.entity_count))
+        self.spawner.enemies.clear()
+        center_tile_x = int(self.player.rect.centerx / TILESIZE)
+        center_tile_y = int(self.player.rect.centery / TILESIZE)
+        max_ring = max(1, int(BENCHMARK_SPAWN_MAX_RING))
+        positions = []
+        for ring in range(1, max_ring + 1):
+            for dy in range(-ring, ring + 1):
+                for dx in range(-ring, ring + 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    if max(abs(dx), abs(dy)) != ring:
+                        continue
+                    tx = max(1, min(38, center_tile_x + dx))
+                    ty = max(1, min(38, center_tile_y + dy))
+                    positions.append((tx, ty))
+                    if len(positions) >= target_count:
+                        break
+                if len(positions) >= target_count:
+                    break
+            if len(positions) >= target_count:
+                break
+
+        if not self.benchmark_runtime.deterministic_spawn:
+            random.shuffle(positions)
+
+        if not positions:
+            positions = [(center_tile_x, center_tile_y)]
+
+        if len(positions) < target_count:
+            print(
+                f"[BENCH] Spawn ring capped at {max_ring}; repeating {len(positions)} nearby slots to reach {target_count} entities.",
+                flush=True,
+            )
+            repeats = (target_count + len(positions) - 1) // len(positions)
+            positions = (positions * repeats)[:target_count]
+
+        enemy_type = self.benchmark_runtime.enemy_type
+        for pos in positions[:target_count]:
+            self.spawner.spawn_enemy({"type": enemy_type, "pos": pos})
+
+    def _toggle_benchmark_backend(self):
+        if self.benchmark_runtime.broadphase_backend == "quadtree":
+            next_backend = "grid"
+        else:
+            next_backend = "quadtree"
+        self.layout_manager.switch_entity_broadphase_backend(next_backend)
+        self.benchmark_runtime.broadphase_backend = next_backend
+        _game_flow_log.debug("Benchmark backend toggled to %s", next_backend)
+
+    def _toggle_pushback_floor(self):
+        self.benchmark_runtime.pushback_floor_enabled = not self.benchmark_runtime.pushback_floor_enabled
+        _game_flow_log.debug("Benchmark pushback floor enabled=%s", self.benchmark_runtime.pushback_floor_enabled)
+
+    def _toggle_pushback_cap(self):
+        self.benchmark_runtime.pushback_cap_enabled = not self.benchmark_runtime.pushback_cap_enabled
+        _game_flow_log.debug("Benchmark pushback cap enabled=%s", self.benchmark_runtime.pushback_cap_enabled)
         
            # print("post")
             #self.layout_manager.obstacle_quad_tree.print_all()
@@ -511,6 +747,21 @@ class Level4:
                 
                 
 
+    def _full_dev_reload(self):
+        """Full dev reload: save state, restart process. Settings and all code reload."""
+        level_number = LAYOUT_TO_LEVEL.get(self.layouts_dir, self.level_number or 6)
+        dev_state = {
+            'level_number': level_number,
+            'layouts_dir': self.layouts_dir,
+            'player_position': list(self.player.rect.topleft),
+            'player_info_dir': self.selected_player_info_dir,
+            'player_stats': self.player_base_stats,
+        }
+        with open(DEV_STATE_PATH, 'w') as f:
+            json.dump(dev_state, f, indent=2)
+        pygame.quit()
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
     def save_enemy_states(self, current_layout):
         self.persistent_enemy_data[current_layout] = [{'type': enemy.type, 'position': enemy.rect.topleft, 'health': enemy.health} for enemy in self.spawner.enemies if enemy.persistent]
 
@@ -571,16 +822,16 @@ class Level4:
         
         # TODO : implement quadtree ? its not particularly heavy part of the code...
         #      : implement mask collision
-        print("attack_sprites")
-        print(self.attack_sprites)
+        #print("attack_sprites")
+        #print(self.attack_sprites)
         if self.attack_sprites:
 
             
             for attack_sprite in self.attack_sprites:
-                print("attack sprite position")
-                print( attack_sprite.rect.left )
-                print(  attack_sprite.rect.width)
-                print(  attack_sprite.rect.height)
+                #print("attack sprite position")
+                #print( attack_sprite.rect.left )
+                #print(  attack_sprite.rect.width)
+                #print(  attack_sprite.rect.height)
                 collision_sprites = pygame.sprite.spritecollide(attack_sprite, self.attackable_sprites, False)
                 if collision_sprites:
                     for target_sprite in collision_sprites:
@@ -795,6 +1046,15 @@ class Level4:
         #print(self.player.rect.center)
          
         self.check_triggers() # i guess i need to pass persist data ?  
+        if self.input_manager.is_key_just_pressed(pygame.K_F5):
+            self._full_dev_reload()
+        if self.benchmark_runtime.enabled:
+            if self.input_manager.is_key_just_pressed(pygame.K_F6):
+                self._toggle_pushback_floor()
+            if self.input_manager.is_key_just_pressed(pygame.K_F7):
+                self._toggle_pushback_cap()
+            if self.input_manager.is_key_just_pressed(pygame.K_F8):
+                self._toggle_benchmark_backend()
         #print(self.player.rect.center)
         #print(self.layout_manager.player.rect.center)
         self.layout_manager.spawner.on_layout_update()
@@ -824,6 +1084,8 @@ class Level4:
             
             
             if self.layout_manager.daytime_layout:
+                if self.game_settings:
+                    self.weather.time_speed_multiplier = self.game_settings.environment_speed
                 self.layout_manager.visible_sprites.custom_draw(self.player,dt, self.weather.weather_intensity, self.weather.light_level)
                 self.weather.update(dt)
                 self.weather_overlay.set_weather(self.weather.weather_type,
@@ -964,6 +1226,7 @@ class Level4:
                 # Check for effect collisions (separate from physics collisions)
                 if isinstance(sprite, Entity):
                     sprite.check_effects(self.layout_manager.effect_quad_trees)
+                    sprite.apply_environmental_damage(dt)
                        
              
             spawned_items = self.item_spawner.update()
@@ -980,6 +1243,34 @@ class Level4:
            #print(f"\n\n after PRE ATTACK {self.player.rect.x}\n\n")
             self.player_attack_logic()
             self.enemy_projectile_logic()
+
+        if self.benchmark_runtime.enabled and self.benchmark_runtime.metrics_enabled:
+            if self.benchmark_runtime.case_phase == "warmup" and self.benchmark_runtime.warmup_elapsed():
+                self.benchmark_runtime.begin_run(self.benchmark_runtime.run_label)
+                print(
+                    f"[BENCH] Measurement started label={self.benchmark_runtime.run_label} "
+                    f"seconds={self.benchmark_runtime.auto_run_seconds} "
+                    f"grid_cell_size={self.benchmark_runtime.grid_cell_size}",
+                    flush=True,
+                )
+
+            if self.benchmark_runtime.case_phase == "measure":
+                self.benchmark_runtime.metrics.record_frame(dt_real)
+                self.benchmark_runtime.maybe_log_metrics()
+                if self.benchmark_runtime.should_auto_stop() and not self._benchmark_summary_written:
+                    row = self.benchmark_runtime.write_summary_row()
+                    self.benchmark_runtime.case_phase = "complete"
+                    print(
+                        f"[BENCH] Case complete label={row['run_label']} "
+                        f"avg_fps={row['avg_fps']:.2f} p95_ms={row['p95_frame_ms']:.2f} "
+                        f"queries={int(row['broadphase_queries'])} candidates={int(row['candidate_collisions'])}",
+                        flush=True,
+                    )
+                    if self.benchmark_runtime.matrix_enabled:
+                        self._start_next_benchmark_case()
+                    else:
+                        self._benchmark_summary_written = True
+                        pygame.event.post(pygame.event.Event(pygame.QUIT))
            #print(f"\n\n after POST ATTACK {self.player.rect.x}\n\n")
             self.save_enemy_states(self.current_layout) #mkght be a big inefficiency 
            
@@ -989,7 +1280,7 @@ class Level4:
            #print(f"\n\n after END OF LOOP {self.player.rect.x}\n\n")
             #Now draw the weather overlay
 
-
+            self.player_dead = getattr(self.player, "is_dead", False)
 
         #
     
@@ -1023,17 +1314,8 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.window_width, self.window_height = self.display_surface.get_size()
         self.half_width = self.display_surface.get_size()[0] // 2
         self.half_height = self.display_surface.get_size()[1] // 2
-                
-                # Define the dimensions for the grass surface
-        grass_width = self.display_surface.get_width() - (2 * TILESIZE)
-        grass_height = self.display_surface.get_height() - (2 * TILESIZE)
-        
-        # Set up the grass surface as a subsurface of the display surface
-        self.grass_surface = self.display_surface.subsurface( (TILESIZE, TILESIZE, grass_width, grass_height) )
-        
-        self.grass_half_width = self.grass_surface.get_width() // 2
-        self.grass_half_height = self.grass_surface.get_height() // 2
-        
+
+        self._apply_grass_viewport()
         
         self.offset = pygame.math.Vector2()
         self.grass_offset = pygame.math.Vector2()
@@ -1044,12 +1326,26 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.update_grass_with_wind_frequency = 5000
         self.wind_last_affected_grass = 0
         self.t=0 # forgrass rotaryfunctin, name it better.
+        self.last_player_grass_force_center = None
+        self.grass_force_threshold_sq = 16  # 4px movement threshold before re-applying player force
         
         # Threading.
         self.executor = ThreadPoolExecutor(max_workers=4)
         self.lock = Lock()
         
         self.overhead_areas = overhead_areas
+
+    def _apply_grass_viewport(self):
+        W, H = self.display_surface.get_size()
+        p = GRASS_VIEWPORT_PERCENT / 100.0
+        gw = max(1, int(W * p))
+        gh = max(1, int(H * p))
+        x = (W - gw) // 2
+        y = (H - gh) // 2
+        clip_rect = pygame.Rect(x, y, gw, gh).clip(pygame.Rect(0, 0, W, H))
+        self.grass_surface = self.display_surface.subsurface(clip_rect)
+        self.grass_half_width = self.grass_surface.get_width() // 2
+        self.grass_half_height = self.grass_surface.get_height() // 2
 
     #@profile
     def update_parallel_inview(self, dt=None, weather=None, wind_force=(0, 0), num_threads=8, *args, **kwargs):
@@ -1076,25 +1372,33 @@ class YSortCameraGroup(pygame.sprite.Group):
 
     #@profile
     def update_parallel(self, obstruction_quad_tree,entity_quad_tree, dt=None, weather=None, wind_force=(0, 0), num_threads=1, *args, **kwargs):
-        #print("attempted parallel update")
-        #sprites_in_view = self.get_sprites_in_view()
-        sprite_batches = [self.sprites()[i::num_threads] for i in range(num_threads)]
-        futures = []
+        if num_threads <= 1:
+            updated_sprites = self._update_batch(
+                obstruction_quad_tree,
+                entity_quad_tree,
+                self.sprites(),
+                dt=dt,
+                lock=None,
+                weather=weather,
+            )
+        else:
+            sprite_batches = [self.sprites()[i::num_threads] for i in range(num_threads)]
+            futures = []
 
-        for batch in sprite_batches:
-            future = self.executor.submit(self.update_for_parallel,
-                                          obstruction_quad_tree,
-                                          entity_quad_tree,
-                                          batch,
-                                          dt,
-                                          self.lock,
-                                          weather,  # Pass down the weather information
-                                          wind_force,)
-            futures.append(future)
+            for batch in sprite_batches:
+                future = self.executor.submit(self.update_for_parallel,
+                                            obstruction_quad_tree,
+                                            entity_quad_tree,
+                                            batch,
+                                            dt,
+                                            self.lock,
+                                            weather,  # Pass down the weather information
+                                            wind_force,)
+                futures.append(future)
 
-        updated_sprites = []
-        for future in futures:
-            updated_sprites.extend(future.result())
+            updated_sprites = []
+            for future in futures:
+                updated_sprites.extend(future.result())
 
         # Extend with non-visible sprites
         #updated_sprites.extend(sprite for sprite in self.sprites() if sprite not in updated_sprites)
@@ -1103,45 +1407,9 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.sprites().clear()
         self.sprites().extend(updated_sprites)
 
-    def set_grass_render_window_size_with_timeofday(self,light_level):
-        #print("light_level!")
-        #print(light_level)
-        if light_level <= 1 and light_level > 0.75:
-                # Define the dimensions for the grass surface
-            grass_width = self.display_surface.get_width() - (2 * TILESIZE)
-            grass_height = self.display_surface.get_height() - (2 * TILESIZE)
-            
-            # Set up the grass surface as a subsurface of the display surface
-            self.grass_surface = self.display_surface.subsurface( (TILESIZE, TILESIZE, grass_width, grass_height) )
-            
-            self.grass_half_width = self.grass_surface.get_width() // 2
-            self.grass_half_height = self.grass_surface.get_height() // 2
-
-        # if light_level <= 0.75 and light_level > 0.5:
-        #         # Define the dimensions for the grass surface
-        #     grass_width = self.display_surface.get_width() - (2.5 * TILESIZE)
-        #     grass_height = self.display_surface.get_height() - (2.5 * TILESIZE)
-            
-        #     # Set up the grass surface as a subsurface of the display surface
-        #     self.grass_surface = self.display_surface.subsurface( (TILESIZE*1.25, TILESIZE*1.25, grass_width, grass_height) )
-            
-        #     self.grass_half_width = self.grass_surface.get_width() // 2
-        #     self.grass_half_height = self.grass_surface.get_height() // 2
-            
-        #print(light_level)
-        if light_level <= 0.5 :
-                # Define the dimensions for the grass surface
-            grass_width = self.display_surface.get_width() - (3 * TILESIZE)
-            grass_height = self.display_surface.get_height() - (3 * TILESIZE)
-            
-            # Set up the grass surface as a subsurface of the display surface
-            self.grass_surface = self.display_surface.subsurface( (TILESIZE*1.5, TILESIZE*1.5, grass_width, grass_height) )
-            
-            self.grass_half_width = self.grass_surface.get_width() // 2
-            self.grass_half_height = self.grass_surface.get_height() // 2
-            
-        #print(f"RESULTING WIDTH : {self.grass_half_width}")
-            
+    def set_grass_render_window_size_with_timeofday(self, light_level):
+        # Single percent-based viewport for all light levels (see GRASS_VIEWPORT_PERCENT).
+        self._apply_grass_viewport()
 
     def set_grass_grid(self,grass_grid):
         self.grass_grid = grass_grid
@@ -1173,7 +1441,14 @@ class YSortCameraGroup(pygame.sprite.Group):
         
         if self.ground_surface is None:
             self.create_ground_surface()
-            
+
+        W, H = self.display_surface.get_size()
+        self.window_width, self.window_height = W, H
+        self.half_width = W // 2
+        self.half_height = H // 2
+
+        self.set_grass_render_window_size_with_timeofday(light_intensity)
+
         self.offset.x = player.rect.centerx - self.half_width 
         self.offset.y = player.rect.centery - self.half_height
         self.grass_offset.x = player.rect.centerx - self.grass_half_width 
@@ -1182,9 +1457,6 @@ class YSortCameraGroup(pygame.sprite.Group):
         
         ground_rect = self.ground_surface.get_rect(topleft=(-self.offset.x, -self.offset.y))
         self.display_surface.blit(self.ground_surface, ground_rect.topleft)
-        
-        
-        self.set_grass_render_window_size_with_timeofday( light_intensity )
             
         #print(f" dt : {self.t}")
         self.t += dt*1500*wind_intensity
@@ -1192,7 +1464,16 @@ class YSortCameraGroup(pygame.sprite.Group):
         
         # if player on grass
         
-        self.grass_manager.apply_force( player.rect.center , 25 , 20)
+        player_center = player.rect.center
+        if self.last_player_grass_force_center is None:
+            self.grass_manager.apply_force(player_center, 25, 20)
+            self.last_player_grass_force_center = player_center
+        else:
+            dx = player_center[0] - self.last_player_grass_force_center[0]
+            dy = player_center[1] - self.last_player_grass_force_center[1]
+            if (dx * dx + dy * dy) >= self.grass_force_threshold_sq:
+                self.grass_manager.apply_force(player_center, 25, 20)
+                self.last_player_grass_force_center = player_center
         
         
         #print( self.grass_offset )
@@ -1241,31 +1522,63 @@ class YSortCameraGroup(pygame.sprite.Group):
                 sprite.update(weather, self.display_surface)
             else:
                 sprite.update(dt)
-    #@profile
-    def update_for_parallel(self,obstacle_quad_tree, entity_quad_tree, batch, dt=None,lock=None, weather=None, wind_force=(0, 0) , *args, **kwargs):
+    def _update_single_sprite(
+        self,
+        sprite,
+        obstacle_quad_tree,
+        entity_quad_tree,
+        dt=None,
+        weather=None,
+    ):
+        if isinstance(sprite, AnimatedEnvironmentSprite):  # keep legacy torch/weather behavior
+            if isinstance(sprite, Torch):
+                sprite.update(weather)
+            else:
+                sprite.update(weather)
+        elif isinstance(sprite, Entity):
+            sprite.update(
+                dt=dt,
+                QuadTree=obstacle_quad_tree,
+                entity_quad_tree=entity_quad_tree,
+            )
+        else:
+            sprite.update(dt=dt)
+
+    def _update_batch(
+        self,
+        obstacle_quad_tree,
+        entity_quad_tree,
+        batch,
+        dt=None,
+        lock=None,
+        weather=None,
+    ):
         updated_sprites = []
         for sprite in batch:
-            if isinstance(sprite, AnimatedEnvironmentSprite):# at some point i was passing display to torch, kept this if incase for now.
-                if isinstance(sprite,Torch):
-                    sprite.update(weather)
-                else:
-                    sprite.update(weather)
-            elif isinstance(sprite, Entity):
-                sprite.update(dt=dt,
-                              QuadTree= obstacle_quad_tree,
-                              entity_quad_tree = entity_quad_tree)
-            else:
-                sprite.update(dt=dt)
-            
-            # Acquire the lock before updating shared resources
-            lock.acquire()
-            try:
+            self._update_single_sprite(
+                sprite,
+                obstacle_quad_tree,
+                entity_quad_tree,
+                dt=dt,
+                weather=weather,
+            )
+            if lock is None:
                 updated_sprites.append(sprite)
-            finally:
-                # Always release the lock, even if an exception occurs
-                lock.release()
-                
+            else:
+                with lock:
+                    updated_sprites.append(sprite)
         return updated_sprites
+
+    #@profile
+    def update_for_parallel(self,obstacle_quad_tree, entity_quad_tree, batch, dt=None,lock=None, weather=None, wind_force=(0, 0) , *args, **kwargs):
+        return self._update_batch(
+            obstacle_quad_tree,
+            entity_quad_tree,
+            batch,
+            dt=dt,
+            lock=lock,
+            weather=weather,
+        )
                     
     def is_tile_in_view(self, tile_position):
         """

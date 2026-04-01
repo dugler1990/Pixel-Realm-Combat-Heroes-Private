@@ -1,6 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <tileset version="1.10" tiledversion="1.11.0" name="eeeeeeeeee" tilewidth="550" tileheight="550" tilecount="108" columns="54">
  <image source="terrain_brush_gen/tileset.png" width="29700" height="1100"/>
+ <tile id="4">
+  <properties>
+   <property name="valid_interaction_types" value="create_fishing_hole"/>
+  </properties>
+ </tile>
+ <tile id="5">
+  <properties>
+   <property name="valid_interaction_types" value="create_fishing_hole"/>
+  </properties>
+ </tile>
+ <tile id="6">
+  <properties>
+   <property name="valid_interaction_types" value="create_fishing_hole"/>
+  </properties>
+ </tile>
+ <tile id="7">
+  <properties>
+   <property name="valid_interaction_types" value="create_fishing_hole"/>
+  </properties>
+ </tile>
  <wangsets>
   <wangset name="Unnamed Set" type="mixed" tile="-1">
    <wangcolor name="" color="#ff0000" tile="-1" probability="1"/>

@@ -2,6 +2,9 @@ import random
 import pygame
 from pygame.math import Vector2
 from  hashRect import HashableRect
+from game_logging import get_debug_logger
+
+_combat_log = get_debug_logger("combat")
 
 
 
@@ -132,9 +135,9 @@ class MixedCombatStrategy(CombatStrategy):
             enemy.current_attack_type = None
             enemy.movement_state = 'evasive'
 
-        print(f"in decide actions mixed strat")
-        print(f"movement state : {enemy.movement_state}")
-        print(f"attack type : {enemy.current_attack_type}")
+        _combat_log.debug("in decide actions mixed strat")
+        _combat_log.debug("movement state : %s", enemy.movement_state)
+        _combat_log.debug("attack type : %s", enemy.current_attack_type)
 
     def execute_attack(self, enemy, player):
         current_time = pygame.time.get_ticks()
@@ -154,9 +157,9 @@ class MixedCombatStrategy(CombatStrategy):
                 enemy.attack_cooldown = attack['cooldown']
                 
         
-        print(f"in execute attack mixed strat")
-        print(f"attack : {attack}")
-        print(f"special attacks : {enemy.special_attacks}")
+        _combat_log.debug("in execute attack mixed strat")
+        _combat_log.debug("attack : %s", attack)
+        _combat_log.debug("special attacks : %s", enemy.special_attacks)
     
     def move(self, enemy, player):
         distance, direction = enemy.get_player_distance_direction(player)
@@ -169,6 +172,6 @@ class MixedCombatStrategy(CombatStrategy):
         
         enemy.status = 'move'
 
-        print(f"in move mixed strat")
-        print(f"status : {enemy.status}")
-        print(f"direction : {enemy.direction}")
+        _combat_log.debug("in move mixed strat")
+        _combat_log.debug("status : %s", enemy.status)
+        _combat_log.debug("direction : %s", enemy.direction)

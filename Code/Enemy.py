@@ -88,9 +88,13 @@ class Enemy(Entity):
             self.import_graphics_left_right(monster_name)
         else:
             self.import_graphics(monster_name)
-        
+
+        if monster_name == "tribey_snake":
+            random_scale = random.gauss(1.5, 0.2)
+            self.scale_animations(random_scale)
+
         self.status = "idle"
-        self.direction_string = 'right'
+        self.direction_string = "right"
         if self.animations_left_right_indicator:
             self.image = self.animations[self.status][self.direction_string][self.frame_index]
         else:
@@ -139,7 +143,12 @@ class Enemy(Entity):
 
         #### 
 
-        self.masks = self.convert_animations_to_masks(self.animations)
+        self.masks = get_or_build_entity_masks(
+            self.monster_name,
+            self.animations,
+            self.animations_left_right_indicator,
+            skip_disk=(self.monster_name == "tribey_snake"),
+        )
         self.mask = None
 
         # Player Interaction
@@ -228,12 +237,7 @@ class Enemy(Entity):
                                                        #redirect_projectile_callback = redirect_projectile_callback,
                                                        #fire_projectile = self.fire_projectile
                                                        )
-        
-        if monster_name == 'tribey_snake':
-            random_scale = random.gauss(1.5, 0.2)
-            self.scale_animations(random_scale)
-    
-    
+
     def scale_animations(self, scale_factor):
         for status, animations in self.animations.items():
             if isinstance(animations, dict):
@@ -243,55 +247,6 @@ class Enemy(Entity):
                 self.animations[status] = [pygame.transform.scale(frame, (int(frame.get_width() * scale_factor), int(frame.get_height() * scale_factor))) for frame in animations]
 
     
-    ## TODO: place this in support
-    def convert_animations_to_masks(self, animations_dict):
-        masks = {}
-        main_folder = "../Graphics/Masks"
-        os.makedirs(main_folder, exist_ok=True)
-    
-        if self.animations_left_right_indicator:
-            for key, animation_set_left_right in animations_dict.items():
-                monster_folder = os.path.join(main_folder, self.monster_name)
-                os.makedirs(monster_folder, exist_ok=True)
-                
-                masks_temp = {}
-                for left_right_key, animation_set in animation_set_left_right.items():
-                    direction_folder = os.path.join(monster_folder, left_right_key)
-                    os.makedirs(direction_folder, exist_ok=True)
-    
-                    mask_frames = frames_to_masks(animation_set)
-                    masks_temp[left_right_key] = mask_frames
-                    
-                    # Save each mask frame as an image
-                    for i, mask in enumerate(mask_frames):
-                        if mask is not None:  # Check if mask exists
-                            # Save the mask as an image
-                            image_path = os.path.join(direction_folder, f"{key}_{left_right_key}_mask_{i}.png")
-                            pygame.image.save(mask.to_surface(), image_path)
-                        
-                masks[key] = masks_temp
-        else:
-            for key, animation_set in animations_dict.items():
-                monster_folder = os.path.join(main_folder, self.monster_name)
-                os.makedirs(monster_folder, exist_ok=True)
-                
-                direction_folder = monster_folder
-    
-                mask_frames = frames_to_masks(animation_set)
-                masks[key] = {"default": mask_frames}
-                
-                # Save each mask frame as an image
-                for i, mask in enumerate(mask_frames):
-                    if mask is not None:  # Check if mask exists
-                        # Save the mask as an image
-                        image_path = os.path.join(direction_folder, f"{key}_mask_{i}.png")
-                        pygame.image.save(mask.to_surface(), image_path)
-        
-        return masks
-
-
-
-        
     def freeze(self, duration=3000):
         """Freeze the enemy, stopping all movement and actions."""
         self.frozen = True
@@ -527,6 +482,13 @@ class Enemy(Entity):
                 self.health -= player.get_full_magic_damage()
             self.hit_time = pygame.time.get_ticks()
             #self.vulnerable = False
+    #@profile
+    def take_environmental_damage(self, amount, damage_type):
+        """Apply environmental damage (e.g. heat); uses same vulnerability and invincibility as get_damage."""
+        if self.vulnerable:
+            self.health -= amount
+            self.hit_time = pygame.time.get_ticks()
+            self.check_death()
     #@profile
     def check_death(self):
         if self.health <= 0:

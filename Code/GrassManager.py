@@ -88,7 +88,7 @@ def normalize(val, amt, target):
 
 # the main object that manages the grass system
 class GrassManager:
-    def __init__(self, grass_path, tile_size=15, shade_amount=100, stiffness=360, max_unique=10, place_range=[1, 1], padding=13):
+    def __init__(self, grass_path, tile_size=15, shade_amount=100, stiffness=360, max_unique=10, place_range=[1, 1], padding=13, rotation_bucket_degrees=6):
         # asset manager
         self.ga = GrassAssets(grass_path, self)
 
@@ -109,6 +109,7 @@ class GrassManager:
         self.vertical_place_range = place_range
         self.ground_shadow = [0, (0, 0, 0), 100, (0, 0)]
         self.padding = padding
+        self.rotation_bucket_degrees = max(1, int(rotation_bucket_degrees))
 
     # enables circular shadows that appear below each blade of grass
     def enable_ground_shadows(self, shadow_strength=40, shadow_radius=2, shadow_color=(0, 0, 1), shadow_shift=(0, 0)):
@@ -191,10 +192,11 @@ class GrassAssets:
         rot_img = pygame.transform.rotate(self.blades[blade_id], rotation)
 
         # shade the blade of grass based on its rotation
-        shade = pygame.Surface(rot_img.get_size())
         shade_amt = self.gm.shade_amount * (abs(rotation) / 90)
-        shade.set_alpha(shade_amt)
-        rot_img.blit(shade, (0, 0))
+        if shade_amt > 0:
+            shade = pygame.Surface(rot_img.get_size())
+            shade.set_alpha(shade_amt)
+            rot_img.blit(shade, (0, 0))
 
         # render the blade
         surf.blit(rot_img, (location[0] - rot_img.get_width() // 2, location[1] - rot_img.get_height() // 2))
@@ -246,31 +248,51 @@ class GrassTile:
     def apply_force(self, force_point, force_radius, force_dropoff):
         
         if not self.custom_blade_data:
-            self.custom_blade_data = [None] * len(self.blades)
+            # Start from baseline blade state so untouched blades remain valid entries.
+            self.custom_blade_data = [list(blade) for blade in self.blades]
+
+        force_radius_sq = force_radius * force_radius
+        outer_radius = force_radius + force_dropoff
+        outer_radius_sq = outer_radius * outer_radius
 
         for i, blade in enumerate(self.blades):
-            orig_data = self.custom_blade_data[i]
-            dis = math.sqrt((self.loc[0] + blade[0][0] - force_point[0]) ** 2 + (self.loc[1] + blade[0][1] - force_point[1]) ** 2)
-            max_force = False
-            if dis < force_radius:
+            blade_x = self.loc[0] + blade[0][0]
+            blade_y = self.loc[1] + blade[0][1]
+            dx = blade_x - force_point[0]
+            dy = blade_y - force_point[1]
+            dist_sq = dx * dx + dy * dy
+
+            if dist_sq < force_radius_sq:
                 force = 2
+            elif dist_sq >= outer_radius_sq:
+                continue
             else:
+                dis = math.sqrt(dist_sq)
                 dis = max(0, dis - force_radius)
                 force = 1 - min(dis / force_dropoff, 1)
-            dir = 1 if force_point[0] > (self.loc[0] + blade[0][0]) else -1
+            dir = 1 if force_point[0] > blade_x else -1
             # don't update unless force is greater
             if not self.custom_blade_data[i] or abs(self.custom_blade_data[i][2] - self.blades[i][2]) <= abs(force) * 90:
                 self.custom_blade_data[i] = [blade[0], blade[1], blade[2] + dir * force * 90]
 
     # update the identifier used to find a valid cached image
     def update_render_data(self):
-        self.render_data = (self.base_id, self.master_rotation)
-        self.true_rotation = self.inc * self.master_rotation
+        quantized_rotation = self._quantize_rotation(self.master_rotation)
+        self.render_data = (self.base_id, quantized_rotation)
+        self.true_rotation = self.inc * quantized_rotation
+
+    def _quantize_rotation(self, rotation):
+        bucket = self.gm.rotation_bucket_degrees
+        return int(round(rotation / bucket) * bucket)
 
     # set new master tile rotation
     def set_rotation(self, rotation):
-        self.master_rotation = rotation
-        self.update_render_data()
+        quantized_rotation = self._quantize_rotation(rotation)
+        if quantized_rotation != self.master_rotation:
+            self.master_rotation = quantized_rotation
+            self.update_render_data()
+            return True
+        return False
 
     # render the tile's image based on its current state and return the data
     def render_tile(self, render_shadow=False):
@@ -293,7 +315,10 @@ class GrassTile:
             shadow_surf.set_alpha(self.gm.ground_shadow[2])
 
         # render each blade using the asset manager
-        for blade in blades:
+        for i, blade in enumerate(blades):
+            if blade is None:
+                # Defensive fallback for partial custom data; should be rare.
+                blade = self.blades[i]
             self.ga.render_blade(surf, blade[1], (blade[0][0] + self.padding, blade[0][1] + self.padding), max(-90, min(90, blade[2] + self.true_rotation)))
 
         # return surf and shadow_surf if applicable
@@ -328,9 +353,15 @@ class GrassTile:
         # attempt to move blades back to their base position
         if self.custom_blade_data:
             matching = True
+            settle_epsilon = 0.1
             for i, blade in enumerate(self.custom_blade_data):
+                if blade is None:
+                    blade = [self.blades[i][0], self.blades[i][1], self.blades[i][2]]
+                    self.custom_blade_data[i] = blade
                 blade[2] = normalize(blade[2], self.gm.stiffness * dt, self.blades[i][2])
-                if blade[2] != self.blades[i][2]:
+                if abs(blade[2] - self.blades[i][2]) <= settle_epsilon:
+                    blade[2] = self.blades[i][2]
+                else:
                     matching = False
             # mark the data as non-custom once in base position so the cache can be used
             if matching:

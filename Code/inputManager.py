@@ -1,4 +1,7 @@
 import pygame
+from game_logging import get_debug_logger
+
+_input_log = get_debug_logger("input")
 
 class InputManager:
     def __init__(self):
@@ -33,9 +36,9 @@ class InputManager:
 
     def reset(self):
         # Debug print before resetting
-        print("Resetting InputManager states.")
+        _input_log.debug("Resetting InputManager states.")
         self.current_key_states = {}
         self.previous_key_states = {}
         self.key_press_events = {}
         # Debug print after resetting
-        print("InputManager states reset.")
+        _input_log.debug("InputManager states reset.")

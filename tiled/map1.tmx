@@ -1,36 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="4" nextobjectid="41">
- <tileset firstgid="1" source="iceobjects1.tsx"/>
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="11" nextobjectid="161">
+ <tileset firstgid="1" source="../../../Desktop/Pixel-Realm-Combat-Heroes-public/tiled/iceobjects1.tsx"/>
  <tileset firstgid="26" source="../../../tiled/snow_on_ice_brush_proper1.tsx"/>
+ <tileset firstgid="134" source="../../../tiled/grassonsnow.tsx"/>
+ <tileset firstgid="242" source="../../../Desktop/Pixel-Realm-Combat-Heroes-public/levels/tmx/ROCKLAVA.tsx"/>
  <layer id="1" name="Tile Layer 1" width="30" height="20">
   <data encoding="csv">
-30,33,38,29,40,31,30,30,31,31,31,32,33,32,32,33,31,31,31,33,31,33,33,33,30,33,33,30,33,31,
-31,31,47,52,51,48,31,33,32,31,31,30,31,30,30,31,32,32,33,31,32,31,30,30,30,31,30,32,30,30,
-31,30,30,38,27,40,31,33,32,31,31,32,33,33,30,31,33,33,33,32,30,30,32,30,30,32,31,32,32,33,
-31,31,31,38,26,40,31,33,32,30,32,33,32,30,32,30,33,32,32,32,31,30,32,30,30,32,30,30,32,33,
-33,33,31,38,27,51,48,32,33,32,31,32,32,31,30,31,33,33,33,32,31,30,31,31,31,33,31,32,31,30,
-33,32,32,47,36,52,40,32,30,30,30,33,31,31,31,30,33,30,32,30,31,30,31,32,33,30,32,31,30,31,
-33,31,32,32,30,38,51,48,30,32,33,30,33,31,30,31,31,31,31,30,30,33,33,31,32,33,31,33,33,32,
-32,33,33,31,33,47,52,51,34,34,34,34,34,48,30,33,33,30,31,30,30,31,31,33,30,31,31,32,33,33,
-33,32,32,31,31,30,47,36,36,36,36,36,52,51,48,33,30,32,33,31,32,30,30,32,33,32,31,32,30,30,
-31,31,32,32,33,31,33,31,32,32,32,30,47,52,40,32,33,33,33,32,32,32,33,30,31,33,31,32,33,31,
-30,31,32,31,32,30,33,33,30,33,31,33,31,38,51,48,32,32,30,31,30,32,32,31,31,31,33,30,30,33,
-33,33,30,30,31,31,30,30,32,30,32,32,30,47,52,51,48,30,32,30,33,31,33,32,33,33,33,30,31,31,
-32,33,33,30,31,30,32,31,32,31,30,31,33,32,47,52,51,48,33,31,30,30,31,33,32,33,32,33,30,30,
-32,32,32,33,30,31,33,31,31,31,33,33,33,32,49,50,29,40,33,32,30,32,32,33,33,31,30,30,31,30,
-30,31,30,32,32,30,30,31,31,31,31,31,31,33,38,28,29,40,33,32,32,33,30,31,32,32,32,30,31,30,
-30,31,32,31,31,31,32,33,32,31,31,31,30,49,50,28,26,40,30,33,33,32,32,32,32,30,30,31,33,30,
-33,33,32,32,30,33,30,31,30,33,31,30,33,38,29,26,29,40,30,30,33,33,30,32,33,31,31,32,33,32,
-30,32,31,33,30,31,33,33,33,33,31,32,49,50,26,26,53,46,33,31,31,33,30,33,33,30,31,32,31,32,
-32,33,32,30,32,30,33,32,33,31,31,32,38,26,53,36,46,33,30,33,32,31,33,33,33,32,33,32,31,30,
-31,33,33,30,31,31,33,33,30,31,31,49,50,26,40,31,32,32,33,32,33,32,33,33,32,33,33,30,31,31
+30,30,31,31,33,138,138,138,138,138,138,138,138,138,157,142,142,156,30,31,33,33,33,31,32,31,32,33,33,31,
+30,33,49,34,48,138,138,138,138,138,138,138,138,138,155,160,135,148,138,32,31,32,32,33,32,31,33,31,31,31,
+33,30,47,52,51,138,138,138,138,138,138,138,138,138,138,146,136,148,138,31,30,32,31,31,32,32,30,30,32,33,
+30,32,30,47,52,51,34,48,138,138,138,138,138,138,141,146,161,154,30,33,31,30,30,31,30,31,32,33,32,33,
+33,33,33,30,47,36,52,51,34,34,34,48,33,33,33,155,154,138,31,30,31,33,30,31,32,32,30,32,32,31,
+33,33,30,32,33,32,47,36,36,52,27,51,34,48,33,33,138,138,30,31,33,33,30,30,31,33,33,32,30,32,
+30,33,32,246,30,31,30,31,33,47,52,29,29,51,34,48,32,33,30,33,31,32,30,33,32,30,30,30,32,32,
+32,32,246,246,246,246,32,32,33,33,47,36,52,26,28,51,48,33,49,34,34,34,48,31,32,32,30,32,30,31,
+33,246,246,246,246,246,246,246,246,33,30,49,50,28,29,26,51,34,50,28,29,27,40,33,31,30,31,33,31,31,
+30,246,246,246,246,265,250,250,264,246,34,50,29,27,29,26,26,26,26,28,26,29,51,48,31,30,31,32,30,32,
+246,246,246,246,265,266,245,243,256,246,28,26,26,29,27,27,29,28,29,27,29,29,27,40,30,33,32,32,32,33,
+246,246,246,265,266,269,252,252,262,246,27,28,29,28,29,26,26,28,29,26,28,26,29,51,48,30,33,32,32,33,
+246,246,246,254,269,262,246,246,246,246,27,26,26,28,29,29,27,28,29,29,26,28,27,26,40,32,30,31,30,32,
+246,265,250,266,256,246,246,246,246,246,27,29,29,29,26,27,29,27,26,28,27,28,27,26,40,30,31,32,30,31,
+246,254,269,252,262,246,246,246,246,246,53,36,36,36,52,27,27,29,29,27,26,26,28,29,40,33,30,33,31,30,
+246,254,256,246,246,246,246,246,246,246,246,33,33,33,47,36,52,28,27,27,29,26,27,26,51,34,48,31,30,32,
+246,254,256,246,246,246,246,246,246,246,246,246,31,32,30,30,47,36,52,27,29,28,26,53,36,52,51,48,33,32,
+246,254,267,250,250,264,246,246,246,246,246,246,30,31,30,32,30,30,38,26,27,29,27,40,30,47,52,40,31,31,
+246,263,252,252,268,267,250,264,246,246,246,48,30,49,48,33,33,49,50,26,28,26,27,40,31,32,47,46,32,32,
+246,246,246,246,263,252,268,267,264,246,246,246,246,246,40,49,48,38,28,26,29,27,28,40,32,31,32,31,32,33
 </data>
  </layer>
  <objectgroup id="2" name="Object Layer 1">
   <object id="1" gid="1" x="4961.71" y="2910.81" width="198" height="166"/>
   <object id="2" gid="20" x="8458.67" y="3590.36" width="550" height="550"/>
   <object id="3" gid="24" x="11298.1" y="8182.43" width="550" height="550"/>
-  <object id="4" gid="22" x="11455.2" y="6297.22" width="550" height="550"/>
+  <object id="4" gid="22" x="11071.2" y="3577.22" width="550" height="550"/>
   <object id="5" gid="5" x="8799.94" y="2266.41" width="550" height="550"/>
   <object id="7" gid="9" x="13986.3" y="3713.77" width="550" height="550"/>
   <object id="8" gid="4" x="6622.98" y="1500.16" width="550" height="550"/>
@@ -56,23 +58,358 @@
   <object id="29" gid="21" x="5329" y="1301" width="550" height="550"/>
   <object id="30" gid="21" x="5717" y="853" width="550" height="550"/>
  </objectgroup>
- <objectgroup id="3" name="Slipery Layer">
+ <objectgroup id="3" name="Slipery Effect  Layer">
   <properties>
    <property name="slippery_factor" type="float" value="3"/>
   </properties>
-  <object id="34" x="1290.91" y="12.1212" width="1266.67" height="603.03"/>
-  <object id="35" x="1293.94" y="318.182" width="890.909" height="606.061">
+  <object id="34" x="2762.91" y="1852.12" width="1050.67" height="699.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="35" x="1281.94" y="726.182" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
    <ellipse/>
   </object>
-  <object id="37" x="2200" y="724.242" width="890.909" height="606.061">
+  <object id="37" x="1680" y="732.242" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
    <ellipse/>
   </object>
-  <object id="38" x="1839.39" y="409.091" width="721.212" height="1093.94"/>
-  <object id="39" x="2572.73" y="645.455">
+  <object id="39" x="1584.73" y="1669.45" rotation="32">
    <polygon points="0,0 93.9394,84.8485 -9.09091,84.8485"/>
   </object>
-  <object id="40" x="1748.48" y="936.364" rotation="90">
+  <object id="40" x="1716.48" y="2136.36" rotation="90">
    <polygon points="0,0 93.9394,-84.8485 -9.09091,-84.8485"/>
+  </object>
+  <object id="52" x="2386.55" y="1828.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="53" x="1834.55" y="1268.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="54" x="3322.55" y="1820.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="55" x="5146.55" y="2932.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="56" x="6210.66" y="3498.49" width="1634.67" height="699.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="57" x="3942.66" y="2402.49" width="2122.67" height="707.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="58" x="3482.55" y="2380.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="59" x="5674.55" y="3468.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="60" x="5518.66" y="2962.49" width="1634.67" height="699.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="61" x="6610.55" y="2924.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="62" x="5530.55" y="2356.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="63" x="2226.55" y="1268.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="64" x="1884" y="1468">
+   <polygon points="0,0 -132,16 -52,128"/>
+  </object>
+  <object id="65" x="2580" y="1172">
+   <polygon points="0,0 -52,116 88,92"/>
+  </object>
+  <object id="66" x="3124" y="1704">
+   <polygon points="0,0 -72,144 180,144 36,92"/>
+  </object>
+  <object id="67" x="3320" y="2560">
+   <polygon points="0,0 232,-4 192,68 160,148 128,60 60,16"/>
+  </object>
+  <object id="68" x="2376" y="2156">
+   <polygon points="0,0 36,-92 88,-148 84,-164 -4,-136 -84,-128 -60,-100 -20,-68 -4,-52"/>
+  </object>
+  <object id="70" x="4216" y="2236">
+   <polygon points="0,0 48,92 148,144 172,160 -68,160 -24,84"/>
+  </object>
+  <object id="71" x="5212" y="3120">
+   <polygon points="0,0 -228,-12 -116,48 -68,152 -68,192 -20,52"/>
+  </object>
+  <object id="72" x="6424" y="2816">
+   <polygon points="0,0 -84,140 252,148 80,104"/>
+  </object>
+  <object id="73" x="5724" y="3676">
+   <polygon points="0,0 -44,108 -160,-8"/>
+  </object>
+  <object id="74" x="7520" y="3332">
+   <polygon points="0,0 -80,164 188,164 44,108"/>
+  </object>
+  <object id="77" x="6398.66" y="4802.49" width="6066.67" height="3243.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="78" x="10142.7" y="8034.49" width="2818.67" height="2923.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="79" x="9326.67" y="5482.49" width="3682.67" height="3675.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="80" x="7918.67" y="5418.49" width="2818.67" height="2923.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="10" name="Heat Effect Layer">
+  <properties>
+   <property name="slippery_factor" type="float" value="3"/>
+  </properties>
+  <object id="96" x="2762.91" y="1852.12" width="1050.67" height="699.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="97" x="1281.94" y="726.182" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="98" x="1680" y="732.242" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="99" x="1584.73" y="1669.45" rotation="32">
+   <polygon points="0,0 93.9394,84.8485 -9.09091,84.8485"/>
+  </object>
+  <object id="100" x="1716.48" y="2136.36" rotation="90">
+   <polygon points="0,0 93.9394,-84.8485 -9.09091,-84.8485"/>
+  </object>
+  <object id="101" x="2386.55" y="1828.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="102" x="1834.55" y="1268.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="103" x="3322.55" y="1820.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="104" x="5146.55" y="2932.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="105" x="6210.66" y="3498.49" width="1634.67" height="699.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="106" x="3942.66" y="2402.49" width="2122.67" height="707.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="107" x="3482.55" y="2380.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="108" x="5674.55" y="3468.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="109" x="5518.66" y="2962.49" width="1634.67" height="699.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="110" x="6610.55" y="2924.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="111" x="5530.55" y="2356.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="112" x="2226.55" y="1268.97" width="890.909" height="758.061">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="113" x="1884" y="1468">
+   <polygon points="0,0 -132,16 -52,128"/>
+  </object>
+  <object id="114" x="2580" y="1172">
+   <polygon points="0,0 -52,116 88,92"/>
+  </object>
+  <object id="115" x="3124" y="1704">
+   <polygon points="0,0 -72,144 180,144 36,92"/>
+  </object>
+  <object id="116" x="3320" y="2560">
+   <polygon points="0,0 232,-4 192,68 160,148 128,60 60,16"/>
+  </object>
+  <object id="117" x="2376" y="2156">
+   <polygon points="0,0 36,-92 88,-148 84,-164 -4,-136 -84,-128 -60,-100 -20,-68 -4,-52"/>
+  </object>
+  <object id="118" x="4216" y="2236">
+   <polygon points="0,0 48,92 148,144 172,160 -68,160 -24,84"/>
+  </object>
+  <object id="119" x="5212" y="3120">
+   <polygon points="0,0 -228,-12 -116,48 -68,152 -68,192 -20,52"/>
+  </object>
+  <object id="120" x="6424" y="2816">
+   <polygon points="0,0 -84,140 252,148 80,104"/>
+  </object>
+  <object id="121" x="5724" y="3676">
+   <polygon points="0,0 -44,108 -160,-8"/>
+  </object>
+  <object id="122" x="7520" y="3332">
+   <polygon points="0,0 -80,164 188,164 44,108"/>
+  </object>
+  <object id="123" x="6398.66" y="4802.49" width="6066.67" height="3243.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="124" x="10142.7" y="8034.49" width="2818.67" height="2923.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="125" x="9326.67" y="5482.49" width="3682.67" height="3675.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="126" x="7918.67" y="5418.49" width="2818.67" height="2923.03">
+   <properties>
+    <property name="slippery_factor" type="float" value="50"/>
+   </properties>
+  </object>
+  <object id="151" x="2940.55" y="5118.95" width="890.909" height="758.061">
+   <properties>
+    <property name="heat" type="float" value="100"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="152" x="3881.55" y="5118.95" width="890.909" height="758.061">
+   <properties>
+    <property name="heat" type="float" value="100"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="153" x="1828.55" y="6190.95" width="890.909" height="758.061">
+   <properties>
+    <property name="heat" type="float" value="100"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="154" x="732.544" y="7326.95" width="890.909" height="758.061">
+   <properties>
+    <property name="heat" type="float" value="100"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="155" x="1668.55" y="7334.95" width="890.909" height="758.061">
+   <properties>
+    <property name="heat" type="float" value="100"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="156" x="732.544" y="9534.95" width="890.909" height="758.061">
+   <properties>
+    <property name="heat" type="float" value="100"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="157" x="3884.55" y="10639" width="890.909" height="758.061">
+   <properties>
+    <property name="heat" type="float" value="100"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="158" x="3868.55" y="5694.95" width="890.909" height="758.061">
+   <properties>
+    <property name="heat" type="float" value="100"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="159" x="2380.55" y="5686.95" width="890.909" height="758.061">
+   <properties>
+    <property name="heat" type="float" value="100"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="160" x="3100.55" y="5662.95" width="890.909" height="758.061">
+   <properties>
+    <property name="heat" type="float" value="100"/>
+   </properties>
+   <ellipse/>
   </object>
  </objectgroup>
 </map>

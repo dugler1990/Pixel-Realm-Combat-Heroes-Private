@@ -1,0 +1,12 @@
+{
+  "default": {
+    "grass_options": [0, 1, 2, 3, 4, 5],
+    "density_mean": 45,
+    "density_sigma": 8
+  },
+  "big": {
+    "grass_options": [6, 7, 8, 9, 10, 11],
+    "density_mean": 40,
+    "density_sigma": 5
+  }
+}

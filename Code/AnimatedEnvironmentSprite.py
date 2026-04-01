@@ -1,5 +1,8 @@
 import pygame
 from Support import import_folder
+from game_logging import get_debug_logger
+
+_anim_env_log = get_debug_logger("animated_environment")
 
 class AnimatedEnvironmentSprite(pygame.sprite.Sprite):
     def __init__(self, pos, groups, initial_frames, speed, affected_by_wind=True):
@@ -44,8 +47,10 @@ class AnimatedEnvironmentSprite(pygame.sprite.Sprite):
         self.update_animations_with_weather(weather)
         now = pygame.time.get_ticks()
         
-        print(f"ANIMATION SPEED : {self.animation_speed}")
-        print(f" frame_index : frame index {self.frame_index} , len {len(self.frames)}")
+        _anim_env_log.debug("ANIMATION SPEED : %s", self.animation_speed)
+        _anim_env_log.debug(
+            "frame_index : %s , len %s", self.frame_index, len(self.frames)
+        )
         if now - self.last_update > self.animation_speed:
             self.frame_index = (self.frame_index + 1) % len(self.frames)
             self.image = self.frames[self.frame_index]

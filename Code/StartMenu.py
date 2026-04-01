@@ -1,6 +1,8 @@
 import pygame
 import sys
+from game_logging import get_debug_logger
 
+_game_flow_log = get_debug_logger("game_flow")
 class StartMenu:
     def __init__(self, game, input_manager):
         self.game = game
@@ -28,4 +30,4 @@ class StartMenu:
             if self.selected_option == 0:  # Start Game Selected
                 self.game.in_start_menu = False
             elif self.selected_option == 1:  # Settings Selected
-                print("Settings selected")
+                _game_flow_log.debug("Settings selected")

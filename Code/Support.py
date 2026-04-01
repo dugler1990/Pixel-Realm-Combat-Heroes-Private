@@ -2,6 +2,9 @@ from csv import reader
 import os
 from os import walk
 import pygame
+from game_logging import get_debug_logger
+
+_mask_ascii_log = get_debug_logger("mask_ascii")
 
 # Support for importing CSV files into Python and more stuff here
 
@@ -39,8 +42,7 @@ def print_mask(mask):
             else:
                 # Append 0 if not colliding
                 row_str += "0"
-        # Print the row string
-        print(row_str)
+        _mask_ascii_log.debug("%s", row_str)
 
 def frames_to_masks(animation_frames):
     masks = []
@@ -52,6 +54,131 @@ def frames_to_masks(animation_frames):
         
         masks.append(mask)
     
+    return masks
+
+
+_CODE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _masks_base_dir():
+    return os.path.normpath(os.path.join(_CODE_DIR, "..", "Graphics", "Masks"))
+
+
+_ENTITY_MASK_CACHE = {}
+
+
+def build_entity_masks_in_memory(animations_dict, animations_left_right_indicator):
+    """Build collision masks from animation surfaces (no disk I/O)."""
+    masks = {}
+    if animations_left_right_indicator:
+        for key, animation_set_left_right in animations_dict.items():
+            masks_temp = {}
+            for left_right_key, animation_set in animation_set_left_right.items():
+                masks_temp[left_right_key] = frames_to_masks(animation_set)
+            masks[key] = masks_temp
+    else:
+        for key, animation_set in animations_dict.items():
+            masks[key] = {"default": frames_to_masks(animation_set)}
+    return masks
+
+
+def load_entity_masks_from_disk(monster_name, animations_dict, animations_left_right_indicator):
+    """
+    Load pre-exported mask PNGs if every expected file exists.
+    Paths match legacy save layout under Graphics/Masks/{monster_name}/...
+    """
+    main_folder = os.path.join(_masks_base_dir(), monster_name)
+    try:
+        if animations_left_right_indicator:
+            out = {}
+            for key, animation_set_left_right in animations_dict.items():
+                masks_temp = {}
+                for left_right_key, animation_set in animation_set_left_right.items():
+                    direction_folder = os.path.join(main_folder, left_right_key)
+                    frames = []
+                    for i in range(len(animation_set)):
+                        image_path = os.path.join(
+                            direction_folder, f"{key}_{left_right_key}_mask_{i}.png"
+                        )
+                        if not os.path.isfile(image_path):
+                            return None
+                        surf = pygame.image.load(image_path).convert_alpha()
+                        frames.append(pygame.mask.from_surface(surf))
+                    masks_temp[left_right_key] = frames
+                out[key] = masks_temp
+            return out
+        out = {}
+        for key, animation_set in animations_dict.items():
+            direction_folder = main_folder
+            frames = []
+            for i in range(len(animation_set)):
+                image_path = os.path.join(direction_folder, f"{key}_mask_{i}.png")
+                if not os.path.isfile(image_path):
+                    return None
+                surf = pygame.image.load(image_path).convert_alpha()
+                frames.append(pygame.mask.from_surface(surf))
+            out[key] = {"default": frames}
+        return out
+    except (pygame.error, OSError):
+        return None
+
+
+def _export_entity_masks_to_disk(monster_name, masks, animations_left_right_indicator):
+    """Write mask PNGs for tooling (dev-only when EXPORT_ENTITY_MASKS_TO_DISK is True)."""
+    main_folder = os.path.join(_masks_base_dir(), monster_name)
+    os.makedirs(main_folder, exist_ok=True)
+    if animations_left_right_indicator:
+        for key, animation_set_left_right in masks.items():
+            for left_right_key, mask_frames in animation_set_left_right.items():
+                direction_folder = os.path.join(main_folder, left_right_key)
+                os.makedirs(direction_folder, exist_ok=True)
+                for i, mask in enumerate(mask_frames):
+                    if mask is not None:
+                        image_path = os.path.join(
+                            direction_folder, f"{key}_{left_right_key}_mask_{i}.png"
+                        )
+                        pygame.image.save(mask.to_surface(), image_path)
+    else:
+        for key, bucket in masks.items():
+            mask_frames = bucket.get("default", [])
+            for i, mask in enumerate(mask_frames):
+                if mask is not None:
+                    image_path = os.path.join(main_folder, f"{key}_mask_{i}.png")
+                    pygame.image.save(mask.to_surface(), image_path)
+
+
+def get_or_build_entity_masks(
+    monster_name,
+    animations_dict,
+    animations_left_right_indicator,
+    *,
+    skip_disk=False,
+):
+    """
+    Return nested dict of pygame masks; prefer disk load, then cache, else build in memory.
+    skip_disk=True for per-instance scaled sprites (e.g. tribey_snake).
+    """
+    from Settings import EXPORT_ENTITY_MASKS_TO_DISK
+
+    if skip_disk:
+        masks = build_entity_masks_in_memory(animations_dict, animations_left_right_indicator)
+        if EXPORT_ENTITY_MASKS_TO_DISK:
+            _export_entity_masks_to_disk(monster_name, masks, animations_left_right_indicator)
+        return masks
+
+    cache_key = (monster_name, animations_left_right_indicator)
+    if cache_key in _ENTITY_MASK_CACHE:
+        return _ENTITY_MASK_CACHE[cache_key]
+
+    loaded = load_entity_masks_from_disk(monster_name, animations_dict, animations_left_right_indicator)
+    if loaded is not None:
+        _ENTITY_MASK_CACHE[cache_key] = loaded
+        return loaded
+
+    masks = build_entity_masks_in_memory(animations_dict, animations_left_right_indicator)
+    if EXPORT_ENTITY_MASKS_TO_DISK:
+        _export_entity_masks_to_disk(monster_name, masks, animations_left_right_indicator)
+    _ENTITY_MASK_CACHE[cache_key] = masks
     return masks
 
 def import_folder(path, scale=None):

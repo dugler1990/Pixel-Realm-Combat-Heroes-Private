@@ -4,14 +4,41 @@ import os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # Game setup
-WIDTH = 1680
-HEIGHT = 950
+WIDTH = 800#1680
+HEIGHT = 400#950
+# Window size as a fraction of the primary monitor (used by Main2 when not fullscreen).
+WINDOW_WIDTH_RATIO = 0.6
+WINDOW_HEIGHT_RATIO = 0.6
 FPS = 30
 TILESIZE = 150
+# Fraction of window width and height (1–100) used for the grass subsurface; centered on the display.
+GRASS_VIEWPORT_PERCENT = 80
+
+# Benchmark mode (off by default). Used for isolated moving-entity collision tests.
+BENCHMARK_ENABLED = False
+BENCHMARK_LAYOUT_DIR = "../levels/benchmark"
+BENCHMARK_ENTITY_COUNT = 150
+BENCHMARK_SEED = 1337
+BENCHMARK_DETERMINISTIC_SPAWN = True
+BENCHMARK_ENEMY_TYPE = "raccoon"
+BENCHMARK_PLAYER_HEALTH_MULTIPLIER = 50.0
+BENCHMARK_BROADPHASE_BACKEND = "quadtree"  # "quadtree" | "grid"
+BENCHMARK_PUSHBACK_FLOOR_ENABLED = False
+BENCHMARK_PUSHBACK_MIN_THRESHOLD = 0.5
+BENCHMARK_PUSHBACK_CAP_ENABLED = False
+BENCHMARK_PUSHBACK_MAX_CAP = 16.0
+BENCHMARK_METRICS_ENABLED = True
+BENCHMARK_METRICS_LOG_EVERY_SEC = 5.0
+BENCHMARK_METRICS_CSV_PATH = "../logs/benchmark_metrics.csv"
+BENCHMARK_AUTO_RUN_SECONDS = 0  # 0 means manual run (no auto-exit)
+BENCHMARK_WARMUP_SECONDS = 1.5
+BENCHMARK_SPAWN_MAX_RING = 3  # Keep benchmark entities near player center
 
 # Debug settings
 DEBUG_DRAW_MASKS = True  # Draw collision masks for all entities and objects
 DEBUG_DRAW_EFFECT_RECTS = True  # Draw effect collision rects in red
+# When True, entity mask PNGs are written under Graphics/Masks (dev/asset pipeline only).
+EXPORT_ENTITY_MASKS_TO_DISK = False
 HITBOX_OFFSET = {
 	"player": -26,
 	"object": -40,
@@ -147,9 +174,9 @@ monster_data = {
                 "attack_type": "melee", 
                 "attack_sound": "../Audio/Attack/Slash.wav", 
                 "speed": 6,
+                "resistance": 3,
                 "combat_config":{
                 "melee_attacks": [{"damage": 6, "cooldown": 1000}],
-                "resistance": 3, 
                 "melee_attack_radius": 50, 
                 "notice_radius": 300,
                 

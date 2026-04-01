@@ -575,8 +575,187 @@ Git token:
 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
 new : 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
 new2: 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
+new3: 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
+
+new4 : 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
 
 git remote set-url origin https://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@github.com/dugler1990/IceCoreTempModelling.git
+
+
+
+
+#### ISSUES TO FIX WHEN DISTRIBUTING:
+
+1.1 pytmx needs a hard change from https://github.com/bitcraft/pytmx/pull/196/commits/74391fc075cb5b951b7ba98a2b6cd48562aa1f07 to use ellipses
+1.2 the venv in Public-... which i am using is a copy from the original "zelda-python..." venv, when i install once activating the "Public-" one it actually installs in Zelda-
+    will eventually have to deal with this issue. 
+
+
+
+
+WL: layout manager class audit (before change to .tmx)
+
+
+1. concerned about necessity for callbacks : restore persistent enemies,initialize_map_items_callback-- callbacks to spawner.
+2. structure: i have start map layout function and then that runs in init
+3. layout manager is the one adding objects to the quad tree for obstructions....seems ok
+
+
+Even if i am not using the grass maanger, i need to pass it around for posible future use, it errors.
+
+I have an issue with the objects, firstly, they are using the Tile class which has by default the TILESIZE set in settings, this is more like
+an image, we defo made objects previously so we should do it like that.
+
+--- wierdly it does just use Tile...
+
+** my next concern is that it auto goes into obstacle sprites....
+** also it uses masks of an image that may or may not actually be an image.
+
+
+------> when its from object layer 2 , there is no image so the mask will not exist. not sure how to handle this.
+        i could just NOT pass a mask when its None, this will not solve my issues but it might atleast get the game running for now.
+        
+        
+        ok... Tile gets rect from image, these objects have no image. 
+        
+        
+        maybe i just create an empty image ? 
+
+
+	add quadtree.
+	
+	
+	
+	we gotsit, there is some issue with item placement though.
+	
+	
+	it is regarding the difference between the tilesize in tiled vs the tilesize ingame.
+	
+	
+	
+	This tilemap tilesize to game tilesize is a real issue.
+	
+	-somehow correct tiles are not being placed. I guess its about position - should be 2 snow tiles in top corner and then blue,
+	 there are 3
+	- image size still not being adapted, objects need to be resized to the same proportion, the x and y pos is adjusted but image needs resized
+	- objects seem to just leave a black square where they are supposed to be transparent and also...be the shape of the shape.
+	
+	----> issue 1 is that transition tiles are not being drawn.
+	
+	 i guess the pygame import is not workinng correctly ? 
+	 
+	 
+	 the surface is correct when testing the pygame load import method. 
+	 its bizzare that it is not working.
+	 
+	 i guess it could be the tilesets its calling from..... but in spyder it can find it correctly.
+	 
+	 
+	 
+	 
+	 
+	 
+	 EVEN REMOVING OTHER LAYERS ISSUE PERSISTS, even printing out surfaces for each shows correct images
+	 wl
+	 ---> i have to look at how this is being called and surrounding functions, its absurd.
+	 
+	 
+	 
+	 DONE
+	 
+	 for slippery layer, i need to draw the shapes as if they are objects....
+	 
+	 if image is None and ellipse is false we just draw the points togethor else we draw the ellipse
+	 
+	 ----> I need a plan for using these properties though.
+	 
+	 	It will just be a part of the gameloop, checking if player or sprites are in any property ranges.
+	 	
+	 	1. Sprite group for properties
+	 	2. Check for all [ Player, enemies, neutral ] if there are ground properties that need to be applied
+	 	3. Method to apply properties to the sprites, 
+	 	    - friction ( slippery idea , affects movement, basically, your movement actions lag, your inertia is maintained )
+	 	    - damage ( lava  while on it takes damage over time, poisen, same but persisting)
+	 	    - slow ( sludge ) 
+	 	    - acceleration ( conveyor belt, avalanche ) 
+	 	    
+	 	    
+	 	    all of the things i can think of are regarding movement and taking damage. 
+	 	    
+	 	    we need to have a thing called "effects", they will be applied to sprites.
+	 	    
+	 	    process:
+	 	    
+	 	    check for properties on all sprites (you can be imune) 
+	 	    property then affects the sprite, some will affect movement speed etc , others damage, debuffs
+	 	    
+	 	    sprites upon update will check if any effects that last a particular time have subsided
+	 	    
+	 	    Effect	
+	 	    SlipperyEffect()
+	 	    ConveyorbeltEffect()
+	 	    DamageEffect()
+	 	    
+	 	    
+	 	    
+	 	    for sprite in enemeies:
+	 	    	collision with properties (use quad tree)
+	 	    	sprite.apply_effect( "effect name" )
+	 	    	
+	 	    Entity:
+	 	    
+	 	        add_effect(effect_dict):
+	 	            Enitity.current_effects.append(effect_dict)
+	 	            
+	 	    	apply_effect( effect_name ):
+	 	    	    if effect_name == "speed":
+	 	    	    	Entity.movementspeed += kwargs["amount"]
+	 	    	    if effect_name == "damage_over_time"
+	 	    	    	Entity.take_damage( kwargs["damage_per_tick"] )
+	 	    	    if effect_name == "slippery":
+	 	    	    	Entity.friction -= kwargs["slippery_factor"]
+	 	    	
+	 	        update():
+		 	    	existing...
+		 	    	check lasting effects
+		 	    	self.effects.time_passed > self.effects.total_time
+		 	    	then self.effect.remove(effect)
+	 	    
+	 	    
+	 	    
+	 
+	 
+	 
+	 
+	 
+	
+	
+	
+
+
+
+---- layout_path passed to initialize_layout from main into level4
+
+----- Layouts dir passed to level4 passed to start map, used for 
+
+	initial_layouts_dir
+	layout_general_config
+	
+	# I think None of this is used atm.
+	
+	# current layout var in level defined
+	
+	just keeping these files in atm.
+
+
+
+
+
+# I have a method for smaller obstructions already, i just dont know if i can define this in tiled.
+
+
+##################3 ok so i need to see how the layout path is used, now i just need to import the .tmx and use it
+                    this needs to be a part of level selection.
 
 
 
@@ -2816,11 +2995,25 @@ Maybe ill try water that is just thecalm ripple ones but increase the animation 
 
 
 
+#####
+WL 09/11/2025
+
+It turns out rectangles dont have defined points... only triangles and polygons.
+
+as_points gets the bounding box,always 4 , 
+only triangles and polygona have the points attribute
+
+ok.. a bit annoying but we will do :
+
+1. polygons ( has points, treat triangles the same)
+2. ellipse  : ellispe attribute
+2. otherwise has to be a squre right ? and the bounding box is the whole thing.
 
 
 
 
-
+WL: got new terrain brush and in theory heat effect of lava but nt recieving damage , witll need debug code 
+     or manual review of how its digering.
 
 
 
