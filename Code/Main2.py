@@ -140,7 +140,7 @@ class Game:
             player_info_dir = self.player_selection.selected_player_info_dir
             player_stats = self.player_configuration.final_stats
             if BENCHMARK_RUNTIME.enabled:
-                layouts_dir = BENCHMARK_LAYOUT_DIR
+                layouts_dir = BENCHMARK_RUNTIME.layout_dir
             else:
                 layouts_dir = (level_6_layout_path if level_number == 6 else
                               level_7_layout_path if level_number == 7 else level_8_layout_path)

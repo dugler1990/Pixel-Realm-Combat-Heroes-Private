@@ -151,7 +151,7 @@ class GrassManager:
                     self.grass_tiles[pos].apply_force(location, radius, dropoff)
 
     # an update and render combination function
-    def update_render(self, surf, dt, offset=(0, 0), rot_function=None):
+    def update_render(self, surf, dt, offset=(0, 0), rot_function=None, collect_stats=False):
         visible_tile_range = (int(surf.get_width() // self.tile_size) + 1, int(surf.get_height() // self.tile_size) + 1)
         base_pos = (int(offset[0] // self.tile_size), int(offset[1] // self.tile_size))
 
@@ -169,11 +169,20 @@ class GrassManager:
                 self.grass_tiles[pos].render_shadow(surf, offset=(offset[0] - self.ground_shadow[3][0], offset[1] - self.ground_shadow[3][1]))
 
         # render the grass tiles
+        custom_tiles = 0
         for pos in render_list:
             tile = self.grass_tiles[pos]
+            if collect_stats and tile.custom_blade_data:
+                custom_tiles += 1
             tile.render(surf, dt, offset=offset)
             if rot_function:
                 tile.set_rotation(rot_function(tile.loc[0], tile.loc[1]))
+        if collect_stats:
+            return {
+                "visible_tiles": len(render_list),
+                "custom_tiles": custom_tiles,
+            }
+        return None
 
 # an asset manager that contains functionality for rendering blades of grass
 class GrassAssets:

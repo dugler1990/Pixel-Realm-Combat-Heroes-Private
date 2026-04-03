@@ -101,7 +101,14 @@ class LayoutManager:
         self.restore_persistent_enemies_callback = restore_persistent_enemies_callback
     
         # Initialize grass manager
-        self.grass_manager = GrassManager(grass_path="../Graphics/Grass", tile_size=TILESIZE, stiffness=600, max_unique=3, place_range=[0, 1])
+        self.grass_manager = GrassManager(
+            grass_path="../Graphics/Grass",
+            tile_size=TILESIZE,
+            stiffness=600,
+            max_unique=3,
+            place_range=[0, 1],
+            rotation_bucket_degrees=GRASS_ROTATION_BUCKET_DEGREES,
+        )
         self._grass_profiles = {}
     
         # Initialize sprite groups

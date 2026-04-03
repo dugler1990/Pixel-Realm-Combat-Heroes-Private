@@ -27,6 +27,7 @@ from Upgrade import Upgrade
 import os
 import sys
 import random
+import time
 from AnimationSprite import AnimationSprite
 from Trap import Trap
 from Tree import Tree 
@@ -339,6 +340,7 @@ class Level4:
             self._start_next_benchmark_case()
         else:
             self._spawn_benchmark_entities()
+            self._reset_benchmark_grass_state()
             self.layout_manager.switch_entity_broadphase_backend(
                 self.benchmark_runtime.broadphase_backend,
                 grid_cell_size=self.benchmark_runtime.grid_cell_size,
@@ -349,10 +351,11 @@ class Level4:
                 f"count={self.benchmark_runtime.entity_count} "
                 f"backend={self.benchmark_runtime.broadphase_backend} "
                 f"grid_cell_size={self.benchmark_runtime.grid_cell_size} "
+                f"swarm_neighbors={self.benchmark_runtime.simple_swarm_neighbor_limit} "
                 f"floor={self.benchmark_runtime.pushback_floor_enabled} "
                 f"cap={self.benchmark_runtime.pushback_cap_enabled} "
                 f"max_cap={self.benchmark_runtime.pushback_max_cap} "
-                f"enemy={self.benchmark_runtime.enemy_type} "
+                f"enemy={self.benchmark_runtime.enemy_display_label()} "
                 f"warmup_s={self.benchmark_runtime.warmup_seconds}",
                 flush=True,
             )
@@ -372,6 +375,67 @@ class Level4:
             enemy.kill()
         self.spawner.enemies.clear()
 
+    def _reset_benchmark_grass_state(self):
+        visible_sprites = getattr(self.layout_manager, "visible_sprites", None)
+        if visible_sprites is not None and hasattr(visible_sprites, "last_player_grass_force_center"):
+            visible_sprites.last_player_grass_force_center = None
+
+    def _draw_benchmark_overlay(self):
+        if not self.benchmark_runtime.enabled:
+            return
+
+        font = pygame.font.Font(None, 24)
+        padding = 8
+        line_gap = 4
+        snap = self.benchmark_runtime.metrics.snapshot()
+        current, total = self.benchmark_runtime.matrix_progress()
+        phase = self.benchmark_runtime.case_phase.upper()
+        if self.benchmark_runtime.case_phase == "measure":
+            elapsed = max(0.0, time.time() - self.benchmark_runtime.run_started_at)
+            phase_target = self.benchmark_runtime.auto_run_seconds
+        elif self.benchmark_runtime.case_phase == "warmup":
+            elapsed = max(0.0, time.time() - self.benchmark_runtime.warmup_started_at)
+            phase_target = self.benchmark_runtime.warmup_seconds
+        else:
+            elapsed = 0.0
+            phase_target = 0.0
+
+        lines = [
+            f"case {current}/{total}  {phase}",
+            f"enemy {self.benchmark_runtime.enemy_display_label()}  count {self.benchmark_runtime.entity_count}",
+            (
+                f"{self.benchmark_runtime.collision_mode}  "
+                f"n={self.benchmark_runtime.simple_swarm_neighbor_limit}  "
+                f"{self.benchmark_runtime.broadphase_backend}  "
+                f"cell={self.benchmark_runtime.grid_cell_size}"
+            ),
+            (
+                f"floor={'on' if self.benchmark_runtime.pushback_floor_enabled else 'off'}  "
+                f"cap={'on' if self.benchmark_runtime.pushback_cap_enabled else 'off'}  "
+                f"max={self.benchmark_runtime.pushback_max_cap:g}"
+            ),
+            f"timer {elapsed:.1f}/{phase_target:.1f}s",
+            f"fps {snap['avg_fps']:.2f}  p95 {snap['p95_frame_ms']:.2f}ms",
+            f"queries {int(snap['broadphase_queries'])}  cand {int(snap['candidate_collisions'])}",
+        ]
+
+        surfaces = [font.render(line, True, (255, 255, 255)) for line in lines]
+        max_width = max(surface.get_width() for surface in surfaces)
+        total_height = sum(surface.get_height() for surface in surfaces) + line_gap * (len(surfaces) - 1)
+        panel_width = max_width + padding * 2
+        panel_height = total_height + padding * 2
+        panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+        panel.fill((0, 0, 0, 170))
+
+        y = padding
+        for surface in surfaces:
+            panel.blit(surface, (padding, y))
+            y += surface.get_height() + line_gap
+
+        x = self.display_surface.get_width() - panel_width - 12
+        y = self.display_surface.get_height() - panel_height - 12
+        self.display_surface.blit(panel, (x, y))
+
     def _start_next_benchmark_case(self):
         case = self.benchmark_runtime.start_next_matrix_case()
         if case is None:
@@ -379,6 +443,7 @@ class Level4:
             pygame.event.post(pygame.event.Event(pygame.QUIT))
             return False
         self._clear_benchmark_enemies()
+        self._reset_benchmark_grass_state()
         self.layout_manager.switch_entity_broadphase_backend(
             case["backend"],
             grid_cell_size=case.get("grid_cell_size"),
@@ -390,8 +455,9 @@ class Level4:
             f"[BENCH] Case {current}/{total} warmup label={self.benchmark_runtime.run_label} "
             f"count={self.benchmark_runtime.entity_count} backend={self.benchmark_runtime.broadphase_backend} "
             f"grid_cell_size={self.benchmark_runtime.grid_cell_size} "
+            f"swarm_neighbors={self.benchmark_runtime.simple_swarm_neighbor_limit} "
             f"floor={self.benchmark_runtime.pushback_floor_enabled} cap={self.benchmark_runtime.pushback_cap_enabled} "
-            f"max_cap={self.benchmark_runtime.pushback_max_cap} enemy={self.benchmark_runtime.enemy_type} "
+            f"max_cap={self.benchmark_runtime.pushback_max_cap} enemy={self.benchmark_runtime.enemy_display_label()} "
             f"warmup_s={self.benchmark_runtime.warmup_seconds}",
             flush=True,
         )
@@ -405,19 +471,35 @@ class Level4:
         self.player.stats["health"] = boosted_max
         self.player.health = boosted_max
 
-    def _spawn_benchmark_boundaries(self):
-        """Spawn tile-based benchmark boundary walls around the anchored player."""
-        # Use the player's current center as the arena center in tile space.
+    def _benchmark_arena_tile_bounds(self):
+        """Return (min_tx, max_tx, min_ty, max_ty, radius_tiles) for wall perimeter; must stay in sync with wall spawn."""
         center_tile_x = int(self.player.rect.centerx / TILESIZE)
         center_tile_y = int(self.player.rect.centery / TILESIZE)
-
-        # Arena half-size in tiles (tunable). Keep well within 1..38 bounds used elsewhere.
-        # Reduced from 8 to 4 so the arena is much tighter.
         radius_tiles = 4
         min_tx = max(1, center_tile_x - radius_tiles)
         max_tx = min(38, center_tile_x + radius_tiles)
         min_ty = max(1, center_tile_y - radius_tiles)
         max_ty = min(38, center_tile_y + radius_tiles)
+        return min_tx, max_tx, min_ty, max_ty, radius_tiles
+
+    def _populate_benchmark_arena_grass(self):
+        """Fill interior of benchmark wall rectangle with grass (grass-benchmark runs only)."""
+        if not self.benchmark_runtime.grass_benchmark_enabled:
+            return
+        min_tx, max_tx, min_ty, max_ty, _ = self._benchmark_arena_tile_bounds()
+        gm = self.layout_manager.grass_manager
+        placed = 0
+        # Interior: strictly inside the wall ring (walls sit on min/max edges).
+        for tx in range(min_tx + 1, max_tx):
+            for ty in range(min_ty + 1, max_ty):
+                gm.place_tile((tx, ty), BENCHMARK_ARENA_GRASS_DENSITY, BENCHMARK_ARENA_GRASS_OPTIONS)
+                placed += 1
+        # Runs after random.seed in _initialize_benchmark_mode and before entity spawn; consumes RNG for blade layout.
+        print(f"[BENCH] Arena grass tiles placed={placed}", flush=True)
+
+    def _spawn_benchmark_boundaries(self):
+        """Spawn tile-based benchmark boundary walls around the anchored player."""
+        min_tx, max_tx, min_ty, max_ty, radius_tiles = self._benchmark_arena_tile_bounds()
 
         # Clear previous references in case benchmark mode is reinitialized.
         self._benchmark_walls.clear()
@@ -462,6 +544,7 @@ class Level4:
             f"[BENCH] Spawned arena walls radius_tiles={radius_tiles} tiles={len(perimeter_tiles)}",
             flush=True,
         )
+        self._populate_benchmark_arena_grass()
 
     def _restore_player_for_benchmark_spawn(self):
         """Reset player to the layout spawn position before each benchmark spawn ring."""
@@ -512,9 +595,10 @@ class Level4:
             repeats = (target_count + len(positions) - 1) // len(positions)
             positions = (positions * repeats)[:target_count]
 
-        enemy_type = self.benchmark_runtime.enemy_type
-        for pos in positions[:target_count]:
-            self.spawner.spawn_enemy({"type": enemy_type, "pos": pos})
+        mix_types = self.benchmark_runtime.expanded_enemy_type_list(target_count)
+        for i, pos in enumerate(positions[:target_count]):
+            et = mix_types[i] if mix_types else self.benchmark_runtime.enemy_type
+            self.spawner.spawn_enemy({"type": et, "pos": pos})
 
     def _toggle_benchmark_backend(self):
         if self.benchmark_runtime.broadphase_backend == "quadtree":
@@ -1201,12 +1285,25 @@ class Level4:
                                                                      weather = self.weather,
                                                                      wind_force = None )
                 
-                self.layout_manager.visible_sprites.custom_draw(self.player,dt, 0, 0.5) # default weather intensity and light level (should be atleast an attribute of the layout manager, really contained in the weather manager.)
+                # Non-daytime layouts normally pass 0 wind (no grass sway). Grass benchmarks need a fixed strong sway so
+                # legacy_tile vs shared_patch are meaningful (see BENCHMARK_GRASS_SWAY_INTENSITY / PRCH_BENCHMARK_GRASS_SWAY_INTENSITY).
+                _grass_sway = (
+                    self.benchmark_runtime.grass_sway_intensity
+                    if (
+                        self.benchmark_runtime.enabled
+                        and self.benchmark_runtime.grass_benchmark_enabled
+                    )
+                    else 0
+                )
+                self.layout_manager.visible_sprites.custom_draw(
+                    self.player, dt, _grass_sway, 0.5
+                )
             #self.layout_manager.update_weather(self.weather)
             
             self.layout_manager.spawner.handle_spawn_areas( self.player,dt_real )        
             # Check for and update enemy sprites specifically
             self.ui.display(self.player)
+            self._draw_benchmark_overlay()
 
             for sprite in self.layout_manager.visible_sprites.sprites():
                 # debug
@@ -1271,18 +1368,10 @@ class Level4:
                     else:
                         self._benchmark_summary_written = True
                         pygame.event.post(pygame.event.Event(pygame.QUIT))
-           #print(f"\n\n after POST ATTACK {self.player.rect.x}\n\n")
-            self.save_enemy_states(self.current_layout) #mkght be a big inefficiency 
-           
-            
-            self.layout_manager.display_time(self.display_surface)
 
-           #print(f"\n\n after END OF LOOP {self.player.rect.x}\n\n")
-            #Now draw the weather overlay
-
-            self.player_dead = getattr(self.player, "is_dead", False)
-
-        #
+        self.save_enemy_states(self.current_layout)  # mkght be a big inefficiency
+        self.layout_manager.display_time(self.display_surface)
+        self.player_dead = getattr(self.player, "is_dead", False)
     
         # Grass  !
 
@@ -1458,9 +1547,14 @@ class YSortCameraGroup(pygame.sprite.Group):
         ground_rect = self.ground_surface.get_rect(topleft=(-self.offset.x, -self.offset.y))
         self.display_surface.blit(self.ground_surface, ground_rect.topleft)
             
-        #print(f" dt : {self.t}")
+        # Shared wind mode keeps one base sway angle for visible grass; legacy mode
+        # preserves the current position-dependent wave across the field.
         self.t += dt*1500*wind_intensity
-        rot_function = lambda x, y: int(math.sin(self.t / 60 + x / 100) * 15)
+        if GRASS_WIND_MODE == "shared_patch":
+            shared_angle = int(math.sin(self.t / 60) * 15)
+            rot_function = lambda x, y, angle=shared_angle: angle
+        else:
+            rot_function = lambda x, y: int(math.sin(self.t / 60 + x / 100) * 15)
         
         # if player on grass
         

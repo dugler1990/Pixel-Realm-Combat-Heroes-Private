@@ -2,15 +2,22 @@ import csv
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 from Settings import (
     BENCHMARK_AUTO_RUN_SECONDS,
     BENCHMARK_BROADPHASE_BACKEND,
     BENCHMARK_DETERMINISTIC_SPAWN,
     BENCHMARK_ENABLED,
+    BENCHMARK_ENEMY_MIX,
     BENCHMARK_ENEMY_TYPE,
     BENCHMARK_ENTITY_COUNT,
+    BENCHMARK_GRASS_DISTURBANCE_ENABLED,
+    BENCHMARK_GRASS_ENABLED,
+    BENCHMARK_GRASS_SWAY_INTENSITY,
+    BENCHMARK_GRASS_VIEWPORT_PERCENT,
+    BENCHMARK_GRASS_WIND_MODE,
+    BENCHMARK_LAYOUT_DIR,
     BENCHMARK_METRICS_CSV_PATH,
     BENCHMARK_METRICS_ENABLED,
     BENCHMARK_METRICS_LOG_EVERY_SEC,
@@ -76,6 +83,11 @@ class BenchmarkMetrics:
     maintenance_insert: int = 0
     maintenance_remove: int = 0
     maintenance_upsert: int = 0
+    grass_update_render_ms_total: float = 0.0
+    grass_force_calls: int = 0
+    grass_visible_tiles_total: int = 0
+    grass_custom_tiles_total: int = 0
+    grass_samples: int = 0
 
     def reset(self):
         self.frame_times_ms.clear()
@@ -85,6 +97,11 @@ class BenchmarkMetrics:
         self.maintenance_insert = 0
         self.maintenance_remove = 0
         self.maintenance_upsert = 0
+        self.grass_update_render_ms_total = 0.0
+        self.grass_force_calls = 0
+        self.grass_visible_tiles_total = 0
+        self.grass_custom_tiles_total = 0
+        self.grass_samples = 0
 
     def record_frame(self, dt_seconds: float):
         self.frame_times_ms.append(max(0.0, dt_seconds) * 1000.0)
@@ -104,11 +121,21 @@ class BenchmarkMetrics:
         elif op == "upsert":
             self.maintenance_upsert += 1
 
+    def record_grass_update(self, elapsed_ms: float, visible_tiles: int, custom_tiles: int):
+        self.grass_update_render_ms_total += max(0.0, float(elapsed_ms))
+        self.grass_visible_tiles_total += max(0, int(visible_tiles))
+        self.grass_custom_tiles_total += max(0, int(custom_tiles))
+        self.grass_samples += 1
+
+    def record_grass_force_call(self):
+        self.grass_force_calls += 1
+
     def snapshot(self) -> Dict[str, float]:
         frame_count = len(self.frame_times_ms)
         total_ms = sum(self.frame_times_ms)
         avg_frame_ms = (total_ms / frame_count) if frame_count else 0.0
         avg_fps = 1000.0 / avg_frame_ms if avg_frame_ms > 0 else 0.0
+        grass_samples = max(0, int(self.grass_samples))
         return {
             "frames": frame_count,
             "avg_frame_ms": avg_frame_ms,
@@ -120,12 +147,24 @@ class BenchmarkMetrics:
             "maintenance_insert": self.maintenance_insert,
             "maintenance_remove": self.maintenance_remove,
             "maintenance_upsert": self.maintenance_upsert,
+            "grass_update_render_ms_total": self.grass_update_render_ms_total,
+            "grass_update_render_ms_avg": (
+                self.grass_update_render_ms_total / grass_samples if grass_samples else 0.0
+            ),
+            "grass_force_calls": self.grass_force_calls,
+            "grass_visible_tiles": (
+                self.grass_visible_tiles_total / grass_samples if grass_samples else 0.0
+            ),
+            "grass_custom_tiles": (
+                self.grass_custom_tiles_total / grass_samples if grass_samples else 0.0
+            ),
         }
 
 
 @dataclass
 class BenchmarkRuntimeState:
     enabled: bool = BENCHMARK_ENABLED
+    layout_dir: str = BENCHMARK_LAYOUT_DIR
     entity_count: int = BENCHMARK_ENTITY_COUNT
     seed: int = BENCHMARK_SEED
     deterministic_spawn: bool = BENCHMARK_DETERMINISTIC_SPAWN
@@ -152,7 +191,19 @@ class BenchmarkRuntimeState:
     collision_mode: str = "simple_swarm"
     matrix_collision_modes: List[str] = field(default_factory=lambda: ["legacy"])
     simple_swarm_neighbor_limit: int = 4
+    matrix_simple_swarm_neighbor_limits: List[int] = field(default_factory=lambda: [4])
+    grass_benchmark_enabled: bool = BENCHMARK_GRASS_ENABLED
+    grass_wind_mode: str = BENCHMARK_GRASS_WIND_MODE
+    grass_sway_intensity: float = BENCHMARK_GRASS_SWAY_INTENSITY
+    grass_viewport_percent: int = BENCHMARK_GRASS_VIEWPORT_PERCENT
+    grass_disturbance_enabled: bool = BENCHMARK_GRASS_DISTURBANCE_ENABLED
+    matrix_grass_wind_modes: List[str] = field(default_factory=lambda: [BENCHMARK_GRASS_WIND_MODE])
+    matrix_grass_disturbance_modes: List[bool] = field(
+        default_factory=lambda: [BENCHMARK_GRASS_DISTURBANCE_ENABLED]
+    )
+    pushback_variant: str = "manual"
     enemy_type: str = BENCHMARK_ENEMY_TYPE
+    enemy_mix_spec: str = BENCHMARK_ENEMY_MIX
     matrix_cases: List[Dict[str, object]] = field(default_factory=list)
     matrix_case_index: int = -1
     warmup_seconds: float = BENCHMARK_WARMUP_SECONDS
@@ -213,8 +264,12 @@ class BenchmarkRuntimeState:
         snap = self.metrics.snapshot()
         row = {
             "run_label": self.run_label,
+            "layout_dir": self.layout_dir,
             "enemy_type": self.enemy_type,
+            "enemy_mix": self.enemy_mix_spec,
             "collision_mode": self.collision_mode,
+            "simple_swarm_neighbor_limit": self.simple_swarm_neighbor_limit,
+            "pushback_variant": self.pushback_variant,
             "backend": self.broadphase_backend,
             "grid_cell_size": self.grid_cell_size if self.broadphase_backend == "grid" else "",
             "entity_count": self.entity_count,
@@ -223,6 +278,10 @@ class BenchmarkRuntimeState:
             "pushback_min_threshold": self.pushback_min_threshold,
             "pushback_cap_enabled": self.pushback_cap_enabled,
             "pushback_max_cap": self.pushback_max_cap,
+            "grass_benchmark_enabled": self.grass_benchmark_enabled,
+            "grass_wind_mode": self.grass_wind_mode,
+            "grass_viewport_percent": self.grass_viewport_percent,
+            "grass_disturbance_enabled": self.grass_disturbance_enabled,
             **snap,
         }
 
@@ -302,37 +361,61 @@ class BenchmarkRuntimeState:
             ]
 
         collision_modes = self.matrix_collision_modes or ["legacy"]
+        if self.grass_benchmark_enabled:
+            grass_wind_modes = self.matrix_grass_wind_modes or [self.grass_wind_mode]
+            grass_disturbance_modes = (
+                self.matrix_grass_disturbance_modes or [self.grass_disturbance_enabled]
+            )
+        else:
+            grass_wind_modes = [self.grass_wind_mode]
+            grass_disturbance_modes = [self.grass_disturbance_enabled]
         for count in self.matrix_counts:
             for backend in self.matrix_backends:
                 for collision_mode in collision_modes:
-                    for toggle_name, floor_enabled, cap_enabled, max_cap in variants:
-                        if str(backend) == "grid":
-                            for cell_size in self.grid_cell_sizes:
-                                case: Dict[str, object] = {
-                                    "entity_count": int(count),
-                                    "backend": str(backend),
-                                    "collision_mode": str(collision_mode),
-                                    "toggle_name": toggle_name,
-                                    "pushback_floor_enabled": floor_enabled,
-                                    "pushback_cap_enabled": cap_enabled,
-                                    "grid_cell_size": int(cell_size),
-                                }
-                                if max_cap is not None:
-                                    case["pushback_max_cap"] = max_cap
-                                self.matrix_cases.append(case)
-                        else:
-                            case = {
-                                "entity_count": int(count),
-                                "backend": str(backend),
-                                "collision_mode": str(collision_mode),
-                                "toggle_name": toggle_name,
-                                "pushback_floor_enabled": floor_enabled,
-                                "pushback_cap_enabled": cap_enabled,
-                                "grid_cell_size": None,
-                            }
-                            if max_cap is not None:
-                                case["pushback_max_cap"] = max_cap
-                            self.matrix_cases.append(case)
+                    if str(collision_mode) == "simple_swarm":
+                        neighbor_limits = (
+                            self.matrix_simple_swarm_neighbor_limits
+                            or [self.simple_swarm_neighbor_limit]
+                        )
+                    else:
+                        neighbor_limits = [self.simple_swarm_neighbor_limit]
+                    for grass_wind_mode in grass_wind_modes:
+                        for grass_disturbance_enabled in grass_disturbance_modes:
+                            for neighbor_limit in neighbor_limits:
+                                for toggle_name, floor_enabled, cap_enabled, max_cap in variants:
+                                    if str(backend) == "grid":
+                                        for cell_size in self.grid_cell_sizes:
+                                            case: Dict[str, object] = {
+                                                "entity_count": int(count),
+                                                "backend": str(backend),
+                                                "collision_mode": str(collision_mode),
+                                                "simple_swarm_neighbor_limit": int(neighbor_limit),
+                                                "toggle_name": toggle_name,
+                                                "pushback_floor_enabled": floor_enabled,
+                                                "pushback_cap_enabled": cap_enabled,
+                                                "grid_cell_size": int(cell_size),
+                                                "grass_wind_mode": str(grass_wind_mode),
+                                                "grass_disturbance_enabled": bool(grass_disturbance_enabled),
+                                            }
+                                            if max_cap is not None:
+                                                case["pushback_max_cap"] = max_cap
+                                            self.matrix_cases.append(case)
+                                    else:
+                                        case = {
+                                            "entity_count": int(count),
+                                            "backend": str(backend),
+                                            "collision_mode": str(collision_mode),
+                                            "simple_swarm_neighbor_limit": int(neighbor_limit),
+                                            "toggle_name": toggle_name,
+                                            "pushback_floor_enabled": floor_enabled,
+                                            "pushback_cap_enabled": cap_enabled,
+                                            "grid_cell_size": None,
+                                            "grass_wind_mode": str(grass_wind_mode),
+                                            "grass_disturbance_enabled": bool(grass_disturbance_enabled),
+                                        }
+                                        if max_cap is not None:
+                                            case["pushback_max_cap"] = max_cap
+                                        self.matrix_cases.append(case)
         self.matrix_case_index = -1
 
     def begin_matrix(self):
@@ -349,8 +432,16 @@ class BenchmarkRuntimeState:
         self.entity_count = int(case["entity_count"])
         self.broadphase_backend = str(case["backend"])
         self.collision_mode = str(case.get("collision_mode", "legacy"))
+        self.simple_swarm_neighbor_limit = int(
+            case.get("simple_swarm_neighbor_limit", self.simple_swarm_neighbor_limit)
+        )
+        self.pushback_variant = str(case.get("toggle_name", "manual"))
         self.pushback_floor_enabled = bool(case["pushback_floor_enabled"])
         self.pushback_cap_enabled = bool(case["pushback_cap_enabled"])
+        self.grass_wind_mode = str(case.get("grass_wind_mode", self.grass_wind_mode))
+        self.grass_disturbance_enabled = bool(
+            case.get("grass_disturbance_enabled", self.grass_disturbance_enabled)
+        )
         if "pushback_max_cap" in case and case["pushback_max_cap"] is not None:
             self.pushback_max_cap = float(case["pushback_max_cap"])
         else:
@@ -362,8 +453,15 @@ class BenchmarkRuntimeState:
             self.grid_cell_size = int(case_cell_size)
         self.run_label = (
             f"{self.matrix_prefix}_{self.entity_count}_{self.broadphase_backend}_"
-            f"cell{self.grid_cell_size}_{self.collision_mode}_{case['toggle_name']}"
+            f"cell{self.grid_cell_size}_{self.collision_mode}_{self.pushback_variant}"
         )
+        if self.collision_mode == "simple_swarm":
+            self.run_label += f"_n{self.simple_swarm_neighbor_limit}"
+        if self.grass_benchmark_enabled:
+            self.run_label += (
+                f"_grass{self.grass_wind_mode}_"
+                f"{'forceon' if self.grass_disturbance_enabled else 'forceoff'}"
+            )
         self.case_phase = "setup"
         return case
 
@@ -371,6 +469,47 @@ class BenchmarkRuntimeState:
         total = len(self.matrix_cases)
         current = self.matrix_case_index + 1
         return current, total
+
+    def expanded_enemy_type_list(self, target_count: int) -> Optional[List[str]]:
+        """Parse enemy_mix_spec (e.g. raccoon:30,ice_mage:10) into one type per spawn slot."""
+        spec = (self.enemy_mix_spec or "").strip()
+        if not spec:
+            return None
+        pairs: List[Tuple[str, int]] = []
+        for part in spec.split(","):
+            part = part.strip()
+            if not part or ":" not in part:
+                continue
+            name, num_s = part.rsplit(":", 1)
+            name = name.strip()
+            try:
+                n = int(num_s.strip())
+            except ValueError:
+                continue
+            if n > 0 and name:
+                pairs.append((name, n))
+        if not pairs:
+            return None
+        flat: List[str] = []
+        for name, n in pairs:
+            flat.extend([name] * n)
+        total = len(flat)
+        if total != target_count:
+            _bench_log.warning(
+                "BENCHMARK_ENEMY_MIX total=%d entity_count=%d; padding with %r or truncating",
+                total,
+                target_count,
+                self.enemy_type,
+            )
+        if total < target_count:
+            flat.extend([self.enemy_type] * (target_count - total))
+        elif total > target_count:
+            flat = flat[:target_count]
+        return flat
+
+    def enemy_display_label(self) -> str:
+        s = (self.enemy_mix_spec or "").strip()
+        return s if s else self.enemy_type
 
 
 def _env_float_list(name: str, default: List[float]) -> List[float]:
@@ -413,8 +552,25 @@ def _env_str_list(name: str, default: List[str]) -> List[str]:
     return out or list(default)
 
 
+def _env_bool_list(name: str, default: List[bool]) -> List[bool]:
+    raw = os.getenv(name)
+    if raw is None or not str(raw).strip():
+        return list(default)
+    out = []
+    for token in str(raw).split(","):
+        token = token.strip().lower()
+        if not token:
+            continue
+        if token in {"1", "true", "yes", "on"}:
+            out.append(True)
+        elif token in {"0", "false", "no", "off"}:
+            out.append(False)
+    return out or list(default)
+
+
 BENCHMARK_RUNTIME = BenchmarkRuntimeState(
     enabled=_env_bool("PRCH_BENCHMARK_ENABLED", BENCHMARK_ENABLED),
+    layout_dir=_env_str("PRCH_BENCHMARK_LAYOUT_DIR", BENCHMARK_LAYOUT_DIR),
     entity_count=_env_int("PRCH_BENCHMARK_ENTITY_COUNT", BENCHMARK_ENTITY_COUNT),
     seed=_env_int("PRCH_BENCHMARK_SEED", BENCHMARK_SEED),
     deterministic_spawn=_env_bool(
@@ -458,5 +614,32 @@ BENCHMARK_RUNTIME = BenchmarkRuntimeState(
     simple_swarm_neighbor_limit=_env_int(
         "PRCH_BENCHMARK_SIMPLE_SWARM_NEIGHBORS", 4
     ),
+    matrix_simple_swarm_neighbor_limits=_env_int_list(
+        "PRCH_BENCHMARK_MATRIX_SIMPLE_SWARM_NEIGHBORS", [4]
+    ),
+    grass_benchmark_enabled=_env_bool(
+        "PRCH_BENCHMARK_GRASS_ENABLED", BENCHMARK_GRASS_ENABLED
+    ),
+    grass_wind_mode=_env_str(
+        "PRCH_BENCHMARK_GRASS_WIND_MODE", BENCHMARK_GRASS_WIND_MODE
+    ),
+    grass_sway_intensity=_env_float(
+        "PRCH_BENCHMARK_GRASS_SWAY_INTENSITY", BENCHMARK_GRASS_SWAY_INTENSITY
+    ),
+    grass_viewport_percent=_env_int(
+        "PRCH_BENCHMARK_GRASS_VIEWPORT_PERCENT", BENCHMARK_GRASS_VIEWPORT_PERCENT
+    ),
+    grass_disturbance_enabled=_env_bool(
+        "PRCH_BENCHMARK_GRASS_DISTURBANCE_ENABLED",
+        BENCHMARK_GRASS_DISTURBANCE_ENABLED,
+    ),
+    matrix_grass_wind_modes=_env_str_list(
+        "PRCH_BENCHMARK_MATRIX_GRASS_WIND_MODES", [BENCHMARK_GRASS_WIND_MODE]
+    ),
+    matrix_grass_disturbance_modes=_env_bool_list(
+        "PRCH_BENCHMARK_MATRIX_GRASS_DISTURBANCE_MODES",
+        [BENCHMARK_GRASS_DISTURBANCE_ENABLED],
+    ),
     enemy_type=_env_str("PRCH_BENCHMARK_ENEMY_TYPE", BENCHMARK_ENEMY_TYPE),
+    enemy_mix_spec=_env_str("PRCH_BENCHMARK_ENEMY_MIX", BENCHMARK_ENEMY_MIX),
 )

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="16" nextobjectid="471">
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="16" nextobjectid="512">
  <tileset firstgid="1" source="iceobjects1.tsx"/>
  <tileset firstgid="26" source="snow_on_ice_brush_proper1.tsx"/>
  <tileset firstgid="134" source="ROCKLAVA.tsx"/>
@@ -887,17 +887,17 @@
   </object>
  </objectgroup>
  <objectgroup id="14" name="grass1">
-  <object id="273" gid="500" x="13805" y="10227" width="550" height="550">
+  <object id="273" gid="500" x="14365" y="10795" width="550" height="550">
    <properties>
     <property name="grass_profile" value="default"/>
    </properties>
   </object>
-  <object id="274" gid="500" x="14381" y="10221" width="550" height="550">
+  <object id="274" gid="500" x="14949" y="10797" width="550" height="550">
    <properties>
     <property name="grass_profile" value="default"/>
    </properties>
   </object>
-  <object id="275" gid="500" x="14973" y="10221" width="550" height="550">
+  <object id="275" gid="500" x="14381" y="10765" width="550" height="550">
    <properties>
     <property name="grass_profile" value="default"/>
    </properties>
@@ -922,7 +922,7 @@
     <property name="grass_profile" value="default"/>
    </properties>
   </object>
-  <object id="280" gid="500" x="15549" y="10221" width="550" height="550">
+  <object id="280" gid="500" x="16053" y="10173" width="550" height="550">
    <properties>
     <property name="grass_profile" value="default"/>
    </properties>
@@ -1553,6 +1553,166 @@
    </properties>
   </object>
   <object id="461" gid="500" x="12831" y="43" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="471" gid="500" x="13228.8" y="10220.8" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="472" gid="500" x="13788.8" y="10221.2" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="473" gid="500" x="13789.2" y="9629.17" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="474" gid="500" x="13197.2" y="10788.8" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="475" gid="500" x="14956.8" y="10212.8" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="476" gid="500" x="14972.8" y="10797.2" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="477" gid="500" x="15517.2" y="9621.16" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="478" gid="500" x="14957.2" y="9588.82" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="483" gid="500" x="15196.8" y="8884.79" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="484" gid="500" x="15756.8" y="8885.19" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="485" gid="500" x="15757.2" y="8293.15" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="486" gid="500" x="15197.2" y="8260.81" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="487" gid="500" x="13149" y="9581" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="488" gid="500" x="13773" y="10797" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="489" gid="500" x="13805" y="10213" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="490" gid="500" x="14397" y="10085" width="550" height="550">
+   <properties>
+    <property name="grass_profile" value="default"/>
+   </properties>
+  </object>
+  <object id="491" gid="500" x="16132.9" y="10799.1" width="550" height="550">
+   <properties>
+    <property name="grass_profile" value="default"/>
+   </properties>
+  </object>
+  <object id="492" gid="500" x="14965.1" y="10792.9" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="493" gid="500" x="15540.9" y="10801.1" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="494" gid="500" x="12628.9" y="10751.1" width="550" height="550">
+   <properties>
+    <property name="grass_profile" value="default"/>
+   </properties>
+  </object>
+  <object id="495" gid="500" x="11461.1" y="10744.9" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="496" gid="500" x="12036.9" y="10753.1" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="497" gid="500" x="14405.1" y="10768.9" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="498" gid="500" x="14980.9" y="10777.1" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="499" gid="500" x="14725.1" y="10104.9" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="500" gid="500" x="15300.9" y="10113.1" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="504" gid="500" x="13797.1" y="10056.9" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="505" gid="500" x="14372.9" y="10065.1" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="508" gid="500" x="15921" y="10803" width="550" height="550">
+   <properties>
+    <property name="grass_profile" value="default"/>
+   </properties>
+  </object>
+  <object id="509" gid="500" x="15321.1" y="10774.9" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="510" gid="500" x="15485" y="10181" width="550" height="550" rotation="0.0348643">
+   <properties>
+    <property name="grass_profile" value="big"/>
+   </properties>
+  </object>
+  <object id="511" gid="500" x="14957" y="10061" width="550" height="550" rotation="0.0348643">
    <properties>
     <property name="grass_profile" value="big"/>
    </properties>

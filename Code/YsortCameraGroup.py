@@ -1,11 +1,13 @@
 import pygame
 import math
-from Settings import TILESIZE, GRASS_VIEWPORT_PERCENT, DEBUG_DRAW_MASKS, DEBUG_DRAW_EFFECT_RECTS
+import time
+from Settings import TILESIZE, GRASS_VIEWPORT_PERCENT, GRASS_WIND_MODE, DEBUG_DRAW_MASKS, DEBUG_DRAW_EFFECT_RECTS
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from Entity import Entity
 from AnimatedEnvironmentSprite import AnimatedEnvironmentSprite
 from Torch import Torch
+from benchmark_runtime import BENCHMARK_RUNTIME
 
 class YSortCameraGroup(pygame.sprite.Group):
     def __init__(self, ground_sprites, grass_manager,overhead_areas):
@@ -39,9 +41,32 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.runtime_debug_effect_rects = DEBUG_DRAW_EFFECT_RECTS
         self.runtime_debug_player_highlight = DEBUG_DRAW_MASKS
 
+    def _grass_benchmark_active(self):
+        return BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.grass_benchmark_enabled
+
+    def _grass_wind_mode(self):
+        if self._grass_benchmark_active():
+            return BENCHMARK_RUNTIME.grass_wind_mode
+        return GRASS_WIND_MODE
+
+    def _grass_disturbance_enabled(self):
+        if self._grass_benchmark_active():
+            return BENCHMARK_RUNTIME.grass_disturbance_enabled
+        return True
+
+    def _grass_viewport_percent(self):
+        if self._grass_benchmark_active():
+            return BENCHMARK_RUNTIME.grass_viewport_percent
+        return GRASS_VIEWPORT_PERCENT
+
+    def _apply_grass_force(self, location, radius, dropoff):
+        self.grass_manager.apply_force(location, radius, dropoff)
+        if self._grass_benchmark_active():
+            BENCHMARK_RUNTIME.metrics.record_grass_force_call()
+
     def _apply_grass_viewport(self):
         W, H = self.display_surface.get_size()
-        p = GRASS_VIEWPORT_PERCENT / 100.0
+        p = self._grass_viewport_percent() / 100.0
         gw = max(1, int(W * p))
         gh = max(1, int(H * p))
         x = (W - gw) // 2
@@ -140,42 +165,65 @@ class YSortCameraGroup(pygame.sprite.Group):
             ground_rect = self.ground_surface.get_rect(topleft=(-self.offset.x, -self.offset.y))
             self.display_surface.blit(self.ground_surface, ground_rect.topleft)
             
-        #print(f" dt : {self.t}")
+        # Shared wind mode keeps one base sway angle for visible grass; legacy mode
+        # preserves the current position-dependent wave across the field.
         self.t += dt*60*wind_intensity
-        rot_function = lambda x, y: int(math.sin(self.t / 60 + x / 100) * 15)
+        if self._grass_wind_mode() == "shared_patch":
+            shared_angle = int(math.sin(self.t / 60) * 15)
+            rot_function = lambda x, y, angle=shared_angle: angle
+        else:
+            rot_function = lambda x, y: int(math.sin(self.t / 60 + x / 100) * 15)
         
         # if player on grass
         
         player_center = player.rect.center
-        if self.last_player_grass_force_center is None:
-            self.grass_manager.apply_force(player_center, 25, 20)
-            self.last_player_grass_force_center = player_center
-        else:
-            dx = player_center[0] - self.last_player_grass_force_center[0]
-            dy = player_center[1] - self.last_player_grass_force_center[1]
-            if (dx * dx + dy * dy) >= self.grass_force_threshold_sq:
-                self.grass_manager.apply_force(player_center, 25, 20)
+        if self._grass_disturbance_enabled():
+            if self.last_player_grass_force_center is None:
+                self._apply_grass_force(player_center, 25, 20)
                 self.last_player_grass_force_center = player_center
+            else:
+                dx = player_center[0] - self.last_player_grass_force_center[0]
+                dy = player_center[1] - self.last_player_grass_force_center[1]
+                if (dx * dx + dy * dy) >= self.grass_force_threshold_sq:
+                    self._apply_grass_force(player_center, 25, 20)
+                    self.last_player_grass_force_center = player_center
+        else:
+            self.last_player_grass_force_center = player_center
         
         
         #print( self.grass_offset )
         #print( self.offset )
         
         # Draw grass relative to player
-        self.grass_manager.update_render(self.grass_surface,
+        grass_stats = None
+        if self._grass_benchmark_active():
+            started_at = time.perf_counter()
+            grass_stats = self.grass_manager.update_render(self.grass_surface,
                                          dt, 
                                          offset=(self.grass_offset.x , 
                                                  self.grass_offset.y ),
-                                      rot_function=rot_function )
+                                      rot_function=rot_function,
+                                      collect_stats=True )
+            BENCHMARK_RUNTIME.metrics.record_grass_update(
+                (time.perf_counter() - started_at) * 1000.0,
+                visible_tiles=(grass_stats or {}).get("visible_tiles", 0),
+                custom_tiles=(grass_stats or {}).get("custom_tiles", 0),
+            )
+        else:
+            self.grass_manager.update_render(self.grass_surface,
+                                             dt, 
+                                             offset=(self.grass_offset.x , 
+                                                     self.grass_offset.y ),
+                                          rot_function=rot_function )
         player_drawn = False
         for sprite in sorted(self.sprites(), key=lambda sprite: sprite.rect.centery):
             #print(sprite)
             #print(dir(sprite))
             offset_pos = sprite.rect.topleft - self.offset
             self.display_surface.blit(sprite.image, offset_pos)
-            if hasattr(sprite, "monster_name"):
+            if self._grass_disturbance_enabled() and hasattr(sprite, "monster_name"):
                 if sprite.monster_name == 'raccoon':
-                    self.grass_manager.apply_force( sprite.rect.center , 110 , 40)
+                    self._apply_grass_force( sprite.rect.center , 110 , 40)
                     
             # if hasattr(sprite, "type") and sprite.type == "player":
             #     player_drawn = True

@@ -13,6 +13,12 @@ FPS = 30
 TILESIZE = 150
 # Fraction of window width and height (1–100) used for the grass subsurface; centered on the display.
 GRASS_VIEWPORT_PERCENT = 80
+# Grass wind mode (see YSortCameraGroup.custom_draw):
+# - "legacy_tile"  — per-tile wind angle from sin(t + x/100) (tile-by-tile phase); slightly slower, more variation.
+# - "shared_patch" — one shared sway angle for all visible grass (whole patch in sync); slightly faster, smoother.
+GRASS_WIND_MODE = "shared_patch"
+# Wind rotation quantization in degrees (GrassManager cache buckets). Lower = smoother motion, more unique tile variants.
+GRASS_ROTATION_BUCKET_DEGREES = 1
 
 # Benchmark mode (off by default). Used for isolated moving-entity collision tests.
 BENCHMARK_ENABLED = False
@@ -21,6 +27,9 @@ BENCHMARK_ENTITY_COUNT = 150
 BENCHMARK_SEED = 1337
 BENCHMARK_DETERMINISTIC_SPAWN = True
 BENCHMARK_ENEMY_TYPE = "raccoon"
+# Comma-separated type:count pairs; when set, overrides single-type spawns (pad/truncate to entity_count).
+# Example with BENCHMARK_ENTITY_COUNT = 40: raccoon:30,ice_mage:10
+BENCHMARK_ENEMY_MIX = ""
 BENCHMARK_PLAYER_HEALTH_MULTIPLIER = 50.0
 BENCHMARK_BROADPHASE_BACKEND = "quadtree"  # "quadtree" | "grid"
 BENCHMARK_PUSHBACK_FLOOR_ENABLED = False
@@ -33,6 +42,16 @@ BENCHMARK_METRICS_CSV_PATH = "../logs/benchmark_metrics.csv"
 BENCHMARK_AUTO_RUN_SECONDS = 0  # 0 means manual run (no auto-exit)
 BENCHMARK_WARMUP_SECONDS = 1.5
 BENCHMARK_SPAWN_MAX_RING = 3  # Keep benchmark entities near player center
+BENCHMARK_GRASS_ENABLED = False
+BENCHMARK_GRASS_WIND_MODE = GRASS_WIND_MODE
+BENCHMARK_GRASS_VIEWPORT_PERCENT = GRASS_VIEWPORT_PERCENT
+BENCHMARK_GRASS_DISTURBANCE_ENABLED = True
+# Grass sway speed in grass benchmarks: passed to YSortCameraGroup.custom_draw as wind_intensity (advances t via dt*60*intensity).
+# Non-daytime layouts used 0 before; keep this >0 so legacy_tile / shared_patch actually animate under PRCH_BENCHMARK_GRASS_ENABLED.
+BENCHMARK_GRASS_SWAY_INTENSITY = 3.0
+# Programmatic grass inside benchmark arena (when PRCH_BENCHMARK_GRASS_ENABLED); matches TMX grass_big-style tiles.
+BENCHMARK_ARENA_GRASS_DENSITY = 55
+BENCHMARK_ARENA_GRASS_OPTIONS = [6, 7, 8, 9, 10, 11]
 
 # Normal gameplay moving-entity broadphase defaults.
 ENTITY_BROADPHASE_BACKEND = "grid"  # "quadtree" | "grid"
