@@ -3,22 +3,24 @@ from Settings import TILESIZE
 class Item:
     def __init__(self,
                  image_path,
-                  pos,
-                  item_type,
-                  item_id,
-                  effect=None,
-                  effect_type = '',
-                  float_offset = 0,
-                  float_speed = 0.3,
-                  float_direction = 1,
-                  float_amplitude = 5):
+                 pos,
+                 item_id,
+                 effect=None,
+                 effect_type='',
+                 item_type='',
+                 float_offset=0,
+                 float_speed=0.3,
+                 float_direction=1,
+                 float_amplitude=5,
+                 belt_allowed=False):
 
         #print(pos)
         self.pos = pos  # Position where the item should appear
-        self.item_type = item_type  # Type of item (could dictate the effect or usage)
+        self.item_id = item_id
+        self.item_type = item_type  # consumable / weapon / etc. from standard_items.json
+        self.belt_allowed = bool(belt_allowed)
         self.effect = effect  # Optional effect or function that gets executed when used or picked up
         self.effect_type = effect_type
-        self.item_id = item_id
         self.image_path = image_path
         self.float_offset = float_offset
         self.float_direction = float_direction

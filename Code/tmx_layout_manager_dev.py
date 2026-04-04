@@ -683,14 +683,18 @@ class LayoutManager:
             spawn_mode = enemy_def.get('spawn_mode', 'instant')  # Default spawn mode to 'instant'
             spawn_interval = enemy_def.get('spawn_interval', 0)
             spawn_chance = enemy_def.get('spawn_chance', 1.0)
-            item_drop_info = enemy_def.get('item_drop_info',None)
             # Depending on the spawn mode, use the spawner to create enemies
             if spawn_mode == 'instant':
                 for pos in positions:
-                    spawner.spawn_enemy({'type': enemy_type,
-                                         'pos': pos, 'persistent': persistent,
-                                         'can_follow': can_follow,
-                                         'item_drop_info':item_drop_info})
+                    spawn_cfg = {
+                        'type': enemy_type,
+                        'pos': pos,
+                        'persistent': persistent,
+                        'can_follow': can_follow,
+                    }
+                    if 'item_drop_info' in enemy_def:
+                        spawn_cfg['item_drop_info'] = enemy_def['item_drop_info']
+                    spawner.spawn_enemy(spawn_cfg)
 
             elif spawn_mode == 'timed':
                 spawner.schedule_spawn(enemy_type, positions, spawn_interval, persistent, can_follow)

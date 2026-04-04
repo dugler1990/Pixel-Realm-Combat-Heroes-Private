@@ -42,6 +42,7 @@ from game_logging import get_tmx_effect_placement_logger, get_tmx_layout_logger
 from benchmark_runtime import BENCHMARK_RUNTIME
 from benchmark_broadphase import MovingEntityBroadphaseAdapter
 from Entity import Entity
+from ItemVisual import ItemVisual
 
 _tmx_layout_log = get_tmx_layout_logger()
 
@@ -137,6 +138,7 @@ class LayoutManager:
         self.player = Player
         
         self.initialize_map_items_callback = initialize_map_items_callback
+        self.item_spawner = None
     
         # Initialize tile map and daytime brightness overlay
         self.tile_map = {}
@@ -210,6 +212,15 @@ class LayoutManager:
         self.spawner = spawner  
         self.spawner.set_layout_callback_update_quad_tree( layout_callback_update_quad_tree )
 
+    def set_item_spawner(self, item_spawner):
+        """ItemSpawner for TMX item layers and pickups (optional)."""
+        self.item_spawner = item_spawner
+
+    def add_item_visual(self, item):
+        """Wrap Item in ItemVisual and add to visible_sprites."""
+        item_visual = ItemVisual(item=item, groups=[self.visible_sprites])
+        self.visible_sprites.add(item_visual)
+
     def _load_grass_profiles(self, tmx_path):
         """Load grass_profiles.json from layout folder first, else shared levels/tmx/."""
         self._grass_profiles = {}
@@ -245,7 +256,7 @@ class LayoutManager:
 
     def _resolve_grass_profile(self, name):
         """
-        Return (density, grass_options) for GrassManager.place_tile, or None on error.
+        Return a normalized placement profile for GrassManager.place_tile, or None on error.
         """
         if name is None:
             return None
@@ -288,7 +299,26 @@ class LayoutManager:
                 density = max(1, round(random.gauss(mean, sigma)))
             else:
                 density = max(1, int(mean))
-        return density, list(options)
+        try:
+            wind_scale = float(prof.get("wind_scale", 1.0))
+            force_scale = float(prof.get("force_scale", 1.0))
+            stiffness = float(prof.get("stiffness", self.grass_manager.stiffness))
+            z_index = int(prof.get("z_index", 0))
+        except (TypeError, ValueError):
+            _tmx_layout_log.debug(
+                "grass_profile=%r has invalid wind_scale/force_scale/stiffness/z_index",
+                key,
+            )
+            return None
+        return {
+            "profile_key": key,
+            "density": density,
+            "grass_options": list(options),
+            "wind_scale": wind_scale,
+            "force_scale": force_scale,
+            "stiffness": stiffness,
+            "z_index": z_index,
+        }
 
 
 ## Create ground sprites:
@@ -340,10 +370,9 @@ class LayoutManager:
                 if gp is not None and str(gp).strip():
                     resolved = self._resolve_grass_profile(gp)
                     if resolved:
-                        density, grass_options = resolved
                         tx, ty = tile[0], tile[1]
                         self.grass_manager.place_tile(
-                            location=(tx, ty), density=density, grass_options=grass_options
+                            location=(tx, ty), density=resolved
                         )
                         grid = getattr(self, "grass_tile_grid", None)
                         if grid is not None and 0 <= ty < len(grid) and 0 <= tx < len(grid[0]):
@@ -363,8 +392,8 @@ class LayoutManager:
             gh = TILESIZE
         return x_pos, y_pos, gw, gh
 
-    def _place_grass_cells_in_rect(self, x_pos, y_pos, gw, gh, density, grass_options):
-        """Fill all tile cells overlapping the axis-aligned rect; respects GrassManager first-wins."""
+    def _place_grass_cells_in_rect(self, x_pos, y_pos, gw, gh, grass_profile):
+        """Fill all tile cells overlapping the axis-aligned rect with a grass placement profile."""
         tx0 = int(math.floor(x_pos / TILESIZE))
         ty0 = int(math.floor(y_pos / TILESIZE))
         tx1 = int(math.floor((x_pos + gw - 1) / TILESIZE))
@@ -383,7 +412,7 @@ class LayoutManager:
         for ty in range(ty_lo, ty_hi + 1):
             for tx in range(tx_lo, tx_hi + 1):
                 self.grass_manager.place_tile(
-                    location=(tx, ty), density=density, grass_options=grass_options
+                    location=(tx, ty), density=grass_profile
                 )
                 if grid is not None and 0 <= ty < len(grid) and 0 <= tx < len(grid[0]):
                     grid[ty][tx] = True
@@ -410,11 +439,10 @@ class LayoutManager:
             resolved = self._resolve_grass_profile(gp)
             if not resolved:
                 continue
-            density, grass_options = resolved
             x_pos, y_pos, gw, gh = self._game_rect_for_tmx_object(
                 object_, tiled_tile_width, tiled_tile_height
             )
-            self._place_grass_cells_in_rect(x_pos, y_pos, gw, gh, density, grass_options)
+            self._place_grass_cells_in_rect(x_pos, y_pos, gw, gh, resolved)
 
     def _try_spawn_animated_env_object(self, object_, props, x_pos, y_pos, width_scaling_factor, height_scaling_factor):
         """
@@ -661,7 +689,46 @@ class LayoutManager:
             
             # Add spawn area to spawner
             self.spawner.add_spawn_area(spawn_matrix, spawner_config, object_info)
-    
+
+    def create_item_object_layer(self, tmx_object_layer):
+        """
+        Object layer whose name contains 'item': each object needs item_id (standard_items.json).
+        Position uses game-space topleft from _game_rect_for_tmx_object (pixels).
+        """
+        if not self.item_spawner:
+            _tmx_layout_log.debug(
+                "item_spawner not set; skipping item object layer %r",
+                getattr(tmx_object_layer, "name", ""),
+            )
+            return
+        tiled_tile_width = self.tmxdata.tilewidth
+        tiled_tile_height = self.tmxdata.tileheight
+        mapping = getattr(self.item_spawner, "item_mapping", None)
+        if not mapping:
+            _tmx_layout_log.debug("item_spawner has no item_mapping; load_item_mapping first")
+            return
+
+        for obj in tmx_object_layer:
+            props = dict(obj.properties) if hasattr(obj, "properties") else {}
+            item_id = props.get("item_id")
+            if item_id is None or (isinstance(item_id, str) and not str(item_id).strip()):
+                _tmx_layout_log.debug(
+                    "Item layer object missing item_id; skipping in layer %r",
+                    getattr(tmx_object_layer, "name", ""),
+                )
+                continue
+            item_id = str(item_id).strip()
+            cfg = mapping.get(item_id)
+            if not cfg:
+                _tmx_layout_log.debug("Unknown item_id %r in item layer", item_id)
+                continue
+            x_px, y_px, _gw, _gh = self._game_rect_for_tmx_object(
+                obj, tiled_tile_width, tiled_tile_height
+            )
+            position = [float(x_px), float(y_px)]
+            item = self.item_spawner.create_item(cfg, position)
+            self.add_item_visual(item)
+
     def _extract_spawner_config(self, props):
         """
         Read a single Tiled property spawner_config: JSON string (or dict) with full spawner config.
@@ -729,6 +796,16 @@ class LayoutManager:
             if opt in data:
                 config[opt] = data[opt]
 
+        if "item_drop_info" in data:
+            raw_drop = data["item_drop_info"]
+            if isinstance(raw_drop, dict):
+                config["item_drop_info"] = raw_drop
+            else:
+                _tmx_layout_log.debug(
+                    "spawner_config item_drop_info must be an object, got %s",
+                    type(raw_drop).__name__,
+                )
+
         return config
     
     def _generate_spawn_matrix(self, obj, tiled_tile_width, tiled_tile_height):
@@ -751,19 +828,27 @@ class LayoutManager:
     
     def _create_spawner_object_info(self, obj, tiled_tile_width, tiled_tile_height):
         """
-        Convert Tiled pixel coordinates to game tile coordinates.
-        Returns object_info dict with x_pos and y_pos in tile coordinates.
+        Spawner placement uses the same math as grass / objects (_game_rect_for_tmx_object).
+
+        Stores the full game-space rect in pixels so Spawner can measure proximity as
+        distance to the box (not only the top-left corner — important for large areas).
         """
-        # Convert Tiled pixel coordinates to tile coordinates
-        x_pos_tiles = obj.x / tiled_tile_width
-        y_pos_tiles = obj.y / tiled_tile_height
-        
-        object_info = {
-            'x_pos': int(x_pos_tiles),
-            'y_pos': int(y_pos_tiles)
+        x_px, y_px, gw, gh = self._game_rect_for_tmx_object(
+            obj, tiled_tile_width, tiled_tile_height
+        )
+        ts = float(self.TILESIZE)
+        anchor_tx = float(x_px) / ts
+        anchor_ty = float(y_px) / ts
+        return {
+            "anchor_tx": anchor_tx,
+            "anchor_ty": anchor_ty,
+            "x_pos": anchor_tx,
+            "y_pos": anchor_ty,
+            "rect_x_px": float(x_px),
+            "rect_y_px": float(y_px),
+            "rect_w_px": float(gw),
+            "rect_h_px": float(gh),
         }
-        
-        return object_info
 
     
     
@@ -829,6 +914,7 @@ class LayoutManager:
             layer_name_lower = layer_name.lower()
             has_effect_name = layer_name.find("Effect") != -1
             has_spawner_name = layer_name_lower.find("spawner") != -1
+            has_item_name = "item" in layer_name_lower
             has_grass_name = "grass" in layer_name_lower
             has_shape_objects = any(getattr(obj, "image", None) is None for obj in layout)
             
@@ -841,6 +927,8 @@ class LayoutManager:
                         "Warning: Spawner layer %r found but spawner not set. Skipping spawner processing.",
                         layer_name,
                     )
+            elif has_item_name:
+                self.create_item_object_layer(layout)
             elif has_grass_name:
                 self.create_grass_object_layer(layout)
             elif has_effect_name or has_shape_objects:

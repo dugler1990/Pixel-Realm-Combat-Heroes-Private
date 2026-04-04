@@ -1,8 +1,10 @@
+import copy
 import pygame
 import random
 import json
 from Item import Item  # Assume this is your Item class
 from Settings import TILESIZE
+from loot_table import resolve_gold_drop, resolve_loot_table
 
 class ItemSpawner:
     def __init__(self):
@@ -38,49 +40,25 @@ class ItemSpawner:
 
     def drop_from_enemy(self, enemy):
         """Drop items from an enemy based on defined drop logic."""
-        #print('In drop from enemy')
-        #print(dir(enemy))
         dropped_items = []
-        if hasattr(enemy, 'item_drop_info'):
-            drop_info = enemy.item_drop_info
-            #print('has item drop info')
-            # Handle guaranteed drops
-            for drop in drop_info.get('guaranteed_drops', []):
-                item_id = drop['item_id']
-                quantity = drop.get('quantity', 1)
-                for _ in range(quantity):
-
-                    drop_config = self.item_mapping.get(item_id)
-
-                    #print(enemy.rect.bottomright)
-                    #print(enemy.rect.bottomright[0])
-                    
-                    #print(drop_config['position'])
-                   
-                    drop_config['positions'].append([enemy.rect.bottomright[0], enemy.rect.bottomright[1]]) # Not sure that this is necessary now, we pass the positions directly to the item creation
-                    position = [enemy.rect.bottomright[0], enemy.rect.bottomright[1]] # to pass directly to create_item
-
-                    #print(drop_config)
-                    item = self.create_item( drop_config, position )
-                    dropped_items.append(item)
-            # Handle random drops
-            if drop_info.get('random_drop_logic') == 'single':
-                # Only one item from the random drop list can be chosen
-                total_chance = sum(drop['chance'] for drop in drop_info['random_drop_list'])
-                random_chance = random.random() * total_chance
-                cumulative_chance = 0
-                for drop in drop_info['random_drop_list']:
-                    cumulative_chance += drop['chance']
-                    if random_chance <= cumulative_chance:
-                         
-                        # WL HERE : 
-                        drop_config = self.item_mapping.get(drop['item_id'])
-                        drop_config['positions'].append([enemy.rect.bottomright[0], enemy.rect.bottomright[1]])
-                        position = [enemy.rect.bottomright[0], enemy.rect.bottomright[1]] 
-                        item = self.create_item(drop_config, position)
-                        dropped_items.append(item)
-                        break
+        drop_info = getattr(enemy, "item_drop_info", None)
+        if not drop_info:
             return dropped_items
+        position = [enemy.rect.bottomright[0], enemy.rect.bottomright[1]]
+        for item_id, _qty in resolve_loot_table(drop_info):
+            base = self.item_mapping.get(item_id)
+            if not base:
+                continue
+            cfg = copy.deepcopy(base)
+            dropped_items.append(self.create_item(cfg, position))
+        gold_amt = resolve_gold_drop(drop_info, random)
+        if gold_amt and gold_amt > 0:
+            base = self.item_mapping.get("gold_coin")
+            if base:
+                cfg = copy.deepcopy(base)
+                cfg["effect"] = {"gold": int(gold_amt)}
+                dropped_items.append(self.create_item(cfg, position))
+        return dropped_items
 
 
 #### Not  currently in use
@@ -154,16 +132,19 @@ class ItemSpawner:
         
         #print(f" CReATED ITEM : {item_config}")
         
-        return Item(item_config['image_path'],
-                     position,
-                     item_config['item_id'],
-                     item_config['effect'],
-                     item_config['effect_type'],
-                     float_offset=float_offset,
-                     float_speed=float_speed,
-                     float_direction=float_direction,
-                     float_amplitude = float_amplitude
-                     )
+        return Item(
+            item_config['image_path'],
+            position,
+            item_config['item_id'],
+            item_config.get('effect'),
+            item_config['effect_type'],
+            item_type=item_config.get('item_type', ''),
+            float_offset=float_offset,
+            float_speed=float_speed,
+            float_direction=float_direction,
+            float_amplitude=float_amplitude,
+            belt_allowed=item_config.get('belt_allowed', False),
+        )
 
     def update(self):
         """Update method for respawning items and other time-based spawning logic."""
@@ -177,9 +158,8 @@ class ItemSpawner:
         """Removes an item and marks its position as available."""
         if item in self.items:
             self.items.remove(item)
-            item_pos = (item.position[0] // TILESIZE, item.position[1] // TILESIZE)
-            # Assuming each item has a unique ID, find the item_id by item
-            item_id = next((id for id, config in self.item_mapping.items() if config == item.config), None)
+            item_pos = (item.pos[0] // TILESIZE, item.pos[1] // TILESIZE)
+            item_id = getattr(item, "item_id", None)
             if item_id and item_pos in self.spawned_positions.get(item_id, set()):
                 self.spawned_positions[item_id].remove(item_pos)
 

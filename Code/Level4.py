@@ -5,6 +5,7 @@ import json
 from Spawner import Spawner
 from ItemSpawner import ItemSpawner
 from Item import Item
+from Inventory import draw_belt_hud
 from ItemVisual import ItemVisual
 import pygame
 from Settings import *
@@ -779,14 +780,18 @@ class LayoutManager:
             spawn_mode = enemy_def.get('spawn_mode', 'instant')  # Default spawn mode to 'instant'
             spawn_interval = enemy_def.get('spawn_interval', 0)
             spawn_chance = enemy_def.get('spawn_chance', 1.0)
-            item_drop_info = enemy_def.get('item_drop_info',None)
             # Depending on the spawn mode, use the spawner to create enemies
             if spawn_mode == 'instant':
                 for pos in positions:
-                    spawner.spawn_enemy({'type': enemy_type,
-                                         'pos': pos, 'persistent': persistent,
-                                         'can_follow': can_follow,
-                                         'item_drop_info':item_drop_info})
+                    spawn_cfg = {
+                        'type': enemy_type,
+                        'pos': pos,
+                        'persistent': persistent,
+                        'can_follow': can_follow,
+                    }
+                    if 'item_drop_info' in enemy_def:
+                        spawn_cfg['item_drop_info'] = enemy_def['item_drop_info']
+                    spawner.spawn_enemy(spawn_cfg)
 
             elif spawn_mode == 'timed':
                 spawner.schedule_spawn(enemy_type, positions, spawn_interval, persistent, can_follow)
@@ -1217,7 +1222,19 @@ class Level4:
             item.pos[1] = item.pos[1]*TILESIZE
 
             # Change required to scale position here.
-            item_instance = Item(item.image_path, item.pos, item.item_id, item.effect, item.effect_type)  # Create a new item instance for each position
+            item_instance = Item(
+                item.image_path,
+                item.pos,
+                item.item_id,
+                item.effect,
+                item.effect_type,
+                item_type=getattr(item, "item_type", ""),
+                float_offset=item.float_offset,
+                float_speed=item.float_speed,
+                float_direction=item.float_direction,
+                float_amplitude=item.float_amplitude,
+                belt_allowed=getattr(item, "belt_allowed", False),
+            )
             self.layout_manager.add_item_visual(item_instance)
 
 
@@ -1256,9 +1273,12 @@ class Level4:
         """Check for collisions between the player and items to handle item collection."""
         for visual_item in [sprite for sprite in self.layout_manager.visible_sprites if isinstance(sprite, ItemVisual)]:
             if self.player.rect.colliderect(visual_item.rect):
-                self.player.pickup_item(visual_item.item)  # Pass the logical item to the pickup method
-                self.item_spawner.remove_item( visual_item.item )  
-                visual_item.kill()
+                ok = self.player.pickup_item(visual_item.item)
+                if ok:
+                    self.item_spawner.remove_item(visual_item.item)
+                    visual_item.kill()
+                else:
+                    visual_item.start_reject_shake()
 
     def check_enemy_deaths(self):
         dead_enemies = [enemy for enemy in self.spawner.enemies if enemy.is_dead()]
@@ -1572,6 +1592,8 @@ class Level4:
         self.game_paused = not self.game_paused
         self.inventory_open = not self.inventory_open
         self.player.inventory.visible = self.inventory_open
+        if not self.inventory_open:
+            self.player.inventory.return_hand_to_backpack()
 
     def toggle_attack_selection(self):
         self.game_paused = not self.game_paused
@@ -1665,6 +1687,9 @@ class Level4:
             elif self.inventory_open:
                 self.player.inventory.display(self.display_surface)
                 self.player.inventory.input()
+                for sprite in self.layout_manager.visible_sprites:
+                    if isinstance(sprite, ItemVisual):
+                        sprite.update(dt)
             elif self.attack_selection_open:
                 self.player.attack_selection.display(self.display_surface)
                 self.player.attack_selection.input()
@@ -2100,6 +2125,8 @@ class Level4:
            
             
             self.layout_manager.display_time(self.display_surface)
+            if not self.inventory_open:
+                draw_belt_hud(self.display_surface, self.player, self.player.inventory)
 
            #print(f"\n\n after END OF LOOP {self.player.rect.x}\n\n")
             #Now draw the weather overlay

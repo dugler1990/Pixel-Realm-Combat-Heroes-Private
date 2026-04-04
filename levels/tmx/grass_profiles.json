@@ -2,11 +2,19 @@
   "default": {
     "grass_options": [0, 1, 2, 3, 4, 5],
     "density_mean": 45,
-    "density_sigma": 8
+    "density_sigma": 8,
+    "wind_scale": 1.0,
+    "force_scale": 1.0,
+    "stiffness": 600,
+    "z_index": 10
   },
   "big": {
     "grass_options": [6, 7, 8, 9, 10, 11],
     "density_mean": 40,
-    "density_sigma": 5
+    "density_sigma": 5,
+    "wind_scale": 0.65,
+    "force_scale": 0.85,
+    "stiffness": 750,
+    "z_index": 20
   }
 }

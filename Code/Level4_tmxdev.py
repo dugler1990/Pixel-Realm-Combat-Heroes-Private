@@ -5,6 +5,7 @@ import json
 from Spawner import Spawner
 from ItemSpawner import ItemSpawner
 from Item import Item
+from Inventory import draw_belt_hud
 from ItemVisual import ItemVisual
 import pygame
 from Settings import *
@@ -179,6 +180,8 @@ class Level4:
         
         self.weather_overlay = WeatherOverlay(self.display_surface)
         self.game_paused = False
+        self._gold_popup_until_ms = 0
+        self._gold_popup_amount = 0
         self.player_dead = False
         self.upgrade_menu_open = False
         self.inventory_open = False
@@ -232,6 +235,7 @@ class Level4:
 # After player initialization in Level4
         self.spawner = Spawner( self, self.persistent_enemy_data,self.fire_projectile )
         self.layout_manager.set_spawner( self.spawner, self.layout_manager.add_obstacle_sprite_to_quad_tree )
+        self.layout_manager.set_item_spawner(self.item_spawner)
         
         
         #print("JUST SET DISPLAY SCREEN ")
@@ -689,7 +693,19 @@ class Level4:
             item.pos[1] = item.pos[1]*TILESIZE
 
             # Change required to scale position here.
-            item_instance = Item(item.image_path, item.pos, item.item_id, item.effect, item.effect_type)  # Create a new item instance for each position
+            item_instance = Item(
+                item.image_path,
+                item.pos,
+                item.item_id,
+                item.effect,
+                item.effect_type,
+                item_type=getattr(item, "item_type", ""),
+                float_offset=item.float_offset,
+                float_speed=item.float_speed,
+                float_direction=item.float_direction,
+                float_amplitude=item.float_amplitude,
+                belt_allowed=getattr(item, "belt_allowed", False),
+            )
             self.layout_manager.add_item_visual(item_instance)
 
 
@@ -728,9 +744,12 @@ class Level4:
         """Check for collisions between the player and items to handle item collection."""
         for visual_item in [sprite for sprite in self.layout_manager.visible_sprites if isinstance(sprite, ItemVisual)]:
             if self.player.rect.colliderect(visual_item.rect):
-                self.player.pickup_item(visual_item.item)  # Pass the logical item to the pickup method
-                self.item_spawner.remove_item( visual_item.item )  
-                visual_item.kill()
+                ok = self.player.pickup_item(visual_item.item)
+                if ok:
+                    self.item_spawner.remove_item(visual_item.item)
+                    visual_item.kill()
+                else:
+                    visual_item.start_reject_shake()
 
     def check_enemy_deaths(self):
         dead_enemies = [enemy for enemy in self.spawner.enemies if enemy.is_dead()]
@@ -1059,6 +1078,31 @@ class Level4:
         self.game_paused = not self.game_paused
         self.inventory_open = not self.inventory_open
         self.player.inventory.visible = self.inventory_open
+        if not self.inventory_open:
+            self.player.inventory.return_hand_to_backpack()
+
+    def notify_gold_pickup(self, amount):
+        if amount <= 0:
+            return
+        if self.game_settings and getattr(self.game_settings, "gold_pickup_popup", True):
+            self._gold_popup_amount = amount
+            self._gold_popup_until_ms = pygame.time.get_ticks() + 1300
+
+    def _draw_gold_pickup_popup(self):
+        if pygame.time.get_ticks() >= getattr(self, "_gold_popup_until_ms", 0):
+            return
+        amt = getattr(self, "_gold_popup_amount", 0)
+        if amt <= 0:
+            return
+        font = pygame.font.Font(None, 40)
+        text = f"Gold +{amt}"
+        surf = font.render(text, True, (255, 215, 0))
+        shadow = font.render(text, True, (30, 22, 0))
+        w, h = self.display_surface.get_size()
+        x = (w - surf.get_width()) // 2
+        y = int(h * 0.70)
+        self.display_surface.blit(shadow, (x + 2, y + 2))
+        self.display_surface.blit(surf, (x, y))
 
     def toggle_attack_selection(self):
         self.game_paused = not self.game_paused
@@ -1154,6 +1198,9 @@ class Level4:
             elif self.inventory_open:
                 self.player.inventory.display(self.display_surface)
                 self.player.inventory.input()
+                for sprite in self.layout_manager.visible_sprites:
+                    if isinstance(sprite, ItemVisual):
+                        sprite.update(dt)
             elif self.attack_selection_open:
                 self.player.attack_selection.display(self.display_surface)
                 self.player.attack_selection.input()
@@ -1371,6 +1418,9 @@ class Level4:
 
         self.save_enemy_states(self.current_layout)  # mkght be a big inefficiency
         self.layout_manager.display_time(self.display_surface)
+        self._draw_gold_pickup_popup()
+        if not self.inventory_open:
+            draw_belt_hud(self.display_surface, self.player, self.player.inventory)
         self.player_dead = getattr(self.player, "is_dead", False)
     
         # Grass  !

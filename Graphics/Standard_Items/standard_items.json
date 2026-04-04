@@ -6,7 +6,8 @@
         "positions": [],
         "image_path": "../levels/Map7/start/Items/frost_potion.png",
         "effect": {"mana": 10},
-        "effect_type": "consumable"
+        "effect_type": "consumable",
+        "belt_allowed": true
     },
     {
         "item_id": "ice_shard",
@@ -56,5 +57,14 @@
         "image_path": "../Graphics/Standard_Items/boss_key.png",
         "effect": {},
         "effect_type": "key"
+    },
+    {
+        "item_id": "gold_coin",
+        "item_type": "gold",
+        "spawn_type": "droppable",
+        "positions": [],
+        "image_path": "../Graphics/Standard_Items/gold_coin.png",
+        "effect": {"gold": 5},
+        "effect_type": "gold"
     }
 ]

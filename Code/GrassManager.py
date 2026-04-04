@@ -73,9 +73,36 @@ probably be set to the height of your tallest blade of grass.
 import os
 import random
 import math
+from collections import defaultdict
 from copy import deepcopy
 
 import pygame
+
+BLADE_POS = 0
+BLADE_ID = 1
+BLADE_ROT = 2
+BLADE_WIND_SCALE = 3
+BLADE_FORCE_SCALE = 4
+BLADE_STIFFNESS = 5
+BLADE_Z_INDEX = 6
+
+
+def _cluster_follower_jitter_deg(seed, loc, bx, by, blade_idx, max_jitter):
+    if max_jitter <= 0:
+        return 0.0
+    tx = int(loc[0]) & 0xFFFFFFFF
+    ty = int(loc[1]) & 0xFFFFFFFF
+    x = (
+        (int(seed) & 0xFFFFFFFF)
+        ^ (tx * 0x9E3779B1)
+        ^ (ty * 0x85EBCA6B)
+        ^ (int(bx) * 0xC2B2AE3D)
+        ^ (int(by) * 0x27D4EB2F)
+        ^ (int(blade_idx) * 0x165667B1)
+    ) & 0xFFFFFFFF
+    u = (x / 4294967295.0) * 2.0 - 1.0
+    return u * max_jitter
+
 
 def normalize(val, amt, target):
     if val > target + amt:
@@ -111,6 +138,50 @@ class GrassManager:
         self.padding = padding
         self.rotation_bucket_degrees = max(1, int(rotation_bucket_degrees))
 
+    def _normalize_placement(self, density_or_profile, grass_options=None, **kwargs):
+        if isinstance(density_or_profile, dict) and grass_options is None:
+            raw = dict(density_or_profile)
+        else:
+            raw = dict(kwargs)
+            raw["density"] = density_or_profile
+            raw["grass_options"] = grass_options
+
+        options = raw.get("grass_options")
+        if not isinstance(options, (list, tuple)) or len(options) == 0:
+            raise ValueError("grass_options must be a non-empty list")
+        try:
+            options = tuple(int(x) for x in options)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("grass_options must contain integers") from exc
+
+        try:
+            density = max(1, int(raw.get("density", 1)))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("density must be an integer") from exc
+
+        def _float_value(name, default):
+            try:
+                return float(raw.get(name, default))
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{name} must be numeric") from exc
+
+        def _int_value(name, default):
+            try:
+                return int(raw.get(name, default))
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{name} must be an integer") from exc
+
+        profile_key = str(raw.get("profile_key", raw.get("layer", "default"))).strip() or "default"
+        return {
+            "profile_key": profile_key,
+            "density": density,
+            "grass_options": options,
+            "wind_scale": _float_value("wind_scale", 1.0),
+            "force_scale": _float_value("force_scale", 1.0),
+            "stiffness": _float_value("stiffness", self.stiffness),
+            "z_index": _int_value("z_index", 0),
+        }
+
     # enables circular shadows that appear below each blade of grass
     def enable_ground_shadows(self, shadow_strength=40, shadow_radius=2, shadow_color=(0, 0, 1), shadow_shift=(0, 0)):
         # don't interfere with colorkey
@@ -129,14 +200,37 @@ class GrassManager:
             self.formats[format_id]['count'] += 1
             self.formats[format_id]['data'].append((tile_id, data))
 
-    # attempt to place a new grass tile
-    def place_tile(self, location, density, grass_options):
-        # ignore if a tile was already placed in this location
-        if tuple(location) not in self.grass_tiles:
-            self.grass_tiles[tuple(location)] = GrassTile(self.tile_size, (location[0] * self.tile_size, location[1] * self.tile_size), density, grass_options, self.ga, self)
+    # attempt to place new grass in a map cell
+    def place_tile(self, location, density, grass_options=None, **kwargs):
+        try:
+            placement = self._normalize_placement(
+                density,
+                grass_options=grass_options,
+                **kwargs,
+            )
+        except ValueError:
+            return
+
+        pos = tuple(location)
+        if pos not in self.grass_tiles:
+            self.grass_tiles[pos] = GrassCell(
+                self.tile_size,
+                (pos[0] * self.tile_size, pos[1] * self.tile_size),
+                self.ga,
+                self,
+            )
+        self.grass_tiles[pos].add_placement(placement)
 
     # apply a force to the grass that causes the grass to bend away
-    def apply_force(self, location, radius, dropoff):
+    def apply_force(
+        self,
+        location,
+        radius,
+        dropoff,
+        cluster_anchor=None,
+        cluster_cfg=None,
+        stats_out=None,
+    ):
         location = (int(location[0]), int(location[1]))
         grid_pos = (int(location[0] // self.tile_size), int(location[1] // self.tile_size))
         tile_range = math.ceil((radius + dropoff) / self.tile_size)
@@ -148,7 +242,14 @@ class GrassManager:
                 x = x - tile_range
                 pos = (grid_pos[0] + x, grid_pos[1] + y)
                 if pos in self.grass_tiles:
-                    self.grass_tiles[pos].apply_force(location, radius, dropoff)
+                    self.grass_tiles[pos].apply_force(
+                        location,
+                        radius,
+                        dropoff,
+                        cluster_anchor=cluster_anchor,
+                        cluster_cfg=cluster_cfg,
+                        stats_out=stats_out,
+                    )
 
     # an update and render combination function
     def update_render(self, surf, dt, offset=(0, 0), rot_function=None, collect_stats=False):
@@ -210,85 +311,227 @@ class GrassAssets:
         # render the blade
         surf.blit(rot_img, (location[0] - rot_img.get_width() // 2, location[1] - rot_img.get_height() // 2))
 
-# the grass tile object that contains data for the blades
-class GrassTile:
-    def __init__(self, tile_size, location, amt, config, ga, gm):
+# the grass tile object that contains data for one map cell of blades
+class GrassCell:
+    def __init__(self, tile_size, location, ga, gm):
         self.ga = ga
         self.gm = gm
         self.loc = location
         self.size = tile_size
+        self.placements = []
         self.blades = []
         self.master_rotation = 0
         self.precision = 30
         self.padding = self.gm.padding
-        self.inc = 90 / self.precision
-
-        # generate blade data
-        y_range = self.gm.vertical_place_range[1] - self.gm.vertical_place_range[0]
-        for i in range(amt):
-            new_blade = random.choice(config)
-
-            y_pos = self.gm.vertical_place_range[0]
-            if y_range:
-                y_pos = random.random() * y_range + self.gm.vertical_place_range[0]
-
-            self.blades.append([(random.random() * self.size, y_pos * self.size), new_blade, random.random() * 30 - 15])
-
-        # layer back to front
-        self.blades.sort(key=lambda x: x[1])
-
-        # get next ID
+        self.rotation_scale = 90 / self.precision
         self.base_id = self.gm.grass_id
         self.gm.grass_id += 1
-
-        # check if the blade data needs to be overwritten with a previous layout to save RAM usage
-        format_id = (amt, tuple(config))
-        overwrite = self.gm.get_format(format_id, self.blades, self.base_id)
-        if overwrite:
-            self.blades = overwrite[1]
-            self.base_id = overwrite[0]
 
         # custom_blade_data is used when the blade's current state should not be cached. all grass tiles will try to return to a cached state
         self.custom_blade_data = None
 
         self.update_render_data()
 
-    # apply a force that affects each blade individually based on distance instead of the rotation of the entire tile
-    def apply_force(self, force_point, force_radius, force_dropoff):
-        
+    def add_placement(self, placement):
+        self.placements.append(placement)
+        self._rebuild_blades()
+
+    def _placement_sort_key(self, placement):
+        return (
+            placement["z_index"],
+            placement["profile_key"],
+            placement["density"],
+            placement["grass_options"],
+        )
+
+    def _placement_signature(self):
+        signature = []
+        for placement in sorted(self.placements, key=self._placement_sort_key):
+            signature.append(
+                (
+                    placement["profile_key"],
+                    placement["density"],
+                    placement["grass_options"],
+                    round(placement["wind_scale"], 4),
+                    round(placement["force_scale"], 4),
+                    round(placement["stiffness"], 4),
+                    placement["z_index"],
+                )
+            )
+        return tuple(signature)
+
+    def _generate_blades_for_placement(self, placement):
+        blades = []
+        y_range = self.gm.vertical_place_range[1] - self.gm.vertical_place_range[0]
+        for _ in range(placement["density"]):
+            blade_id = random.choice(placement["grass_options"])
+            y_pos = self.gm.vertical_place_range[0]
+            if y_range:
+                y_pos = random.random() * y_range + self.gm.vertical_place_range[0]
+            blades.append(
+                [
+                    (random.random() * self.size, y_pos * self.size),
+                    blade_id,
+                    random.random() * 30 - 15,
+                    placement["wind_scale"],
+                    placement["force_scale"],
+                    placement["stiffness"],
+                    placement["z_index"],
+                ]
+            )
+        return blades
+
+    def _rebuild_blades(self):
+        combined_blades = []
+        for placement in sorted(self.placements, key=self._placement_sort_key):
+            combined_blades.extend(self._generate_blades_for_placement(placement))
+
+        combined_blades.sort(
+            key=lambda blade: (
+                blade[BLADE_Z_INDEX],
+                blade[BLADE_POS][1],
+                blade[BLADE_ID],
+            )
+        )
+
+        new_base_id = self.gm.grass_id
+        self.gm.grass_id += 1
+        overwrite = self.gm.get_format(
+            self._placement_signature(),
+            combined_blades,
+            new_base_id,
+        )
+        if overwrite:
+            self.blades = overwrite[1]
+            self.base_id = overwrite[0]
+        else:
+            self.blades = combined_blades
+            self.base_id = new_base_id
+        self.custom_blade_data = None
+        self.update_render_data()
+
+    def _ensure_custom_blade_data(self):
         if not self.custom_blade_data:
-            # Start from baseline blade state so untouched blades remain valid entries.
             self.custom_blade_data = [list(blade) for blade in self.blades]
+
+    def _apply_force_one_blade(self, i, force_point, force_radius, force_dropoff):
+        blade = self.blades[i]
+        blade_x = self.loc[0] + blade[0][0]
+        blade_y = self.loc[1] + blade[0][1]
+        dx = blade_x - force_point[0]
+        dy = blade_y - force_point[1]
+        dist_sq = dx * dx + dy * dy
 
         force_radius_sq = force_radius * force_radius
         outer_radius = force_radius + force_dropoff
         outer_radius_sq = outer_radius * outer_radius
 
-        for i, blade in enumerate(self.blades):
-            blade_x = self.loc[0] + blade[0][0]
-            blade_y = self.loc[1] + blade[0][1]
-            dx = blade_x - force_point[0]
-            dy = blade_y - force_point[1]
-            dist_sq = dx * dx + dy * dy
+        if dist_sq < force_radius_sq:
+            force = 2
+        elif dist_sq >= outer_radius_sq:
+            return
+        else:
+            dis = math.sqrt(dist_sq)
+            dis = max(0, dis - force_radius)
+            force = 1 - min(dis / force_dropoff, 1)
+        force *= blade[BLADE_FORCE_SCALE]
+        dir_ = 1 if force_point[0] > blade_x else -1
+        if (
+            not self.custom_blade_data[i]
+            or abs(self.custom_blade_data[i][BLADE_ROT] - self.blades[i][BLADE_ROT])
+            <= abs(force) * 90
+        ):
+            updated = list(self.blades[i])
+            updated[BLADE_ROT] = blade[BLADE_ROT] + dir_ * force * 90
+            self.custom_blade_data[i] = updated
 
-            if dist_sq < force_radius_sq:
-                force = 2
-            elif dist_sq >= outer_radius_sq:
-                continue
+    # apply a force that affects each blade individually based on distance instead of the rotation of the entire tile
+    def apply_force(
+        self,
+        force_point,
+        force_radius,
+        force_dropoff,
+        cluster_anchor=None,
+        cluster_cfg=None,
+        stats_out=None,
+    ):
+        if not self.blades:
+            return
+
+        use_cluster = (
+            cluster_cfg
+            and cluster_cfg.get("enabled")
+            and cluster_anchor is not None
+        )
+
+        if not use_cluster:
+            self._ensure_custom_blade_data()
+            for i in range(len(self.blades)):
+                self._apply_force_one_blade(i, force_point, force_radius, force_dropoff)
+            return
+
+        ax, ay = float(cluster_anchor[0]), float(cluster_anchor[1])
+        r_sq = float(cluster_cfg["player_radius_px"]) ** 2
+        sub = int(cluster_cfg["subcell_px"])
+        gs = int(cluster_cfg["group_size"])
+        jitter_max = float(cluster_cfg["jitter_deg"])
+        jseed = int(cluster_cfg["jitter_seed"])
+
+        self._ensure_custom_blade_data()
+
+        near = []
+        far = []
+        for i, blade in enumerate(self.blades):
+            wx = self.loc[0] + blade[0][0]
+            wy = self.loc[1] + blade[0][1]
+            d_sq = (wx - ax) * (wx - ax) + (wy - ay) * (wy - ay)
+            if d_sq <= r_sq:
+                near.append(i)
             else:
-                dis = math.sqrt(dist_sq)
-                dis = max(0, dis - force_radius)
-                force = 1 - min(dis / force_dropoff, 1)
-            dir = 1 if force_point[0] > blade_x else -1
-            # don't update unless force is greater
-            if not self.custom_blade_data[i] or abs(self.custom_blade_data[i][2] - self.blades[i][2]) <= abs(force) * 90:
-                self.custom_blade_data[i] = [blade[0], blade[1], blade[2] + dir * force * 90]
+                far.append(i)
+
+        for i in near:
+            self._apply_force_one_blade(i, force_point, force_radius, force_dropoff)
+
+        buckets = defaultdict(list)
+        for i in far:
+            blade = self.blades[i]
+            wx = self.loc[0] + blade[0][0]
+            wy = self.loc[1] + blade[0][1]
+            bx = int(wx // sub)
+            by = int(wy // sub)
+            buckets[(bx, by)].append((wx, wy, i))
+
+        for (bx, by), items in buckets.items():
+            items.sort(key=lambda t: (t[0], t[1], t[2]))
+            idx_list = [t[2] for t in items]
+            for k in range(0, len(idx_list), gs):
+                chunk = idx_list[k : k + gs]
+                if not chunk:
+                    continue
+                leader = chunk[0]
+                self._apply_force_one_blade(leader, force_point, force_radius, force_dropoff)
+                leader_row = self.custom_blade_data[leader]
+                if leader_row is None:
+                    continue
+                leader_rot = leader_row[BLADE_ROT]
+                for fj in chunk[1:]:
+                    row = list(self.blades[fj])
+                    jitter = _cluster_follower_jitter_deg(
+                        jseed, self.loc, bx, by, fj, jitter_max
+                    )
+                    row[BLADE_ROT] = max(-90, min(90, leader_rot + jitter))
+                    self.custom_blade_data[fj] = row
+                    if stats_out is not None:
+                        stats_out["cluster_follower_copies"] = (
+                            stats_out.get("cluster_follower_copies", 0) + 1
+                        )
 
     # update the identifier used to find a valid cached image
     def update_render_data(self):
         quantized_rotation = self._quantize_rotation(self.master_rotation)
         self.render_data = (self.base_id, quantized_rotation)
-        self.true_rotation = self.inc * quantized_rotation
+        self.true_rotation = self.rotation_scale * quantized_rotation
 
     def _quantize_rotation(self, rotation):
         bucket = self.gm.rotation_bucket_degrees
@@ -302,6 +545,15 @@ class GrassTile:
             self.update_render_data()
             return True
         return False
+
+    def _blade_render_rotation(self, blade):
+        return max(
+            -90,
+            min(
+                90,
+                blade[BLADE_ROT] + self.true_rotation * blade[BLADE_WIND_SCALE],
+            ),
+        )
 
     # render the tile's image based on its current state and return the data
     def render_tile(self, render_shadow=False):
@@ -320,7 +572,15 @@ class GrassTile:
             shadow_surf = pygame.Surface(surf.get_size())
             shadow_surf.set_colorkey((0, 0, 0))
             for blade in self.blades:
-                pygame.draw.circle(shadow_surf, self.gm.ground_shadow[1], (blade[0][0] + self.padding, blade[0][1] + self.padding), self.gm.ground_shadow[0])
+                pygame.draw.circle(
+                    shadow_surf,
+                    self.gm.ground_shadow[1],
+                    (
+                        blade[BLADE_POS][0] + self.padding,
+                        blade[BLADE_POS][1] + self.padding,
+                    ),
+                    self.gm.ground_shadow[0],
+                )
             shadow_surf.set_alpha(self.gm.ground_shadow[2])
 
         # render each blade using the asset manager
@@ -328,7 +588,15 @@ class GrassTile:
             if blade is None:
                 # Defensive fallback for partial custom data; should be rare.
                 blade = self.blades[i]
-            self.ga.render_blade(surf, blade[1], (blade[0][0] + self.padding, blade[0][1] + self.padding), max(-90, min(90, blade[2] + self.true_rotation)))
+            self.ga.render_blade(
+                surf,
+                blade[BLADE_ID],
+                (
+                    blade[BLADE_POS][0] + self.padding,
+                    blade[BLADE_POS][1] + self.padding,
+                ),
+                self._blade_render_rotation(blade),
+            )
 
         # return surf and shadow_surf if applicable
         if render_shadow:
@@ -365,13 +633,20 @@ class GrassTile:
             settle_epsilon = 0.1
             for i, blade in enumerate(self.custom_blade_data):
                 if blade is None:
-                    blade = [self.blades[i][0], self.blades[i][1], self.blades[i][2]]
+                    blade = list(self.blades[i])
                     self.custom_blade_data[i] = blade
-                blade[2] = normalize(blade[2], self.gm.stiffness * dt, self.blades[i][2])
-                if abs(blade[2] - self.blades[i][2]) <= settle_epsilon:
-                    blade[2] = self.blades[i][2]
+                blade[BLADE_ROT] = normalize(
+                    blade[BLADE_ROT],
+                    blade[BLADE_STIFFNESS] * dt,
+                    self.blades[i][BLADE_ROT],
+                )
+                if abs(blade[BLADE_ROT] - self.blades[i][BLADE_ROT]) <= settle_epsilon:
+                    blade[BLADE_ROT] = self.blades[i][BLADE_ROT]
                 else:
                     matching = False
             # mark the data as non-custom once in base position so the cache can be used
             if matching:
                 self.custom_blade_data = None
+
+
+GrassTile = GrassCell

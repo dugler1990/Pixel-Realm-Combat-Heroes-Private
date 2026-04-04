@@ -1,6 +1,6 @@
 # TMX grass (`grass_profile`)
 
-Procedural grass uses [`GrassManager`](../../Code/GrassManager.py): `place_tile(location, density, grass_options)` with blade indices from `../Graphics/Grass` (alphabetical order).
+Procedural grass uses [`GrassManager`](../../Code/GrassManager.py). Profiles now resolve to a full placement config, and multiple profiles can merge into the same map cell.
 
 ## Layer naming (required)
 
@@ -36,6 +36,10 @@ If a layer name matches multiple rules, processing order is: **spawner** → **g
 - **`grass_options`**: list of int (blade image indices)
 - **`density_mean`** / **`density_sigma`**: optional; density = `round(random.gauss(mean, sigma))`, clamped to at least 1
 - **`density`**: optional fixed int (if set, mean/sigma are ignored)
+- **`wind_scale`**: optional float multiplier applied to the shared wind angle
+- **`force_scale`**: optional float multiplier applied to disturbance forces
+- **`stiffness`**: optional float settling speed override for blades from this profile
+- **`z_index`**: optional int render-order key inside a cell; lower renders first
 
 ## Layout-specific override (optional)
 
@@ -43,7 +47,11 @@ If a layout folder contains its own `grass_profiles.json`, it is loaded first; o
 
 ## Overlapping cells
 
-**`GrassManager.place_tile`** ignores a cell if grass was already placed there. Earlier layers / earlier objects win.
+Overlapping placements now **merge into one grass cell**. This means `default` and `big` can both contribute blades to the same map tile:
+
+- all blades in that cell render through one grass system
+- shared wind still comes from one global patch angle
+- per-profile `wind_scale`, `force_scale`, `stiffness`, and `z_index` still apply
 
 ## Migration
 

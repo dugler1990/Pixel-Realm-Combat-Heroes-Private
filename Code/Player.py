@@ -120,9 +120,14 @@ class BasePlayer(Entity):
         
         self.max_stats = {"health": 300, "energy": 140, "attack": 20, "magic": 10, "speed": 10}
         self.upgrade_cost = {"health": 100, "energy": 100, "attack": 100, "magic": 100, "speed": 100}
+        # Upgrade UI must match max_stats / upgrade_cost keys (not len(self.stats), which may include vitality etc.)
+        self.upgrade_stat_order = tuple(self.max_stats.keys())
         self.health = self.stats["health"]
         self.energy = self.stats["energy"]
         self.exp = 0
+        self.gold = 0
+        self.has_belt = True
+        self.belt_capacity = 1
         self.speed = self.stats["speed"]
         self.speed_multiplier = 1 
         
@@ -211,16 +216,32 @@ class BasePlayer(Entity):
         
         
         
+    def apply_item_effect(self, effect):
+        """Apply consumable effect dict (e.g. health/mana from standard_items.json)."""
+        if not effect:
+            return
+        if "health" in effect:
+            cap = self.stats.get("health", self.health)
+            self.health = min(self.health + effect["health"], cap)
+        if "mana" in effect:
+            cap = self.stats.get("energy", self.energy)
+            self.energy = min(self.energy + effect["mana"], cap)
+
     def pickup_item(self, item):
         _player_item_log.debug("item.effect_type:%s", item.effect_type)
-        _player_item_log.debug("%s", dir(item))
-        if hasattr(self,"TILESIZE"):
+        if hasattr(self, "TILESIZE"):
             _player_item_log.debug("%s", self.TILESIZE)
-        if item.effect_type == 'consumable':
-            self.apply_item_effect(item.effect)  # A method to apply the item's effect (e.g., heal the player)
-        else:
-            self.inventory.add_item(item)  # Add non-consumable items to the inventory
-        
+        if getattr(item, "effect_type", None) == "gold":
+            effect = getattr(item, "effect", None) or {}
+            amt = int(effect.get("gold", 0))
+            if amt <= 0:
+                return False
+            self.gold += amt
+            if getattr(self, "level", None) is not None and hasattr(self.level, "notify_gold_pickup"):
+                self.level.notify_gold_pickup(amt)
+            return True
+        return self.inventory.add_item(item)
+
     def input(self):
         current_time = pygame.time.get_ticks()
         
@@ -241,6 +262,12 @@ class BasePlayer(Entity):
     
         # Handle key presses
         if not self.attacking:
+            if not self.inventory.visible and self.has_belt and self.belt_capacity > 0:
+                belt_keys = (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4)
+                for i, key in enumerate(belt_keys):
+                    if self.input_manager.is_key_just_pressed(key) and i < self.belt_capacity:
+                        self.use_belt_slot(i)
+
             if self.input_manager.is_key_just_pressed(pygame.K_i):
                 if current_time - self.last_i_press_time > 500:
                     self.level.toggle_inventory()
@@ -413,7 +440,8 @@ class BasePlayer(Entity):
         return base_damage + spell_damage
 
     def get_value_by_index(self, index):
-        return list(self.stats.values())[index]
+        key = self.upgrade_stat_order[index]
+        return self.stats.get(key, self.max_stats.get(key, 0))
 
     def player_death(self):
         if self.health <= 0:
@@ -421,7 +449,8 @@ class BasePlayer(Entity):
             self.is_dead = True
 
     def get_cost_by_index(self, index):
-        return list(self.upgrade_cost.values())[index]
+        key = self.upgrade_stat_order[index]
+        return self.upgrade_cost[key]
 
     def energy_recovery(self):
         if self.is_dead or self.health <= 0:

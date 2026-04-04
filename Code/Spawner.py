@@ -1,4 +1,6 @@
+import copy
 import json
+import math
 import random
 import pygame
 from Enemy import Enemy  # Make sure to import your Enemy class
@@ -7,13 +9,24 @@ from game_logging import get_debug_logger
 from random import randint
 
 _spawner_log = get_debug_logger("spawner")
+
+
+def _distance_point_to_rect(px: float, py: float, rx: float, ry: float, rw: float, rh: float) -> float:
+    """Shortest distance from point (px, py) to axis-aligned rectangle [rx, rx+rw] x [ry, ry+rh]."""
+    if rw <= 0 or rh <= 0:
+        return math.hypot(px - rx, py - ry)
+    cx = min(max(px, rx), rx + rw)
+    cy = min(max(py, ry), ry + rh)
+    return math.hypot(px - cx, py - cy)
+
+
 from Eskimo import Eskimo
 from IceClone import IceClone
 from Trap import Trap
 from PolarBear import PolarBear
 from Settings import monster_data
 import SpecialAttacks
-import math
+from enemy_drop_defaults import get_default_item_drop_for_monster
 
 CHARACTER_CLASSES = {
     'eskimo': Eskimo,
@@ -132,15 +145,29 @@ class Spawner:
             # print(f"area pos : {area['object_info']['y_pos']}")
             
             config = area['config']
-            # Player proximity test, 
-            proximity = config.get( "distance", 2000 )
-            if isinstance(proximity, int):
-                distance = math.sqrt( ( area["object_info"]["x_pos"]*TILESIZE- player.rect.center[0] )**2 + ( area["object_info"]["y_pos"]*TILESIZE - player.rect.center[1] )**2 ) 
-                
-                #print("distance and proximity")
-                #print(distance)
-                #print(proximity)
-                if distance > proximity:
+            # Player proximity: distance to spawner AABB in game pixels (not only top-left — large rects need this)
+            proximity = config.get("distance", 2000)
+            if isinstance(proximity, (int, float)):
+                oi = area["object_info"]
+                px = float(player.rect.center[0])
+                py = float(player.rect.center[1])
+                if oi.get("rect_w_px") is not None and float(oi.get("rect_w_px", 0)) > 0:
+                    distance = _distance_point_to_rect(
+                        px,
+                        py,
+                        float(oi["rect_x_px"]),
+                        float(oi["rect_y_px"]),
+                        float(oi["rect_w_px"]),
+                        float(oi["rect_h_px"]),
+                    )
+                else:
+                    ax = oi.get("anchor_tx", oi.get("x_pos", 0.0))
+                    ay = oi.get("anchor_ty", oi.get("y_pos", 0.0))
+                    distance = math.hypot(
+                        float(ax) * TILESIZE - px,
+                        float(ay) * TILESIZE - py,
+                    )
+                if distance > float(proximity):
                     continue
                     
             #print(config['next_spawn_time'])
@@ -201,24 +228,34 @@ class Spawner:
                                 special_attacks = monster_data[chosen_enemy].get('special_attacks',None)
                                 fire_projectile = self.fire_projectile
                                 
-                            
-                            self.spawn_enemy({'type': chosen_enemy,
-                                              'pos': spawn_pos,
-                                              'fire_projectile':fire_projectile,
-                                              'special_attacks':special_attacks})
+                            spawn_cfg = {
+                                'type': chosen_enemy,
+                                'pos': spawn_pos,
+                                'fire_projectile': fire_projectile,
+                                'special_attacks': special_attacks,
+                            }
+                            if 'item_drop_info' in config:
+                                spawn_cfg['item_drop_info'] = config['item_drop_info']
+                            self.spawn_enemy(spawn_cfg)
                     
                 
                 #config['next_spawn_time'] = current_time + config['frequency'] from previous implementation
 
 
     def choose_random_spawn_pos(self, spawn_matrix, object_info):
+        """
+        Spawn positions are float game-tile coords (same scale as layout_manager anchors).
+        Each matrix cell is one TMX tile wide/tall = one game tile in world space.
+        """
+        ax = float(object_info.get("anchor_tx", object_info.get("x_pos", 0.0)))
+        ay = float(object_info.get("anchor_ty", object_info.get("y_pos", 0.0)))
         possible_positions = []
-        for y, row in enumerate(spawn_matrix):
-            for x, cell in enumerate(row):
+        for row_i, row in enumerate(spawn_matrix):
+            for col_i, cell in enumerate(row):
                 if cell == 1:
-                    world_x = object_info['x_pos'] + x
-                    world_y = object_info['y_pos'] + y
-                    possible_positions.append((world_x, world_y))
+                    spawn_tx = ax + col_i + random.random()
+                    spawn_ty = ay + row_i + random.random()
+                    possible_positions.append((spawn_tx, spawn_ty))
         return random.choice(possible_positions) if possible_positions else None
 
 
@@ -286,6 +323,17 @@ class Spawner:
 
         
 ## TODO: the level is passed to the spawner.... should this use callbacks ? hmm
+        if 'item_drop_info' in config:
+            item_drop_info = copy.deepcopy(config['item_drop_info'])
+            default_drop = get_default_item_drop_for_monster(config['type'])
+            if (
+                default_drop
+                and 'gold_drop' in default_drop
+                and 'gold_drop' not in item_drop_info
+            ):
+                item_drop_info['gold_drop'] = default_drop['gold_drop']
+        else:
+            item_drop_info = get_default_item_drop_for_monster(config['type'])
         enemy = Enemy(  monster_name=config['type'], 
                         pos=scaled_pos,
                         groups=[self.level.layout_manager.visible_sprites, self.level.attackable_sprites],
@@ -293,7 +341,7 @@ class Spawner:
                         combat_context=combat_context,
                         special_attacks=special_attacks,
                         persistent=config.get('persistent', False),
-                        item_drop_info=config.get('item_drop_info',None) )
+                        item_drop_info=item_drop_info )
         self.enemies.append(enemy)
         
 

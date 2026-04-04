@@ -23,6 +23,7 @@ class GameSettings:
     environment_speed_index: int = 2  # 1.0x
     fps_cap_index: int = 0  # 30 fps (matches existing default)
     debug_mode: bool = False
+    gold_pickup_popup: bool = True
 
     MENU_ROWS: tuple[str, ...] = (
         "music_volume",
@@ -30,6 +31,7 @@ class GameSettings:
         "environment_speed",
         "fps_cap",
         "debug_mode",
+        "gold_pickup_popup",
     )
 
     @property
@@ -81,6 +83,9 @@ class GameSettings:
             return
         if setting_id == "debug_mode" and direction != 0:
             self.debug_mode = not self.debug_mode
+            return
+        if setting_id == "gold_pickup_popup" and direction != 0:
+            self.gold_pickup_popup = not self.gold_pickup_popup
 
     def _clamp_index(self, idx: int, options: list) -> int:
         return max(0, min(len(options) - 1, idx))

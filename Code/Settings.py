@@ -12,7 +12,7 @@ WINDOW_HEIGHT_RATIO = 0.6
 FPS = 30
 TILESIZE = 150
 # Fraction of window width and height (1–100) used for the grass subsurface; centered on the display.
-GRASS_VIEWPORT_PERCENT = 80
+GRASS_VIEWPORT_PERCENT = 100
 # Grass wind mode (see YSortCameraGroup.custom_draw):
 # - "legacy_tile"  — per-tile wind angle from sin(t + x/100) (tile-by-tile phase); slightly slower, more variation.
 # - "shared_patch" — one shared sway angle for all visible grass (whole patch in sync); slightly faster, smoother.
@@ -23,7 +23,7 @@ GRASS_ROTATION_BUCKET_DEGREES = 1
 # Benchmark mode (off by default). Used for isolated moving-entity collision tests.
 BENCHMARK_ENABLED = False
 BENCHMARK_LAYOUT_DIR = "../levels/benchmark"
-BENCHMARK_ENTITY_COUNT = 150
+BENCHMARK_ENTITY_COUNT = 10
 BENCHMARK_SEED = 1337
 BENCHMARK_DETERMINISTIC_SPAWN = True
 BENCHMARK_ENEMY_TYPE = "raccoon"
@@ -39,8 +39,9 @@ BENCHMARK_PUSHBACK_MAX_CAP = 16.0
 BENCHMARK_METRICS_ENABLED = True
 BENCHMARK_METRICS_LOG_EVERY_SEC = 5.0
 BENCHMARK_METRICS_CSV_PATH = "../logs/benchmark_metrics.csv"
-BENCHMARK_AUTO_RUN_SECONDS = 0  # 0 means manual run (no auto-exit)
-BENCHMARK_WARMUP_SECONDS = 1.5
+# Grass / perf runs: use ~5s warmup so caches settle, then ~15s+ measure (set 0 for manual no auto-exit).
+BENCHMARK_AUTO_RUN_SECONDS = 15.0
+BENCHMARK_WARMUP_SECONDS = 5.0
 BENCHMARK_SPAWN_MAX_RING = 3  # Keep benchmark entities near player center
 BENCHMARK_GRASS_ENABLED = False
 BENCHMARK_GRASS_WIND_MODE = GRASS_WIND_MODE
@@ -49,9 +50,18 @@ BENCHMARK_GRASS_DISTURBANCE_ENABLED = True
 # Grass sway speed in grass benchmarks: passed to YSortCameraGroup.custom_draw as wind_intensity (advances t via dt*60*intensity).
 # Non-daytime layouts used 0 before; keep this >0 so legacy_tile / shared_patch actually animate under PRCH_BENCHMARK_GRASS_ENABLED.
 BENCHMARK_GRASS_SWAY_INTENSITY = 3.0
-# Programmatic grass inside benchmark arena (when PRCH_BENCHMARK_GRASS_ENABLED); matches TMX grass_big-style tiles.
-BENCHMARK_ARENA_GRASS_DENSITY = 55
-BENCHMARK_ARENA_GRASS_OPTIONS = [6, 7, 8, 9, 10, 11]
+# Programmatic grass inside benchmark arena (when PRCH_BENCHMARK_GRASS_ENABLED).
+# Blade IDs are alphabetical indices in Graphics/Grass — low indices tend to shorter blades, high to taller.
+BENCHMARK_ARENA_GRASS_DENSITY = 72
+BENCHMARK_ARENA_GRASS_OPTIONS = [0, 1, 2, 3, 8, 9, 10, 11]
+# Grass force clustering (benchmark + grass enabled only): beyond player_radius, only one blade per subcell group runs force math; followers copy leader rotation.
+BENCHMARK_GRASS_CLUSTER_FORCES_ENABLED = False
+BENCHMARK_GRASS_CLUSTER_PLAYER_RADIUS_PX = 280.0
+BENCHMARK_GRASS_CLUSTER_SUBCELL_PX = 40
+BENCHMARK_GRASS_CLUSTER_GROUP_SIZE = 3
+BENCHMARK_GRASS_CLUSTER_JITTER_DEG = 0.0
+# Mixed into deterministic follower jitter; defaults to BENCHMARK_SEED for reproducible A/B runs.
+BENCHMARK_GRASS_CLUSTER_JITTER_SEED = BENCHMARK_SEED
 
 # Normal gameplay moving-entity broadphase defaults.
 ENTITY_BROADPHASE_BACKEND = "grid"  # "quadtree" | "grid"
