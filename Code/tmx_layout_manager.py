@@ -32,6 +32,7 @@ from EffectArea import EffectArea
 from Torch import Torch
 from Tree import Tree
 from AnimationSprite import AnimationSprite
+import copy
 import json
 import logging
 import math
@@ -43,8 +44,13 @@ from benchmark_runtime import BENCHMARK_RUNTIME
 from benchmark_broadphase import MovingEntityBroadphaseAdapter
 from Entity import Entity
 from ItemVisual import ItemVisual
+from InteractableChest import InteractableChest
 
 _tmx_layout_log = get_tmx_layout_logger()
+
+# Legacy TMX: interactable_type=chest without interactable_profile uses this profile id,
+# which maps to wooden chest type + default variant (paths under chests/wooden/default/ in JSON).
+DEFAULT_CHEST_INTERACTABLE_PROFILE = "chest_default"
 
 # TMX tile object: custom property env_anim_type = "tree" | "torch" (case-insensitive).
 # Keyword maps 1:1 to sprite_animation_config (legacy Map7 tree1/torch1 paths).
@@ -120,6 +126,8 @@ class LayoutManager:
     
         # Initialize camera group for sorting sprites
         self.visible_sprites = YSortCameraGroup(self.ground_sprites, self.grass_manager, self.overhead_areas)
+        self.environment_interactables = []
+        self._env_interactable_profiles = {}
     
        # Positioning here again, its a bit of a mess , i think i do this in start map of level first and it gets reset here unwillingly so i set it again
        
@@ -204,8 +212,8 @@ class LayoutManager:
         """Sets the player object for layout interaction."""
         self.player = player
 
-    def trigger_animation(self, frames, position, speed):
-        AnimationSprite(frames, position, speed, [self.visible_sprites])
+    def trigger_animation(self, frames, position, speed, on_complete=None):
+        AnimationSprite(frames, position, speed, [self.visible_sprites], on_complete=on_complete)
 
     def set_spawner(self, spawner, layout_callback_update_quad_tree):
         """Sets the Spawner object for enemy management."""
@@ -253,6 +261,243 @@ class LayoutManager:
         _tmx_layout_log.debug(
             "No grass_profiles.json found; grass_profile on tiles will be ignored."
         )
+
+    def _load_env_interactable_profiles(self, tmx_path):
+        """Load env_interactable_profiles.json from layout folder first, else shared levels/tmx/."""
+        self._env_interactable_profiles = {}
+        candidates = []
+        if tmx_path:
+            candidates.append(
+                os.path.normpath(
+                    os.path.join(os.path.abspath(tmx_path), "env_interactable_profiles.json")
+                )
+            )
+        _code_dir = os.path.dirname(os.path.abspath(__file__))
+        candidates.append(
+            os.path.normpath(
+                os.path.join(_code_dir, "..", "levels", "tmx", "env_interactable_profiles.json")
+            )
+        )
+        for path in candidates:
+            if not os.path.isfile(path):
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    self._env_interactable_profiles = data
+                else:
+                    _tmx_layout_log.debug(
+                        "env_interactable_profiles.json must be a JSON object, got %s: %s",
+                        type(data).__name__,
+                        path,
+                    )
+            except (json.JSONDecodeError, OSError) as e:
+                _tmx_layout_log.debug(
+                    "Failed to load env interactable profiles from %s: %s", path, e
+                )
+            break
+        else:
+            _tmx_layout_log.debug(
+                "No env_interactable_profiles.json found; world interactable profiles unavailable."
+            )
+        self._rebuild_chest_type_default_loot()
+
+    def _rebuild_chest_type_default_loot(self):
+        """
+        Per material (wooden, metal, gold, ice): canonical default_loot from chest_{type}
+        in JSON; wooden falls back to chest_default if chest_wooden has no default_loot.
+        Used when chest_{type}_snow (or chest_{type}) has empty default_loot.
+        """
+        profiles = getattr(self, "_env_interactable_profiles", None) or {}
+        self._chest_type_default_loot = {}
+        for m in ("wooden", "metal", "gold", "ice"):
+            prof = profiles.get(f"chest_{m}")
+            dl = {}
+            if prof and isinstance(prof.get("default_loot"), dict):
+                dl = prof["default_loot"]
+            if m == "wooden" and (not dl or len(dl) == 0):
+                cd = profiles.get(DEFAULT_CHEST_INTERACTABLE_PROFILE, {})
+                if isinstance(cd.get("default_loot"), dict) and len(cd["default_loot"]) > 0:
+                    dl = cd["default_loot"]
+            self._chest_type_default_loot[m] = copy.deepcopy(dl) if dl else {}
+
+    def _merge_env_interactable_props(self, profile_id, props):
+        """
+        Merge profile defaults with TMX object properties.
+        Returns a dict with kind, loot_info, interaction_margin, paths, profile_id, or None if unknown profile.
+        """
+        prof = self._env_interactable_profiles.get(profile_id)
+        if not prof or not isinstance(prof, dict):
+            _tmx_layout_log.debug(
+                "Unknown interactable_profile=%r; add it to env_interactable_profiles.json",
+                profile_id,
+            )
+            return None
+        merged = copy.deepcopy(prof)
+        merged["profile_id"] = profile_id
+
+        loot_raw = props.get("loot_json")
+        if isinstance(loot_raw, dict):
+            loot_info = loot_raw
+        else:
+            try:
+                loot_info = json.loads(loot_raw) if loot_raw else None
+            except (json.JSONDecodeError, TypeError):
+                loot_info = None
+        if loot_info is not None and loot_info != {}:
+            merged["loot_info"] = loot_info
+        else:
+            dl_raw = merged.get("default_loot") or {}
+            if isinstance(dl_raw, dict) and len(dl_raw) > 0:
+                merged["loot_info"] = copy.deepcopy(dl_raw)
+            else:
+                pid = merged.get("profile_id", "")
+                bucket = getattr(self, "_chest_type_default_loot", None) or {}
+                picked = None
+                for m in ("wooden", "metal", "gold", "ice"):
+                    if pid == f"chest_{m}_snow" or pid == f"chest_{m}":
+                        picked = bucket.get(m)
+                        break
+                if picked is not None and isinstance(picked, dict) and len(picked) > 0:
+                    merged["loot_info"] = copy.deepcopy(picked)
+                else:
+                    merged["loot_info"] = (
+                        copy.deepcopy(dl_raw) if isinstance(dl_raw, dict) else {}
+                    )
+        merged.pop("default_loot", None)
+
+        try:
+            if props.get("interaction_margin") is not None and str(props.get("interaction_margin")).strip() != "":
+                merged["interaction_margin"] = int(props.get("interaction_margin"))
+        except (TypeError, ValueError):
+            pass
+        merged.setdefault("interaction_margin", 48)
+
+        for tmx_key, merged_key in (
+            ("open_animation", "open_animation_path"),
+            ("image_open", "image_open_path"),
+            ("hit_animation", "hit_animation"),
+        ):
+            raw = props.get(tmx_key)
+            if raw is not None and str(raw).strip():
+                merged[merged_key] = str(raw).strip()
+            else:
+                from_prof = prof.get(tmx_key) or prof.get(merged_key)
+                if from_prof is not None and str(from_prof).strip():
+                    merged[merged_key] = str(from_prof).strip()
+                else:
+                    merged[merged_key] = None
+
+        merged.setdefault("kind", "loot_container")
+        return merged
+
+    def _scale_loot_chest_hit_frames(self, hit_frames, tw, th, sprite_fit):
+        """
+        Scale hit frames to fit the TMX object box in game pixels.
+        pixel_contain (default): integer upscale when smaller than box (crisp pixel art),
+        centered with topleft offset; downscale with aspect preserve if art is larger.
+        stretch: scale exactly to (tw, th).
+        Returns (scaled_frames, display_size (w,h), topleft_offset (dx,dy)).
+        """
+        sw, sh = hit_frames[0].get_size()
+        fit = (sprite_fit or "pixel_contain").strip().lower()
+        if fit == "stretch":
+            scaled = [pygame.transform.scale(f, (tw, th)) for f in hit_frames]
+            return scaled, (tw, th), (0, 0)
+        if sw <= 0 or sh <= 0:
+            scaled = [pygame.transform.scale(f, (tw, th)) for f in hit_frames]
+            return scaled, (tw, th), (0, 0)
+        k = min(tw // sw, th // sh)
+        if k >= 1:
+            nw, nh = sw * k, sh * k
+            scaled = [pygame.transform.scale(f, (nw, nh)) for f in hit_frames]
+        else:
+            scale = min(float(tw) / float(sw), float(th) / float(sh))
+            nw = max(1, int(round(sw * scale)))
+            nh = max(1, int(round(sh * scale)))
+            scaled = [pygame.transform.scale(f, (nw, nh)) for f in hit_frames]
+        dx = (tw - nw) // 2
+        dy = (th - nh) // 2
+        return scaled, (nw, nh), (dx, dy)
+
+    def _try_build_loot_chest_assets(self, merged, target_size=None):
+        """
+        Load hit animation frames; idle is the first frame (sorted order matches import_folder).
+        If target_size is (w, h) with positive ints, scale frames per merged sprite_fit
+        (default pixel_contain). Returns (idle_surface, hit_frames, layout_meta) or None;
+        layout_meta: {"display_size": (w,h), "topleft_offset": (dx,dy)}.
+        """
+        from Support import import_folder, resolve_env_interactable_path
+
+        pid = merged.get("profile_id", "?")
+        tmx_folder = getattr(self, "tmx_folder", None)
+
+        hit_raw = merged.get("hit_animation")
+        if not hit_raw or not str(hit_raw).strip():
+            _tmx_layout_log.error(
+                "loot chest profile %r: missing hit_animation", pid
+            )
+            return None
+
+        hit_path = resolve_env_interactable_path(str(hit_raw).strip(), tmx_folder)
+
+        if not hit_path or not os.path.isdir(hit_path):
+            _tmx_layout_log.error(
+                "loot chest profile %r: hit_animation not a directory: %r (resolved %r)",
+                pid,
+                hit_raw,
+                hit_path,
+            )
+            return None
+
+        try:
+            hit_frames = import_folder(hit_path)
+        except Exception as e:
+            _tmx_layout_log.error(
+                "loot chest profile %r: failed to import hit frames from %r: %s",
+                pid,
+                hit_path,
+                e,
+            )
+            return None
+
+        if not hit_frames:
+            _tmx_layout_log.error(
+                "loot chest profile %r: hit_animation empty or unreadable: %r",
+                pid,
+                hit_path,
+            )
+            return None
+
+        layout_meta = {"display_size": None, "topleft_offset": (0, 0)}
+        if target_size is not None and len(target_size) >= 2:
+            tw, th = int(target_size[0]), int(target_size[1])
+            if tw > 0 and th > 0:
+                sprite_fit = merged.get("sprite_fit")
+                hit_frames, disp, off = self._scale_loot_chest_hit_frames(
+                    hit_frames, tw, th, sprite_fit
+                )
+                layout_meta = {"display_size": disp, "topleft_offset": off}
+
+        open_raw = merged.get("open_animation_path")
+        open_path = None
+        if open_raw and str(open_raw).strip():
+            open_path = resolve_env_interactable_path(str(open_raw).strip(), tmx_folder)
+        _tmx_layout_log.debug(
+            "loot chest spawn profile=%r hit_animation_resolved=%r open_animation_resolved=%r",
+            pid,
+            hit_path,
+            open_path,
+        )
+
+        idle_surface = hit_frames[0].copy()
+        if layout_meta.get("display_size") is None:
+            layout_meta = {
+                "display_size": idle_surface.get_size(),
+                "topleft_offset": (0, 0),
+            }
+        return (idle_surface, hit_frames, layout_meta)
 
     def _resolve_grass_profile(self, name):
         """
@@ -502,9 +747,64 @@ class LayoutManager:
             ):
                 continue
 
+            interact_key = str(props.get("interactable_type", "")).strip().lower()
+            prof_key = str(props.get("interactable_profile", "")).strip()
+            if not prof_key and interact_key == "chest":
+                prof_key = DEFAULT_CHEST_INTERACTABLE_PROFILE
+
+            merged = None
+            if prof_key:
+                merged = self._merge_env_interactable_props(prof_key, props)
+                if merged is None:
+                    merged = self._merge_env_interactable_props(
+                        DEFAULT_CHEST_INTERACTABLE_PROFILE, props
+                    )
+
+            if merged is not None:
+                kind = str(merged.get("kind", "loot_container")).strip().lower()
+                if kind == "loot_container":
+                    gw = object_.width * width_scaling_factor
+                    gh = object_.height * height_scaling_factor
+                    if gw <= 0 or gh <= 0:
+                        gw = TILESIZE
+                        gh = TILESIZE
+                    target_w = max(1, int(round(gw)))
+                    target_h = max(1, int(round(gh)))
+                    built = self._try_build_loot_chest_assets(
+                        merged, (target_w, target_h)
+                    )
+                    if built is None:
+                        continue
+                    idle_surface, hit_frames, layout_meta = built
+                    dx, dy = layout_meta.get("topleft_offset", (0, 0))
+                    disp = layout_meta.get("display_size") or (
+                        target_w,
+                        target_h,
+                    )
+                    InteractableChest(
+                        (x_pos + dx, y_pos + dy),
+                        [self.obstacle_sprites, self.visible_sprites],
+                        self.environment_interactables,
+                        idle_surface,
+                        hit_frames,
+                        merged["loot_info"],
+                        profile_id=merged.get("profile_id", ""),
+                        kind=kind,
+                        interaction_margin=merged.get("interaction_margin", 48),
+                        open_animation_path=merged.get("open_animation_path"),
+                        image_open_path=merged.get("image_open_path"),
+                        merged_config=merged,
+                        tmx_folder=getattr(self, "tmx_folder", None),
+                        display_size=tuple(int(x) for x in disp),
+                    )
+                    continue
+                _tmx_layout_log.debug(
+                    "env interactable kind=%r not implemented; using static Tile",
+                    kind,
+                )
+
             image = object_.image
 
-            
             if image is not None:
                 # SCALE
                 image = pygame.transform.scale( image, (object_.width*width_scaling_factor, object_.height*height_scaling_factor ) )
@@ -512,7 +812,7 @@ class LayoutManager:
             else:
                 # Non-image objects (shapes) should be handled as effect layers, skip drawing
                 continue
-            
+
             new_tile = Tile((x_pos, y_pos),
                             [self.obstacle_sprites,self.ground_sprites], 
                             'ground',
@@ -686,6 +986,24 @@ class LayoutManager:
             
             # Convert coordinates and create object_info
             object_info = self._create_spawner_object_info(obj, tiled_tile_width, tiled_tile_height)
+            _tmx_layout_log.debug(
+                "Registered TMX spawner object_id=%r layer=%r anchor=(%.2f, %.2f) rect_px=(%.1f, %.1f, %.1f, %.1f) "
+                "enemy_keys=%s neutral_keys=%s frequency=%s spawn_limits=%s spawn_number=%s distance=%s",
+                object_info.get("object_id"),
+                layer_name,
+                object_info.get("anchor_tx", 0.0),
+                object_info.get("anchor_ty", 0.0),
+                object_info.get("rect_x_px", 0.0),
+                object_info.get("rect_y_px", 0.0),
+                object_info.get("rect_w_px", 0.0),
+                object_info.get("rect_h_px", 0.0),
+                sorted((spawner_config.get("enemy_spawn_weights") or {}).keys()),
+                sorted((spawner_config.get("neutral_spawn_weights") or {}).keys()),
+                spawner_config.get("frequency"),
+                spawner_config.get("spawn_limits"),
+                spawner_config.get("spawn_number"),
+                spawner_config.get("distance", 2000),
+            )
             
             # Add spawn area to spawner
             self.spawner.add_spawn_area(spawn_matrix, spawner_config, object_info)
@@ -729,6 +1047,85 @@ class LayoutManager:
             item = self.item_spawner.create_item(cfg, position)
             self.add_item_visual(item)
 
+    def _extract_weight_map(self, data, key, config_name):
+        raw = data.get(key)
+        if raw is None:
+            return None
+        if isinstance(raw, str):
+            if not raw.strip():
+                return None
+            try:
+                raw = json.loads(raw)
+            except json.JSONDecodeError as e:
+                _tmx_layout_log.debug(
+                    "Could not parse %s %s as JSON: %s",
+                    config_name,
+                    key,
+                    e,
+                )
+                return None
+        if not isinstance(raw, dict):
+            _tmx_layout_log.debug(
+                "%s %s must be an object (dict)",
+                config_name,
+                key,
+            )
+            return None
+        return raw if len(raw) > 0 else None
+
+    def _extract_spawn_limits(self, data):
+        raw = data.get("spawn_limits")
+        if raw is None:
+            return {}
+        if isinstance(raw, str):
+            if not raw.strip():
+                return {}
+            try:
+                raw = json.loads(raw)
+            except json.JSONDecodeError as e:
+                _tmx_layout_log.debug("Could not parse spawner_config spawn_limits as JSON: %s", e)
+                return {}
+        if not isinstance(raw, dict):
+            _tmx_layout_log.debug(
+                "spawner_config spawn_limits must be an object (dict), got %s",
+                type(raw).__name__,
+            )
+            return {}
+
+        parsed = {}
+        for key in ("general", "enemy", "neutral"):
+            value = raw.get(key)
+            if isinstance(value, int) and value >= 0:
+                parsed[key] = value
+            elif value is not None:
+                _tmx_layout_log.debug(
+                    "spawner_config spawn_limits.%s must be a non-negative int, got %r",
+                    key,
+                    value,
+                )
+
+        raw_types = raw.get("types")
+        if raw_types is not None:
+            if isinstance(raw_types, dict):
+                parsed_types = {}
+                for actor_type, cap in raw_types.items():
+                    if isinstance(cap, int) and cap >= 0:
+                        parsed_types[str(actor_type)] = cap
+                    else:
+                        _tmx_layout_log.debug(
+                            "spawner_config spawn_limits.types[%r] must be a non-negative int, got %r",
+                            actor_type,
+                            cap,
+                        )
+                if parsed_types:
+                    parsed["types"] = parsed_types
+            else:
+                _tmx_layout_log.debug(
+                    "spawner_config spawn_limits.types must be an object (dict), got %s",
+                    type(raw_types).__name__,
+                )
+        return parsed
+
     def _extract_spawner_config(self, props):
         """
         Read a single Tiled property spawner_config: JSON string (or dict) with full spawner config.
@@ -765,33 +1162,36 @@ class LayoutManager:
             )
             return None
 
-        weights = data.get("enemy_spawn_weights")
-        if weights is None:
+        enemy_weights = self._extract_weight_map(data, "enemy_spawn_weights", "spawner_config")
+        neutral_weights = self._extract_weight_map(data, "neutral_spawn_weights", "spawner_config")
+        if enemy_weights is None and neutral_weights is None:
             _tmx_layout_log.debug(
-                "spawner_config must include enemy_spawn_weights"
-            )
-            return None
-        if isinstance(weights, str):
-            try:
-                weights = json.loads(weights)
-            except json.JSONDecodeError as e:
-                _tmx_layout_log.debug(
-                    "Could not parse enemy_spawn_weights as JSON: %s", e
-                )
-                return None
-        if not isinstance(weights, dict):
-            _tmx_layout_log.debug(
-                "enemy_spawn_weights must be an object (dict)"
+                "spawner_config must include enemy_spawn_weights and/or neutral_spawn_weights"
             )
             return None
 
+        legacy_spawn_limit = data.get("spawn_limit", 60)
+        if not isinstance(legacy_spawn_limit, int) or legacy_spawn_limit < 0:
+            _tmx_layout_log.debug(
+                "spawner_config spawn_limit must be a non-negative int, got %r. Using default 60.",
+                legacy_spawn_limit,
+            )
+            legacy_spawn_limit = 60
+        spawn_limits = self._extract_spawn_limits(data)
+        if "general" not in spawn_limits:
+            spawn_limits["general"] = legacy_spawn_limit
+
         config = {
-            "enemy_spawn_weights": weights,
             "spawn_type": data.get("spawn_type", "random_weights"),
             "frequency": data.get("frequency", 10000),
-            "spawn_limit": data.get("spawn_limit", 60),
+            "spawn_limit": legacy_spawn_limit,
             "spawn_number": data.get("spawn_number", 1),
+            "spawn_limits": spawn_limits,
         }
+        if enemy_weights is not None:
+            config["enemy_spawn_weights"] = enemy_weights
+        if neutral_weights is not None:
+            config["neutral_spawn_weights"] = neutral_weights
         for opt in ("distance", "time_scaled", "scale_type", "scale_max"):
             if opt in data:
                 config[opt] = data[opt]
@@ -806,7 +1206,111 @@ class LayoutManager:
                     type(raw_drop).__name__,
                 )
 
+        if "neutral_attributes" in data:
+            raw_attrs = data["neutral_attributes"]
+            if isinstance(raw_attrs, dict):
+                config["neutral_attributes"] = raw_attrs
+            else:
+                _tmx_layout_log.debug(
+                    "spawner_config neutral_attributes must be an object, got %s",
+                    type(raw_attrs).__name__,
+                )
+
         return config
+
+    def _extract_entity_spawn_config(self, props):
+        """
+        Read a single Tiled property entity_spawn_config: JSON string (or dict) for one placed entity.
+        Requires kind=enemy|neutral and type. For neutral, attributes defaults to {}.
+        """
+        raw = props.get("entity_spawn_config")
+        if raw is None:
+            _tmx_layout_log.debug("Placed entity object missing entity_spawn_config property")
+            return None
+        if isinstance(raw, str) and not str(raw).strip():
+            _tmx_layout_log.debug("Placed entity entity_spawn_config is empty")
+            return None
+
+        if isinstance(raw, str):
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as e:
+                _tmx_layout_log.debug("Invalid entity_spawn_config JSON: %s", e)
+                return None
+        elif isinstance(raw, dict):
+            data = dict(raw)
+        else:
+            _tmx_layout_log.debug(
+                "entity_spawn_config must be string or dict, got %s",
+                type(raw).__name__,
+            )
+            return None
+
+        if not isinstance(data, dict):
+            _tmx_layout_log.debug(
+                "entity_spawn_config JSON must be an object at top level"
+            )
+            return None
+
+        kind = str(data.get("kind", "")).strip().lower()
+        if kind not in ("enemy", "neutral"):
+            _tmx_layout_log.debug(
+                "entity_spawn_config kind must be 'enemy' or 'neutral', got %r",
+                data.get("kind"),
+            )
+            return None
+
+        entity_type = data.get("type")
+        if entity_type is None or (isinstance(entity_type, str) and not str(entity_type).strip()):
+            _tmx_layout_log.debug(
+                "entity_spawn_config must include non-empty type"
+            )
+            return None
+
+        config = dict(data)
+        config["kind"] = kind
+        config["type"] = str(entity_type).strip()
+        if kind == "neutral":
+            attrs = config.get("attributes", {})
+            if not isinstance(attrs, dict):
+                _tmx_layout_log.debug(
+                    "entity_spawn_config neutral attributes must be an object, got %s",
+                    type(attrs).__name__,
+                )
+                return None
+            config["attributes"] = attrs
+        return config
+
+    def create_placed_entity_layer(self, tmx_object_layer):
+        """
+        Object layer whose name contains 'placed_entities': each object needs entity_spawn_config.
+        Spawns exactly one enemy or neutral from the object's position in tile-space.
+        """
+        if not hasattr(self, "spawner"):
+            _tmx_layout_log.debug(
+                "spawner not set; skipping placed entity layer %r",
+                getattr(tmx_object_layer, "name", ""),
+            )
+            return
+        tiled_tile_width = self.tmxdata.tilewidth
+        tiled_tile_height = self.tmxdata.tileheight
+
+        for obj in tmx_object_layer:
+            props = dict(obj.properties) if hasattr(obj, "properties") else {}
+            config = self._extract_entity_spawn_config(props)
+            if not config:
+                continue
+            x_px, y_px, _gw, _gh = self._game_rect_for_tmx_object(
+                obj, tiled_tile_width, tiled_tile_height
+            )
+            pos = (float(x_px) / float(TILESIZE), float(y_px) / float(TILESIZE))
+            spawn_cfg = dict(config)
+            spawn_cfg["pos"] = pos
+
+            if spawn_cfg["kind"] == "enemy":
+                self.spawner.spawn_enemy(spawn_cfg)
+            else:
+                self.spawner.spawn_neutral(spawn_cfg)
     
     def _generate_spawn_matrix(self, obj, tiled_tile_width, tiled_tile_height):
         """
@@ -840,6 +1344,7 @@ class LayoutManager:
         anchor_tx = float(x_px) / ts
         anchor_ty = float(y_px) / ts
         return {
+            "object_id": getattr(obj, "id", None),
             "anchor_tx": anchor_tx,
             "anchor_ty": anchor_ty,
             "x_pos": anchor_tx,
@@ -880,10 +1385,13 @@ class LayoutManager:
         self.all_effect_areas = []  # Store all effect areas for debug visualization 
         
         self.tmxdata = load_pygame( tmx_path + '/map.tmx' )
+        self.tmx_folder = os.path.abspath(tmx_path) if tmx_path else ""
+        self.environment_interactables = []
 
         # Fresh procedural grass for this map (LayoutManager reuses one GrassManager).
         self.grass_manager.grass_tiles.clear()
         self._load_grass_profiles(tmx_path)
+        self._load_env_interactable_profiles(tmx_path)
         self.grass_tile_grid = [
             [None for _ in range(self.tmxdata.width)] for _ in range(self.tmxdata.height)
         ]
@@ -914,8 +1422,10 @@ class LayoutManager:
             layer_name_lower = layer_name.lower()
             has_effect_name = layer_name.find("Effect") != -1
             has_spawner_name = layer_name_lower.find("spawner") != -1
+            has_placed_entities_name = "placed_entities" in layer_name_lower
             has_item_name = "item" in layer_name_lower
             has_grass_name = "grass" in layer_name_lower
+            has_interactables_name = "interactable" in layer_name_lower
             has_shape_objects = any(getattr(obj, "image", None) is None for obj in layout)
             
             if has_spawner_name:
@@ -927,10 +1437,14 @@ class LayoutManager:
                         "Warning: Spawner layer %r found but spawner not set. Skipping spawner processing.",
                         layer_name,
                     )
+            elif has_placed_entities_name:
+                self.create_placed_entity_layer(layout)
             elif has_item_name:
                 self.create_item_object_layer(layout)
             elif has_grass_name:
                 self.create_grass_object_layer(layout)
+            elif has_interactables_name:
+                self.create_object_layer(layout)
             elif has_effect_name or has_shape_objects:
                 self.create_effect_layer(layout)
             else:

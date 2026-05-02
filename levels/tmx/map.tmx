@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="16" nextobjectid="527">
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="17" nextobjectid="543">
  <tileset firstgid="1" source="iceobjects1.tsx"/>
  <tileset firstgid="26" source="snow_on_ice_brush_proper1.tsx"/>
  <tileset firstgid="134" source="ROCKLAVA.tsx"/>
@@ -7,7 +7,7 @@
  <tileset firstgid="350" source="GRASSMUD.tsx"/>
  <tileset firstgid="458" source="objects_all.tsx"/>
  <tileset firstgid="508" source="../../../../Desktop/Pixel-Realm-Combat-Heroes-public/levels/tmx/GRASSMUD.tsx"/>
- <layer id="1" name="Tile Layer 1" width="30" height="20">
+ <layer id="1" name="Tile Layer 1" width="30" height="20" visible="0">
   <data encoding="csv">
 30,30,31,31,33,509,511,509,535,518,518,518,534,509,509,535,518,518,518,242,242,245,269,268,245,243,269,252,268,242,
 30,33,49,34,48,351,352,351,350,351,516,530,529,518,518,528,531,516,516,244,243,242,267,266,242,242,267,250,266,269,
@@ -62,6 +62,15 @@
     <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;squid&quot;:1,&quot;tribey_snake&quot;:1,&quot;raccoon&quot;:1,&quot;spirit&quot;:1,&quot;bamboo&quot;:1,&quot;ice_ghost&quot;:1,&quot;tribey_spear&quot;:1,&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1,&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:10,&quot;spawn_number&quot;:3,&quot;spawn_limit&quot;:50}"/>
    </properties>
   </object>
+  <object id="542" gid="472" x="6133" y="2517" width="550" height="550">
+   <properties>
+    <property name="spawner_config" value="{&quot;neutral_spawn_weights&quot;:{&quot;eskimo&quot;:1},&quot;neutral_attributes&quot;:{&quot;eskimo&quot;:{&quot;interactable_tile_types&quot;:[&quot;ice&quot;]}},&quot;frequency&quot;:10,&quot;spawn_limit&quot;:1,&quot;spawn_number&quot;:1}"/>
+   </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="16" name="Interactables">
+  <object id="530" x="8656" y="2304"/>
+  <object id="531" x="7560" y="1824"/>
  </objectgroup>
  <objectgroup id="2" name="Object Layer 1">
   <object id="1" gid="1" x="4961.71" y="2910.81" width="198" height="166"/>
@@ -283,6 +292,41 @@
    </properties>
   </object>
   <object id="526" gid="499" x="14405" y="3853" width="2118" height="1670"/>
+  <object id="533" gid="482" x="5853" y="10619" width="550" height="550">
+   <properties>
+    <property name="interactable_profile" value="chest_wooden_snow"/>
+   </properties>
+  </object>
+  <object id="534" gid="482" x="7997" y="10723" width="550" height="550">
+   <properties>
+    <property name="interactable_type" value="chest"/>
+   </properties>
+  </object>
+  <object id="535" gid="482" x="8661" y="11853" width="550" height="550">
+   <properties>
+    <property name="interactable_type" value="chest"/>
+   </properties>
+  </object>
+  <object id="536" gid="482" x="8797" y="13061" width="550" height="550">
+   <properties>
+    <property name="interactable_type" value="chest"/>
+   </properties>
+  </object>
+  <object id="537" gid="482" x="5029" y="12165" width="822" height="686">
+   <properties>
+    <property name="interactable_profile" value="chest_ice_snow"/>
+   </properties>
+  </object>
+  <object id="538" gid="482" x="6309" y="12813" width="462" height="446">
+   <properties>
+    <property name="interactable_profile" value="chest_gold_snow"/>
+   </properties>
+  </object>
+  <object id="539" gid="482" x="6221" y="11773" width="422" height="294">
+   <properties>
+    <property name="interactable_profile" value="chest_metal_snow"/>
+   </properties>
+  </object>
  </objectgroup>
  <objectgroup id="3" name="Slipery Layer">
   <properties>
@@ -902,7 +946,7 @@
    <ellipse/>
   </object>
  </objectgroup>
- <objectgroup id="14" name="grass1">
+ <objectgroup id="14" name="grass1" visible="0">
   <object id="299" gid="500" x="13836.3" y="8523.65" width="550" height="550" rotation="0.0348643">
    <properties>
     <property name="grass_profile" value="big"/>

@@ -10,6 +10,24 @@ from typing import Any, Dict, List, Optional, Tuple
 ResolvedDrop = Tuple[str, int]
 
 
+def _weighted_pick_item_id(
+    lst: List[Dict[str, Any]], rng: random.Random
+) -> Optional[str]:
+    if not lst:
+        return None
+    total_chance = sum(float(d.get("chance", 0)) for d in lst)
+    if total_chance <= 0:
+        return None
+    pick = rng.random() * total_chance
+    cumulative = 0.0
+    for drop in lst:
+        cumulative += float(drop.get("chance", 0))
+        if pick <= cumulative:
+            item_id = drop.get("item_id")
+            return str(item_id) if item_id else None
+    return None
+
+
 def resolve_gold_drop(
     drop_info: Optional[Dict[str, Any]],
     rng: Optional[random.Random] = None,
@@ -40,7 +58,8 @@ def resolve_loot_table(
 ) -> List[ResolvedDrop]:
     """
     Turn item_drop_info into a flat list of (item_id, quantity) with quantity>=1 per tuple.
-    Guaranteed drops are expanded first; then one weighted pick for random_drop_logic 'single'.
+    Guaranteed drops are expanded first; then weighted picks for random_drop_logic
+    'single' (one pick) or 'multiple' (random_drop_count min/max inclusive, duplicates allowed).
     No pygame / world positions.
     """
     if not drop_info:
@@ -56,21 +75,24 @@ def resolve_loot_table(
         for _ in range(qty):
             resolved.append((str(item_id), 1))
 
-    if drop_info.get("random_drop_logic") == "single":
-        lst = drop_info.get("random_drop_list") or []
-        if not lst:
-            return resolved
-        total_chance = sum(float(d.get("chance", 0)) for d in lst)
-        if total_chance <= 0:
-            return resolved
-        pick = rng.random() * total_chance
-        cumulative = 0.0
-        for drop in lst:
-            cumulative += float(drop.get("chance", 0))
-            if pick <= cumulative:
-                item_id = drop.get("item_id")
-                if item_id:
-                    resolved.append((str(item_id), 1))
-                break
+    logic = drop_info.get("random_drop_logic")
+    lst = drop_info.get("random_drop_list") or []
+
+    if logic == "single" and lst:
+        item_id = _weighted_pick_item_id(lst, rng)
+        if item_id:
+            resolved.append((item_id, 1))
+
+    elif logic == "multiple" and lst:
+        rc = drop_info.get("random_drop_count") or {}
+        nmin = max(1, int(rc.get("min", 1)))
+        nmax = max(1, int(rc.get("max", nmin)))
+        if nmax < nmin:
+            nmin, nmax = nmax, nmin
+        count = rng.randint(nmin, nmax)
+        for _ in range(count):
+            item_id = _weighted_pick_item_id(lst, rng)
+            if item_id:
+                resolved.append((item_id, 1))
 
     return resolved

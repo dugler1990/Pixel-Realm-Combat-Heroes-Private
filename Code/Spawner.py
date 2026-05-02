@@ -44,6 +44,9 @@ class Spawner:
         self.spawn_areas = [] 
         self.neutral_characters = []
         self.fire_projectile = fire_projectile
+        self.global_spawn_limits = self._normalize_global_spawn_limits(
+            getattr(level, "global_spawn_limits", None)
+        )
 
     def spawn_trap(self, trap_config):
         # Check the type of trap to spawn based on a key in the configuration, for example:
@@ -102,18 +105,150 @@ class Spawner:
             self.enemy_configs = json.load(file)
 
     def add_spawn_area(self, spawn_matrix, spawner_config, obj_info):
-        
-        
-        
-        
         self.spawn_areas.append({
             'matrix': spawn_matrix,
             'config': spawner_config,
             'object_info': obj_info,  # Store object info if needed for position reference
             'spawn_timer':0,
-            'spawn_scale_timer':0
+            'spawn_scale_timer':0,
+            'debug_state': None,
         })
+        _spawner_log.debug(
+            "Added spawn area object_id=%r anchor=(%.2f, %.2f) matrix=%dx%d enemy_keys=%s neutral_keys=%s "
+            "frequency=%s spawn_limits=%s spawn_number=%s distance=%s",
+            obj_info.get("object_id"),
+            float(obj_info.get("anchor_tx", 0.0)),
+            float(obj_info.get("anchor_ty", 0.0)),
+            len(spawn_matrix[0]) if spawn_matrix and len(spawn_matrix) > 0 else 0,
+            len(spawn_matrix),
+            sorted((spawner_config.get("enemy_spawn_weights") or {}).keys()),
+            sorted((spawner_config.get("neutral_spawn_weights") or {}).keys()),
+            spawner_config.get("frequency"),
+            spawner_config.get("spawn_limits"),
+            spawner_config.get("spawn_number"),
+            spawner_config.get("distance", 2000),
+        )
 
+    def _set_area_debug_state(self, area, state, message, *args):
+        if area.get("debug_state") == state:
+            return
+        area["debug_state"] = state
+        _spawner_log.debug(message, *args)
+
+    def _normalize_global_spawn_limits(self, raw_limits):
+        result = {
+            "general": None,
+            "enemy": None,
+            "neutral": None,
+            "types": {},
+        }
+        if not isinstance(raw_limits, dict):
+            return result
+        for key in ("general", "enemy", "neutral"):
+            value = raw_limits.get(key)
+            if isinstance(value, int) and value >= 0:
+                result[key] = value
+        raw_types = raw_limits.get("types")
+        if isinstance(raw_types, dict):
+            for actor_type, cap in raw_types.items():
+                if isinstance(cap, int) and cap >= 0:
+                    result["types"][str(actor_type)] = cap
+        return result
+
+    def _is_sprite_alive(self, sprite):
+        alive_method = getattr(sprite, "alive", None)
+        if callable(alive_method):
+            return bool(alive_method())
+        return True
+
+    def _live_enemies(self):
+        return [enemy for enemy in self.enemies if self._is_sprite_alive(enemy)]
+
+    def _live_neutrals(self):
+        return [neutral for neutral in self.neutral_characters if self._is_sprite_alive(neutral)]
+
+    def _all_live_actors(self):
+        enemies = self._live_enemies()
+        neutrals = self._live_neutrals()
+        return enemies + neutrals, enemies, neutrals
+
+    def _actor_spawn_type(self, actor, fallback_name=""):
+        value = getattr(actor, "_spawn_type", None)
+        if isinstance(value, str) and value:
+            return value
+        value = getattr(actor, "monster_name", None)
+        if isinstance(value, str) and value:
+            return value
+        return fallback_name
+
+    def _count_actors(self, actors, actor_type=None, source_object_id=None):
+        total = 0
+        for actor in actors:
+            if source_object_id is not None and getattr(actor, "_spawn_source_object_id", None) != source_object_id:
+                continue
+            if actor_type is not None:
+                if self._actor_spawn_type(actor) != actor_type:
+                    continue
+            total += 1
+        return total
+
+    def _build_limit_snapshot(self, spawn_kind, spawn_type, source_object_id):
+        live_all, live_enemies, live_neutrals = self._all_live_actors()
+        kind_actors = live_enemies if spawn_kind == "enemy" else live_neutrals
+        return {
+            "global_general": len(live_all),
+            "global_enemy": len(live_enemies),
+            "global_neutral": len(live_neutrals),
+            "global_type": self._count_actors(live_all, actor_type=spawn_type),
+            "spawner_general": self._count_actors(live_all, source_object_id=source_object_id),
+            "spawner_kind": self._count_actors(kind_actors, source_object_id=source_object_id),
+            "spawner_type": self._count_actors(
+                kind_actors,
+                actor_type=spawn_type,
+                source_object_id=source_object_id,
+            ),
+        }
+
+    def _evaluate_spawn_limits(self, config, spawn_kind, spawn_type, source_object_id):
+        per_spawner_limits = config.get("spawn_limits") if isinstance(config.get("spawn_limits"), dict) else {}
+        global_limits = self.global_spawn_limits
+        snapshot = self._build_limit_snapshot(spawn_kind, spawn_type, source_object_id)
+
+        _spawner_log.debug(
+            "Spawner object_id=%r evaluating limits kind=%s type=%s snapshot=%s per_spawner=%s global=%s",
+            source_object_id,
+            spawn_kind,
+            spawn_type,
+            snapshot,
+            per_spawner_limits,
+            global_limits,
+        )
+
+        checks = [
+            ("per_spawner", "general", snapshot["spawner_general"], per_spawner_limits.get("general")),
+            ("per_spawner", spawn_kind, snapshot["spawner_kind"], per_spawner_limits.get(spawn_kind)),
+            ("per_spawner", f"type:{spawn_type}", snapshot["spawner_type"], (per_spawner_limits.get("types") or {}).get(spawn_type)),
+            ("global", "general", snapshot["global_general"], global_limits.get("general")),
+            ("global", spawn_kind, snapshot[f"global_{spawn_kind}"], global_limits.get(spawn_kind)),
+            ("global", f"type:{spawn_type}", snapshot["global_type"], (global_limits.get("types") or {}).get(spawn_type)),
+        ]
+
+        for scope, key, current, cap in checks:
+            if cap is None:
+                continue
+            if current >= cap:
+                return False, {
+                    "scope": scope,
+                    "key": key,
+                    "current": current,
+                    "cap": cap,
+                }
+        return True, {
+            "scope": "none",
+            "key": "none",
+            "current": None,
+            "cap": None,
+        }
 
     def handle_spawn_areas(self, player, dt):
         #current_time = pygame.time.get_ticks() # 
@@ -168,7 +303,25 @@ class Spawner:
                         float(ay) * TILESIZE - py,
                     )
                 if distance > float(proximity):
+                    self._set_area_debug_state(
+                        area,
+                        "waiting_distance",
+                        "Spawner object_id=%r waiting for proximity distance=%.1f threshold=%.1f player_px=(%.1f, %.1f)",
+                        oi.get("object_id"),
+                        distance,
+                        float(proximity),
+                        px,
+                        py,
+                    )
                     continue
+                self._set_area_debug_state(
+                    area,
+                    "in_range",
+                    "Spawner object_id=%r entered proximity distance=%.1f threshold=%.1f",
+                    oi.get("object_id"),
+                    distance,
+                    float(proximity),
+                )
                     
             #print(config['next_spawn_time'])
             #print(current_time)
@@ -179,6 +332,17 @@ class Spawner:
             
             if 'frequency' not in config or area["spawn_timer"]>= config['frequency']:
                 area["spawn_timer"]= 0
+                self._set_area_debug_state(
+                    area,
+                    "ready_to_spawn",
+                    "Spawner object_id=%r ready to spawn frequency=%s spawn_limits=%s spawn_number=%s enemies_live=%d neutrals_live=%d",
+                    area["object_info"].get("object_id"),
+                    config.get("frequency"),
+                    config.get("spawn_limits"),
+                    config.get("spawn_number"),
+                    len(self._live_enemies()),
+                    len(self._live_neutrals()),
+                )
                 
                 #print("len enemies :")
                 #print(len(self.enemies))
@@ -188,55 +352,108 @@ class Spawner:
                 
                 
                 #print( f" number enemier : {len(self.enemies)}, spawn limit : { config['spawn_limit']} " )
-                if len(self.enemies) < config['spawn_limit']:
-                    n_enemies_from_spawner = len(self.enemies)
-                    number_new_sprites = config["spawn_number"]
-                    if  n_enemies_from_spawner + config["spawn_number"] > config['spawn_limit']  :
-                        number_new_sprites = config['spawn_limit'] - n_enemies_from_spawner
-                    
-                    for i in range(number_new_sprites):
-                        spawn_pos = self.choose_random_spawn_pos(area['matrix'], area['object_info'])
-                        if spawn_pos:
-                            chosen_enemy = self.choose_enemy_based_on_weights(config['enemy_spawn_weights'])
-                            
-                            # Should get this info from standarcd dict in spawner i think easier than in each spawner config
-                            if chosen_enemy == 'demon_dog':
-                                special_attacks = {'projectile':'demon_dog_projectile'}
-                                fire_projectile = self.fire_projectile
-                                
-                                ## Ok , so i'm handling this in the spawn area, lets not waste future time
-                                #       this needs to be in config, 
-                                #       spawners just work with enemy names
-                                #       all other info is in Settings
-                                #       i will use an enemy config file
-                                #       for now ill just import this in Settings
-                                
-                                #       key goal is, i do not want this if demon dog in handle spawn areas,
-                                #                     if i spawn a demon dog from initial , he will be mellee
-                                #                     i could just put this in Settings RN.
-                                
-                                
-                                
-                                
-                                # WL 
-                                # issue is that im not doing this in initial instantiation, basically
-                                # setting fire_projectile i think.
-                                
-                                
-                                
-                            else:
-                                special_attacks = monster_data[chosen_enemy].get('special_attacks',None)
-                                fire_projectile = self.fire_projectile
-                                
-                            spawn_cfg = {
-                                'type': chosen_enemy,
-                                'pos': spawn_pos,
-                                'fire_projectile': fire_projectile,
-                                'special_attacks': special_attacks,
-                            }
-                            if 'item_drop_info' in config:
-                                spawn_cfg['item_drop_info'] = config['item_drop_info']
-                            self.spawn_enemy(spawn_cfg)
+                number_new_sprites = max(0, int(config.get("spawn_number", 1)))
+                source_object_id = area["object_info"].get("object_id")
+                for _ in range(number_new_sprites):
+                    spawn_pos = self.choose_random_spawn_pos(area['matrix'], area['object_info'])
+                    if not spawn_pos:
+                        _spawner_log.debug(
+                            "Spawner object_id=%r has no valid spawn position in matrix",
+                            source_object_id,
+                        )
+                        continue
+
+                    enemy_weights = config.get('enemy_spawn_weights') or {}
+                    neutral_weights = config.get('neutral_spawn_weights') or {}
+                    enemy_total = sum(enemy_weights.values()) if enemy_weights else 0
+                    neutral_total = sum(neutral_weights.values()) if neutral_weights else 0
+                    if enemy_total <= 0 and neutral_total <= 0:
+                        _spawner_log.debug(
+                            "Spawner object_id=%r has no usable weight pools at spawn time",
+                            source_object_id,
+                        )
+                        continue
+
+                    spawn_kind = 'enemy'
+                    if enemy_total > 0 and neutral_total > 0:
+                        total = enemy_total + neutral_total
+                        roll = random.uniform(0, total)
+                        spawn_kind = 'enemy' if roll < enemy_total else 'neutral'
+                    elif neutral_total > 0:
+                        spawn_kind = 'neutral'
+
+                    if spawn_kind == 'neutral':
+                        spawn_type = self.choose_enemy_based_on_weights(neutral_weights)
+                    else:
+                        spawn_type = self.choose_enemy_based_on_weights(enemy_weights)
+
+                    allowed, reason = self._evaluate_spawn_limits(
+                        config=config,
+                        spawn_kind=spawn_kind,
+                        spawn_type=spawn_type,
+                        source_object_id=source_object_id,
+                    )
+                    if not allowed:
+                        _spawner_log.debug(
+                            "Spawner object_id=%r blocked kind=%s type=%s scope=%s key=%s current=%s cap=%s",
+                            source_object_id,
+                            spawn_kind,
+                            spawn_type,
+                            reason["scope"],
+                            reason["key"],
+                            reason["current"],
+                            reason["cap"],
+                        )
+                        continue
+
+                    _spawner_log.debug(
+                        "Spawner object_id=%r allowed spawn kind=%s type=%s pos=(%.2f, %.2f)",
+                        source_object_id,
+                        spawn_kind,
+                        spawn_type,
+                        float(spawn_pos[0]),
+                        float(spawn_pos[1]),
+                    )
+
+                    if spawn_kind == 'neutral':
+                        neutral_attributes = config.get('neutral_attributes') or {}
+                        attrs = neutral_attributes.get(spawn_type, {})
+                        spawn_cfg = {
+                            'type': spawn_type,
+                            'pos': spawn_pos,
+                            'attributes': attrs if isinstance(attrs, dict) else {},
+                            '_spawn_source_object_id': source_object_id,
+                        }
+                        self.spawn_neutral(spawn_cfg)
+                        continue
+
+                    # Should get this info from standard dict in spawner i think easier than in each spawner config
+                    if spawn_type == 'demon_dog':
+                        special_attacks = {'projectile':'demon_dog_projectile'}
+                        fire_projectile = self.fire_projectile
+                    else:
+                        special_attacks = monster_data[spawn_type].get('special_attacks',None)
+                        fire_projectile = self.fire_projectile
+
+                    spawn_cfg = {
+                        'type': spawn_type,
+                        'pos': spawn_pos,
+                        'fire_projectile': fire_projectile,
+                        'special_attacks': special_attacks,
+                        '_spawn_source_object_id': source_object_id,
+                    }
+                    if 'item_drop_info' in config:
+                        spawn_cfg['item_drop_info'] = config['item_drop_info']
+                    self.spawn_enemy(spawn_cfg)
+            else:
+                self._set_area_debug_state(
+                    area,
+                    "waiting_timer",
+                    "Spawner object_id=%r waiting for timer current=%.3f frequency=%s",
+                    area["object_info"].get("object_id"),
+                    float(area["spawn_timer"]),
+                    config.get("frequency"),
+                )
                     
                 
                 #config['next_spawn_time'] = current_time + config['frequency'] from previous implementation
@@ -342,7 +559,19 @@ class Spawner:
                         special_attacks=special_attacks,
                         persistent=config.get('persistent', False),
                         item_drop_info=item_drop_info )
+        enemy._spawn_source_object_id = config.get('_spawn_source_object_id')
+        enemy._spawn_type = str(config.get('type', ''))
         self.enemies.append(enemy)
+        _spawner_log.debug(
+            "Spawned enemy type=%s tile_pos=(%.2f, %.2f) pixel_pos=(%.1f, %.1f) persistent=%s source_object_id=%r",
+            config['type'],
+            float(pos[0]),
+            float(pos[1]),
+            float(scaled_pos[0]),
+            float(scaled_pos[1]),
+            config.get('persistent', False),
+            config.get('_spawn_source_object_id'),
+        )
         
 
  
@@ -357,21 +586,39 @@ class Spawner:
         char_type = config['type']
         #print(char_type)
         char_class = CHARACTER_CLASSES.get(char_type)
+        attributes = config.get('attributes', {})
+        if not isinstance(attributes, dict):
+            attributes = {}
 
         if char_class:
-            # Instantiate the neutral character with the necessary sprite groups and callbacks
-            neutral_character = char_class(
-                pos=scaled_pos,
-                groups=[self.level.layout_manager.visible_sprites, self.level.attackable_sprites],
-                obstacle_sprites=self.level.layout_manager.obstacle_sprites,
-                get_tile_valid_actions_callback=self.level.get_tile_valid_actions,  # Confusing bcoz this is the only place this is used and written in level
-                update_item_spawner_callback=self.level.item_spawner.update_spawn_positions,  # You need to define this callback in your level class
-                update_tile_image_callback=self.level.layout_manager.update_tile_image, 
-                trigger_death_particles = self.level.trigger_death_particles,# You need to define this callback in your level class
-                layout_callback_update_quad_tree = self.layout_callback_update_quad_tree,
-                **config['attributes']
-             )
-            self.neutral_characters.append(neutral_character)
+            try:
+                # Instantiate the neutral character with the necessary sprite groups and callbacks
+                neutral_character = char_class(
+                    pos=scaled_pos,
+                    groups=[self.level.layout_manager.visible_sprites, self.level.attackable_sprites],
+                    obstacle_sprites=self.level.layout_manager.obstacle_sprites,
+                    get_tile_valid_actions_callback=self.level.get_tile_valid_actions,  # Confusing bcoz this is the only place this is used and written in level
+                    update_item_spawner_callback=self.level.item_spawner.update_spawn_positions,  # You need to define this callback in your level class
+                    update_tile_image_callback=self.level.layout_manager.update_tile_image, 
+                    trigger_death_particles = self.level.trigger_death_particles,# You need to define this callback in your level class
+                    layout_callback_update_quad_tree = self.layout_callback_update_quad_tree,
+                    **attributes
+                 )
+                neutral_character._spawn_source_object_id = config.get('_spawn_source_object_id')
+                neutral_character._spawn_type = str(char_type)
+                self.neutral_characters.append(neutral_character)
+                _spawner_log.debug(
+                    "Spawned neutral type=%s tile_pos=(%.2f, %.2f) pixel_pos=(%.1f, %.1f) attrs_keys=%s source_object_id=%r",
+                    char_type,
+                    float(pos[0]),
+                    float(pos[1]),
+                    float(scaled_pos[0]),
+                    float(scaled_pos[1]),
+                    sorted(attributes.keys()),
+                    config.get('_spawn_source_object_id'),
+                )
+            except TypeError as e:
+                _spawner_log.debug("Failed to spawn neutral %s: %s", char_type, e)
         else:
             _spawner_log.debug("Unknown neutral character type: %s", char_type)
 

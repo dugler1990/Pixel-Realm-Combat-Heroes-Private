@@ -1,0 +1,246 @@
+{
+  "chest_default": {
+    "kind": "loot_container",
+    "interaction_margin": 48,
+    "default_loot": {
+      "random_drop_logic": "multiple",
+      "random_drop_count": {
+        "min": 1,
+        "max": 1
+      },
+      "random_drop_list": [
+        {
+          "item_id": "frozen_fish",
+          "chance": 40
+        },
+        {
+          "item_id": "frost_potion",
+          "chance": 20
+        },
+        {
+          "item_id": "ice_shard",
+          "chance": 25
+        },
+        {
+          "item_id": "snowflake_charm",
+          "chance": 10
+        },
+        {
+          "item_id": "arctic_feather",
+          "chance": 5
+        }
+      ],
+      "gold_drop": {
+        "chance": 1.0,
+        "min": 2,
+        "max": 6
+      }
+    },
+    "frame_ms": 100,
+    "open_animation": "../Graphics/EnvInteractables/chests/wooden/default/open",
+    "hit_animation": "../Graphics/EnvInteractables/chests/wooden/default/hit"
+  },
+  "chest_wooden": {
+    "kind": "loot_container",
+    "interaction_margin": 48,
+    "default_loot": {
+      "random_drop_logic": "multiple",
+      "random_drop_count": {
+        "min": 1,
+        "max": 1
+      },
+      "random_drop_list": [
+        {
+          "item_id": "frozen_fish",
+          "chance": 40
+        },
+        {
+          "item_id": "frost_potion",
+          "chance": 20
+        },
+        {
+          "item_id": "ice_shard",
+          "chance": 25
+        },
+        {
+          "item_id": "snowflake_charm",
+          "chance": 10
+        },
+        {
+          "item_id": "arctic_feather",
+          "chance": 5
+        }
+      ],
+      "gold_drop": {
+        "chance": 1.0,
+        "min": 2,
+        "max": 6
+      }
+    },
+    "frame_ms": 100,
+    "open_animation": "../Graphics/EnvInteractables/chests/wooden/default/open",
+    "hit_animation": "../Graphics/EnvInteractables/chests/wooden/default/hit"
+  },
+  "chest_wooden_snow": {
+    "kind": "loot_container",
+    "interaction_margin": 48,
+    "default_loot": {},
+    "frame_ms": 100,
+    "open_animation": "../Graphics/EnvInteractables/chests/wooden/snow/open",
+    "hit_animation": "../Graphics/EnvInteractables/chests/wooden/snow/hit"
+  },
+  "chest_metal": {
+    "kind": "loot_container",
+    "interaction_margin": 48,
+    "default_loot": {
+      "random_drop_logic": "multiple",
+      "random_drop_count": {
+        "min": 1,
+        "max": 2
+      },
+      "random_drop_list": [
+        {
+          "item_id": "frozen_fish",
+          "chance": 40
+        },
+        {
+          "item_id": "frost_potion",
+          "chance": 20
+        },
+        {
+          "item_id": "ice_shard",
+          "chance": 25
+        },
+        {
+          "item_id": "snowflake_charm",
+          "chance": 10
+        },
+        {
+          "item_id": "arctic_feather",
+          "chance": 5
+        }
+      ],
+      "gold_drop": {
+        "chance": 1.0,
+        "min": 5,
+        "max": 12
+      }
+    },
+    "frame_ms": 100,
+    "open_animation": "../Graphics/EnvInteractables/chests/metal/default/open",
+    "hit_animation": "../Graphics/EnvInteractables/chests/metal/default/hit"
+  },
+  "chest_metal_snow": {
+    "kind": "loot_container",
+    "interaction_margin": 48,
+    "default_loot": {},
+    "frame_ms": 100,
+    "open_animation": "../Graphics/EnvInteractables/chests/metal/snow/open",
+    "hit_animation": "../Graphics/EnvInteractables/chests/metal/snow/hit"
+  },
+  "chest_gold": {
+    "kind": "loot_container",
+    "interaction_margin": 48,
+    "default_loot": {
+      "random_drop_logic": "multiple",
+      "random_drop_count": {
+        "min": 3,
+        "max": 4
+      },
+      "random_drop_list": [
+        {
+          "item_id": "frozen_fish",
+          "chance": 40
+        },
+        {
+          "item_id": "frost_potion",
+          "chance": 20
+        },
+        {
+          "item_id": "ice_shard",
+          "chance": 25
+        },
+        {
+          "item_id": "snowflake_charm",
+          "chance": 10
+        },
+        {
+          "item_id": "arctic_feather",
+          "chance": 5
+        }
+      ],
+      "gold_drop": {
+        "chance": 1.0,
+        "min": 12,
+        "max": 28
+      }
+    },
+    "frame_ms": 100,
+    "open_animation": "../Graphics/EnvInteractables/chests/gold/default/open",
+    "hit_animation": "../Graphics/EnvInteractables/chests/gold/default/hit"
+  },
+  "chest_gold_snow": {
+    "kind": "loot_container",
+    "interaction_margin": 48,
+    "default_loot": {},
+    "frame_ms": 100,
+    "open_animation": "../Graphics/EnvInteractables/chests/gold/snow/open",
+    "hit_animation": "../Graphics/EnvInteractables/chests/gold/snow/hit"
+  },
+  "chest_ice": {
+    "kind": "loot_container",
+    "interaction_margin": 48,
+    "default_loot": {
+      "random_drop_logic": "multiple",
+      "random_drop_count": {
+        "min": 2,
+        "max": 3
+      },
+      "random_drop_list": [
+        {
+          "item_id": "frozen_fish",
+          "chance": 40
+        },
+        {
+          "item_id": "frost_potion",
+          "chance": 20
+        },
+        {
+          "item_id": "ice_shard",
+          "chance": 25
+        },
+        {
+          "item_id": "snowflake_charm",
+          "chance": 10
+        },
+        {
+          "item_id": "arctic_feather",
+          "chance": 5
+        }
+      ],
+      "gold_drop": {
+        "chance": 1.0,
+        "min": 8,
+        "max": 18
+      }
+    },
+    "frame_ms": 100,
+    "open_animation": "../Graphics/EnvInteractables/chests/ice/default/open",
+    "hit_animation": "../Graphics/EnvInteractables/chests/ice/default/hit"
+  },
+  "chest_ice_snow": {
+    "kind": "loot_container",
+    "interaction_margin": 48,
+    "default_loot": {},
+    "frame_ms": 100,
+    "open_animation": "../Graphics/EnvInteractables/chests/ice/snow/open",
+    "hit_animation": "../Graphics/EnvInteractables/chests/ice/snow/hit"
+  },
+  "chest_example_variant": {
+    "kind": "loot_container",
+    "interaction_margin": 56,
+    "default_loot": {},
+    "open_animation": "../Graphics/EnvInteractables/chests/metal/snow/open",
+    "hit_animation": "../Graphics/EnvInteractables/chests/metal/snow/hit"
+  }
+}

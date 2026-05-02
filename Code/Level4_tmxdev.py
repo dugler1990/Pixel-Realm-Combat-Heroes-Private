@@ -25,10 +25,12 @@ from Particles import AnimationPlayer
 from Magic import MagicPlayer
 from Evasion import EvasionPlayer
 from Upgrade import Upgrade
+import copy
 import os
 import sys
 import random
 import time
+from loot_table import resolve_gold_drop, resolve_loot_table
 from AnimationSprite import AnimationSprite
 from Trap import Trap
 from Tree import Tree 
@@ -185,6 +187,7 @@ class Level4:
         self.player_dead = False
         self.upgrade_menu_open = False
         self.inventory_open = False
+        self._show_interact_prompt = False
         self.attack_selection_open = False 
         self.player_config_open = False
         self.selected_player_info_dir = selected_player_info_dir
@@ -232,6 +235,13 @@ class Level4:
                 
                 )        
 
+        # Level-wide caps for Spawner (read in Spawner.__init__ via getattr(level, "global_spawn_limits")).
+        self.global_spawn_limits = {
+            "general": 130,
+            "enemy": 120,
+            "neutral": 10,
+        }
+
 # After player initialization in Level4
         self.spawner = Spawner( self, self.persistent_enemy_data,self.fire_projectile )
         self.layout_manager.set_spawner( self.spawner, self.layout_manager.add_obstacle_sprite_to_quad_tree )
@@ -278,6 +288,7 @@ class Level4:
         
         
         self.layout_manager.set_player(self.player)
+        self._seed_default_belt_if_needed()
         self.weather = Weather()
         if self.game_settings:
             self.weather.time_speed_multiplier = self.game_settings.environment_speed
@@ -708,7 +719,237 @@ class Level4:
             )
             self.layout_manager.add_item_visual(item_instance)
 
+    def _update_loot_container_proximity(self):
+        from InteractableChest import InteractableChest
 
+        self._show_interact_prompt = False
+        env = getattr(self.layout_manager, "environment_interactables", None) or []
+        if getattr(self, "game_paused", False) or getattr(self, "inventory_open", False):
+            for sprite in env:
+                if isinstance(sprite, InteractableChest) and not getattr(
+                    sprite, "opened", False
+                ):
+                    sprite.notify_proximity(False)
+            return
+        for sprite in env:
+            if not isinstance(sprite, InteractableChest):
+                continue
+            if getattr(sprite, "opened", False):
+                continue
+            margin = getattr(sprite, "interaction_margin", 48)
+            in_range = self.player.rect.colliderect(
+                sprite.rect.inflate(margin, margin)
+            )
+            sprite.notify_proximity(in_range)
+            if in_range:
+                self._show_interact_prompt = True
+
+    def _draw_interact_prompt(self):
+        if not getattr(self, "_show_interact_prompt", False):
+            return
+        if getattr(self, "game_paused", False) or self.inventory_open:
+            return
+        font = pygame.font.Font(None, 28)
+        text = font.render("[Space] Interact", True, (240, 240, 240))
+        rect = text.get_rect()
+        # Above draw_belt_hud (slots ~H-54..H-18 plus slot labels)
+        rect.midbottom = (
+            self.display_surface.get_width() // 2,
+            self.display_surface.get_height() - 80,
+        )
+        self.display_surface.blit(text, rect)
+
+    def try_interact_nearby_environment(self):
+        if not self.input_manager.is_key_just_pressed(pygame.K_SPACE):
+            return False
+        if getattr(self, "game_paused", False):
+            return False
+        if getattr(self, "inventory_open", False):
+            return False
+        lm = self.layout_manager
+        env = getattr(lm, "environment_interactables", None)
+        if not env:
+            return False
+        for obj in list(env):
+            if getattr(obj, "opened", False):
+                continue
+            margin = getattr(obj, "interaction_margin", 48)
+            if not self.player.rect.colliderect(obj.rect.inflate(margin, margin)):
+                continue
+            kind = str(getattr(obj, "kind", "loot_container")).strip().lower()
+            if kind == "loot_container":
+                self._open_loot_container(obj)
+                return True
+            _game_flow_log.debug(
+                "env interactable kind=%r has no handler yet", kind
+            )
+            continue
+        return False
+
+    def try_open_nearby_chest(self):
+        return self.try_interact_nearby_environment()
+
+    def _resolve_chest_asset_path(self, raw_path):
+        from Support import resolve_env_interactable_path
+
+        return resolve_env_interactable_path(
+            raw_path, getattr(self.layout_manager, "tmx_folder", None)
+        )
+
+    def _scale_chest_surface(self, chest, surf):
+        """Match open-animation / static open art to TMX-scaled hit sprite size."""
+        ds = getattr(chest, "display_size", None)
+        if not ds or len(ds) < 2:
+            return surf
+        w, h = int(ds[0]), int(ds[1])
+        if w <= 0 or h <= 0:
+            return surf
+        if surf.get_width() == w and surf.get_height() == h:
+            return surf
+        return pygame.transform.scale(surf, (w, h))
+
+    def _apply_loot_container_open_visual(self, chest, center, cx, bottom):
+        open_anim = getattr(chest, "open_animation_path", None)
+        image_open = getattr(chest, "image_open_path", None)
+
+        path_anim = self._resolve_chest_asset_path(open_anim) if open_anim else None
+        path_img = self._resolve_chest_asset_path(image_open) if image_open else None
+        final_surface = None
+        anchor_midbottom = (cx, bottom)
+
+        if path_img and os.path.isfile(path_img):
+            final_surface = pygame.image.load(path_img).convert_alpha()
+            final_surface = self._scale_chest_surface(chest, final_surface)
+
+        if path_anim and os.path.isdir(path_anim):
+            frames = import_folder(path_anim)
+            ds = getattr(chest, "display_size", None)
+            if frames and ds and len(ds) >= 2:
+                w, h = int(ds[0]), int(ds[1])
+                if w > 0 and h > 0:
+                    frames = [
+                        pygame.transform.scale(f, (w, h))
+                        if f.get_width() != w or f.get_height() != h
+                        else f
+                        for f in frames
+                    ]
+            if not frames:
+                _game_flow_log.debug(
+                    "open animation folder empty or unreadable: %s", path_anim
+                )
+            if frames:
+                if hasattr(chest, "start_open_animation"):
+                    chest.start_open_animation(
+                        frames,
+                        final_surface=final_surface,
+                        anchor_midbottom=anchor_midbottom,
+                    )
+                else:
+                    fallback = final_surface if final_surface is not None else frames[-1]
+                    chest.image = fallback
+                    chest.mask = pygame.mask.from_surface(fallback)
+                    chest.rect = fallback.get_rect(midbottom=anchor_midbottom)
+                return
+        if final_surface is not None:
+            if hasattr(chest, "start_open_animation"):
+                chest.start_open_animation(
+                    [],
+                    final_surface=final_surface,
+                    anchor_midbottom=anchor_midbottom,
+                )
+            else:
+                chest.image = final_surface
+                chest.mask = pygame.mask.from_surface(final_surface)
+                chest.rect = final_surface.get_rect(midbottom=anchor_midbottom)
+
+    def _open_loot_container(self, chest):
+        if hasattr(chest, "prepare_for_open"):
+            chest.prepare_for_open()
+        chest.opened = True
+        lm = self.layout_manager
+        if chest in lm.environment_interactables:
+            lm.environment_interactables.remove(chest)
+        center = chest.rect.center
+        bottom = chest.rect.bottom
+        cx = chest.rect.centerx
+
+        drop_info = getattr(chest, "loot_info", None) or {}
+        profile = getattr(chest, "profile_id", "") or "?"
+
+        _game_flow_log.debug(
+            "Chest open: profile=%r resolved loot_info=%s",
+            profile,
+            drop_info,
+        )
+
+        item_tuples = resolve_loot_table(drop_info)
+        rolled_ids = [i for i, _ in item_tuples]
+        _game_flow_log.debug(
+            "Chest resolve_loot_table profile=%r count=%d item_ids=%s",
+            profile,
+            len(item_tuples),
+            rolled_ids,
+        )
+
+        spawned_ids = []
+        unknown_ids = []
+        for item_id, _q in item_tuples:
+            base = self.item_spawner.item_mapping.get(item_id)
+            if not base:
+                unknown_ids.append(item_id)
+                continue
+            cfg = copy.deepcopy(base)
+            pos = [center[0] + random.randint(-24, 24), center[1] + random.randint(-16, 16)]
+            item = self.item_spawner.create_item(cfg, pos)
+            lm.add_item_visual(item)
+            spawned_ids.append(item_id)
+
+        if unknown_ids:
+            _game_flow_log.warning(
+                "Chest open profile=%r: no item_mapping for item_id(s) %s",
+                profile,
+                unknown_ids,
+            )
+
+        gold_amt = resolve_gold_drop(drop_info, random)
+        gold_spawned = None
+        if gold_amt and gold_amt > 0:
+            base = self.item_spawner.item_mapping.get("gold_coin")
+            if base:
+                cfg = copy.deepcopy(base)
+                cfg["effect"] = {"gold": int(gold_amt)}
+                pos = [center[0] + random.randint(-24, 24), center[1] + random.randint(-16, 16)]
+                item = self.item_spawner.create_item(cfg, pos)
+                lm.add_item_visual(item)
+                gold_spawned = int(gold_amt)
+            else:
+                _game_flow_log.warning(
+                    "Chest open profile=%r: gold_drop rolled %s but gold_coin missing from item_mapping",
+                    profile,
+                    gold_amt,
+                )
+        _game_flow_log.debug(
+            "Chest resolve_gold_drop profile=%r amount_resolved=%s amount_spawned=%s",
+            profile,
+            gold_amt,
+            gold_spawned,
+        )
+
+        if not spawned_ids and gold_spawned is None:
+            _game_flow_log.info(
+                "Chest opened with empty loot table (profile=%r rolled_item_ids=%s)",
+                profile,
+                rolled_ids,
+            )
+        else:
+            _game_flow_log.debug(
+                "Chest open result profile=%r spawned_items=%s gold=%s",
+                profile,
+                spawned_ids,
+                gold_spawned,
+            )
+
+        self._apply_loot_container_open_visual(chest, center, cx, bottom)
 
     def get_level_up_threshold(self, level):
         return 1000 * level ** 2
@@ -1074,12 +1315,28 @@ class Level4:
         self.game_paused = not self.game_paused
         self.upgrade_menu_open = not self.upgrade_menu_open
 
+    def _seed_default_belt_if_needed(self):
+        cfg = self.item_spawner.item_mapping.get("simple_belt")
+        if not cfg or not getattr(self, "player", None):
+            return
+        inv = self.player.inventory
+        wslot = inv.slots[inv.waist_slot_index]
+        if wslot.item is not None:
+            inv.sync_belt_from_waist()
+            return
+        cfg = copy.deepcopy(cfg)
+        belt_item = self.item_spawner.create_item(cfg, [0, 0])
+        wslot.item = belt_item
+        wslot.quantity = 1
+        inv.sync_belt_from_waist()
+
     def toggle_inventory(self):
         self.game_paused = not self.game_paused
         self.inventory_open = not self.inventory_open
         self.player.inventory.visible = self.inventory_open
         if not self.inventory_open:
             self.player.inventory.return_hand_to_backpack()
+            self.player.inventory.sync_belt_from_waist()
 
     def notify_gold_pickup(self, amount):
         if amount <= 0:
@@ -1383,6 +1640,7 @@ class Level4:
             
             self.check_enemy_deaths()
             self.handle_item_collection()
+            self._update_loot_container_proximity()
             #self.layout_manager.visible_sprites.enemy_update(self.player)  
            #print(f"\n\n after PRE ATTACK {self.player.rect.x}\n\n")
             self.player_attack_logic()
@@ -1421,6 +1679,7 @@ class Level4:
         self._draw_gold_pickup_popup()
         if not self.inventory_open:
             draw_belt_hud(self.display_surface, self.player, self.player.inventory)
+            self._draw_interact_prompt()
         self.player_dead = getattr(self.player, "is_dead", False)
     
         # Grass  !

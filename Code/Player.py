@@ -126,8 +126,8 @@ class BasePlayer(Entity):
         self.energy = self.stats["energy"]
         self.exp = 0
         self.gold = 0
-        self.has_belt = True
-        self.belt_capacity = 1
+        self.has_belt = False
+        self.belt_capacity = 0
         self.speed = self.stats["speed"]
         self.speed_multiplier = 1 
         
@@ -247,6 +247,12 @@ class BasePlayer(Entity):
         
         if 'slide' in self.status:  # Input blocking for both evasions and attacks should be unified
             return 
+
+        interact_fn = getattr(self.level, "try_interact_nearby_environment", None)
+        if interact_fn is None:
+            interact_fn = getattr(self.level, "try_open_nearby_chest", None)
+        if interact_fn and interact_fn():
+            return
         
         # Handle key releases
         released_keys = [key for key in self.input_manager.previous_key_states if self.input_manager.previous_key_states[key] and not self.input_manager.current_key_states[key]]

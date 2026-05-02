@@ -26,6 +26,7 @@ from Particles import AnimationPlayer
 from Magic import MagicPlayer
 from Evasion import EvasionPlayer
 from Upgrade import Upgrade
+import copy
 import os
 import random
 from AnimationSprite import AnimationSprite
@@ -1102,6 +1103,7 @@ class Level4:
         
         
         self.layout_manager.set_player(self.player)
+        self._seed_default_belt_if_needed()
         self.weather = Weather()
         
         
@@ -1588,12 +1590,28 @@ class Level4:
         self.game_paused = not self.game_paused
         self.upgrade_menu_open = not self.upgrade_menu_open
 
+    def _seed_default_belt_if_needed(self):
+        cfg = self.item_spawner.item_mapping.get("simple_belt")
+        if not cfg or not getattr(self, "player", None):
+            return
+        inv = self.player.inventory
+        wslot = inv.slots[inv.waist_slot_index]
+        if wslot.item is not None:
+            inv.sync_belt_from_waist()
+            return
+        cfg = copy.deepcopy(cfg)
+        belt_item = self.item_spawner.create_item(cfg, [0, 0])
+        wslot.item = belt_item
+        wslot.quantity = 1
+        inv.sync_belt_from_waist()
+
     def toggle_inventory(self):
         self.game_paused = not self.game_paused
         self.inventory_open = not self.inventory_open
         self.player.inventory.visible = self.inventory_open
         if not self.inventory_open:
             self.player.inventory.return_hand_to_backpack()
+            self.player.inventory.sync_belt_from_waist()
 
     def toggle_attack_selection(self):
         self.game_paused = not self.game_paused

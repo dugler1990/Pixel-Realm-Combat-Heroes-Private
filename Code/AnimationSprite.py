@@ -1,8 +1,9 @@
 import pygame
 
 class AnimationSprite(pygame.sprite.Sprite):
-    def __init__(self, frames, position, speed, groups):
+    def __init__(self, frames, position, speed, groups, on_complete=None):
         super().__init__(groups)
+        self.on_complete = on_complete
         self.frames = frames
         self.image = frames[0]
         self.rect = self.image.get_rect()
@@ -20,6 +21,8 @@ class AnimationSprite(pygame.sprite.Sprite):
         if now - self.last_update > self.animation_speed:
             self.frame_index += 1
             if self.frame_index >= len(self.frames):
+                if self.on_complete:
+                    self.on_complete()
                 self.kill()  # Remove sprite after animation
             else:
                 self.image = self.frames[self.frame_index]

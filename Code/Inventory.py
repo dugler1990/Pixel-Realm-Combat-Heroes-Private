@@ -6,7 +6,7 @@ _player_item_log = get_debug_logger("player_item")
 # Max stack size per slot for stackable items (consumables).
 MAX_STACK_PER_ITEM = 99
 
-BODY_SLOT_COUNT = 8
+BODY_SLOT_COUNT = 9
 BACKPACK_ROWS = 4
 BACKPACK_COLS = 3
 BACKPACK_COUNT = BACKPACK_ROWS * BACKPACK_COLS
@@ -71,6 +71,8 @@ class InventorySlot:
             slot_surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
             if self.slot_type == "belt":
                 color = (200, 160, 80)
+            elif self.slot_type == "waist":
+                color = (160, 120, 200)
             else:
                 color = (255, 255, 255) if self.slot_type == "general" else (0, 255, 0)
             pygame.draw.rect(slot_surface, color, (0, 0, self.rect.width, self.rect.height))
@@ -163,8 +165,10 @@ class Inventory:
 
         self.slots.append(InventorySlot(pygame.Rect(base_x - 20, base_y + 355, 80, 40), "boots"))
         self.slots.append(InventorySlot(pygame.Rect(base_x + 120, base_y + 355, 80, 40), "boots"))
+        self.slots.append(InventorySlot(pygame.Rect(base_x + 70, base_y + 300, 50, 48), "waist"))
 
         self.body_start_index = 0
+        self.waist_slot_index = self.body_start_index + BODY_SLOT_COUNT - 1
         self.backpack_start_index = BODY_SLOT_COUNT
 
         backpack_x, backpack_y = 320, 100
@@ -278,7 +282,10 @@ class Inventory:
             return
 
         if self.input_manager.is_key_just_pressed(pygame.K_TAB):
-            self.focus_region = (self.focus_region + 1) % 3
+            if getattr(self.player, "has_belt", False):
+                self.focus_region = (self.focus_region + 1) % 3
+            else:
+                self.focus_region = FOCUS_BACKPACK if self.focus_region == FOCUS_BODY else FOCUS_BODY
             return
 
         if self.focus_region == FOCUS_BODY:
@@ -297,7 +304,7 @@ class Inventory:
                 self.selected_backpack_index = idx - 1
             elif self.input_manager.is_key_just_pressed(pygame.K_RIGHT) and col < BACKPACK_COLS - 1:
                 self.selected_backpack_index = idx + 1
-        else:
+        elif self.focus_region == FOCUS_BELT and getattr(self.player, "has_belt", False):
             if self.input_manager.is_key_just_pressed(pygame.K_LEFT):
                 self.belt_index = (self.belt_index - 1) % BELT_SLOT_COUNT
             elif self.input_manager.is_key_just_pressed(pygame.K_RIGHT):
@@ -324,8 +331,49 @@ class Inventory:
         slot.item = None
         slot.quantity = 0
         _clear_slot_visual(slot)
+        self.sync_belt_from_waist()
+
+    def sync_belt_from_waist(self):
+        prev = getattr(self.player, "has_belt", False)
+        slot = self.slots[self.waist_slot_index]
+        it = slot.item
+        if (
+            it is not None
+            and slot.quantity > 0
+            and getattr(it, "effect_type", None) == "belt_equip"
+        ):
+            eff = getattr(it, "effect", None) or {}
+            n = int(eff.get("belt_slots", 1))
+            self.player.has_belt = True
+            self.player.belt_capacity = min(BELT_SLOT_COUNT, max(0, n))
+        else:
+            self.player.has_belt = False
+            self.player.belt_capacity = 0
+            if prev:
+                self.dump_belt_slots_to_backpack()
+        if not self.player.has_belt and self.focus_region == FOCUS_BELT:
+            self.focus_region = FOCUS_BACKPACK
+
+    def dump_belt_slots_to_backpack(self):
+        for i in range(BELT_SLOT_COUNT):
+            slot = self.slots[self.belt_start_index + i]
+            if slot.item is None or slot.quantity <= 0:
+                continue
+            target_qty = slot.quantity
+            moved = 0
+            for _ in range(target_qty):
+                if not self.add_item(slot.item):
+                    break
+                moved += 1
+            slot.quantity -= moved
+            if slot.quantity <= 0:
+                slot.item = None
+                slot.quantity = 0
+                _clear_slot_visual(slot)
 
     def _can_place_in_slot(self, slot, item):
+        if slot.slot_type == "waist":
+            return getattr(item, "effect_type", None) == "belt_equip"
         if slot.slot_type == "belt":
             bidx = self.slots.index(slot) - self.belt_start_index
             if self._belt_slot_locked(bidx):
@@ -345,6 +393,7 @@ class Inventory:
             self.hand_item = None
             self.hand_qty = 0
             _clear_slot_visual(slot)
+            self.sync_belt_from_waist()
             return
 
         if (
@@ -360,12 +409,14 @@ class Inventory:
                 self.hand_item = None
                 self.hand_qty = 0
             _clear_slot_visual(slot)
+            self.sync_belt_from_waist()
             return
 
         old_it, old_q = slot.item, slot.quantity
         slot.item, slot.quantity = self.hand_item, self.hand_qty
         self.hand_item, self.hand_qty = old_it, old_q
         _clear_slot_visual(slot)
+        self.sync_belt_from_waist()
 
     def use_selected_backpack_item(self):
         """Consume one charge from selected backpack slot if it is a consumable."""

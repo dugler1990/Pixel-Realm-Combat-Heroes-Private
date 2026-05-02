@@ -181,10 +181,42 @@ def get_or_build_entity_masks(
     _ENTITY_MASK_CACHE[cache_key] = masks
     return masks
 
+def resolve_env_interactable_path(raw_path, tmx_folder=None):
+    """
+    Resolve a relative path from env interactable profiles / TMX (Graphics/..., levels/...).
+    Tries: absolute if exists, then tmx_folder + path, then project root (Code/..) + path.
+    """
+    if not raw_path:
+        return None
+    s = str(raw_path).strip()
+    if not s:
+        return None
+    if os.path.isabs(s) and os.path.exists(s):
+        return s
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def _resolve_from_project_root(p):
+        # Strip a leading "../" so "../Graphics/..." joins project_root, not repo parent's Graphics.
+        rel = p[3:] if p.startswith("../") else p
+        return os.path.normpath(os.path.join(project_root, rel))
+
+    if tmx_folder:
+        if s.startswith("../"):
+            cand = _resolve_from_project_root(s)
+        else:
+            cand = os.path.normpath(os.path.join(os.path.abspath(tmx_folder), s))
+        if os.path.exists(cand):
+            return cand
+    cand2 = _resolve_from_project_root(s)
+    if os.path.exists(cand2):
+        return cand2
+    return cand2
+
+
 def import_folder(path, scale=None):
     surface_list = []
     for _, __, img_files in walk(path):
-        for image in img_files:
+        for image in sorted(img_files):
             full_path = os.path.join(path, image)
             image_surf = pygame.image.load(full_path).convert_alpha()
             if scale:

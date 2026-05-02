@@ -14,8 +14,9 @@ def _tier_low() -> Dict[str, Any]:
     return {
         "random_drop_logic": "single",
         "random_drop_list": [
-            {"item_id": "frozen_fish", "chance": 55},
-            {"item_id": "ice_shard", "chance": 25},
+            {"item_id": "frozen_fish", "chance": 48},
+            {"item_id": "frost_potion", "chance": 10},
+            {"item_id": "ice_shard", "chance": 22},
             {"item_id": "snowflake_charm", "chance": 12},
             {"item_id": "arctic_feather", "chance": 8},
         ],
@@ -27,10 +28,11 @@ def _tier_mid() -> Dict[str, Any]:
     return {
         "random_drop_logic": "single",
         "random_drop_list": [
-            {"item_id": "frozen_fish", "chance": 40},
-            {"item_id": "ice_shard", "chance": 25},
-            {"item_id": "snowflake_charm", "chance": 20},
-            {"item_id": "arctic_feather", "chance": 15},
+            {"item_id": "frozen_fish", "chance": 34},
+            {"item_id": "frost_potion", "chance": 12},
+            {"item_id": "ice_shard", "chance": 23},
+            {"item_id": "snowflake_charm", "chance": 18},
+            {"item_id": "arctic_feather", "chance": 13},
         ],
         "gold_drop": {"chance": 0.48, "min": 1, "max": 8},
     }
@@ -40,10 +42,11 @@ def _tier_high() -> Dict[str, Any]:
     return {
         "random_drop_logic": "single",
         "random_drop_list": [
-            {"item_id": "frozen_fish", "chance": 28},
-            {"item_id": "ice_shard", "chance": 22},
-            {"item_id": "snowflake_charm", "chance": 25},
-            {"item_id": "arctic_feather", "chance": 25},
+            {"item_id": "frozen_fish", "chance": 23},
+            {"item_id": "frost_potion", "chance": 12},
+            {"item_id": "ice_shard", "chance": 20},
+            {"item_id": "snowflake_charm", "chance": 23},
+            {"item_id": "arctic_feather", "chance": 22},
         ],
         "gold_drop": {"chance": 0.55, "min": 2, "max": 14},
     }
@@ -53,10 +56,11 @@ def _tier_boss() -> Dict[str, Any]:
     return {
         "random_drop_logic": "single",
         "random_drop_list": [
-            {"item_id": "frozen_fish", "chance": 15},
-            {"item_id": "ice_shard", "chance": 20},
-            {"item_id": "snowflake_charm", "chance": 30},
-            {"item_id": "arctic_feather", "chance": 35},
+            {"item_id": "frozen_fish", "chance": 12},
+            {"item_id": "frost_potion", "chance": 12},
+            {"item_id": "ice_shard", "chance": 18},
+            {"item_id": "snowflake_charm", "chance": 28},
+            {"item_id": "arctic_feather", "chance": 30},
         ],
         "gold_drop": {"chance": 0.82, "min": 6, "max": 28},
     }

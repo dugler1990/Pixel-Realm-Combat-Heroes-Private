@@ -106,12 +106,25 @@ class ItemSpawner:
                 self.items.append(item)
         #print(f"new items : {self.items}")
 
-    def spawn_from_chest(self, chest_position):
-        """Spawn one or more items when a chest is opened."""
-        for item_key, config in self.item_configs.items():
-            if config.get('spawn_type') == 'chest':
-                for _ in range(random.randint(1, config.get('max_items', 1))):
-                    self.create_item(item_key, chest_position)
+    def spawn_from_chest(self, chest_position, drop_info=None):
+        """Spawn items from a loot table at a position (optional helper; level flow uses resolve_loot_table directly)."""
+        dropped = []
+        if not drop_info or not getattr(self, "item_mapping", None):
+            return dropped
+        for item_id, _qty in resolve_loot_table(drop_info):
+            base = self.item_mapping.get(item_id)
+            if not base:
+                continue
+            cfg = copy.deepcopy(base)
+            dropped.append(self.create_item(cfg, chest_position))
+        gold_amt = resolve_gold_drop(drop_info, random)
+        if gold_amt and gold_amt > 0:
+            base = self.item_mapping.get("gold_coin")
+            if base:
+                cfg = copy.deepcopy(base)
+                cfg["effect"] = {"gold": int(gold_amt)}
+                dropped.append(self.create_item(cfg, chest_position))
+        return dropped
 
 
     def create_item(self, item_config, position):

@@ -12,10 +12,10 @@
     "console": false
   },
   "tmx_layout": {
-    "enabled": false,
+    "enabled": true,
     "level": "DEBUG",
     "file": "logs/tmx_layout.log",
-    "console": false
+    "console": true
   },
   "animated_environment": {
     "enabled": false,
@@ -42,10 +42,10 @@
     "console": false
   },
   "spawner": {
-    "enabled": false,
+    "enabled": true,
     "level": "DEBUG",
     "file": "logs/spawner.log",
-    "console": false
+    "console": true
   },
   "input": {
     "enabled": false,
