@@ -571,13 +571,7 @@ wolf saga, use wolf face as text .
  ---- >  Enemy definitions are still in Settings and Graphics/Monsters.
 
 
-Git token:
-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
-new : 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
-new2: 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
-new3: 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
 
-new4 : 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
 
 git remote set-url origin https://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@github.com/dugler1990/IceCoreTempModelling.git
 
