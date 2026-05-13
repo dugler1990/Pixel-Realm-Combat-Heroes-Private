@@ -213,10 +213,18 @@ def resolve_env_interactable_path(raw_path, tmx_folder=None):
     return cand2
 
 
+def _animation_frame_sort_key(filename):
+    """Sort 0.png,1.png,...,10.png in numeric order (plain sorted() is lexicographic)."""
+    stem, _, ext = filename.rpartition(".")
+    if ext.lower() in ("png", "jpg", "jpeg", "gif", "webp") and stem.isdigit():
+        return (0, int(stem), filename.lower())
+    return (1, filename.lower())
+
+
 def import_folder(path, scale=None):
     surface_list = []
     for _, __, img_files in walk(path):
-        for image in sorted(img_files):
+        for image in sorted(img_files, key=_animation_frame_sort_key):
             full_path = os.path.join(path, image)
             image_surf = pygame.image.load(full_path).convert_alpha()
             if scale:

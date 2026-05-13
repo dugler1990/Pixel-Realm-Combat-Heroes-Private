@@ -29,4 +29,20 @@ Goals :
 
 2. Make the slippery factor impact movement.
 
+
+
+09-05-2026
+
+I have the barb run as an mp4 , the issue is that the first 3 frames are great to transition from running but then really i need like 3 to 19 on loop... 
+---> Maybe simplest is just to get 3-19 directly for now.....
+-------> WL: do that.
 	 
+	 
+	 
+	 ### WL, lets get this barb going, 
+	 	  1. invert the movement and attack -> image_utils/flip_right_facing_sprite_images.py 
+	 	  2. just wire it up
+	 	  3. get image for selection.
+	 	  
+	 	  
+	 	  

@@ -16,6 +16,22 @@
                             "agility":6,
                             "charisma":3}
             
+        },
+                {
+            "selection_position": {"x":1,"y":0},
+            "name":"barb",
+            "player_info_dir":"../Graphics/barb/",
+             "base_stats":{"health": 2000,
+                            "energy": 20,
+                            "attack": 10,
+                            "magic": 1,
+                            "speed": 15, 
+                            "strength": 20,
+                            "vitality":20,
+                            "magic":7,
+                            "agility":4,
+                            "charisma":3}
+            
         }
     ]
 }

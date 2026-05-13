@@ -623,6 +623,58 @@ class LayoutManager:
                         if grid is not None and 0 <= ty < len(grid) and 0 <= tx < len(grid[0]):
                             grid[ty][tx] = True
 
+    def update_tile_image(self, key, position):
+        """
+        Update the image of a tile at the given position based on the provided key.
+
+        :param key: A string key representing the new tile image to use.
+        :param position: A tuple (x, y) representing the tile's position on the map.
+        """
+        image_mapping = {
+            "building_in_progress": {"image_path": "../Graphics/Tiles/building_in_progress.png",
+                                     "valid_interaction_types": [],
+                                     "is_obstacle": True},
+            "fishing_hole": {"image_path": "../Graphics/Tiles/fishing_hole.png",
+                             "valid_interaction_types": [],
+                             "is_obstacle": True},
+            "ice_tile": {"image_path": "../Graphics/Tiles/ice_tile.png",
+                         "valid_interaction_types": ["create_fishing_hole"],
+                         "is_obstacle": False},
+        }
+
+        entry = image_mapping.get(key)
+        if not entry:
+            return
+        image_path = entry.get("image_path")
+        if not image_path:
+            return
+        valid_interaction_types = entry.get("valid_interaction_types")
+        is_obstacle = entry.get("is_obstacle")
+
+        new_image = pygame.image.load(image_path).convert()
+        new_image = pygame.transform.scale(new_image, (self.TILESIZE, self.TILESIZE))
+
+        tile = self.tile_map.get(position)
+
+        if tile:
+            groups = tile.groups()
+
+            for group in groups:
+                group.remove(tile)
+
+            tile.image = new_image
+            tile.valid_interaction_types = valid_interaction_types
+
+            for group in groups:
+                if group is self.obstacle_sprites:
+                    continue
+                group.add(tile)
+
+            if is_obstacle:
+                self.obstacle_sprites.add(tile)
+
+            self.visible_sprites.update_tile_on_ground_surface(tile)
+
         
     def _game_rect_for_tmx_object(self, object_, tiled_tile_width, tiled_tile_height):
         """Tiled object position/size to game-space pixel rect (x, y, w, h)."""
