@@ -1,6 +1,7 @@
 import pygame
 from Trap import Trap
 from Enemy import Enemy
+from Interaction import InteractionContext
 
 class IceClone(Trap):
     def __init__(self, pos, groups, image_path, animation_player, effect_type,
@@ -37,5 +38,28 @@ class IceClone(Trap):
         # Explosion effect, potentially dealing damage
         affected_sprites = pygame.sprite.spritecollide(self, self.groups[0], False, pygame.sprite.collide_circle)
         for sprite in affected_sprites:
-            if isinstance(sprite, Enemy):  # Assuming there's an Enemy class
-                sprite.get_damage(50, "explosion")  # Deal damage
+            ctx = InteractionContext(
+                kind="damage",
+                source_kind=getattr(self, "source_kind", "special"),
+                source=getattr(self, "owner", self),
+                owner=getattr(self, "owner", None),
+                source_team=getattr(self, "source_team", None)
+                or getattr(getattr(self, "owner", None), "team_id", "neutral"),
+                target=sprite,
+                amount=getattr(self, "amount", 50) or 50,
+                attack_type=getattr(self, "attack_type", "explosion"),
+                tags=set(getattr(self, "tags", {"special"})),
+            )
+            resolver = None
+            if hasattr(self, "owner") and self.owner is not None:
+                owner_level = getattr(self.owner, "level", None)
+                if owner_level is not None and hasattr(owner_level, "interaction_resolver"):
+                    resolver = owner_level.interaction_resolver
+            if resolver is not None:
+                resolver.apply(ctx)
+            elif hasattr(sprite, "receive_interaction"):
+                if hasattr(sprite, "can_receive_interaction"):
+                    if sprite.can_receive_interaction(ctx):
+                        sprite.receive_interaction(ctx)
+                else:
+                    sprite.receive_interaction(ctx)

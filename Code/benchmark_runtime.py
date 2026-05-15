@@ -88,6 +88,18 @@ class BenchmarkMetrics:
     grass_visible_tiles_total: int = 0
     grass_custom_tiles_total: int = 0
     grass_samples: int = 0
+    interactions_emitted_total: int = 0
+    interactions_resolved_total: int = 0
+    interactions_rejected_team: int = 0
+    interactions_rejected_target: int = 0
+    interactions_damage_applied_total: int = 0
+    interactions_effect_state_total: int = 0
+    interactions_rejected_missing_target: int = 0
+    interactions_rejected_team_policy: int = 0
+    interactions_rejected_target_gate: int = 0
+    interactions_rejected_no_receive: int = 0
+    aggro_checks_total: int = 0
+    aggro_allowed_total: int = 0
 
     def reset(self):
         self.frame_times_ms.clear()
@@ -102,6 +114,18 @@ class BenchmarkMetrics:
         self.grass_visible_tiles_total = 0
         self.grass_custom_tiles_total = 0
         self.grass_samples = 0
+        self.interactions_emitted_total = 0
+        self.interactions_resolved_total = 0
+        self.interactions_rejected_team = 0
+        self.interactions_rejected_target = 0
+        self.interactions_damage_applied_total = 0
+        self.interactions_effect_state_total = 0
+        self.interactions_rejected_missing_target = 0
+        self.interactions_rejected_team_policy = 0
+        self.interactions_rejected_target_gate = 0
+        self.interactions_rejected_no_receive = 0
+        self.aggro_checks_total = 0
+        self.aggro_allowed_total = 0
 
     def record_frame(self, dt_seconds: float):
         self.frame_times_ms.append(max(0.0, dt_seconds) * 1000.0)
@@ -129,6 +153,42 @@ class BenchmarkMetrics:
 
     def record_grass_force_call(self):
         self.grass_force_calls += 1
+
+    def record_interaction_emitted(self):
+        self.interactions_emitted_total += 1
+
+    def record_interaction_resolved(self, ctx):
+        self.interactions_resolved_total += 1
+        kind = getattr(ctx, "kind", None)
+        if kind == "damage":
+            self.interactions_damage_applied_total += 1
+        elif kind == "effect_state":
+            self.interactions_effect_state_total += 1
+
+    def record_interaction_rejected_team(self):
+        self.interactions_rejected_team += 1
+
+    def record_interaction_rejected_target(self):
+        self.interactions_rejected_target += 1
+
+    def record_interaction_rejected_reason(self, reason: str):
+        if reason == "missing_target":
+            self.interactions_rejected_missing_target += 1
+        elif reason == "team_policy":
+            self.interactions_rejected_team_policy += 1
+        elif reason == "target_gate":
+            self.interactions_rejected_target_gate += 1
+        elif reason == "no_receive_interaction":
+            self.interactions_rejected_no_receive += 1
+
+    def record_aggro_check(self, allowed: bool):
+        self.aggro_checks_total += 1
+        if allowed:
+            self.aggro_allowed_total += 1
+
+    # Backward-compatible alias if any caller uses old method name.
+    def record_aggro_checks(self, allowed: bool):
+        self.record_aggro_check(allowed)
 
     def snapshot(self) -> Dict[str, float]:
         frame_count = len(self.frame_times_ms)
@@ -158,6 +218,18 @@ class BenchmarkMetrics:
             "grass_custom_tiles": (
                 self.grass_custom_tiles_total / grass_samples if grass_samples else 0.0
             ),
+            "interactions_emitted_total": self.interactions_emitted_total,
+            "interactions_resolved_total": self.interactions_resolved_total,
+            "interactions_rejected_team": self.interactions_rejected_team,
+            "interactions_rejected_target": self.interactions_rejected_target,
+            "interactions_damage_applied_total": self.interactions_damage_applied_total,
+            "interactions_effect_state_total": self.interactions_effect_state_total,
+            "interactions_rejected_missing_target": self.interactions_rejected_missing_target,
+            "interactions_rejected_team_policy": self.interactions_rejected_team_policy,
+            "interactions_rejected_target_gate": self.interactions_rejected_target_gate,
+            "interactions_rejected_no_receive": self.interactions_rejected_no_receive,
+            "aggro_checks_total": self.aggro_checks_total,
+            "aggro_allowed_total": self.aggro_allowed_total,
         }
 
 
@@ -238,7 +310,7 @@ class BenchmarkRuntimeState:
         self.last_metrics_log_at = now
         snap = self.metrics.snapshot()
         _bench_log.debug(
-            "BENCHMARK_METRICS run=%s backend=%s floor=%s cap=%s frames=%s avg_fps=%.2f avg_ms=%.2f p95_ms=%.2f queries=%s candidates=%s resolved=%s maint(i/r/u)=%s/%s/%s",
+            "BENCHMARK_METRICS run=%s backend=%s floor=%s cap=%s frames=%s avg_fps=%.2f avg_ms=%.2f p95_ms=%.2f queries=%s candidates=%s resolved=%s maint(i/r/u)=%s/%s/%s interactions(e/r/tgt/team/dmg/eff)=%s/%s/%s/%s/%s/%s rejects(miss/team/gate/norecv)=%s/%s/%s/%s aggro(c/a)=%s/%s",
             self.run_label,
             self.broadphase_backend,
             self.pushback_floor_enabled,
@@ -253,6 +325,18 @@ class BenchmarkRuntimeState:
             snap["maintenance_insert"],
             snap["maintenance_remove"],
             snap["maintenance_upsert"],
+            snap["interactions_emitted_total"],
+            snap["interactions_resolved_total"],
+            snap["interactions_rejected_target"],
+            snap["interactions_rejected_team"],
+            snap["interactions_damage_applied_total"],
+            snap["interactions_effect_state_total"],
+            snap["interactions_rejected_missing_target"],
+            snap["interactions_rejected_team_policy"],
+            snap["interactions_rejected_target_gate"],
+            snap["interactions_rejected_no_receive"],
+            snap["aggro_checks_total"],
+            snap["aggro_allowed_total"],
         )
 
     def should_auto_stop(self) -> bool:

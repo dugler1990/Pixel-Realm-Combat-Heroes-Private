@@ -127,7 +127,13 @@ class AnimationPlayer:
                          movement=None,
                          is_moving=False,
                          total_distance=0,
-                         frame_duration=100):
+                         frame_duration=100,
+                         owner=None,
+                         source_team=None,
+                         source_kind=None,
+                         attack_type=None,
+                         amount=None,
+                         interaction_tags=None):
         
         animation_frames = self.frames[animation_type]
         
@@ -140,7 +146,13 @@ class AnimationPlayer:
                        is_moving=is_moving,
                        total_distance=total_distance,
                        frame_duration=frame_duration,
-                       quadtree=quadtree)
+                       quadtree=quadtree,
+                       owner=owner,
+                       source_team=source_team,
+                       source_kind=source_kind,
+                       attack_type=attack_type,
+                       amount=amount,
+                       interaction_tags=interaction_tags)
 
         # Register particle in the quadtree
         
@@ -168,7 +180,13 @@ class ParticleEffect(pygame.sprite.Sprite):
                  movement=None,
                  is_moving=False,
                  total_distance=0,
-                 frame_duration=100):
+                 frame_duration=100,
+                 owner=None,
+                 source_team=None,
+                 source_kind=None,
+                 attack_type=None,
+                 amount=None,
+                 interaction_tags=None):
         
         super().__init__(groups)
         self.frames = frames
@@ -185,6 +203,13 @@ class ParticleEffect(pygame.sprite.Sprite):
         self.last_update = pygame.time.get_ticks()
         self.animation_speed = frame_duration  # Time in milliseconds between frames
         self.sprite_type = "magic"
+        self.owner = owner
+        self.source_team = source_team or getattr(owner, "team_id", None)
+        self.source_kind = source_kind or ("enemy_projectile" if self.source_team == "enemy" else "player_attack")
+        self.attack_type = attack_type or self.sprite_type
+        self.interaction_kind = "damage"
+        self.amount = amount
+        self.tags = set(interaction_tags or [])
         self.quadtree = quadtree
         self.id = id(self)
         

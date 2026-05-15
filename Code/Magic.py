@@ -42,12 +42,20 @@ class MagicPlayer:
                     offset_x = (direction.x * i) * TILESIZE
                     x = player.rect.centerx + offset_x + randint(-TILESIZE // 3, TILESIZE // 3)
                     y = player.rect.centery + randint(-TILESIZE // 3, TILESIZE // 3)
-                    self.animation_player.create_particles("flame", (x, y), groups)
+                    self.animation_player.create_particles("flame", (x, y), groups,
+                                                          owner=player,
+                                                          source_team=getattr(player, "team_id", "player"),
+                                                          source_kind="player_attack",
+                                                          attack_type="magic")
                 else: # Vertical
                     offset_y = (direction.y * i) * TILESIZE
                     x = player.rect.centerx + randint(-TILESIZE // 3, TILESIZE // 3)
                     y = player.rect.centery + offset_y + randint(-TILESIZE // 3, TILESIZE // 3)
-                    self.animation_player.create_particles("flame", (x, y), groups, is_moving=False)
+                    self.animation_player.create_particles("flame", (x, y), groups, is_moving=False,
+                                                          owner=player,
+                                                          source_team=getattr(player, "team_id", "player"),
+                                                          source_kind="player_attack",
+                                                          attack_type="magic")
     
     
     def ice_ball(self, player, cost, groups):
@@ -83,7 +91,11 @@ class MagicPlayer:
                                                     movement=movement,
                                                     total_distance=total_distance,
                                                     frame_duration=frame_duration,                                                    
-                                                    is_moving=True)
+                                                    is_moving=True,
+                                                    owner=player,
+                                                    source_team=getattr(player, "team_id", "player"),
+                                                    source_kind="player_attack",
+                                                    attack_type="magic")
             return particle
 
               

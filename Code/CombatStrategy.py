@@ -108,12 +108,12 @@ class MeleeCombatStrategy(CombatStrategy):
         self.melee_attacks = melee_attacks
         
 
-    def decide_action(self, enemy, player):
+    def decide_action(self, enemy, target):
         # assumes offensive stance initially
         # this guy has no other stance atm anyway
         if not hasattr(enemy,"movement_state") :
             enemy.movement_state = 'offensive'
-        distance, _ = enemy.get_player_distance_direction(player)
+        distance, _ = enemy.get_target_distance_direction(target)
         if distance <= enemy.combat_config['melee_attack_radius'] and enemy.can_attack:
             enemy.current_attack_type = "melee"
             enemy.movement_state = 'offensive'
@@ -127,8 +127,8 @@ class MeleeCombatStrategy(CombatStrategy):
             enemy.status = "idle"
             
 
-    def execute_attack(self, enemy, player):
-        if self.handle_special_attacks(enemy, player):
+    def execute_attack(self, enemy, target):
+        if self.handle_special_attacks(enemy, target):
             return 
         
         current_time = pygame.time.get_ticks()
@@ -140,18 +140,18 @@ class MeleeCombatStrategy(CombatStrategy):
                 
                 # colision for enemy attack without distance
                 
-                distance_to_player = Vector2(enemy.rect.center).distance_to(player.rect.center)
+                distance_to_player = Vector2(enemy.rect.center).distance_to(target.rect.center)
                 if distance_to_player <= enemy.combat_config["melee_attack_radius"]:
                     attack = random.choice(self.melee_attacks)
-                    #self.combat_context["damage_player"](attack['damage'], "melee")
-                    player.get_damage( attack['damage'],"melee" )  
+                    if "enemy_melee_hit" in self.combat_context:
+                        self.combat_context["enemy_melee_hit"](enemy, target, attack)
                     enemy.attack_sound.play()
                     enemy.attack_cooldown = attack['cooldown']
                     enemy.direction = Vector2(0, 0) 
     
-    def move(self, enemy, player):
+    def move(self, enemy, target):
         if enemy.status != "attack":  # Only move if not attacking
-            distance, direction = enemy.get_player_distance_direction(player)
+            distance, direction = enemy.get_target_distance_direction(target)
             if enemy.movement_state == 'offensive':
                 enemy.direction = direction
             elif enemy.movement_state == 'defensive':
@@ -182,10 +182,10 @@ class RangedCombatStrategy(CombatStrategy):
                          )
         self.ranged_attacks = ranged_attacks
 
-    def decide_action(self, enemy, player):
+    def decide_action(self, enemy, target):
         if not hasattr(enemy,"movement_state") :
             enemy.movement_state = 'defensive'
-        distance, _ = enemy.get_player_distance_direction(player)
+        distance, _ = enemy.get_target_distance_direction(target)
         if distance <= enemy.combat_config["ranged_attack_radius"] and enemy.can_attack:
             enemy.current_attack_type = "ranged"
             enemy.movement_state = 'defensive'
@@ -195,8 +195,8 @@ class RangedCombatStrategy(CombatStrategy):
             enemy.movement_state = 'defensive'
             enemy.status = "move"
 
-    def execute_attack(self, enemy, player):
-        if self.handle_special_attacks(enemy, player):
+    def execute_attack(self, enemy, target):
+        if self.handle_special_attacks(enemy, target):
             return 
         
         current_time = pygame.time.get_ticks()
@@ -207,16 +207,18 @@ class RangedCombatStrategy(CombatStrategy):
             if enemy.current_attack_type == "ranged":
                 attack = random.choice(self.ranged_attacks)
                 self.combat_context["fire_projectile"](enemy_pos=enemy.rect.center,
-                                                     target_pos=player.rect.center,
+                                                     target_pos=target.rect.center,
                                                      projectile_type=attack['type'],
-                                                     groups=enemy.groups)
+                                                     groups=enemy.groups,
+                                                     owner=enemy,
+                                                     source_team=getattr(enemy, "team_id", None))
                 enemy.attack_sound.play()
                 enemy.attack_cooldown = attack['cooldown']
                 enemy.direction = Vector2(0, 0) 
     
-    def move(self, enemy, player):
+    def move(self, enemy, target):
         if enemy.status != "attack":  # Only move if not attacking
-            distance, direction = enemy.get_player_distance_direction(player)
+            distance, direction = enemy.get_target_distance_direction(target)
             if enemy.movement_state == 'defensive':
                 enemy.direction = -direction
             elif enemy.movement_state == 'evasive':
@@ -252,10 +254,10 @@ class MixedCombatStrategy(CombatStrategy):
         self.evasion_start_time = None
 
         
-    def decide_action(self, enemy, player):
+    def decide_action(self, enemy, target):
         if not hasattr(enemy,"movement_state") :
             enemy.movement_state = 'defensive'
-        distance, _ = enemy.get_player_distance_direction(player)
+        distance, _ = enemy.get_target_distance_direction(target)
         #print(f"decide action distance ; {distance}")
         #print(f" mele radiius: {enemy.combat_config['melee_notice_radius'] }")
         #print(f"ranged radiius: {enemy.combat_config['ranged_attack_radius'] }")
@@ -281,7 +283,7 @@ class MixedCombatStrategy(CombatStrategy):
         # print(f"movement state : {enemy.movement_state}")
         # print(f"attack type : {enemy.current_attack_type}")
 
-    def execute_attack(self, enemy, player):
+    def execute_attack(self, enemy, target):
         
         
         # print(f"in execute attack")
@@ -293,7 +295,7 @@ class MixedCombatStrategy(CombatStrategy):
 
         #print(f"current attack type  : {enemy.current_attack_type}")
 
-        if self.handle_special_attacks(enemy, player):
+        if self.handle_special_attacks(enemy, target):
             
             return 
         
@@ -304,21 +306,23 @@ class MixedCombatStrategy(CombatStrategy):
             enemy.attack_time = current_time
 
             if enemy.current_attack_type == "melee":
-                distance_to_player = Vector2(enemy.rect.center).distance_to(player.rect.center)
+                distance_to_player = Vector2(enemy.rect.center).distance_to(target.rect.center)
                 if distance_to_player <= enemy.combat_config["melee_attack_radius"]:
                     
                     attack = random.choice(self.melee_attacks)
-                    #self.combat_context["damage_player"](attack['damage'], "melee")
-                    player.get_damage( attack['damage'],"melee" ) 
+                    if "enemy_melee_hit" in self.combat_context:
+                        self.combat_context["enemy_melee_hit"](enemy, target, attack)
                     enemy.attack_sound.play()
                     enemy.attack_cooldown = attack['cooldown']
 
             elif enemy.current_attack_type == "ranged":
                 attack = random.choice(self.ranged_attacks)
                 self.combat_context["fire_projectile"](enemy_pos=enemy.rect.center,
-                                     target_pos=player.rect.center,
+                                     target_pos=target.rect.center,
                                      projectile_type=attack['type'],
-                                     groups=enemy.groups)
+                                     groups=enemy.groups,
+                                     owner=enemy,
+                                     source_team=getattr(enemy, "team_id", None))
                 enemy.attack_sound.play()
                 enemy.attack_cooldown = attack['cooldown']
             enemy.direction = Vector2(0, 0)  
@@ -328,8 +332,8 @@ class MixedCombatStrategy(CombatStrategy):
         # print(f"attack : {attack}")
         # print(f"special attacks : {enemy.special_attacks}")
     
-    def move(self, enemy, player):
-        distance, direction = enemy.get_player_distance_direction(player)
+    def move(self, enemy, target):
+        distance, direction = enemy.get_target_distance_direction(target)
         current_time = pygame.time.get_ticks()
 
         # Get the notice radius from the combat config

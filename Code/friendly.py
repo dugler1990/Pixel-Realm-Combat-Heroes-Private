@@ -1,4 +1,5 @@
 import pygame
+import math
 from Settings import *
 from Entity import Entity
 from Support import *
@@ -8,6 +9,7 @@ from CombatStrategy import MeleeCombatStrategy,RangedCombatStrategy,MixedCombatS
 import random
 import os
 import cv2
+from Interaction import InteractionContext
     
 # This is for file importing but is in Main.py anyways
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -36,6 +38,9 @@ class Friendly(Entity):
                          layout_callback_update_quad_tree = layout_callback_update_quad_tree)
         self.groups = groups
         self.sprite_type = "friendly"
+        self.team_id = "friendly"
+        self.recent_attacker_team_id = None
+        self.recent_attacker_until_ms = 0
         
         
         
@@ -454,6 +459,97 @@ class Friendly(Entity):
                 self.health -= player.get_full_magic_damage()
             self.hit_time = pygame.time.get_ticks()
             #self.vulnerable = False
+
+    def can_receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            return True
+        if ctx.kind != "damage":
+            return False
+        if ctx.source_team == self.team_id:
+            return False
+        return True
+
+    def receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            super().receive_interaction(ctx)
+            return
+        if ctx.kind != "damage":
+            return
+        source_team = ctx.source_team
+        if source_team and source_team != self.team_id:
+            self.recent_attacker_team_id = source_team
+            retaliation_window_ms = 12000
+            level = self.combat_context.get("level") if isinstance(self.combat_context, dict) else None
+            resolver = getattr(level, "interaction_resolver", None) if level is not None else None
+            policy = getattr(resolver, "faction_policy", None) if resolver is not None else None
+            configured_window = getattr(policy, "neutral_retaliation_window_ms", None)
+            if isinstance(configured_window, int) and configured_window >= 0:
+                retaliation_window_ms = configured_window
+            self.recent_attacker_until_ms = pygame.time.get_ticks() + retaliation_window_ms
+        source = ctx.source
+        if source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
+            attack_type = "weapon" if ctx.attack_type == "weapon" else "magic"
+            self.get_damage(source, attack_type)
+            return
+        amount = ctx.amount
+        if amount is None:
+            return
+        if self.vulnerable:
+            self.health -= amount
+            self.hit_time = pygame.time.get_ticks()
+
+    def _is_valid_aggro_target(self, candidate):
+        if candidate is self:
+            return False
+        if not hasattr(candidate, "rect"):
+            return False
+        if hasattr(candidate, "health") and getattr(candidate, "health", 1) <= 0:
+            return False
+        return True
+
+    def select_hostile_target(self):
+        level = self.combat_context.get("level") if isinstance(self.combat_context, dict) else None
+        resolver = getattr(level, "interaction_resolver", None) if level is not None else None
+        if resolver is None or level is None:
+            return None
+        visible = getattr(level.layout_manager, "visible_sprites", None)
+        if visible is None:
+            return None
+
+        now = pygame.time.get_ticks()
+        prefer_team = (
+            self.recent_attacker_team_id
+            if now < self.recent_attacker_until_ms
+            else None
+        )
+
+        best_target = None
+        best_distance = math.inf
+        for candidate in visible.sprites():
+            if not self._is_valid_aggro_target(candidate):
+                continue
+            if not resolver.can_aggro(self, candidate):
+                continue
+            if prefer_team is not None and getattr(candidate, "team_id", None) != prefer_team:
+                continue
+            distance, _ = self.get_enemy_distance_direction(candidate)
+            if distance < best_distance:
+                best_distance = distance
+                best_target = candidate
+
+        if best_target is None and prefer_team is not None:
+            # Fallback to any hostile if retaliate team not currently available.
+            for candidate in visible.sprites():
+                if not self._is_valid_aggro_target(candidate):
+                    continue
+                if not resolver.can_aggro(self, candidate):
+                    continue
+                distance, _ = self.get_enemy_distance_direction(candidate)
+                if distance < best_distance:
+                    best_distance = distance
+                    best_target = candidate
+
+        return best_target
     #@profile
     def check_death(self):
         if self.health <= 0:
@@ -493,4 +589,9 @@ class Friendly(Entity):
     def enemy_update(self, player, quadtree=None):
         if not self.frozen:
             #self.get_status(player)
-            self.actions(player,quadtree)
+            target = self.select_hostile_target()
+            if target is None:
+                self.status = "idle"
+                self.direction = pygame.math.Vector2(0, 0)
+                return
+            self.actions(target,quadtree)

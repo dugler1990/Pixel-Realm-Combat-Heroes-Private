@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "teams": ["player", "enemy", "neutral", "friendly", "environment"],
+  "policy_params": {
+    "neutral_retaliation_window_ms": 12000,
+    "strict_matrix_only": false
+  },
+  "damage_matrix": {
+    "player": {
+      "player": false,
+      "enemy": true,
+      "neutral": true,
+      "friendly": true,
+      "environment": true
+    },
+    "enemy": {
+      "player": true,
+      "enemy": false,
+      "neutral": true,
+      "friendly": true,
+      "environment": true
+    },
+    "neutral": {
+      "player": true,
+      "enemy": true,
+      "neutral": false,
+      "friendly": true,
+      "environment": true
+    },
+    "friendly": {
+      "player": true,
+      "enemy": true,
+      "neutral": true,
+      "friendly": false,
+      "environment": true
+    },
+    "environment": {
+      "player": true,
+      "enemy": true,
+      "neutral": true,
+      "friendly": true,
+      "environment": true
+    }
+  },
+  "aggro_matrix": {
+    "player": {
+      "player": false,
+      "enemy": true,
+      "neutral": false,
+      "friendly": false,
+      "environment": false
+    },
+    "enemy": {
+      "player": true,
+      "enemy": false,
+      "neutral": false,
+      "friendly": true,
+      "environment": false
+    },
+    "neutral": {
+      "player": false,
+      "enemy": false,
+      "neutral": false,
+      "friendly": false,
+      "environment": false
+    },
+    "friendly": {
+      "player": false,
+      "enemy": true,
+      "neutral": false,
+      "friendly": false,
+      "environment": false
+    },
+    "environment": {
+      "player": false,
+      "enemy": false,
+      "neutral": false,
+      "friendly": false,
+      "environment": false
+    }
+  }
+}

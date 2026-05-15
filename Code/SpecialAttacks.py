@@ -130,7 +130,9 @@ class MultiShotIceball(SpecialAttack):
                 context["fire_projectile"]( enemy_pos = enemy.rect.center,
                                             target_pos = enemy.rect.center + random_direction * 50,
                                             projectile_type = self.projectile_type,
-                                            groups = enemy.groups)
+                                            groups = enemy.groups,
+                                            owner=enemy,
+                                            source_team=getattr(enemy, "team_id", None))
             enemy.status = 'MultiShotIceball'
             self.last_used_time = pygame.time.get_ticks()
             
@@ -178,7 +180,10 @@ class SummonIceGhosts(SpecialAttack):
                     
                     spawn_pos = self.generate_random_position(enemy.rect.center, self.spawn_radius)
                     _combat_log.debug("spawn pos  : %s", spawn_pos)
-                    context["spawn_enemy"](config = {'type': 'ice_ghost'},
+                    context["spawn_enemy"](config = {
+                                            'type': 'ice_ghost',
+                                            'spawn_team_id': getattr(enemy, "team_id", None),
+                                        },
                                         pos = spawn_pos)
                     _combat_log.debug("supposidly spawned ghost")
             self.is_casting = False

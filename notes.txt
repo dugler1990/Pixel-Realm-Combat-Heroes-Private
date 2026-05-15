@@ -717,6 +717,7 @@ an image, we defo made objects previously so we should do it like that.
 	 	    
 	 	    
 	 	    
+            # Idea to make sort of build, manage the city when you sit on a throne.
 	 
 	 
 	 

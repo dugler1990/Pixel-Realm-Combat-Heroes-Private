@@ -12,6 +12,7 @@ from inputManager import InputManager
 from AttackSelection import AttackSelection
 from Settings import *
 from Support import frames_to_masks
+from Interaction import InteractionContext
 
 class BasePlayer(Entity):
     def __init__(self,
@@ -141,6 +142,7 @@ class BasePlayer(Entity):
         self.weapon_attack_sound.set_volume(0.2)
 
         self.scale_animation()
+        self.team_id = "player"
         
         
     
@@ -155,9 +157,41 @@ class BasePlayer(Entity):
                 if attack_type != 'melee': ## TODO : a at the moment this is recieving attack type to do attack particles, 
                                                     # we do not have any attack particles for this so screw it.
                     # LayoutManager is passed as obstacle_sprites; animation_player lives on level
-                    self.level.animation_player.create_particles(
-                        attack_type, self.rect.center, [self.obstacle_sprites.visible_sprites]
-                    )
+                    animation_player = getattr(self.level, "animation_player", None)
+                    if animation_player is not None and attack_type in getattr(animation_player, "frames", {}):
+                        animation_player.create_particles(
+                            attack_type, self.rect.center, [self.obstacle_sprites.visible_sprites]
+                        )
+
+    def can_receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            return True
+        if ctx.kind != "damage":
+            return False
+        if ctx.source_team == self.team_id:
+            return False
+        return True
+
+    def receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            super().receive_interaction(ctx)
+            return
+        if ctx.kind != "damage":
+            return
+        amount = ctx.amount
+        if amount is None:
+            source = ctx.source
+            if source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
+                if ctx.attack_type == "weapon":
+                    amount = source.get_full_weapon_damage()
+                else:
+                    amount = source.get_full_magic_damage()
+        if amount is None:
+            return
+        if ctx.source_kind == "environment":
+            self.take_environmental_damage(amount, ctx.attack_type)
+            return
+        self.get_damage(amount, ctx.attack_type)
 
     def take_environmental_damage(self, amount, damage_type):
         """Apply environmental damage (e.g. heat); reuses vulnerability via get_damage. No attack_type so particle branch is skipped until environmental types are defined."""

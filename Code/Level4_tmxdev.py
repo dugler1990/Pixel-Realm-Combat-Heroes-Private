@@ -52,6 +52,7 @@ from hashRect import HashableRect
 from Entity import Entity
 from tmx_layout_manager import LayoutManager
 from benchmark_runtime import BENCHMARK_RUNTIME
+from Interaction import InteractionContext, InteractionResolver
 #with open('triggers.json',r) as file
 #triggers = json.loads(file.read())
 
@@ -217,6 +218,7 @@ class Level4:
         self.attack_sprites = pygame.sprite.Group()
         self.attackable_sprites = pygame.sprite.Group()
         self.enemy_attack_sprites = pygame.sprite.Group()
+        self.interaction_resolver = InteractionResolver(telemetry_sink=self.benchmark_runtime.metrics)
 
 
         if layout_manager :
@@ -1137,6 +1139,11 @@ class Level4:
             # Add the particle to the enemy_attack_sprites group
             if not projectile.groups().__contains__(self.enemy_attack_sprites):
                 self.enemy_attack_sprites.add(projectile)
+            owner_team = getattr(getattr(projectile, "owner", None), "team_id", None)
+            projectile.source_team = owner_team if owner_team is not None else "enemy"
+            projectile.source_kind = "enemy_projectile"
+            projectile.attack_type = "magic"
+            projectile.owner = None
             
                     
                 
@@ -1179,9 +1186,29 @@ class Level4:
                 collision_sprites = pygame.sprite.spritecollide(attack_sprite, self.attackable_sprites, False)
                 if collision_sprites:
                     for target_sprite in collision_sprites:
-                        # Assuming 'physical' or 'magic' as example attack types
-                        attack_type = 'physical' if attack_sprite.sprite_type == 'weapon' else 'magic'
-                        target_sprite.get_damage(self.player, attack_type)
+                        if target_sprite is self.player:
+                            continue
+                        attack_type = getattr(
+                            attack_sprite,
+                            "attack_type",
+                            "weapon" if attack_sprite.sprite_type == "weapon" else "magic",
+                        )
+                        ctx = InteractionContext(
+                            kind=getattr(attack_sprite, "interaction_kind", "damage"),
+                            source_kind=getattr(attack_sprite, "source_kind", "player_attack"),
+                            source=getattr(attack_sprite, "owner", self.player),
+                            owner=getattr(attack_sprite, "owner", self.player),
+                            source_team=getattr(
+                                attack_sprite,
+                                "source_team",
+                                getattr(self.player, "team_id", "player"),
+                            ),
+                            target=target_sprite,
+                            amount=getattr(attack_sprite, "amount", None),
+                            attack_type=attack_type,
+                            tags=set(getattr(attack_sprite, "tags", set())),
+                        )
+                        self.interaction_resolver.apply(ctx)
 
 
     
@@ -1192,11 +1219,38 @@ class Level4:
             for enemy_attack_sprite in self.enemy_attack_sprites:
                 collision_sprites = pygame.sprite.spritecollide(enemy_attack_sprite, [self.player], False)# TODO eventually they should be able to damage all friendly stuff.
                 if collision_sprites:
-                    #print("COLISION NOTICED !!!!!!!!!!!")
                     for target_sprite in collision_sprites:
-                        # TODO : define particle effect with damage amount, 
-                        # also get target resistance etc.
-                        self.damage_player(amount = 10, attack_type = None)
+                        ctx = InteractionContext(
+                            kind=getattr(enemy_attack_sprite, "interaction_kind", "damage"),
+                            source_kind=getattr(enemy_attack_sprite, "source_kind", "enemy_projectile"),
+                            source=getattr(enemy_attack_sprite, "owner", enemy_attack_sprite),
+                            owner=getattr(enemy_attack_sprite, "owner", None),
+                            source_team=getattr(enemy_attack_sprite, "source_team", "enemy"),
+                            target=target_sprite,
+                            amount=getattr(enemy_attack_sprite, "amount", 10),
+                            attack_type=getattr(enemy_attack_sprite, "attack_type", "magic"),
+                            tags=set(getattr(enemy_attack_sprite, "tags", set())),
+                        )
+                        self.interaction_resolver.apply(ctx)
+
+    def emit_enemy_melee_hit(self, enemy, target, attack):
+        amount = None
+        attack_type = "melee"
+        if isinstance(attack, dict):
+            amount = attack.get("damage")
+            attack_type = attack.get("type", "melee")
+        ctx = InteractionContext(
+            kind="damage",
+            source_kind="enemy_melee",
+            source=enemy,
+            owner=enemy,
+            source_team=getattr(enemy, "team_id", "enemy"),
+            target=target,
+            amount=amount,
+            attack_type=attack_type,
+            tags={"enemy_melee"},
+        )
+        self.interaction_resolver.apply(ctx)
 
 
 
@@ -1388,7 +1442,7 @@ class Level4:
         # Return the direction vector
         return pygame.math.Vector2(direction_x, direction_y)
     #@profile
-    def fire_projectile(self, enemy_pos, target_pos, projectile_type, groups): ### groups not actually used, we pass level references to the groups explicitely below , regardles,, this could be confusing ISSUE
+    def fire_projectile(self, enemy_pos, target_pos, projectile_type, groups, owner=None, source_team=None): ### groups not actually used, we pass level references to the groups explicitely below , regardles,, this could be confusing ISSUE
     
         # Calculate the angle to the target
         angle_to_target = self.calculate_angle(enemy_pos, target_pos)
@@ -1396,6 +1450,15 @@ class Level4:
         rounded_angle = self.round_angle(angle_to_target)
         # Determine the direction vector based on the rounded angle
         direction = self.get_direction_from_angle(rounded_angle)
+        resolved_owner = owner
+        if resolved_owner is None and groups:
+            for sprite in groups:
+                if hasattr(sprite, "team_id"):
+                    resolved_owner = sprite
+                    break
+        resolved_source_team = source_team
+        if resolved_source_team is None:
+            resolved_source_team = getattr(resolved_owner, "team_id", "enemy")
         # Invoke the method responsible for creating the projectile, passing in the direction
         self.animation_player.create_particles(animation_type = projectile_type,
                                                pos = enemy_pos,
@@ -1404,7 +1467,11 @@ class Level4:
                                                quadtree=self.layout_manager.entity_quad_tree,
                                                direction=direction*12,# TODO :actually controls speed, i need to unify how i do it in magic and here, two similar params
                                                is_moving = True,
-                                               total_distance=1000
+                                               total_distance=1000,
+                                               owner=resolved_owner,
+                                               source_team=resolved_source_team,
+                                               source_kind="enemy_projectile",
+                                               attack_type="magic"
                                                )
 
 
@@ -1617,7 +1684,7 @@ class Level4:
 
 
                 if hasattr(sprite, 'enemy_update'):
-                    sprite.enemy_update(self.player,self.layout_manager.entity_quad_tree)
+                    sprite.enemy_update(None, self.layout_manager.entity_quad_tree)
                 elif isinstance( sprite, Trap):
                     enemies_in_range = self.check_trap_triggers(sprite)
                     # Prolly pass  enemies to activate to freeze them n that.

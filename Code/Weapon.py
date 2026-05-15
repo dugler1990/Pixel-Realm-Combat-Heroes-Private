@@ -3,6 +3,13 @@ class Weapon(pygame.sprite.Sprite):
     def __init__(self, player, groups):
         super().__init__(groups)
         self.sprite_type = "weapon"
+        self.owner = player
+        self.source_team = getattr(player, "team_id", "player")
+        self.source_kind = "player_attack"
+        self.attack_type = "weapon"
+        self.interaction_kind = "damage"
+        self.tags = {"weapon", "player_attack"}
+        self.amount = None
         direction = player.status.split("_")[0]
         direction = direction.capitalize()
         # Graphics

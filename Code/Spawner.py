@@ -48,6 +48,14 @@ class Spawner:
             getattr(level, "global_spawn_limits", None)
         )
 
+    def _resolve_source_team(self, owner=None, explicit_team=None, fallback_team="neutral"):
+        if isinstance(explicit_team, str) and explicit_team.strip():
+            return explicit_team.strip()
+        owner_team = getattr(owner, "team_id", None)
+        if isinstance(owner_team, str) and owner_team.strip():
+            return owner_team.strip()
+        return fallback_team
+
     def spawn_trap(self, trap_config):
         # Check the type of trap to spawn based on a key in the configuration, for example:
         if trap_config['class'] == IceClone:
@@ -66,6 +74,16 @@ class Spawner:
                 health=trap_config.get('health', 100),
                 exp_value=trap_config.get('exp_value', 0)
             )
+            trap.owner = trap_config.get('owner')
+            trap.source_team = self._resolve_source_team(
+                owner=trap.owner,
+                explicit_team=trap_config.get('source_team'),
+                fallback_team="neutral",
+            )
+            trap.source_kind = trap_config.get('source_kind', 'special')
+            trap.attack_type = trap_config.get('attack_type', trap_config.get('effect_type', 'special'))
+            trap.amount = trap_config.get('amount')
+            trap.tags = set(trap_config.get('tags', {'special'}))
             #print(trap_config)
         else:
             # Default to the general Trap class if no specific class is required
@@ -83,6 +101,16 @@ class Spawner:
                 health=trap_config.get('health', 100),
                 exp_value=trap_config.get('exp_value', 50)
             )
+            trap.owner = trap_config.get('owner')
+            trap.source_team = self._resolve_source_team(
+                owner=trap.owner,
+                explicit_team=trap_config.get('source_team'),
+                fallback_team="neutral",
+            )
+            trap.source_kind = trap_config.get('source_kind', 'trap')
+            trap.attack_type = trap_config.get('attack_type', trap_config.get('effect_type', 'trap'))
+            trap.amount = trap_config.get('amount')
+            trap.tags = set(trap_config.get('tags', {'trap'}))
     
         # Adding the trap to sprite groups is handled in the Trap's __init__, so we just return the trap
         return trap
@@ -115,7 +143,7 @@ class Spawner:
         })
         _spawner_log.debug(
             "Added spawn area object_id=%r anchor=(%.2f, %.2f) matrix=%dx%d enemy_keys=%s neutral_keys=%s "
-            "frequency=%s spawn_limits=%s spawn_number=%s distance=%s",
+            "frequency=%s spawn_limits=%s spawn_number=%s distance=%s spawn_team_id=%r",
             obj_info.get("object_id"),
             float(obj_info.get("anchor_tx", 0.0)),
             float(obj_info.get("anchor_ty", 0.0)),
@@ -127,6 +155,7 @@ class Spawner:
             spawner_config.get("spawn_limits"),
             spawner_config.get("spawn_number"),
             spawner_config.get("distance", 2000),
+            spawner_config.get("spawn_team_id"),
         )
 
     def _set_area_debug_state(self, area, state, message, *args):
@@ -423,6 +452,7 @@ class Spawner:
                             'pos': spawn_pos,
                             'attributes': attrs if isinstance(attrs, dict) else {},
                             '_spawn_source_object_id': source_object_id,
+                            'spawn_team_id': config.get('spawn_team_id'),
                         }
                         self.spawn_neutral(spawn_cfg)
                         continue
@@ -441,6 +471,7 @@ class Spawner:
                         'fire_projectile': fire_projectile,
                         'special_attacks': special_attacks,
                         '_spawn_source_object_id': source_object_id,
+                        'spawn_team_id': config.get('spawn_team_id'),
                     }
                     if 'item_drop_info' in config:
                         spawn_cfg['item_drop_info'] = config['item_drop_info']
@@ -478,9 +509,14 @@ class Spawner:
 
 
     def generate_combat_context(self, level, combat_config):
-        context = {}
+        context = {
+            "level": level,
+            "default_target": level.player,
+        }
         if 'damage_player' in combat_config.keys():# keys is not the best, its got True False atm for no reason , no biggy TODO:
             context['damage_player'] = level.damage_player
+        if 'damage_player' in combat_config.keys():
+            context['enemy_melee_hit'] = level.emit_enemy_melee_hit
         if 'fire_projectile' in combat_config.keys():
             context['fire_projectile'] = level.fire_projectile
         if 'redirect_projectile' in combat_config.keys():
@@ -559,11 +595,14 @@ class Spawner:
                         special_attacks=special_attacks,
                         persistent=config.get('persistent', False),
                         item_drop_info=item_drop_info )
+        spawn_team_id = config.get("spawn_team_id")
+        if isinstance(spawn_team_id, str) and spawn_team_id.strip():
+            enemy.team_id = spawn_team_id.strip()
         enemy._spawn_source_object_id = config.get('_spawn_source_object_id')
         enemy._spawn_type = str(config.get('type', ''))
         self.enemies.append(enemy)
         _spawner_log.debug(
-            "Spawned enemy type=%s tile_pos=(%.2f, %.2f) pixel_pos=(%.1f, %.1f) persistent=%s source_object_id=%r",
+            "Spawned enemy type=%s tile_pos=(%.2f, %.2f) pixel_pos=(%.1f, %.1f) persistent=%s source_object_id=%r team_id=%r",
             config['type'],
             float(pos[0]),
             float(pos[1]),
@@ -571,6 +610,7 @@ class Spawner:
             float(scaled_pos[1]),
             config.get('persistent', False),
             config.get('_spawn_source_object_id'),
+            getattr(enemy, "team_id", None),
         )
         
 
@@ -604,11 +644,14 @@ class Spawner:
                     layout_callback_update_quad_tree = self.layout_callback_update_quad_tree,
                     **attributes
                  )
+                spawn_team_id = config.get("spawn_team_id")
+                if isinstance(spawn_team_id, str) and spawn_team_id.strip():
+                    neutral_character.team_id = spawn_team_id.strip()
                 neutral_character._spawn_source_object_id = config.get('_spawn_source_object_id')
                 neutral_character._spawn_type = str(char_type)
                 self.neutral_characters.append(neutral_character)
                 _spawner_log.debug(
-                    "Spawned neutral type=%s tile_pos=(%.2f, %.2f) pixel_pos=(%.1f, %.1f) attrs_keys=%s source_object_id=%r",
+                    "Spawned neutral type=%s tile_pos=(%.2f, %.2f) pixel_pos=(%.1f, %.1f) attrs_keys=%s source_object_id=%r team_id=%r",
                     char_type,
                     float(pos[0]),
                     float(pos[1]),
@@ -616,6 +659,7 @@ class Spawner:
                     float(scaled_pos[1]),
                     sorted(attributes.keys()),
                     config.get('_spawn_source_object_id'),
+                    getattr(neutral_character, "team_id", None),
                 )
             except TypeError as e:
                 _spawner_log.debug("Failed to spawn neutral %s: %s", char_type, e)

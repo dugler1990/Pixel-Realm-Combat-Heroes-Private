@@ -6,8 +6,9 @@ import math
 from hashRect import HashableRect
 from game_logging import get_collision_mask_logger
 from Support import print_mask
-from Effect import EFFECT_REGISTRY
+from Effect import EFFECT_REGISTRY, SlipperyEffect
 from benchmark_runtime import BENCHMARK_RUNTIME
+from Interaction import InteractionContext
 # This is for file (images specifically) importing (This line changes the directory to where the project is saved)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 MAX_DISPLACEMENT = 5.5
@@ -46,6 +47,8 @@ class Entity(pygame.sprite.Sprite):
         self.move_not_called_before = True
         # Active effects tracking: {effect_area_id: effect_instance}
         self.active_effects = {}
+        # Interaction-driven effect state keyed by effect name, e.g. {"slippery": {...}}
+        self.effect_state = {}
         self.fire_resistance = 0  # Reduces heat (and future fire) damage; can be set from stats later
         if layout_callback_update_quad_tree :
             self.layout_callback_update_quad_tree = layout_callback_update_quad_tree
@@ -101,12 +104,22 @@ class Entity(pygame.sprite.Sprite):
         acceleration_multiplier = 1.0  # Start with normal (1.0)
         friction_samples = []
         
-        for effect in self.active_effects.values():
-            acc_mult = effect.get_acceleration_multiplier()
-            fric_mult = effect.get_friction_multiplier()
-            if acc_mult < acceleration_multiplier:
+        slippery_state = self.effect_state.get("slippery")
+        if slippery_state:
+            acc_mult = slippery_state.get("acceleration_multiplier")
+            fric_mult = slippery_state.get("friction_multiplier")
+            if acc_mult is not None and acc_mult < acceleration_multiplier:
                 acceleration_multiplier = acc_mult
-            friction_samples.append(fric_mult)
+            if fric_mult is not None:
+                friction_samples.append(fric_mult)
+        elif self.active_effects:
+            # Backward-compatible fallback while effect-state migration settles.
+            for effect in self.active_effects.values():
+                acc_mult = effect.get_acceleration_multiplier()
+                fric_mult = effect.get_friction_multiplier()
+                if acc_mult < acceleration_multiplier:
+                    acceleration_multiplier = acc_mult
+                friction_samples.append(fric_mult)
         
         if friction_samples:
             friction_multiplier = sum(friction_samples) / len(friction_samples)
@@ -755,8 +768,8 @@ class Entity(pygame.sprite.Sprite):
 
         _mask_log = get_collision_mask_logger()
 
-        # Track currently colliding effect areas
-        current_effect_area_ids = set()
+        # Track currently colliding effect instances (area + effect key)
+        current_effect_instance_ids = set()
         
         # BROAD PHASE: Use rect for quad tree query (same as entity/obstacle collisions)
         entity_rect = HashableRect(self.rect, self.id)
@@ -882,50 +895,69 @@ class Entity(pygame.sprite.Sprite):
 
                 if do_collision:
                     effect_area_id = effect_area._id
-                    current_effect_area_ids.add(effect_area_id)
 
-                    if _mask_log.isEnabledFor(logging.DEBUG):
-                        _mask_log.debug(
-                            "  Effect in current_effect_area_ids: %s", effect_area_id
-                        )
+                    # Allow mixed effect areas: process each matching registry key independently.
+                    for prop_key, effect_class in EFFECT_REGISTRY.items():
+                        if prop_key not in effect_area.properties:
+                            continue
+                        effect_instance_id = (effect_area_id, prop_key)
+                        current_effect_instance_ids.add(effect_instance_id)
 
-                    # If effect not already active, create and apply it
-                    if effect_area_id not in self.active_effects:
-                        # Look up effect class from registry based on properties
-                        effect_instance = None
-                        for prop_key, effect_class in EFFECT_REGISTRY.items():
-                            if prop_key in effect_area.properties:
-                                effect_instance = effect_class(effect_area.properties)
-                                break
+                        if _mask_log.isEnabledFor(logging.DEBUG):
+                            _mask_log.debug(
+                                "  Effect instance in current set: %s", effect_instance_id
+                            )
 
-                        if effect_instance:
-                            self.active_effects[effect_area_id] = effect_instance
+                        if effect_instance_id not in self.active_effects:
+                            effect_instance = effect_class(effect_area.properties)
+                            self.active_effects[effect_instance_id] = effect_instance
                             effect_instance.apply(self)
+                            self._emit_effect_state_interaction(
+                                effect_key=prop_key,
+                                phase="begin",
+                                effect_instance=effect_instance,
+                                effect_area_id=effect_area_id,
+                            )
                             if _mask_log.isEnabledFor(logging.DEBUG):
                                 _mask_log.debug(
                                     "  Effect APPLIED: %s, velocity: %s",
-                                    effect_area_id,
+                                    effect_instance_id,
                                     self.velocity,
                                 )
+                        else:
+                            effect_instance = self.active_effects[effect_instance_id]
+                            self._emit_effect_state_interaction(
+                                effect_key=prop_key,
+                                phase="tick",
+                                effect_instance=effect_instance,
+                                effect_area_id=effect_area_id,
+                            )
         
         # Remove effects that are no longer colliding
         effects_to_remove = []
-        for effect_area_id, effect_instance in self.active_effects.items():
-            if effect_area_id not in current_effect_area_ids:
+        for effect_instance_id, effect_instance in self.active_effects.items():
+            if effect_instance_id not in current_effect_instance_ids:
                 # Check if effect should persist after exit
                 if not effect_instance.should_persist_after_exit():
                     effect_instance.remove(self)
-                    effects_to_remove.append(effect_area_id)
+                    effect_area_id, effect_key = effect_instance_id
+                    self._emit_effect_state_interaction(
+                        effect_key=effect_key,
+                        phase="end",
+                        effect_instance=effect_instance,
+                        effect_area_id=effect_area_id,
+                    )
+                    effects_to_remove.append(effect_instance_id)
                     if _mask_log.isEnabledFor(logging.DEBUG):
                         _mask_log.debug(
                             "  Effect REMOVED: %s (no longer colliding, velocity: %s)",
-                            effect_area_id,
+                            effect_instance_id,
                             self.velocity,
                         )
         
         # Remove effects that shouldn't persist
-        for effect_area_id in effects_to_remove:
-            del self.active_effects[effect_area_id]
+        for effect_instance_id in effects_to_remove:
+            del self.active_effects[effect_instance_id]
         
         if _mask_log.isEnabledFor(logging.DEBUG):
             if self.active_effects:
@@ -943,17 +975,78 @@ class Entity(pygame.sprite.Sprite):
         """Apply damage from active effects that provide environmental damage (e.g. heat)."""
         #print(f"applying environmental damage")
         #print(self.active_effects)
-        for effect in self.active_effects.values():
+        resolver = self._get_interaction_resolver()
+        for (effect_area_id, effect_key), effect in self.active_effects.items():
             if hasattr(effect, 'get_environmental_damage'):
                 result = effect.get_environmental_damage(self, dt)
                 if result:
                     amount, damage_type = result
                     if amount > 0:
-                        self.take_environmental_damage(amount, damage_type)
+                        ctx = InteractionContext(
+                            kind="damage",
+                            source_kind="environment",
+                            source=effect,
+                            owner=None,
+                            source_team="environment",
+                            target=self,
+                            amount=amount,
+                            attack_type=damage_type,
+                            effect_key=effect_key,
+                            effect_area_id=effect_area_id,
+                            tags={"environment", effect_key},
+                        )
+                        if resolver is not None:
+                            resolver.apply(ctx)
+                        elif self.can_receive_interaction(ctx):
+                            self.receive_interaction(ctx)
+
+    def _get_interaction_resolver(self):
+        if hasattr(self, "level") and hasattr(self.level, "interaction_resolver"):
+            return self.level.interaction_resolver
+        return None
+
+    def _emit_effect_state_interaction(self, effect_key, phase, effect_instance, effect_area_id):
+        ctx = InteractionContext(
+            kind="effect_state",
+            source_kind="environment",
+            source=effect_instance,
+            owner=None,
+            source_team="environment",
+            target=self,
+            phase=phase,
+            effect_key=effect_key,
+            effect_area_id=effect_area_id,
+            tags={"environment", "effect_state", effect_key, phase},
+        )
+        resolver = self._get_interaction_resolver()
+        if resolver is not None:
+            resolver.apply(ctx)
+        elif self.can_receive_interaction(ctx):
+            self.receive_interaction(ctx)
 
     def take_environmental_damage(self, amount, damage_type):
         """Override in subclasses that have health. Base Entity does nothing."""
         pass
+
+    def can_receive_interaction(self, ctx: InteractionContext):
+        return True
+
+    def receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            effect_key = ctx.effect_key
+            if not effect_key:
+                return
+            phase = ctx.phase or "tick"
+            if phase == "end":
+                self.effect_state.pop(effect_key, None)
+                return
+            payload = {"phase": phase, "source": ctx.source}
+            if effect_key == "slippery" and isinstance(ctx.source, SlipperyEffect):
+                payload["acceleration_multiplier"] = ctx.source.get_acceleration_multiplier()
+                payload["friction_multiplier"] = ctx.source.get_friction_multiplier()
+            self.effect_state[effect_key] = payload
+            return
+        return
 
     def line_rect_intersection(start_point, end_point, rect):
         x1, y1 = start_point

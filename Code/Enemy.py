@@ -1,4 +1,5 @@
 import pygame
+import math
 from Settings import *
 from Entity import Entity
 from Support import *
@@ -8,6 +9,7 @@ from CombatStrategy import MeleeCombatStrategy,RangedCombatStrategy,MixedCombatS
 import random
 import os
 import cv2
+from Interaction import InteractionContext
     
 # This is for file importing but is in Main.py anyways
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -52,6 +54,7 @@ class Enemy(Entity):
                          layout_callback_update_quad_tree = layout_callback_update_quad_tree)
         self.groups = groups
         self.sprite_type = "enemy"
+        self.team_id = "enemy"
         
         
         
@@ -348,22 +351,55 @@ class Enemy(Entity):
         # print(f"path : {main_path + animation}")
         # print(f"Loaded animations for {name}: {self.animations}")
 
-    def get_player_distance_direction(self, player):
+    def get_target_distance_direction(self, target):
         #print("getting player distance")
         enemy_vec = pygame.math.Vector2(self.rect.center)
-        player_vec = pygame.math.Vector2(player.rect.center)
+        target_vec = pygame.math.Vector2(target.rect.center)
         #print(player_vec)
-        distance = (player_vec - enemy_vec).magnitude()
+        distance = (target_vec - enemy_vec).magnitude()
         #print(f"player : {player_vec}")
         #print(f"enemy : {enemy_vec}")
         #print(distance)
         
         if distance > 0:
-            direction = (player_vec - enemy_vec).normalize()
+            direction = (target_vec - enemy_vec).normalize()
         else:
             direction = pygame.math.Vector2()
 
         return(distance, direction)
+
+    def get_player_distance_direction(self, player):
+        return self.get_target_distance_direction(player)
+
+    def _is_valid_aggro_target(self, candidate):
+        if candidate is self:
+            return False
+        if not hasattr(candidate, "rect"):
+            return False
+        if hasattr(candidate, "health") and getattr(candidate, "health", 1) <= 0:
+            return False
+        return True
+
+    def select_hostile_target(self):
+        level = self.combat_context.get("level") if isinstance(self.combat_context, dict) else None
+        resolver = getattr(level, "interaction_resolver", None)
+        if resolver is None:
+            return self.combat_context.get("default_target")
+        visible = getattr(level.layout_manager, "visible_sprites", None)
+        if visible is None:
+            return self.combat_context.get("default_target")
+        best_target = None
+        best_distance = math.inf
+        for candidate in visible.sprites():
+            if not self._is_valid_aggro_target(candidate):
+                continue
+            if not resolver.can_aggro(self, candidate):
+                continue
+            distance, _ = self.get_target_distance_direction(candidate)
+            if distance < best_distance:
+                best_distance = distance
+                best_target = candidate
+        return best_target
 
     def get_status(self, player):
         distance = self.get_player_distance_direction(player)[0]
@@ -482,6 +518,33 @@ class Enemy(Entity):
                 self.health -= player.get_full_magic_damage()
             self.hit_time = pygame.time.get_ticks()
             #self.vulnerable = False
+
+    def can_receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            return True
+        if ctx.kind != "damage":
+            return False
+        if ctx.source_team == self.team_id:
+            return False
+        return True
+
+    def receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            super().receive_interaction(ctx)
+            return
+        if ctx.kind != "damage":
+            return
+        source = ctx.source
+        if source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
+            attack_type = "weapon" if ctx.attack_type == "weapon" else "magic"
+            self.get_damage(source, attack_type)
+            return
+        amount = ctx.amount
+        if amount is None:
+            return
+        if self.vulnerable:
+            self.health -= amount
+            self.hit_time = pygame.time.get_ticks()
     #@profile
     def take_environmental_damage(self, amount, damage_type):
         """Apply environmental damage (e.g. heat); uses same vulnerability and invincibility as get_damage."""
@@ -523,4 +586,9 @@ class Enemy(Entity):
     def enemy_update(self, player, quadtree=None):
         if not self.frozen:
             #self.get_status(player)
-            self.actions(player,quadtree)
+            target = self.select_hostile_target()
+            if target is None:
+                self.status = "idle"
+                self.direction = pygame.math.Vector2(0, 0)
+                return
+            self.actions(target,quadtree)

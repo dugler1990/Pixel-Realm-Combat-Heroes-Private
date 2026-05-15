@@ -3,6 +3,7 @@ import random
 from Settings import TILESIZE
 
 from Entity import Entity
+from Interaction import InteractionContext
 class NeutralCharacter(Entity):
     def __init__(self, pos,
                  groups,
@@ -30,6 +31,7 @@ class NeutralCharacter(Entity):
         self.rect = self.image.get_rect(topleft=pos)
         self.hitbox = self.rect.inflate(0, -10)
         self.interactable_tile_types = interactable_tile_types
+        self.team_id = "neutral"
         self.roam_direction_change_coef = 0.2
         self.direction_vector = ( random.choice([-1, 1]), random.choice([-1, 1]) )
         self.roam_walk_chance = 0.05
@@ -150,6 +152,33 @@ class NeutralCharacter(Entity):
 
     def perform_action(self, action,tile_pos):
         pass
+
+    def can_receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            return True
+        if ctx.kind != "damage":
+            return False
+        if ctx.source_team == self.team_id:
+            return False
+        return True
+
+    def receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            super().receive_interaction(ctx)
+            return
+        if ctx.kind != "damage":
+            return
+        source = ctx.source
+        if source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
+            attack_type = "weapon" if ctx.attack_type == "weapon" else "magic"
+            self.get_damage(source, attack_type)
+            return
+        amount = ctx.amount
+        if amount is None:
+            return
+        if hasattr(self, "vulnerable") and self.vulnerable:
+            self.health -= amount
+            self.hit_time = pygame.time.get_ticks()
 
     def check_interactable_tile_old(self):
         #print(f"rect center : {self.rect.center}")

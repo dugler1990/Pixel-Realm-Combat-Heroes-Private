@@ -1248,6 +1248,22 @@ class LayoutManager:
             if opt in data:
                 config[opt] = data[opt]
 
+        if "spawn_team_id" in data:
+            raw_spawn_team_id = data.get("spawn_team_id")
+            if isinstance(raw_spawn_team_id, str):
+                spawn_team_id = raw_spawn_team_id.strip()
+                if spawn_team_id:
+                    config["spawn_team_id"] = spawn_team_id
+                else:
+                    _tmx_layout_log.debug(
+                        "spawner_config spawn_team_id must be a non-empty string when provided"
+                    )
+            else:
+                _tmx_layout_log.debug(
+                    "spawner_config spawn_team_id must be a string, got %s",
+                    type(raw_spawn_team_id).__name__,
+                )
+
         if "item_drop_info" in data:
             raw_drop = data["item_drop_info"]
             if isinstance(raw_drop, dict):
