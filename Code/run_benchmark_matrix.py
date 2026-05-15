@@ -250,7 +250,7 @@ def run_matrix(
 
     header = (
         "entity_count | backend | grid_cell_size | collision_mode | swarm_n | grass_wind | disturbance | variant | avg_fps | p95_ms | "
-        "grass_ms | grass_visible | grass_custom | grass_force | queries | candidates | resolved | maint_u | i_emit | i_resolve | i_rej_team | i_rej_target | i_damage | i_effect_state | i_rej_missing | i_rej_policy | i_rej_gate | i_rej_norecv | aggro_checks | aggro_allowed"
+        "grass_ms | grass_visible | grass_custom | grass_force | queries | candidates | resolved | maint_u | i_emit | i_resolve | i_rej_team | i_rej_target | i_damage | i_effect_state | i_rej_missing | i_rej_policy | i_rej_gate | i_rej_norecv | aggro_checks | aggro_allowed | i_prefilter_checked | i_prefilter_skipped"
     )
     print("\nComparison table")
     print(header)
@@ -277,14 +277,15 @@ def run_matrix(
             f"{_as_int(row, 'interactions_rejected_team_policy')} | "
             f"{_as_int(row, 'interactions_rejected_target_gate')} | "
             f"{_as_int(row, 'interactions_rejected_no_receive')} | "
-            f"{_as_int(row, 'aggro_checks_total')} | {_as_int(row, 'aggro_allowed_total')}"
+            f"{_as_int(row, 'aggro_checks_total')} | {_as_int(row, 'aggro_allowed_total')} | "
+            f"{_as_int(row, 'interactions_prefilter_checked_total')} | {_as_int(row, 'interactions_prefilter_skipped_total')}"
         )
 
     summary_path = os.path.join(repo_root, "logs", f"benchmark_comparison_{stamp}.md")
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write("# Benchmark Comparison\n\n")
         f.write(header + "\n")
-        f.write("-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-\n")
+        f.write("-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-\n")
         for row in rows:
             grid_cell_size = row.get("grid_cell_size", "") or "-"
             collision_mode = _collision_mode_from_row(row)
@@ -307,7 +308,8 @@ def run_matrix(
                 f"{_as_int(row, 'interactions_rejected_team_policy')} | "
                 f"{_as_int(row, 'interactions_rejected_target_gate')} | "
                 f"{_as_int(row, 'interactions_rejected_no_receive')} | "
-                f"{_as_int(row, 'aggro_checks_total')} | {_as_int(row, 'aggro_allowed_total')}\n"
+                f"{_as_int(row, 'aggro_checks_total')} | {_as_int(row, 'aggro_allowed_total')} | "
+                f"{_as_int(row, 'interactions_prefilter_checked_total')} | {_as_int(row, 'interactions_prefilter_skipped_total')}\n"
             )
     print(f"\nWrote summary: {summary_path}")
     return 0
@@ -336,11 +338,11 @@ def summarize_from_csv(run_prefix, csv_path=None):
         return 1
     header = (
         "entity_count | backend | grid_cell_size | collision_mode | swarm_n | grass_wind | disturbance | variant | avg_fps | p95_ms | "
-        "grass_ms | grass_visible | grass_custom | grass_force | queries | candidates | resolved | maint_u | i_emit | i_resolve | i_rej_team | i_rej_target | i_damage | i_effect_state | i_rej_missing | i_rej_policy | i_rej_gate | i_rej_norecv | aggro_checks | aggro_allowed"
+        "grass_ms | grass_visible | grass_custom | grass_force | queries | candidates | resolved | maint_u | i_emit | i_resolve | i_rej_team | i_rej_target | i_damage | i_effect_state | i_rej_missing | i_rej_policy | i_rej_gate | i_rej_norecv | aggro_checks | aggro_allowed | i_prefilter_checked | i_prefilter_skipped"
     )
     print("\nComparison table")
     print(header)
-    print("-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-")
+    print("-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-")
     for row in rows:
         grid_cell_size = row.get("grid_cell_size", "") or "-"
         collision_mode = _collision_mode_from_row(row)
@@ -363,7 +365,8 @@ def summarize_from_csv(run_prefix, csv_path=None):
             f"{_as_int(row, 'interactions_rejected_team_policy')} | "
             f"{_as_int(row, 'interactions_rejected_target_gate')} | "
             f"{_as_int(row, 'interactions_rejected_no_receive')} | "
-            f"{_as_int(row, 'aggro_checks_total')} | {_as_int(row, 'aggro_allowed_total')}"
+            f"{_as_int(row, 'aggro_checks_total')} | {_as_int(row, 'aggro_allowed_total')} | "
+            f"{_as_int(row, 'interactions_prefilter_checked_total')} | {_as_int(row, 'interactions_prefilter_skipped_total')}"
         )
     return 0
 

@@ -132,7 +132,8 @@ class MultiShotIceball(SpecialAttack):
                                             projectile_type = self.projectile_type,
                                             groups = enemy.groups,
                                             owner=enemy,
-                                            source_team=getattr(enemy, "team_id", None))
+                                            source_team=getattr(enemy, "team_id", None),
+                                            amount=None)
             enemy.status = 'MultiShotIceball'
             self.last_used_time = pygame.time.get_ticks()
             

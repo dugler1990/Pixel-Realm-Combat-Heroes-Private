@@ -482,9 +482,12 @@ class Friendly(Entity):
             level = self.combat_context.get("level") if isinstance(self.combat_context, dict) else None
             resolver = getattr(level, "interaction_resolver", None) if level is not None else None
             policy = getattr(resolver, "faction_policy", None) if resolver is not None else None
-            configured_window = getattr(policy, "neutral_retaliation_window_ms", None)
-            if isinstance(configured_window, int) and configured_window >= 0:
-                retaliation_window_ms = configured_window
+            if policy is not None and hasattr(policy, "resolve_faction"):
+                faction_def = policy.resolve_faction(getattr(self, "team_id", None))
+                if isinstance(faction_def, dict):
+                    configured_window = faction_def.get("retaliation_window_ms")
+                    if isinstance(configured_window, int) and configured_window >= 0:
+                        retaliation_window_ms = configured_window
             self.recent_attacker_until_ms = pygame.time.get_ticks() + retaliation_window_ms
         source = ctx.source
         if source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):

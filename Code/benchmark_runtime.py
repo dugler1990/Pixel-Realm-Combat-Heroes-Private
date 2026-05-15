@@ -100,6 +100,8 @@ class BenchmarkMetrics:
     interactions_rejected_no_receive: int = 0
     aggro_checks_total: int = 0
     aggro_allowed_total: int = 0
+    interactions_prefilter_checked_total: int = 0
+    interactions_prefilter_skipped_total: int = 0
 
     def reset(self):
         self.frame_times_ms.clear()
@@ -126,6 +128,8 @@ class BenchmarkMetrics:
         self.interactions_rejected_no_receive = 0
         self.aggro_checks_total = 0
         self.aggro_allowed_total = 0
+        self.interactions_prefilter_checked_total = 0
+        self.interactions_prefilter_skipped_total = 0
 
     def record_frame(self, dt_seconds: float):
         self.frame_times_ms.append(max(0.0, dt_seconds) * 1000.0)
@@ -186,6 +190,11 @@ class BenchmarkMetrics:
         if allowed:
             self.aggro_allowed_total += 1
 
+    def record_interaction_prefilter(self, skipped: bool):
+        self.interactions_prefilter_checked_total += 1
+        if skipped:
+            self.interactions_prefilter_skipped_total += 1
+
     # Backward-compatible alias if any caller uses old method name.
     def record_aggro_checks(self, allowed: bool):
         self.record_aggro_check(allowed)
@@ -230,6 +239,8 @@ class BenchmarkMetrics:
             "interactions_rejected_no_receive": self.interactions_rejected_no_receive,
             "aggro_checks_total": self.aggro_checks_total,
             "aggro_allowed_total": self.aggro_allowed_total,
+            "interactions_prefilter_checked_total": self.interactions_prefilter_checked_total,
+            "interactions_prefilter_skipped_total": self.interactions_prefilter_skipped_total,
         }
 
 
@@ -310,7 +321,7 @@ class BenchmarkRuntimeState:
         self.last_metrics_log_at = now
         snap = self.metrics.snapshot()
         _bench_log.debug(
-            "BENCHMARK_METRICS run=%s backend=%s floor=%s cap=%s frames=%s avg_fps=%.2f avg_ms=%.2f p95_ms=%.2f queries=%s candidates=%s resolved=%s maint(i/r/u)=%s/%s/%s interactions(e/r/tgt/team/dmg/eff)=%s/%s/%s/%s/%s/%s rejects(miss/team/gate/norecv)=%s/%s/%s/%s aggro(c/a)=%s/%s",
+            "BENCHMARK_METRICS run=%s backend=%s floor=%s cap=%s frames=%s avg_fps=%.2f avg_ms=%.2f p95_ms=%.2f queries=%s candidates=%s resolved=%s maint(i/r/u)=%s/%s/%s interactions(e/r/tgt/team/dmg/eff)=%s/%s/%s/%s/%s/%s rejects(miss/team/gate/norecv)=%s/%s/%s/%s aggro(c/a)=%s/%s prefilter(c/s)=%s/%s",
             self.run_label,
             self.broadphase_backend,
             self.pushback_floor_enabled,
@@ -337,6 +348,8 @@ class BenchmarkRuntimeState:
             snap["interactions_rejected_no_receive"],
             snap["aggro_checks_total"],
             snap["aggro_allowed_total"],
+            snap["interactions_prefilter_checked_total"],
+            snap["interactions_prefilter_skipped_total"],
         )
 
     def should_auto_stop(self) -> bool:

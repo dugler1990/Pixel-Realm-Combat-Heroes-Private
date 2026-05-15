@@ -12,10 +12,10 @@
     "console": false
   },
   "tmx_layout": {
-    "enabled": true,
+    "enabled": false,
     "level": "DEBUG",
     "file": "logs/tmx_layout.log",
-    "console": true
+    "console": false
   },
   "animated_environment": {
     "enabled": false,
@@ -30,10 +30,10 @@
     "console": false
   },
   "combat": {
-    "enabled": false,
+    "enabled": true,
     "level": "DEBUG",
     "file": "logs/combat.log",
-    "console": false
+    "console": true
   },
   "player_item": {
     "enabled": false,
@@ -42,10 +42,10 @@
     "console": false
   },
   "spawner": {
-    "enabled": true,
+    "enabled": false,
     "level": "DEBUG",
     "file": "logs/spawner.log",
-    "console": true
+    "console": false
   },
   "input": {
     "enabled": false,

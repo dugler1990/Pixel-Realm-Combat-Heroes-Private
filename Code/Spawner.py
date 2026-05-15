@@ -56,6 +56,22 @@ class Spawner:
             return owner_team.strip()
         return fallback_team
 
+    def _validate_spawn_team_id(self, spawn_team_id, source_object_id=None):
+        if not isinstance(spawn_team_id, str) or not spawn_team_id.strip():
+            return None
+        normalized = spawn_team_id.strip()
+        resolver = getattr(self.level, "interaction_resolver", None)
+        if resolver is None or not hasattr(resolver, "is_known_team"):
+            return normalized
+        if resolver.is_known_team(normalized):
+            return normalized
+        _spawner_log.warning(
+            "Spawner object_id=%r has unknown spawn_team_id=%r; spawn blocked by policy",
+            source_object_id,
+            normalized,
+        )
+        return None
+
     def spawn_trap(self, trap_config):
         # Check the type of trap to spawn based on a key in the configuration, for example:
         if trap_config['class'] == IceClone:
@@ -447,12 +463,18 @@ class Spawner:
                     if spawn_kind == 'neutral':
                         neutral_attributes = config.get('neutral_attributes') or {}
                         attrs = neutral_attributes.get(spawn_type, {})
+                        validated_team = self._validate_spawn_team_id(
+                            config.get('spawn_team_id'),
+                            source_object_id=source_object_id,
+                        )
+                        if config.get('spawn_team_id') and validated_team is None:
+                            continue
                         spawn_cfg = {
                             'type': spawn_type,
                             'pos': spawn_pos,
                             'attributes': attrs if isinstance(attrs, dict) else {},
                             '_spawn_source_object_id': source_object_id,
-                            'spawn_team_id': config.get('spawn_team_id'),
+                            'spawn_team_id': validated_team,
                         }
                         self.spawn_neutral(spawn_cfg)
                         continue
@@ -471,8 +493,13 @@ class Spawner:
                         'fire_projectile': fire_projectile,
                         'special_attacks': special_attacks,
                         '_spawn_source_object_id': source_object_id,
-                        'spawn_team_id': config.get('spawn_team_id'),
+                        'spawn_team_id': self._validate_spawn_team_id(
+                            config.get('spawn_team_id'),
+                            source_object_id=source_object_id,
+                        ),
                     }
+                    if config.get('spawn_team_id') and spawn_cfg['spawn_team_id'] is None:
+                        continue
                     if 'item_drop_info' in config:
                         spawn_cfg['item_drop_info'] = config['item_drop_info']
                     self.spawn_enemy(spawn_cfg)

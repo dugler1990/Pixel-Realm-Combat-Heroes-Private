@@ -1103,6 +1103,7 @@ class Level4:
         
         
         self.layout_manager.set_player(self.player)
+        self.attackable_sprites.add(self.player)
         self._seed_default_belt_if_needed()
         self.weather = Weather()
         

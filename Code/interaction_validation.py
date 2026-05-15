@@ -2,7 +2,7 @@ import argparse
 import json
 from dataclasses import dataclass
 
-from Interaction import FactionPolicy, InteractionContext, InteractionResolver
+from Interaction import InteractionContext, InteractionResolver
 
 
 @dataclass
@@ -243,46 +243,89 @@ def _run_mixed_effect_route():
 
 def _run_faction_policy_route():
     resolver = InteractionResolver()
-    neutral_target = StubTarget(team_id="neutral", allow=True)
-    enemy_ctx = InteractionContext(
-        kind="damage",
-        source_kind="enemy_projectile",
-        source_team="enemy",
-        target=neutral_target,
-        amount=4,
-        attack_type="magic",
-    )
-    ok_enemy_neutral = resolver.apply(enemy_ctx)
-    # Same-team is still blocked
-    enemy_target = StubTarget(team_id="enemy", allow=True)
-    enemy_friendly_fire = InteractionContext(
-        kind="damage",
-        source_kind="enemy_melee",
-        source_team="enemy",
-        target=enemy_target,
-        amount=4,
-        attack_type="melee",
-    )
-    ok_same_team = resolver.apply(enemy_friendly_fire)
-    # Environment still applies to all.
-    env_target = StubTarget(team_id="friendly", allow=True)
-    env_ctx = InteractionContext(
-        kind="damage",
-        source_kind="environment",
-        source_team="environment",
-        target=env_target,
-        amount=1,
-        attack_type="heat",
-    )
-    ok_env = resolver.apply(env_ctx)
+    enemy1_target = StubTarget(team_id="enemy_1", allow=True)
+    enemy2_target = StubTarget(team_id="enemy_2", allow=True)
+    enemy3_target = StubTarget(team_id="enemy_3", allow=True)
+    ally4_target = StubTarget(team_id="ally_4", allow=True)
+    neutral_passive = StubTarget(team_id="neutral_passive", allow=True)
+    player_target = StubTarget(team_id="player", allow=True)
 
-    passed = ok_enemy_neutral and not ok_same_team and ok_env
+    enemy1_to_enemy2 = resolver.apply(
+        InteractionContext(
+            kind="damage",
+            source_kind="enemy_projectile",
+            source_team="enemy_1",
+            target=enemy2_target,
+            amount=4,
+            attack_type="magic",
+        )
+    )
+    enemy3_to_enemy1 = resolver.apply(
+        InteractionContext(
+            kind="damage",
+            source_kind="enemy_projectile",
+            source_team="enemy_3",
+            target=enemy1_target,
+            amount=4,
+            attack_type="magic",
+        )
+    )
+    ally4_to_enemy3 = resolver.apply(
+        InteractionContext(
+            kind="damage",
+            source_kind="special",
+            source_team="ally_4",
+            target=enemy3_target,
+            amount=4,
+            attack_type="magic",
+        )
+    )
+    ally4_to_player = resolver.apply(
+        InteractionContext(
+            kind="damage",
+            source_kind="special",
+            source_team="ally_4",
+            target=player_target,
+            amount=4,
+            attack_type="magic",
+        )
+    )
+    neutral_passive_to_enemy1 = resolver.apply(
+        InteractionContext(
+            kind="damage",
+            source_kind="neutral_attack",
+            source_team="neutral_passive",
+            target=enemy1_target,
+            amount=4,
+            attack_type="magic",
+        )
+    )
+    env_to_ally4 = resolver.apply(
+        InteractionContext(
+            kind="damage",
+            source_kind="environment",
+            source_team="environment",
+            target=ally4_target,
+            amount=2,
+            attack_type="heat",
+        )
+    )
+
+    passed = (
+        not enemy1_to_enemy2
+        and enemy3_to_enemy1
+        and ally4_to_enemy3
+        and not ally4_to_player
+        and not neutral_passive_to_enemy1
+        and env_to_ally4
+    )
     return ScenarioResult(
         "FactionPolicyRoute",
         passed,
         (
-            f"enemy_to_neutral={ok_enemy_neutral} same_team={ok_same_team} "
-            f"env_to_friendly={ok_env}"
+            f"e1_e2={enemy1_to_enemy2} e3_e1={enemy3_to_enemy1} "
+            f"a4_e3={ally4_to_enemy3} a4_p={ally4_to_player} "
+            f"npass_e1={neutral_passive_to_enemy1} env_a4={env_to_ally4}"
         ),
     )
 
@@ -296,71 +339,63 @@ def _run_aggro_policy_route():
 
     enemy = AggroActor("enemy")
     player = AggroActor("player")
-    neutral = AggroActor("neutral")
-    friendly = AggroActor("friendly")
-    enemy2 = AggroActor("enemy")
+    neutral = AggroActor("neutral_passive")
+    neutral_chaotic = AggroActor("neutral_chaotic")
+    ally4 = AggroActor("ally_4")
+    enemy1 = AggroActor("enemy_1")
+    enemy2 = AggroActor("enemy_2")
+    enemy3 = AggroActor("enemy_3")
 
     # Baseline aggro rules
     enemy_to_player = resolver.can_aggro(enemy, player)
-    enemy_to_neutral = resolver.can_aggro(enemy, neutral)
-    friendly_to_enemy = resolver.can_aggro(friendly, enemy)
-    enemy_to_enemy = resolver.can_aggro(enemy, enemy2)
-    player_to_neutral = resolver.can_aggro(player, neutral)
+    enemy1_to_enemy2 = resolver.can_aggro(enemy1, enemy2)
+    enemy1_to_enemy3 = resolver.can_aggro(enemy1, enemy3)
+    ally4_to_enemy3 = resolver.can_aggro(ally4, enemy3)
+    ally4_to_player = resolver.can_aggro(ally4, player)
+    player_to_neutral_passive = resolver.can_aggro(player, neutral)
+    chaotic_to_enemy1 = resolver.can_aggro(neutral_chaotic, enemy1)
+    chaotic_to_player = resolver.can_aggro(neutral_chaotic, player)
 
     # Neutral retaliation behavior
-    policy: FactionPolicy = resolver.faction_policy
-    policy.register_retaliation(neutral, "enemy", 1000)
-    setattr(neutral, "retaliate_until_ms", 1000 + policy.neutral_retaliation_window_ms)
-    neutral_to_enemy = resolver.can_aggro(neutral, enemy)
+    policy = resolver.faction_policy
+    policy.register_retaliation(neutral, "enemy_1", 1000)
+    faction_def = policy.resolve_faction("neutral_passive") or {}
+    retaliation_window = int(faction_def.get("retaliation_window_ms", 0))
+    setattr(neutral, "retaliate_until_ms", 1000 + retaliation_window)
+    neutral_to_enemy_after_hit = resolver.can_aggro(neutral, enemy1)
 
     passed = (
         enemy_to_player
-        and not enemy_to_neutral
-        and friendly_to_enemy
-        and not enemy_to_enemy
-        and not player_to_neutral
-        and neutral_to_enemy
+        and not enemy1_to_enemy2
+        and enemy1_to_enemy3
+        and ally4_to_enemy3
+        and not ally4_to_player
+        and not player_to_neutral_passive
+        and chaotic_to_enemy1
+        and chaotic_to_player
+        and neutral_to_enemy_after_hit
     )
     return ScenarioResult(
         "AggroPolicyRoute",
         passed,
         (
-            f"e_p={enemy_to_player} e_n={enemy_to_neutral} "
-            f"f_e={friendly_to_enemy} e_e={enemy_to_enemy} p_n={player_to_neutral} "
-            f"n_e_ret={neutral_to_enemy}"
+            f"e_p={enemy_to_player} e1_e2={enemy1_to_enemy2} e1_e3={enemy1_to_enemy3} "
+            f"a4_e3={ally4_to_enemy3} a4_p={ally4_to_player} p_np={player_to_neutral_passive} "
+            f"nc_e1={chaotic_to_enemy1} nc_p={chaotic_to_player} nret_e1={neutral_to_enemy_after_hit}"
         ),
     )
 
 
 def _run_multifaction_spawner_route():
-    policy = FactionPolicy()
-    if "enemy_tribe_a" not in policy.teams:
-        policy.teams.append("enemy_tribe_a")
-    if "enemy_tribe_b" not in policy.teams:
-        policy.teams.append("enemy_tribe_b")
-    policy.strict_matrix_only = True
-    policy.damage_matrix.setdefault("enemy_tribe_a", {})
-    policy.damage_matrix.setdefault("enemy_tribe_b", {})
-    policy.damage_matrix["enemy_tribe_a"]["enemy_tribe_a"] = False
-    policy.damage_matrix["enemy_tribe_a"]["enemy_tribe_b"] = True
-    policy.damage_matrix["enemy_tribe_b"]["enemy_tribe_a"] = True
-    policy.damage_matrix["enemy_tribe_b"]["enemy_tribe_b"] = False
-    policy.aggro_matrix.setdefault("enemy_tribe_a", {})
-    policy.aggro_matrix.setdefault("enemy_tribe_b", {})
-    policy.aggro_matrix["enemy_tribe_a"]["enemy_tribe_a"] = False
-    policy.aggro_matrix["enemy_tribe_a"]["enemy_tribe_b"] = True
-    policy.aggro_matrix["enemy_tribe_b"]["enemy_tribe_a"] = True
-    policy.aggro_matrix["enemy_tribe_b"]["enemy_tribe_b"] = False
+    resolver = InteractionResolver()
 
-    resolver = InteractionResolver(faction_policy=policy)
-
-    a_target = StubTarget(team_id="enemy_tribe_a", allow=True)
-    b_target = StubTarget(team_id="enemy_tribe_b", allow=True)
+    a_target = StubTarget(team_id="enemy_1", allow=True)
+    b_target = StubTarget(team_id="enemy_3", allow=True)
     a_to_b = resolver.apply(
         InteractionContext(
             kind="damage",
             source_kind="enemy_projectile",
-            source_team="enemy_tribe_a",
+            source_team="enemy_1",
             target=b_target,
             amount=6,
             attack_type="magic",
@@ -370,7 +405,7 @@ def _run_multifaction_spawner_route():
         InteractionContext(
             kind="damage",
             source_kind="enemy_projectile",
-            source_team="enemy_tribe_a",
+            source_team="enemy_1",
             target=a_target,
             amount=6,
             attack_type="magic",
@@ -381,8 +416,8 @@ def _run_multifaction_spawner_route():
         def __init__(self, team_id):
             self.team_id = team_id
 
-    tribe_a = AggroActor("enemy_tribe_a")
-    tribe_b = AggroActor("enemy_tribe_b")
+    tribe_a = AggroActor("enemy_1")
+    tribe_b = AggroActor("enemy_3")
     aggro_a_b = resolver.can_aggro(tribe_a, tribe_b)
     aggro_a_a = resolver.can_aggro(tribe_a, tribe_a)
 
@@ -393,6 +428,28 @@ def _run_multifaction_spawner_route():
         (
             f"a_to_b={a_to_b} a_to_a={a_to_a} "
             f"aggro_a_b={aggro_a_b} aggro_a_a={aggro_a_a}"
+        ),
+    )
+
+
+def _run_prefilter_route():
+    resolver = InteractionResolver()
+    can_enemy1_hit_enemy2 = resolver.can_potentially_affect("enemy_1", "enemy_2", "damage")
+    can_enemy3_hit_enemy1 = resolver.can_potentially_affect("enemy_3", "enemy_1", "damage")
+    can_ally4_hit_player = resolver.can_potentially_affect("ally_4", "player", "damage")
+    can_env_hit_enemy1 = resolver.can_potentially_affect("environment", "enemy_1", "damage")
+    passed = (
+        not can_enemy1_hit_enemy2
+        and can_enemy3_hit_enemy1
+        and not can_ally4_hit_player
+        and can_env_hit_enemy1
+    )
+    return ScenarioResult(
+        "PrefilterRoute",
+        passed,
+        (
+            f"e1_e2={can_enemy1_hit_enemy2} e3_e1={can_enemy3_hit_enemy1} "
+            f"a4_p={can_ally4_hit_player} env_e1={can_env_hit_enemy1}"
         ),
     )
 
@@ -445,6 +502,7 @@ def run_validation_suite():
         _run_faction_policy_route(),
         _run_aggro_policy_route(),
         _run_multifaction_spawner_route(),
+        _run_prefilter_route(),
         _run_owner_inheritance_route(),
     ]
     passed = all(s.passed for s in scenarios)

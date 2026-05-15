@@ -12,6 +12,7 @@ from Settings import *
 from game_logging import get_debug_logger
 
 _game_flow_log = get_debug_logger("game_flow")
+_combat_log = get_debug_logger("combat")
 from Tile import Tile
 from Trigger import Trigger
 from Player import SpecificPlayer
@@ -290,6 +291,7 @@ class Level4:
         
         
         self.layout_manager.set_player(self.player)
+        self.attackable_sprites.add(self.player)
         self._seed_default_belt_if_needed()
         self.weather = Weather()
         if self.game_settings:
@@ -1188,21 +1190,30 @@ class Level4:
                     for target_sprite in collision_sprites:
                         if target_sprite is self.player:
                             continue
+                        interaction_kind = getattr(attack_sprite, "interaction_kind", "damage")
+                        source_team = getattr(
+                            attack_sprite,
+                            "source_team",
+                            getattr(self.player, "team_id", "player"),
+                        )
+                        target_team = getattr(target_sprite, "team_id", None)
+                        if not self.interaction_resolver.can_potentially_affect(
+                            source_team=source_team,
+                            target_team=target_team,
+                            kind=interaction_kind,
+                        ):
+                            continue
                         attack_type = getattr(
                             attack_sprite,
                             "attack_type",
                             "weapon" if attack_sprite.sprite_type == "weapon" else "magic",
                         )
                         ctx = InteractionContext(
-                            kind=getattr(attack_sprite, "interaction_kind", "damage"),
+                            kind=interaction_kind,
                             source_kind=getattr(attack_sprite, "source_kind", "player_attack"),
                             source=getattr(attack_sprite, "owner", self.player),
                             owner=getattr(attack_sprite, "owner", self.player),
-                            source_team=getattr(
-                                attack_sprite,
-                                "source_team",
-                                getattr(self.player, "team_id", "player"),
-                            ),
+                            source_team=source_team,
                             target=target_sprite,
                             amount=getattr(attack_sprite, "amount", None),
                             attack_type=attack_type,
@@ -1215,23 +1226,114 @@ class Level4:
     def enemy_projectile_logic(self):
 
         if self.enemy_attack_sprites:
-            #print("ATTACK SPRITES EXIST")
             for enemy_attack_sprite in self.enemy_attack_sprites:
-                collision_sprites = pygame.sprite.spritecollide(enemy_attack_sprite, [self.player], False)# TODO eventually they should be able to damage all friendly stuff.
+                projectile_owner = getattr(enemy_attack_sprite, "owner", None)
+                projectile_owner_team = getattr(projectile_owner, "team_id", None)
+                source_team = getattr(enemy_attack_sprite, "source_team", "enemy")
+                interaction_kind = getattr(enemy_attack_sprite, "interaction_kind", "damage")
+                _combat_log.debug(
+                    "enemy_projectile scan sprite_id=%s owner_id=%s owner_team=%r source_team=%r kind=%r pos=%r",
+                    id(enemy_attack_sprite),
+                    id(projectile_owner) if projectile_owner is not None else None,
+                    projectile_owner_team,
+                    source_team,
+                    interaction_kind,
+                    getattr(getattr(enemy_attack_sprite, "rect", None), "center", None),
+                )
+                collision_sprites = pygame.sprite.spritecollide(enemy_attack_sprite, self.attackable_sprites, False)
+                _combat_log.debug(
+                    "enemy_projectile candidates sprite_id=%s candidate_count=%d target_mode=attackable_group",
+                    id(enemy_attack_sprite),
+                    len(collision_sprites),
+                )
                 if collision_sprites:
                     for target_sprite in collision_sprites:
+                        if target_sprite is projectile_owner or target_sprite is enemy_attack_sprite:
+                            _combat_log.debug(
+                                "enemy_projectile skip sprite_id=%s target_id=%s reason=owner_or_self",
+                                id(enemy_attack_sprite),
+                                id(target_sprite),
+                            )
+                            continue
+                        target_team = getattr(target_sprite, "team_id", None)
+                        prefilter_allowed = self.interaction_resolver.can_potentially_affect(
+                            source_team=source_team,
+                            target_team=target_team,
+                            kind=interaction_kind,
+                        )
+                        _combat_log.debug(
+                            "enemy_projectile prefilter sprite_id=%s target_id=%s target_team=%r allowed=%s",
+                            id(enemy_attack_sprite),
+                            id(target_sprite),
+                            target_team,
+                            prefilter_allowed,
+                        )
+                        if not prefilter_allowed:
+                            continue
                         ctx = InteractionContext(
-                            kind=getattr(enemy_attack_sprite, "interaction_kind", "damage"),
+                            kind=interaction_kind,
                             source_kind=getattr(enemy_attack_sprite, "source_kind", "enemy_projectile"),
                             source=getattr(enemy_attack_sprite, "owner", enemy_attack_sprite),
                             owner=getattr(enemy_attack_sprite, "owner", None),
-                            source_team=getattr(enemy_attack_sprite, "source_team", "enemy"),
+                            source_team=source_team,
                             target=target_sprite,
-                            amount=getattr(enemy_attack_sprite, "amount", 10),
+                            amount=getattr(enemy_attack_sprite, "amount", None),
                             attack_type=getattr(enemy_attack_sprite, "attack_type", "magic"),
                             tags=set(getattr(enemy_attack_sprite, "tags", set())),
                         )
-                        self.interaction_resolver.apply(ctx)
+                        resolved = self.interaction_resolver.apply(ctx)
+                        _combat_log.debug(
+                            "enemy_projectile apply sprite_id=%s target_id=%s target_team=%r resolved=%s amount=%r attack_type=%r",
+                            id(enemy_attack_sprite),
+                            id(target_sprite),
+                            target_team,
+                            resolved,
+                            getattr(enemy_attack_sprite, "amount", 10),
+                            getattr(enemy_attack_sprite, "attack_type", "magic"),
+                        )
+
+    def _safe_number(self, value, default=0.0):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float(default)
+
+    def _resolve_projectile_damage_payload(self, owner, projectile_type=None, base_amount=None):
+        base_damage = base_amount
+        combat_config = {}
+        if owner is not None:
+            owner_config = getattr(owner, "combat_config", None)
+            if isinstance(owner_config, dict):
+                combat_config = owner_config
+        if base_damage is None:
+            ranged_attacks = combat_config.get("ranged_attacks", [])
+            if isinstance(ranged_attacks, list):
+                for attack in ranged_attacks:
+                    if not isinstance(attack, dict):
+                        continue
+                    if projectile_type is not None and attack.get("type") != projectile_type:
+                        continue
+                    candidate = attack.get("damage")
+                    if candidate is not None:
+                        base_damage = candidate
+                        break
+        if base_damage is None:
+            base_damage = combat_config.get("default_ranged_damage")
+        if base_damage is None:
+            return None
+        multiplier = self._safe_number(combat_config.get("projectile_damage_multiplier", 1.0), 1.0)
+        bonus = self._safe_number(combat_config.get("projectile_damage_bonus", 0.0), 0.0)
+        if owner is not None:
+            getter_multiplier = getattr(owner, "get_projectile_damage_multiplier", None)
+            if callable(getter_multiplier):
+                multiplier *= self._safe_number(getter_multiplier(), 1.0)
+            getter_bonus = getattr(owner, "get_projectile_damage_bonus", None)
+            if callable(getter_bonus):
+                bonus += self._safe_number(getter_bonus(), 0.0)
+            multiplier *= self._safe_number(getattr(owner, "projectile_damage_multiplier", 1.0), 1.0)
+            bonus += self._safe_number(getattr(owner, "projectile_damage_bonus", 0.0), 0.0)
+        resolved_damage = int(round(self._safe_number(base_damage, 0.0) * multiplier + bonus))
+        return max(0, resolved_damage)
 
     def emit_enemy_melee_hit(self, enemy, target, attack):
         amount = None
@@ -1239,12 +1341,20 @@ class Level4:
         if isinstance(attack, dict):
             amount = attack.get("damage")
             attack_type = attack.get("type", "melee")
+        source_team = getattr(enemy, "team_id", "enemy")
+        target_team = getattr(target, "team_id", None)
+        if not self.interaction_resolver.can_potentially_affect(
+            source_team=source_team,
+            target_team=target_team,
+            kind="damage",
+        ):
+            return
         ctx = InteractionContext(
             kind="damage",
             source_kind="enemy_melee",
             source=enemy,
             owner=enemy,
-            source_team=getattr(enemy, "team_id", "enemy"),
+            source_team=source_team,
             target=target,
             amount=amount,
             attack_type=attack_type,
@@ -1442,7 +1552,7 @@ class Level4:
         # Return the direction vector
         return pygame.math.Vector2(direction_x, direction_y)
     #@profile
-    def fire_projectile(self, enemy_pos, target_pos, projectile_type, groups, owner=None, source_team=None): ### groups not actually used, we pass level references to the groups explicitely below , regardles,, this could be confusing ISSUE
+    def fire_projectile(self, enemy_pos, target_pos, projectile_type, groups, owner=None, source_team=None, amount=None): ### groups not actually used, we pass level references to the groups explicitely below , regardles,, this could be confusing ISSUE
     
         # Calculate the angle to the target
         angle_to_target = self.calculate_angle(enemy_pos, target_pos)
@@ -1459,6 +1569,19 @@ class Level4:
         resolved_source_team = source_team
         if resolved_source_team is None:
             resolved_source_team = getattr(resolved_owner, "team_id", "enemy")
+        resolved_amount = self._resolve_projectile_damage_payload(
+            owner=resolved_owner,
+            projectile_type=projectile_type,
+            base_amount=amount,
+        )
+        _combat_log.debug(
+            "enemy_projectile payload owner_id=%s projectile_type=%r base_amount=%r resolved_amount=%r source_team=%r",
+            id(resolved_owner) if resolved_owner is not None else None,
+            projectile_type,
+            amount,
+            resolved_amount,
+            resolved_source_team,
+        )
         # Invoke the method responsible for creating the projectile, passing in the direction
         self.animation_player.create_particles(animation_type = projectile_type,
                                                pos = enemy_pos,
@@ -1471,7 +1594,8 @@ class Level4:
                                                owner=resolved_owner,
                                                source_team=resolved_source_team,
                                                source_kind="enemy_projectile",
-                                               attack_type="magic"
+                                               attack_type="magic",
+                                               amount=resolved_amount
                                                )
 
 

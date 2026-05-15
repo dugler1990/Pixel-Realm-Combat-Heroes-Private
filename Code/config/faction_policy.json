@@ -1,82 +1,103 @@
 {
-  "schema_version": 1,
-  "teams": ["player", "enemy", "neutral", "friendly", "environment"],
+  "schema_version": 2,
   "policy_params": {
-    "neutral_retaliation_window_ms": 12000,
-    "strict_matrix_only": false
+    "unknown_faction_behavior": "reject",
+    "default_retaliation_window_ms": 12000
   },
-  "damage_matrix": {
+  "archetypes": {
     "player": {
-      "player": false,
-      "enemy": true,
-      "neutral": true,
-      "friendly": true,
-      "environment": true
+      "aggro_mode": "hostile_only",
+      "damage_mode": "hostile_only",
+      "retaliation_window_ms": 0
     },
     "enemy": {
-      "player": true,
-      "enemy": false,
-      "neutral": true,
-      "friendly": true,
-      "environment": true
+      "aggro_mode": "hostile_only",
+      "damage_mode": "hostile_only",
+      "retaliation_window_ms": 0
+    },
+    "ally": {
+      "aggro_mode": "hostile_only",
+      "damage_mode": "hostile_only",
+      "retaliation_window_ms": 0
     },
     "neutral": {
-      "player": true,
-      "enemy": true,
-      "neutral": false,
-      "friendly": true,
-      "environment": true
-    },
-    "friendly": {
-      "player": true,
-      "enemy": true,
-      "neutral": true,
-      "friendly": false,
-      "environment": true
+      "aggro_mode": "retaliate_only",
+      "damage_mode": "hostile_only",
+      "retaliation_window_ms": 12000
     },
     "environment": {
-      "player": true,
-      "enemy": true,
-      "neutral": true,
-      "friendly": true,
-      "environment": true
+      "aggro_mode": "never",
+      "damage_mode": "all",
+      "retaliation_window_ms": 0
     }
   },
-  "aggro_matrix": {
-    "player": {
-      "player": false,
-      "enemy": true,
-      "neutral": false,
-      "friendly": false,
-      "environment": false
+  "factions": {
+    "player": {"archetype": "player"},
+    "enemy": {"archetype": "enemy"},
+    "friendly": {"archetype": "ally"},
+    "neutral": {"archetype": "neutral"},
+    "environment": {"archetype": "environment"},
+    "enemy_1": {"archetype": "enemy"},
+    "enemy_2": {"archetype": "enemy"},
+    "enemy_3": {"archetype": "enemy"},
+    "ally_4": {"archetype": "ally"},
+    "neutral_passive": {"archetype": "neutral", "aggro_mode": "retaliate_only"},
+    "neutral_chaotic": {"archetype": "neutral", "aggro_mode": "hostile_only"}
+  },
+  "relations": {
+    "defaults": {
+      "same_faction": "ally",
+      "same_archetype": "neutral",
+      "fallback": "neutral"
     },
-    "enemy": {
-      "player": true,
-      "enemy": false,
-      "neutral": false,
-      "friendly": true,
-      "environment": false
+    "archetype_relations": {
+      "player": {
+        "enemy": "hostile",
+        "ally": "ally",
+        "neutral": "hostile",
+        "environment": "neutral"
+      },
+      "enemy": {
+        "player": "hostile",
+        "ally": "hostile",
+        "neutral": "hostile",
+        "environment": "neutral"
+      },
+      "ally": {
+        "enemy": "hostile",
+        "player": "ally",
+        "neutral": "neutral",
+        "environment": "neutral"
+      },
+      "neutral": {
+        "player": "hostile",
+        "enemy": "hostile",
+        "ally": "hostile",
+        "environment": "neutral"
+      },
+      "environment": {
+        "player": "neutral",
+        "enemy": "neutral",
+        "ally": "neutral",
+        "neutral": "neutral"
+      }
     },
-    "neutral": {
-      "player": false,
-      "enemy": false,
-      "neutral": false,
-      "friendly": false,
-      "environment": false
-    },
-    "friendly": {
-      "player": false,
-      "enemy": true,
-      "neutral": false,
-      "friendly": false,
-      "environment": false
-    },
-    "environment": {
-      "player": false,
-      "enemy": false,
-      "neutral": false,
-      "friendly": false,
-      "environment": false
-    }
+    "pairs": [
+      {"a": "enemy_1", "b": "enemy_2", "relation": "ally"},
+      {"a": "enemy_1", "b": "enemy_3", "relation": "hostile"},
+      {"a": "enemy_2", "b": "enemy_3", "relation": "hostile"},
+      {"a": "enemy_1", "b": "player", "relation": "hostile"},
+      {"a": "enemy_2", "b": "player", "relation": "hostile"},
+      {"a": "enemy_3", "b": "player", "relation": "hostile"},
+      {"a": "ally_4", "b": "enemy_1", "relation": "hostile"},
+      {"a": "ally_4", "b": "enemy_2", "relation": "hostile"},
+      {"a": "ally_4", "b": "enemy_3", "relation": "hostile"},
+      {"a": "ally_4", "b": "player", "relation": "ally"},
+      {"a": "neutral_chaotic", "b": "player", "relation": "hostile"},
+      {"a": "neutral_chaotic", "b": "enemy_1", "relation": "hostile"},
+      {"a": "neutral_chaotic", "b": "enemy_2", "relation": "hostile"},
+      {"a": "neutral_chaotic", "b": "enemy_3", "relation": "hostile"},
+      {"a": "neutral_chaotic", "b": "ally_4", "relation": "hostile"}
+    ]
   }
 }

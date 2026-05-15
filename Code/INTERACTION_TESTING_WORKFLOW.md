@@ -58,9 +58,10 @@ python run_benchmark_matrix.py 3 1.5 --counts 100,150 --backends quadtree,grid -
 
 Then compare summary rows in `logs/benchmark_metrics.csv` and latest generated `logs/benchmark_comparison_*.md`.
 
-For effect-focused correctness, the validation suite also covers:
+For effect-focused and faction-policy correctness, the validation suite also covers:
 
 - `SlipperyLifecycleRoute` (`begin`/`tick`/`end`)
 - `MixedEffectRoute` (heat damage + slippery state in the same run)
-- `MultiFactionSpawnerRoute` (different spawned factions, same-team deny, cross-team allow, aggro split)
+- `MultiFactionSpawnerRoute` (different spawned factions, allied deny, hostile allow, aggro split)
+- `PrefilterRoute` (combat prefilter candidate skip/allow behavior)
 - `OwnerInheritanceRoute` (owner team propagation for emitted interaction source_team)

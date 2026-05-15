@@ -211,7 +211,8 @@ class RangedCombatStrategy(CombatStrategy):
                                                      projectile_type=attack['type'],
                                                      groups=enemy.groups,
                                                      owner=enemy,
-                                                     source_team=getattr(enemy, "team_id", None))
+                                                     source_team=getattr(enemy, "team_id", None),
+                                                     amount=attack.get("damage"))
                 enemy.attack_sound.play()
                 enemy.attack_cooldown = attack['cooldown']
                 enemy.direction = Vector2(0, 0) 
@@ -322,7 +323,8 @@ class MixedCombatStrategy(CombatStrategy):
                                      projectile_type=attack['type'],
                                      groups=enemy.groups,
                                      owner=enemy,
-                                     source_team=getattr(enemy, "team_id", None))
+                                     source_team=getattr(enemy, "team_id", None),
+                                     amount=attack.get("damage"))
                 enemy.attack_sound.play()
                 enemy.attack_cooldown = attack['cooldown']
             enemy.direction = Vector2(0, 0)  

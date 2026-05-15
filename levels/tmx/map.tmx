@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="17" nextobjectid="543">
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="17" nextobjectid="544">
  <tileset firstgid="1" source="iceobjects1.tsx"/>
  <tileset firstgid="26" source="snow_on_ice_brush_proper1.tsx"/>
  <tileset firstgid="134" source="ROCKLAVA.tsx"/>
@@ -34,41 +34,46 @@
  <objectgroup id="12" name="spawner">
   <object id="255" gid="499" x="1421" y="5059" width="550" height="550">
    <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;squid&quot;:1,&quot;tribey_snake&quot;:1,&quot;raccoon&quot;:1,&quot;spirit&quot;:1,&quot;bamboo&quot;:1,&quot;ice_ghost&quot;:1,&quot;tribey_spear&quot;:1,&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1,&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:10,&quot;spawn_number&quot;:3,&quot;spawn_limit&quot;:50}"/>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;ice_ghost&quot;:2,&quot;raccoon&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:8,&quot;spawn_number&quot;:2,&quot;spawn_limit&quot;:20,&quot;spawn_team_id&quot;:&quot;enemy_1&quot;}"/>
    </properties>
   </object>
   <object id="256" gid="499" x="4733" y="7571" width="550" height="550">
    <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;squid&quot;:1,&quot;tribey_snake&quot;:1,&quot;raccoon&quot;:1,&quot;spirit&quot;:1,&quot;bamboo&quot;:1,&quot;ice_ghost&quot;:1,&quot;tribey_spear&quot;:1,&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1,&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:8,&quot;spawn_number&quot;:5,&quot;spawn_limit&quot;:200}"/>
+    <property name="spawner_config" value="{&quot;neutral_spawn_weights&quot;:{&quot;eskimo&quot;:1},&quot;neutral_attributes&quot;:{&quot;eskimo&quot;:{&quot;interactable_tile_types&quot;:[&quot;ice&quot;]}},&quot;frequency&quot;:10,&quot;spawn_number&quot;:1,&quot;spawn_limit&quot;:6,&quot;spawn_team_id&quot;:&quot;neutral_passive&quot;}"/>
    </properties>
   </object>
   <object id="521" gid="499" x="15245" y="7909" width="550" height="550">
    <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;squid&quot;:1,&quot;tribey_snake&quot;:1,&quot;raccoon&quot;:1,&quot;spirit&quot;:1,&quot;bamboo&quot;:1,&quot;ice_ghost&quot;:1,&quot;tribey_spear&quot;:1,&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1,&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:8,&quot;spawn_number&quot;:3,&quot;spawn_limit&quot;:50}"/>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;spirit&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:8,&quot;spawn_number&quot;:1,&quot;spawn_limit&quot;:10,&quot;spawn_team_id&quot;:&quot;neutral_chaotic&quot;}"/>
    </properties>
   </object>
   <object id="523" gid="499" x="13845" y="8157" width="1102" height="982">
    <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;squid&quot;:1,&quot;tribey_snake&quot;:1,&quot;raccoon&quot;:1,&quot;spirit&quot;:1,&quot;bamboo&quot;:1,&quot;ice_ghost&quot;:1,&quot;tribey_spear&quot;:1,&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1,&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:2000,&quot;spawn_number&quot;:3,&quot;spawn_limit&quot;:50}"/>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;squid&quot;:1,&quot;tribey_snake&quot;:1,&quot;raccoon&quot;:1,&quot;spirit&quot;:1,&quot;bamboo&quot;:1,&quot;ice_ghost&quot;:1,&quot;tribey_spear&quot;:1,&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1,&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:20,&quot;spawn_number&quot;:3,&quot;spawn_limit&quot;:50}"/>
    </properties>
   </object>
   <object id="524" gid="499" x="12233" y="6397" width="2118" height="1670">
    <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;squid&quot;:1,&quot;tribey_snake&quot;:1,&quot;raccoon&quot;:1,&quot;spirit&quot;:1,&quot;bamboo&quot;:1,&quot;ice_ghost&quot;:1,&quot;tribey_spear&quot;:1,&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1,&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:8,&quot;spawn_number&quot;:3,&quot;spawn_limit&quot;:500}"/>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:8,&quot;spawn_number&quot;:2,&quot;spawn_limit&quot;:20,&quot;spawn_team_id&quot;:&quot;enemy_3&quot;}"/>
    </properties>
   </object>
   <object id="525" gid="499" x="2085" y="5085" width="550" height="550">
    <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;squid&quot;:1,&quot;tribey_snake&quot;:1,&quot;raccoon&quot;:1,&quot;spirit&quot;:1,&quot;bamboo&quot;:1,&quot;ice_ghost&quot;:1,&quot;tribey_spear&quot;:1,&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1,&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:10,&quot;spawn_number&quot;:3,&quot;spawn_limit&quot;:50}"/>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;ice_mage&quot;:1,&quot;spirit&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:8,&quot;spawn_number&quot;:2,&quot;spawn_limit&quot;:20,&quot;spawn_team_id&quot;:&quot;enemy_2&quot;}"/>
    </properties>
   </object>
   <object id="542" gid="472" x="6133" y="2517" width="550" height="550">
    <properties>
-    <property name="spawner_config" value="{&quot;neutral_spawn_weights&quot;:{&quot;eskimo&quot;:1},&quot;neutral_attributes&quot;:{&quot;eskimo&quot;:{&quot;interactable_tile_types&quot;:[&quot;ice&quot;]}},&quot;frequency&quot;:10,&quot;spawn_limit&quot;:1,&quot;spawn_number&quot;:1}"/>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:10,&quot;spawn_number&quot;:1,&quot;spawn_limit&quot;:8,&quot;spawn_team_id&quot;:&quot;ally_4&quot;}"/>
+   </properties>
+  </object>
+  <object id="543" gid="2" x="2125" y="1821" width="550" height="550">
+   <properties>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;tribey_spear&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:8,&quot;spawn_number&quot;:4,&quot;spawn_limit&quot;:20,&quot;spawn_team_id&quot;:&quot;ally_4&quot;}"/>
    </properties>
   </object>
  </objectgroup>
- <objectgroup id="16" name="Interactables">
+ <objectgroup id="16" name="Interactables" visible="0">
   <object id="530" x="8656" y="2304"/>
   <object id="531" x="7560" y="1824"/>
  </objectgroup>
@@ -87,10 +92,9 @@
   <object id="13" gid="6" x="5297.3" y="3623.65" width="550" height="550"/>
   <object id="14" gid="11" x="5971.94" y="3625.84" width="550" height="550"/>
   <object id="15" gid="16" x="4752.24" y="1444.53" width="550" height="550"/>
-  <object id="16" gid="2" x="2244.35" y="4201.47" width="550" height="550"/>
   <object id="17" gid="3" x="4616" y="3636.75" width="550" height="550"/>
   <object id="18" gid="18" x="7847.79" y="3798.24" width="190" height="118"/>
-  <object id="19" gid="25" x="2740.3" y="4885.1" width="550" height="550"/>
+  <object id="19" gid="25" x="276.3" y="4917.1" width="550" height="550"/>
   <object id="21" gid="20" x="8753" y="3693" width="550" height="550"/>
   <object id="22" gid="20" x="9057" y="3793" width="550" height="550"/>
   <object id="23" gid="4" x="6809" y="1585" width="550" height="550"/>
@@ -165,12 +169,12 @@
   <object id="207" gid="469" x="5461" y="4819" width="550" height="550"/>
   <object id="208" gid="469" x="5677" y="4939" width="550" height="550"/>
   <object id="209" gid="469" x="5893" y="5043" width="550" height="550"/>
-  <object id="210" gid="473" x="3397" y="4219" width="550" height="550"/>
-  <object id="211" gid="473" x="3917" y="4203" width="550" height="550"/>
+  <object id="210" gid="473" x="725" y="4259" width="550" height="550"/>
+  <object id="211" gid="473" x="3925" y="4459" width="550" height="550"/>
   <object id="212" gid="473" x="4469" y="4211" width="550" height="550"/>
-  <object id="213" gid="473" x="5021" y="4227" width="550" height="550"/>
-  <object id="214" gid="473" x="5573" y="4219" width="550" height="550"/>
-  <object id="215" gid="473" x="2804.4" y="4234.31" width="598.052" height="549.912" rotation="0.125503"/>
+  <object id="213" gid="473" x="4981" y="4155" width="550" height="550"/>
+  <object id="214" gid="473" x="189" y="4203" width="550" height="550"/>
+  <object id="215" gid="473" x="1260.4" y="4274.31" width="598.052" height="549.912" rotation="0.125503"/>
   <object id="216" gid="458" x="653" y="3651" width="550" height="550"/>
   <object id="217" gid="458" x="853" y="3747" width="550" height="550"/>
   <object id="218" gid="493" x="15709" y="5051" width="550" height="550"/>
@@ -328,7 +332,7 @@
    </properties>
   </object>
  </objectgroup>
- <objectgroup id="3" name="Slipery Layer">
+ <objectgroup id="3" name="Slipery Layer" visible="0">
   <properties>
    <property name="slippery_factor" type="float" value="3"/>
   </properties>
@@ -505,7 +509,7 @@
    <ellipse/>
   </object>
  </objectgroup>
- <objectgroup id="10" name="Heat Effect Layer">
+ <objectgroup id="10" name="Heat Effect Layer" visible="0">
   <properties>
    <property name="slippery_factor" type="float" value="3"/>
   </properties>
@@ -550,7 +554,7 @@
    </properties>
    <ellipse/>
   </object>
-  <object id="104" x="5146.55" y="2932.97" width="890.909" height="758.061">
+  <object id="104" x="4434.55" y="1604.97" width="890.909" height="758.061">
    <properties>
     <property name="slippery_factor" type="float" value="50"/>
    </properties>
@@ -972,32 +976,12 @@
     <property name="grass_profile" value="default"/>
    </properties>
   </object>
-  <object id="324" gid="500" x="11085" y="3117" width="550" height="550">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
   <object id="325" gid="500" x="11085" y="2557" width="550" height="550">
    <properties>
     <property name="grass_profile" value="default"/>
    </properties>
   </object>
   <object id="326" gid="500" x="11085" y="1981" width="550" height="550">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
-  <object id="327" gid="500" x="11101" y="1165" width="550" height="550">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
-  <object id="328" gid="500" x="11677" y="1165" width="550" height="550">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
-  <object id="329" gid="500" x="11661" y="2013" width="550" height="550">
    <properties>
     <property name="grass_profile" value="default"/>
    </properties>
@@ -1022,11 +1006,6 @@
     <property name="grass_profile" value="default"/>
    </properties>
   </object>
-  <object id="334" gid="500" x="9669" y="3117" width="550" height="550">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
   <object id="335" gid="500" x="9669" y="2557" width="550" height="550">
    <properties>
     <property name="grass_profile" value="default"/>
@@ -1037,22 +1016,12 @@
     <property name="grass_profile" value="default"/>
    </properties>
   </object>
-  <object id="337" gid="500" x="9669" y="1437" width="550" height="550">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
   <object id="338" gid="500" x="10245" y="1437" width="550" height="550">
    <properties>
     <property name="grass_profile" value="default"/>
    </properties>
   </object>
   <object id="339" gid="500" x="10245" y="2013" width="550" height="550">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
-  <object id="340" gid="500" x="10245" y="2557" width="550" height="550">
    <properties>
     <property name="grass_profile" value="default"/>
    </properties>
@@ -1072,16 +1041,6 @@
     <property name="grass_profile" value="default"/>
    </properties>
   </object>
-  <object id="344" gid="500" x="8483" y="3117" width="550" height="550">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
-  <object id="345" gid="500" x="8483" y="2557" width="550" height="550">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
   <object id="346" gid="500" x="8483" y="1981" width="550" height="550">
    <properties>
     <property name="grass_profile" value="default"/>
@@ -1097,32 +1056,12 @@
     <property name="grass_profile" value="default"/>
    </properties>
   </object>
-  <object id="349" gid="500" x="9059" y="2013" width="550" height="550">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
-  <object id="350" gid="500" x="9059" y="2557" width="550" height="550">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
-  <object id="351" gid="500" x="9075" y="3101" width="550" height="550">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
   <object id="352" gid="500" x="9075" y="3613" width="550" height="550">
    <properties>
     <property name="grass_profile" value="default"/>
    </properties>
   </object>
   <object id="353" gid="500" x="12292.6" y="3619.85" width="542.294" height="542.294">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
-  <object id="354" gid="500" x="12261" y="3133.76" width="542.294" height="542.294">
    <properties>
     <property name="grass_profile" value="default"/>
    </properties>
@@ -1137,17 +1076,7 @@
     <property name="grass_profile" value="default"/>
    </properties>
   </object>
-  <object id="357" gid="500" x="12277" y="1205.29" width="542.294" height="542.294">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
   <object id="358" gid="500" x="12844.9" y="1205.29" width="542.294" height="542.294">
-   <properties>
-    <property name="grass_profile" value="default"/>
-   </properties>
-  </object>
-  <object id="359" gid="500" x="12828.9" y="2045.22" width="542.294" height="542.294">
    <properties>
     <property name="grass_profile" value="default"/>
    </properties>
@@ -1237,26 +1166,6 @@
     <property name="grass_profile" value="big"/>
    </properties>
   </object>
-  <object id="422" gid="500" x="8737" y="-903" width="550" height="550" rotation="0.0348643">
-   <properties>
-    <property name="grass_profile" value="big"/>
-   </properties>
-  </object>
-  <object id="423" gid="500" x="9289" y="-903" width="550" height="550" rotation="0.0348643">
-   <properties>
-    <property name="grass_profile" value="big"/>
-   </properties>
-  </object>
-  <object id="424" gid="500" x="9865" y="-903" width="550" height="550" rotation="0.0348643">
-   <properties>
-    <property name="grass_profile" value="big"/>
-   </properties>
-  </object>
-  <object id="425" gid="500" x="10425" y="-895" width="550" height="550" rotation="0.0348643">
-   <properties>
-    <property name="grass_profile" value="big"/>
-   </properties>
-  </object>
   <object id="426" gid="500" x="11067" y="3071" width="550" height="550" rotation="0.0348643">
    <properties>
     <property name="grass_profile" value="big"/>
@@ -1283,11 +1192,6 @@
    </properties>
   </object>
   <object id="431" gid="500" x="11631" y="2515" width="550" height="550" rotation="0.0348643">
-   <properties>
-    <property name="grass_profile" value="big"/>
-   </properties>
-  </object>
-  <object id="432" gid="500" x="12207" y="2515" width="550" height="550" rotation="0.0348643">
    <properties>
     <property name="grass_profile" value="big"/>
    </properties>
@@ -1357,11 +1261,6 @@
     <property name="grass_profile" value="big"/>
    </properties>
   </object>
-  <object id="446" gid="500" x="8575" y="1995" width="550" height="550" rotation="0.0348643">
-   <properties>
-    <property name="grass_profile" value="big"/>
-   </properties>
-  </object>
   <object id="447" gid="500" x="9127" y="1995" width="550" height="550" rotation="0.0348643">
    <properties>
     <property name="grass_profile" value="big"/>
@@ -1402,37 +1301,7 @@
     <property name="grass_profile" value="big"/>
    </properties>
   </object>
-  <object id="455" gid="500" x="11679" y="579" width="550" height="550" rotation="0.0348643">
-   <properties>
-    <property name="grass_profile" value="big"/>
-   </properties>
-  </object>
-  <object id="456" gid="500" x="12255" y="579" width="550" height="550" rotation="0.0348643">
-   <properties>
-    <property name="grass_profile" value="big"/>
-   </properties>
-  </object>
   <object id="457" gid="500" x="12815" y="587" width="550" height="550" rotation="0.0348643">
-   <properties>
-    <property name="grass_profile" value="big"/>
-   </properties>
-  </object>
-  <object id="458" gid="500" x="11143" y="35" width="550" height="550" rotation="0.0348643">
-   <properties>
-    <property name="grass_profile" value="big"/>
-   </properties>
-  </object>
-  <object id="459" gid="500" x="11695" y="35" width="550" height="550" rotation="0.0348643">
-   <properties>
-    <property name="grass_profile" value="big"/>
-   </properties>
-  </object>
-  <object id="460" gid="500" x="12271" y="35" width="550" height="550" rotation="0.0348643">
-   <properties>
-    <property name="grass_profile" value="big"/>
-   </properties>
-  </object>
-  <object id="461" gid="500" x="12831" y="43" width="550" height="550" rotation="0.0348643">
    <properties>
     <property name="grass_profile" value="big"/>
    </properties>

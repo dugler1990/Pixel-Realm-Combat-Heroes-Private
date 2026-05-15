@@ -5,6 +5,7 @@ from game_logging import get_debug_logger
 from Entity import Entity
 
 _player_item_log = get_debug_logger("player_item")
+_combat_log = get_debug_logger("combat")
 import os
 from Inventory import Inventory
 from PlayerConfiguration import PlayerConfiguration
@@ -188,10 +189,29 @@ class BasePlayer(Entity):
                     amount = source.get_full_magic_damage()
         if amount is None:
             return
+        health_before = self.health
         if ctx.source_kind == "environment":
             self.take_environmental_damage(amount, ctx.attack_type)
+            _combat_log.debug(
+                "player_damage_ingress source_kind=%r source_team=%r amount=%r attack_type=%r health_before=%r health_after=%r",
+                ctx.source_kind,
+                ctx.source_team,
+                amount,
+                ctx.attack_type,
+                health_before,
+                self.health,
+            )
             return
         self.get_damage(amount, ctx.attack_type)
+        _combat_log.debug(
+            "player_damage_ingress source_kind=%r source_team=%r amount=%r attack_type=%r health_before=%r health_after=%r",
+            ctx.source_kind,
+            ctx.source_team,
+            amount,
+            ctx.attack_type,
+            health_before,
+            self.health,
+        )
 
     def take_environmental_damage(self, amount, damage_type):
         """Apply environmental damage (e.g. heat); reuses vulnerability via get_damage. No attack_type so particle branch is skipped until environmental types are defined."""
