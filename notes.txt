@@ -716,8 +716,17 @@ an image, we defo made objects previously so we should do it like that.
 		 	    	then self.effect.remove(effect)
 	 	    
 	 	    
-	 	    
+# next do option for coloring with faction color either outline of full, we had some debug thing putting outlines right ? or bounding boxes ? 
+
+	 	    # IDEAS
             # Idea to make sort of build, manage the city when you sit on a throne.
+            # Idea to put in tons of folk lore and mix it up 
+              -> big foot but when you finally track him down he gets abductd by aliens.
+              -> you can follow but this mission is half impossible and epic on a spaceship.
+              -> they abduct bigfoot coz he is really the boss species but they dominate him
+              ---> super op stuff i want 
+            # impale style attacks.
+            # charge up hold attack let go dynamic.
 	 
 	 
 	 

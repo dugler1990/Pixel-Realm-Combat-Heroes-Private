@@ -242,5 +242,25 @@
     "default_loot": {},
     "open_animation": "../Graphics/EnvInteractables/chests/metal/snow/open",
     "hit_animation": "../Graphics/EnvInteractables/chests/metal/snow/hit"
+  },
+  "throne_royal": {
+    "kind": "seat",
+    "interaction_margin": 48,
+    "frame_ms": 100,
+    "throne_idle": "../Graphics/EnvInteractables/thrones/royal/idle",
+    "sit_animations": {
+      "sit_down": "../Graphics/barb/sit_down",
+      "sit_idle": "../Graphics/barb/sit_idle",
+      "sit_up": "../Graphics/barb/sit_up"
+    },
+    "player_offset": {
+      "x": 0,
+      "y": 0
+    },
+    "seat_anchor_mode": "mask_midbottom",
+    "seat_anchor_offset": {
+      "x": 0,
+      "y": 0
+    }
   }
 }

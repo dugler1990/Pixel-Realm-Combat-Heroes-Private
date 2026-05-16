@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from Settings import DEBUG_DRAW_FACTION_OUTLINES
+
 
 @dataclass
 class GameSettings:
@@ -23,6 +25,7 @@ class GameSettings:
     environment_speed_index: int = 2  # 1.0x
     fps_cap_index: int = 0  # 30 fps (matches existing default)
     debug_mode: bool = False
+    debug_faction_outlines: bool = DEBUG_DRAW_FACTION_OUTLINES
     gold_pickup_popup: bool = True
 
     MENU_ROWS: tuple[str, ...] = (
@@ -31,6 +34,7 @@ class GameSettings:
         "environment_speed",
         "fps_cap",
         "debug_mode",
+        "debug_faction_outlines",
         "gold_pickup_popup",
     )
 
@@ -59,6 +63,10 @@ class GameSettings:
     def activate_row(self, setting_id: str) -> None:
         if setting_id == "debug_mode":
             self.debug_mode = not self.debug_mode
+        elif setting_id == "debug_faction_outlines":
+            self.debug_faction_outlines = not self.debug_faction_outlines
+        elif setting_id == "gold_pickup_popup":
+            self.gold_pickup_popup = not self.gold_pickup_popup
 
     def _step(self, setting_id: str, direction: int) -> None:
         if setting_id == "music_volume":
@@ -83,6 +91,9 @@ class GameSettings:
             return
         if setting_id == "debug_mode" and direction != 0:
             self.debug_mode = not self.debug_mode
+            return
+        if setting_id == "debug_faction_outlines" and direction != 0:
+            self.debug_faction_outlines = not self.debug_faction_outlines
             return
         if setting_id == "gold_pickup_popup" and direction != 0:
             self.gold_pickup_popup = not self.gold_pickup_popup

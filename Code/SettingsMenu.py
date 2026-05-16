@@ -42,7 +42,7 @@ class SettingsMenu:
         surface.blit(overlay, (0, 0))
 
         width = min(860, surface.get_width() - 80)
-        height = 490
+        height = 552
         x = (surface.get_width() - width) // 2
         y = (surface.get_height() - height) // 2
         panel_rect = pygame.Rect(x, y, width, height)
@@ -58,6 +58,7 @@ class SettingsMenu:
             ("Environment Speed", f"{self.settings.environment_speed:.2f}x"),
             ("FPS Cap", f"{self.settings.fps_cap}"),
             ("Debug Mode", "ON" if self.settings.debug_mode else "OFF"),
+            ("Faction hitbox outlines", "ON" if self.settings.debug_faction_outlines else "OFF"),
             ("Gold pickup popup", "ON" if self.settings.gold_pickup_popup else "OFF"),
         ]
 

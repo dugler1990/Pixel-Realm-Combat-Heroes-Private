@@ -44,6 +44,51 @@ def print_mask(mask):
                 row_str += "0"
         _mask_ascii_log.debug("%s", row_str)
 
+def _mask_opaque_bounds(mask):
+    """Union bounding box of opaque pixels in mask coords, or None if empty."""
+    if mask is None or mask.count() == 0:
+        return None
+    try:
+        rects = mask.get_bounding_rects()
+    except AttributeError:
+        rects = [mask.get_bounding_rect()]
+    if not rects:
+        return None
+    left = min(r.left for r in rects)
+    top = min(r.top for r in rects)
+    right = max(r.right for r in rects)
+    bottom = max(r.bottom for r in rects)
+    if right <= left or bottom <= top:
+        return None
+    return pygame.Rect(left, top, right - left, bottom - top)
+
+
+def mask_midbottom_world(sprite_rect, mask):
+    """
+    World pixel at bottom-center of the mask's opaque bounding box.
+    Falls back to sprite_rect.midbottom when the mask is empty.
+    """
+    bounds = _mask_opaque_bounds(mask)
+    if bounds is None:
+        return sprite_rect.midbottom
+    return (
+        sprite_rect.left + bounds.centerx,
+        sprite_rect.top + bounds.bottom,
+    )
+
+
+def position_surface_mask_midbottom_at(surface, mask, world_midbottom):
+    """
+    Return a rect for surface so the mask opaque midbottom sits on world_midbottom.
+    Falls back to surface rect with midbottom=world_midbottom when mask is empty.
+    """
+    bounds = _mask_opaque_bounds(mask)
+    if bounds is None:
+        return surface.get_rect(midbottom=world_midbottom)
+    wx, wy = int(world_midbottom[0]), int(world_midbottom[1])
+    return surface.get_rect(topleft=(wx - bounds.centerx, wy - bounds.bottom))
+
+
 def frames_to_masks(animation_frames):
     masks = []
     #print(animation_frames)

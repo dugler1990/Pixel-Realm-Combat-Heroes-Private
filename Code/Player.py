@@ -1,5 +1,5 @@
 import pygame
-from Support import import_folder
+from Support import import_folder, position_surface_mask_midbottom_at
 from Settings import *
 from game_logging import get_debug_logger
 from Entity import Entity
@@ -76,6 +76,10 @@ class BasePlayer(Entity):
         self.magic_switch_time = None
 
         self.attack_selection = AttackSelection(self, input_manager)
+        self.seated_object = None
+        self.seat_anchor_world = None
+        self.seat_player_offset = (0, 0)
+        self.post_seat_status = "down_idle"
 
 
         # Evasions
@@ -242,7 +246,8 @@ class BasePlayer(Entity):
             "up": [], "down": [], "left": [], "right": [],
             "right_idle": [], "left_idle": [], "up_idle": [], "down_idle": [],
             "right_attack": [], "left_attack": [], "up_attack": [], "down_attack": [],
-            "slide_right":[],"slide_left":[]
+            "slide_right":[],"slide_left":[],
+            "sit_down": [], "sit_idle": [], "sit_up": []
         }
 
         for animation in self.animations.keys():
@@ -306,6 +311,11 @@ class BasePlayer(Entity):
         if interact_fn is None:
             interact_fn = getattr(self.level, "try_open_nearby_chest", None)
         if interact_fn and interact_fn():
+            return
+        if self.status.startswith("sit_") or self.seated_object is not None:
+            self.attacking = False
+            self.direction.x = 0
+            self.direction.y = 0
             return
         
         # Handle key releases
@@ -411,6 +421,11 @@ class BasePlayer(Entity):
     def get_status(self):
         #print(f"in get_status first status : {self.status}")
         #print(f"IS SLIDE IN self.status :{'slide' in self.status}")
+        if self.status.startswith("sit_"):
+            self.attacking = False
+            self.direction.x = 0
+            self.direction.y = 0
+            return
         if 'slide' in self.status:
             self.maintain_slide_status()
         else:
@@ -475,14 +490,39 @@ class BasePlayer(Entity):
        #print(self.frame_index)
        #print(self.status)
         #print(self.animations)
-        animation = self.animations[self.status]
-        masks = self.masks[self.status]
+        animation = self.animations.get(self.status) or []
+        masks = self.masks.get(self.status) or []
+        if not animation or not masks:
+            fallback_status = "down_idle"
+            animation = self.animations.get(fallback_status, [])
+            masks = self.masks.get(fallback_status, [])
+            self.status = fallback_status
+            self.frame_index = 0
+            if not animation or not masks:
+                return
         self.frame_index += self.animation_speed
         if self.frame_index >= len(animation):
-            self.frame_index = 0
+            if self.status == "sit_down":
+                self.status = "sit_idle"
+                self.frame_index = 0
+                animation = self.animations.get(self.status) or animation
+                masks = self.masks.get(self.status) or masks
+            elif self.status == "sit_up":
+                self.status = self.post_seat_status
+                self.seated_object = None
+                self.seat_anchor_world = None
+                self.seat_player_offset = (0, 0)
+                self.frame_index = 0
+                animation = self.animations.get(self.status) or animation
+                masks = self.masks.get(self.status) or masks
+            else:
+                self.frame_index = 0
         self.image = animation[int(self.frame_index)]
         self.mask = masks[int(self.frame_index)]
-        self.rect = self.image.get_rect(center=self.hitbox.center)
+        if self.status.startswith("sit_"):
+            self._position_sprite_for_seat()
+        else:
+            self.rect = self.image.get_rect(center=self.hitbox.center)
         if not self.vulnerable:
             alpha = self.wave_value()
             self.image.set_alpha(alpha)
@@ -600,6 +640,78 @@ class BasePlayer(Entity):
        #print(f"self.rect post {self.rect.x}")
         # Update hitbox to match the new rect
         self.hitbox.center = self.rect.center
+
+    def _resolve_post_seat_status(self):
+        if "left" in self.status:
+            return "left_idle"
+        if "right" in self.status:
+            return "right_idle"
+        if "up" in self.status:
+            return "up_idle"
+        return "down_idle"
+
+    def _seat_world_target(self):
+        if self.seat_anchor_world is None:
+            return None
+        ax, ay = self.seat_anchor_world
+        ox, oy = self.seat_player_offset
+        return (ax + ox, ay + oy)
+
+    def _position_sprite_for_seat(self):
+        target = self._seat_world_target()
+        if target is None:
+            self.rect = self.image.get_rect(center=self.hitbox.center)
+            return
+        self.rect = position_surface_mask_midbottom_at(self.image, self.mask, target)
+        if hasattr(self, "hitbox"):
+            self.hitbox.center = self.rect.center
+
+    def _import_sit_animation_override(self, sit_paths):
+        if not isinstance(sit_paths, dict):
+            return
+        changed = False
+        for key in ("sit_down", "sit_idle", "sit_up"):
+            raw_path = sit_paths.get(key)
+            if not raw_path or not os.path.isdir(raw_path):
+                continue
+            try:
+                frames = import_folder(raw_path)
+            except Exception:
+                frames = []
+            if not frames:
+                continue
+            if hasattr(self, "TILESIZE"):
+                frames = [
+                    pygame.transform.scale(frame, (self.TILESIZE, self.TILESIZE))
+                    for frame in frames
+                ]
+            self.animations[key] = frames
+            self.masks[key] = frames_to_masks(frames)
+            changed = True
+        if changed:
+            self.frame_index = 0
+
+    def begin_seated_interaction(self, seat_obj, anchor_world, player_offset=(0, 0), sit_paths=None):
+        self.attacking = False
+        self.direction.x = 0
+        self.direction.y = 0
+        self.post_seat_status = self._resolve_post_seat_status()
+        if sit_paths:
+            self._import_sit_animation_override(sit_paths)
+        self.seated_object = seat_obj
+        self.seat_anchor_world = (int(anchor_world[0]), int(anchor_world[1]))
+        self.seat_player_offset = (int(player_offset[0]), int(player_offset[1]))
+        self.status = "sit_down"
+        self.frame_index = 0
+
+    def begin_stand_from_seat(self):
+        if self.status == "sit_up":
+            return
+        self.attacking = False
+        self.direction.x = 0
+        self.direction.y = 0
+        self.status = "sit_up"
+        self.frame_index = 0
         
 
 class SpecificPlayer(BasePlayer):

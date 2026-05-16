@@ -70,6 +70,7 @@ ENTITY_BROADPHASE_GRID_CELL_SIZE = 450
 # Debug settings
 DEBUG_DRAW_MASKS = True  # Draw collision masks for all entities and objects
 DEBUG_DRAW_EFFECT_RECTS = True  # Draw effect collision rects in red
+DEBUG_DRAW_FACTION_OUTLINES = False  # Seeds GameSettings.debug_faction_outlines; toggle also in settings (Ctrl+Shift+S)
 # When True, entity mask PNGs are written under Graphics/Masks (dev/asset pipeline only).
 EXPORT_ENTITY_MASKS_TO_DISK = False
 HITBOX_OFFSET = {

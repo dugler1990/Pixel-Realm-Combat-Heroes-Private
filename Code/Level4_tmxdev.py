@@ -54,6 +54,7 @@ from Entity import Entity
 from tmx_layout_manager import LayoutManager
 from benchmark_runtime import BENCHMARK_RUNTIME
 from Interaction import InteractionContext, InteractionResolver
+from Support import resolve_env_interactable_path
 #with open('triggers.json',r) as file
 #triggers = json.loads(file.read())
 
@@ -748,6 +749,50 @@ class Level4:
             if in_range:
                 self._show_interact_prompt = True
 
+    def _resolve_sit_animation_paths(self, seat):
+        cfg = getattr(seat, "env_config", None) or {}
+        sit_cfg = cfg.get("sit_animations")
+        if not isinstance(sit_cfg, dict):
+            return {}
+        out = {}
+        tmx_folder = getattr(self.layout_manager, "tmx_folder", None)
+        for key in ("sit_down", "sit_idle", "sit_up"):
+            raw = sit_cfg.get(key)
+            if not raw:
+                continue
+            resolved = resolve_env_interactable_path(str(raw).strip(), tmx_folder)
+            if resolved:
+                out[key] = resolved
+        return out
+
+    def _sit_on_seat(self, seat):
+        player = self.player
+        if not hasattr(player, "begin_seated_interaction"):
+            return False
+        if player.status == "sit_up":
+            return False
+        anchor_world = seat.get_seat_anchor() if hasattr(seat, "get_seat_anchor") else seat.rect.midbottom
+        player_offset = getattr(seat, "player_offset", (0, 0))
+        sit_paths = self._resolve_sit_animation_paths(seat)
+        player.begin_seated_interaction(
+            seat_obj=seat,
+            anchor_world=anchor_world,
+            player_offset=player_offset,
+            sit_paths=sit_paths,
+        )
+        return True
+
+    def _stand_from_seat(self):
+        player = self.player
+        if getattr(player, "status", "") == "sit_up":
+            return True
+        if getattr(player, "seated_object", None) is None and not getattr(player, "status", "").startswith("sit_"):
+            return False
+        if hasattr(player, "begin_stand_from_seat"):
+            player.begin_stand_from_seat()
+            return True
+        return False
+
     def _draw_interact_prompt(self):
         if not getattr(self, "_show_interact_prompt", False):
             return
@@ -770,6 +815,8 @@ class Level4:
             return False
         if getattr(self, "inventory_open", False):
             return False
+        if self._stand_from_seat():
+            return True
         lm = self.layout_manager
         env = getattr(lm, "environment_interactables", None)
         if not env:
@@ -784,6 +831,8 @@ class Level4:
             if kind == "loot_container":
                 self._open_loot_container(obj)
                 return True
+            if kind == "seat":
+                return self._sit_on_seat(obj)
             _game_flow_log.debug(
                 "env interactable kind=%r has no handler yet", kind
             )

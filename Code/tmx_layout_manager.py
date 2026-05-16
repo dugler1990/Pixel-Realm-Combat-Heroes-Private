@@ -45,6 +45,7 @@ from benchmark_broadphase import MovingEntityBroadphaseAdapter
 from Entity import Entity
 from ItemVisual import ItemVisual
 from InteractableChest import InteractableChest
+from InteractableSeat import InteractableSeat
 
 _tmx_layout_log = get_tmx_layout_logger()
 
@@ -499,6 +500,60 @@ class LayoutManager:
             }
         return (idle_surface, hit_frames, layout_meta)
 
+    def _try_build_seat_assets(self, merged, target_size=None):
+        """
+        Load and scale seat idle sprite to TMX object size.
+        Returns (idle_surface, layout_meta) or None on failure.
+        """
+        from Support import import_folder, resolve_env_interactable_path
+
+        pid = merged.get("profile_id", "?")
+        tmx_folder = getattr(self, "tmx_folder", None)
+        idle_raw = merged.get("throne_idle")
+        if not idle_raw or not str(idle_raw).strip():
+            _tmx_layout_log.error(
+                "seat profile %r: missing throne_idle", pid
+            )
+            return None
+        idle_path = resolve_env_interactable_path(str(idle_raw).strip(), tmx_folder)
+        if not idle_path:
+            _tmx_layout_log.error(
+                "seat profile %r: throne_idle could not be resolved from %r",
+                pid,
+                idle_raw,
+            )
+            return None
+
+        idle_surface = None
+        if os.path.isdir(idle_path):
+            frames = import_folder(idle_path)
+            if frames:
+                idle_surface = frames[0].copy()
+        elif os.path.isfile(idle_path):
+            idle_surface = pygame.image.load(idle_path).convert_alpha()
+
+        if idle_surface is None:
+            _tmx_layout_log.error(
+                "seat profile %r: throne_idle not readable: %r (resolved %r)",
+                pid,
+                idle_raw,
+                idle_path,
+            )
+            return None
+
+        layout_meta = {"display_size": idle_surface.get_size(), "topleft_offset": (0, 0)}
+        if target_size is not None and len(target_size) >= 2:
+            tw, th = int(target_size[0]), int(target_size[1])
+            if tw > 0 and th > 0:
+                sprite_fit = merged.get("sprite_fit")
+                scaled_frames, disp, off = self._scale_loot_chest_hit_frames(
+                    [idle_surface], tw, th, sprite_fit
+                )
+                idle_surface = scaled_frames[0]
+                layout_meta = {"display_size": disp, "topleft_offset": off}
+
+        return (idle_surface, layout_meta)
+
     def _resolve_grass_profile(self, name):
         """
         Return a normalized placement profile for GrassManager.place_tile, or None on error.
@@ -847,6 +902,37 @@ class LayoutManager:
                         image_open_path=merged.get("image_open_path"),
                         merged_config=merged,
                         tmx_folder=getattr(self, "tmx_folder", None),
+                        display_size=tuple(int(x) for x in disp),
+                    )
+                    continue
+                if kind == "seat":
+                    gw = object_.width * width_scaling_factor
+                    gh = object_.height * height_scaling_factor
+                    if gw <= 0 or gh <= 0:
+                        gw = TILESIZE
+                        gh = TILESIZE
+                    target_w = max(1, int(round(gw)))
+                    target_h = max(1, int(round(gh)))
+                    built = self._try_build_seat_assets(
+                        merged, (target_w, target_h)
+                    )
+                    if built is None:
+                        continue
+                    idle_surface, layout_meta = built
+                    dx, dy = layout_meta.get("topleft_offset", (0, 0))
+                    disp = layout_meta.get("display_size") or (
+                        target_w,
+                        target_h,
+                    )
+                    InteractableSeat(
+                        (x_pos + dx, y_pos + dy),
+                        [self.obstacle_sprites, self.visible_sprites],
+                        self.environment_interactables,
+                        idle_surface,
+                        profile_id=merged.get("profile_id", ""),
+                        kind=kind,
+                        interaction_margin=merged.get("interaction_margin", 48),
+                        merged_config=merged,
                         display_size=tuple(int(x) for x in disp),
                     )
                     continue

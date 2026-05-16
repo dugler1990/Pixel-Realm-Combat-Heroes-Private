@@ -1,13 +1,40 @@
+import hashlib
 import pygame
 import math
 import time
-from Settings import TILESIZE, GRASS_VIEWPORT_PERCENT, GRASS_WIND_MODE, DEBUG_DRAW_MASKS, DEBUG_DRAW_EFFECT_RECTS
+from Settings import (
+    TILESIZE,
+    GRASS_VIEWPORT_PERCENT,
+    GRASS_WIND_MODE,
+    DEBUG_DRAW_MASKS,
+    DEBUG_DRAW_EFFECT_RECTS,
+    DEBUG_DRAW_FACTION_OUTLINES,
+)
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from Entity import Entity
 from AnimatedEnvironmentSprite import AnimatedEnvironmentSprite
 from Torch import Torch
 from benchmark_runtime import BENCHMARK_RUNTIME
+
+_KNOWN_FACTION_OUTLINE_COLORS = {
+    "player": (72, 220, 120),
+    "enemy": (255, 72, 72),
+    "friendly": (90, 170, 255),
+    "neutral": (220, 200, 90),
+}
+
+
+def _faction_outline_color(team_id):
+    if team_id is None:
+        return (160, 160, 160)
+    sid = str(team_id)
+    if sid in _KNOWN_FACTION_OUTLINE_COLORS:
+        return _KNOWN_FACTION_OUTLINE_COLORS[sid]
+    digest = hashlib.md5(sid.encode("utf-8")).digest()
+    r, g, b = digest[0], digest[1], digest[2]
+    return (max(72, r), max(72, g), max(72, b))
+
 
 class YSortCameraGroup(pygame.sprite.Group):
     def __init__(self, ground_sprites, grass_manager,overhead_areas):
@@ -40,6 +67,7 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.debug_effect_areas = []  # For debug visualization of effect collision rects
         self.runtime_debug_effect_rects = DEBUG_DRAW_EFFECT_RECTS
         self.runtime_debug_player_highlight = DEBUG_DRAW_MASKS
+        self.runtime_debug_faction_outlines = DEBUG_DRAW_FACTION_OUTLINES
 
     def _grass_benchmark_active(self):
         return BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.grass_benchmark_enabled
@@ -260,7 +288,24 @@ class YSortCameraGroup(pygame.sprite.Group):
             highlight_radius = max(24, int(max(player.rect.width, player.rect.height) * 0.75))
             pygame.draw.circle(self.display_surface, (255, 255, 0), player_center, highlight_radius, 3)
 
-    
+        if self.runtime_debug_faction_outlines:
+            for sprite in self.sprites():
+                if not isinstance(sprite, Entity) or not hasattr(sprite, "hitbox"):
+                    continue
+                hb = sprite.hitbox
+                rect_screen = pygame.Rect(
+                    hb.x - self.offset.x,
+                    hb.y - self.offset.y,
+                    hb.width,
+                    hb.height,
+                )
+                team_id = getattr(sprite, "team_id", None)
+                pygame.draw.rect(
+                    self.display_surface,
+                    _faction_outline_color(team_id),
+                    rect_screen,
+                    2,
+                )
 
     #@profile
     

@@ -127,6 +127,7 @@ class Game:
             visible = self.level.layout_manager.visible_sprites
             visible.runtime_debug_effect_rects = self.settings.debug_mode
             visible.runtime_debug_player_highlight = self.settings.debug_mode
+            visible.runtime_debug_faction_outlines = self.settings.debug_faction_outlines
 
 
 
