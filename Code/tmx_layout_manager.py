@@ -779,8 +779,7 @@ class LayoutManager:
         tiled_tile_height = self.tmxdata.tileheight
 
         for object_ in tmx_object_layer:
-            raw_props = getattr(object_, "properties", None) or {}
-            props = dict(raw_props) if raw_props is not None else {}
+            props = getattr(object_, "properties", None) or {}
             gp = props.get("grass_profile")
             if gp is None or not str(gp).strip():
                 _tmx_layout_log.debug(
@@ -846,8 +845,7 @@ class LayoutManager:
             width_scaling_factor = TILESIZE/tiled_tile_width
             height_scaling_factor = TILESIZE/tiled_tile_height
 
-            raw_props = getattr(object_, "properties", None) or {}
-            props = dict(raw_props) if raw_props is not None else {}
+            props = getattr(object_, "properties", None) or {}
 
             if self._try_spawn_animated_env_object(
                 object_, props, x_pos, y_pos, width_scaling_factor, height_scaling_factor
@@ -945,7 +943,9 @@ class LayoutManager:
 
             if image is not None:
                 # SCALE
-                image = pygame.transform.scale( image, (object_.width*width_scaling_factor, object_.height*height_scaling_factor ) )
+                scaled_w = max(1, int(round(object_.width * width_scaling_factor)))
+                scaled_h = max(1, int(round(object_.height * height_scaling_factor)))
+                image = pygame.transform.scale(image, (scaled_w, scaled_h))
                 mask = pygame.mask.from_surface(image)
             else:
                 # Non-image objects (shapes) should be handled as effect layers, skip drawing
@@ -1581,6 +1581,7 @@ class LayoutManager:
             has_grass_name = "grass" in layer_name_lower
             has_interactables_name = "interactable" in layer_name_lower
             has_shape_objects = any(getattr(obj, "image", None) is None for obj in layout)
+            has_image_objects = any(getattr(obj, "image", None) is not None for obj in layout)
             
             if has_spawner_name:
                 # Process spawner layer
@@ -1599,7 +1600,7 @@ class LayoutManager:
                 self.create_grass_object_layer(layout)
             elif has_interactables_name:
                 self.create_object_layer(layout)
-            elif has_effect_name or has_shape_objects:
+            elif has_effect_name or (has_shape_objects and not has_image_objects):
                 self.create_effect_layer(layout)
             else:
                 self.create_object_layer(layout)

@@ -274,8 +274,14 @@ class Game:
                 # Pause normal state handlers while settings menu is active.
                 if self.state == "level" and self.level and hasattr(self.level, "display_surface"):
                     self.level.display_surface.fill((0, 0, 0))
+                    rts_session = getattr(self.level, "rts_session", None)
+                    camera_focus = (
+                        rts_session.camera_focus()
+                        if rts_session is not None and rts_session.is_active()
+                        else self.level.player
+                    )
                     self.level.layout_manager.visible_sprites.custom_draw(
-                        self.level.player, dt, 0, 0.5
+                        self.level.player, dt, 0, 0.5, camera_focus=camera_focus
                     )
                 elif self.state == "death_menu":
                     self.death_menu.draw()

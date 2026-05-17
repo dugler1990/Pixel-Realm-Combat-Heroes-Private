@@ -54,6 +54,8 @@ from Entity import Entity
 from tmx_layout_manager import LayoutManager
 from benchmark_runtime import BENCHMARK_RUNTIME
 from Interaction import InteractionContext, InteractionResolver
+from rts import RtsSession
+from rts.world_adapter import RtsWorldAdapter
 from Support import resolve_env_interactable_path
 #with open('triggers.json',r) as file
 #triggers = json.loads(file.read())
@@ -88,6 +90,50 @@ def draw_circle_with_max_brightness(surface, circle, max_brightness_mask, mask_p
     brightness_color = (255 * circle.brightness, 255 * circle.brightness, 255 * circle.brightness, 255)
     pygame.draw.circle(max_brightness_mask, brightness_color, mask_pos, circle.radius)
     surface.blit(max_brightness_mask, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+
+
+class LevelRtsWorldAdapter(RtsWorldAdapter):
+    """Narrow RTS host adapter for the current action-RPG level."""
+
+    def __init__(self, level):
+        self.level = level
+
+    def get_player(self):
+        return self.level.player
+
+    def get_display_surface(self):
+        return self.level.display_surface
+
+    def get_visible_sprites(self):
+        return self.level.layout_manager.visible_sprites
+
+    def get_selectable_sprites(self):
+        lm = self.level.layout_manager
+        selectables = list(getattr(lm, "environment_interactables", None) or [])
+        for sprite in lm.visible_sprites.sprites():
+            if getattr(sprite, "rts_selectable", False) and sprite not in selectables:
+                selectables.append(sprite)
+        return selectables
+
+    def get_map_bounds(self):
+        visible = self.level.layout_manager.visible_sprites
+        ground = getattr(visible, "ground_surface", None)
+        if ground is not None and hasattr(visible, "min_x") and hasattr(visible, "min_y"):
+            return pygame.Rect(visible.min_x, visible.min_y, ground.get_width(), ground.get_height())
+        sprites = getattr(visible, "sprites", lambda: [])()
+        rects = [sprite.rect for sprite in sprites if hasattr(sprite, "rect")]
+        if not rects:
+            return None
+        bounds = rects[0].copy()
+        for rect in rects[1:]:
+            bounds.union_ip(rect)
+        return bounds
+
+    def request_player_stand(self):
+        self.level._stand_from_seat()
+
+    def is_player_dead(self):
+        return bool(getattr(self.level.player, "is_dead", False))
 
 
 def subtract_circle(circle1, circle2, surface):
@@ -304,6 +350,8 @@ class Level4:
         self.magic_player = MagicPlayer(self.animation_player)
         self.evasion_player = EvasionPlayer(self.animation_player, self.create_trap)
         self.current_attack = None
+        self.rts_world_adapter = LevelRtsWorldAdapter(self)
+        self.rts_session = RtsSession(self.rts_world_adapter, self.input_manager)
 
         if self.benchmark_runtime.enabled:
             self._initialize_benchmark_mode()
@@ -780,6 +828,8 @@ class Level4:
             player_offset=player_offset,
             sit_paths=sit_paths,
         )
+        if hasattr(self, "rts_session"):
+            self.rts_session.enter(throne=seat)
         return True
 
     def _stand_from_seat(self):
@@ -815,6 +865,10 @@ class Level4:
             return False
         if getattr(self, "inventory_open", False):
             return False
+        rts_session = getattr(self, "rts_session", None)
+        if rts_session is not None and rts_session.is_active():
+            rts_session.exit(request_stand=True)
+            return True
         if self._stand_from_seat():
             return True
         lm = self.layout_manager
@@ -1683,6 +1737,13 @@ class Level4:
         #print(self.player.rect.center)
         #print(self.layout_manager.player.rect.center)
         self.layout_manager.spawner.on_layout_update()
+        if hasattr(self, "rts_session"):
+            self.rts_session.update(dt_real)
+        camera_focus = (
+            self.rts_session.camera_focus()
+            if getattr(self, "rts_session", None) is not None and self.rts_session.is_active()
+            else self.player
+        )
         #print(f"\n\n after layout update {self.player.rect.x}\n\n")
         #self.layout_manager.visible_sprites.custom_draw(self.player,dt, self.weather.weather_intensity, self.weather.light_level)
        #print(f"\n\n after after custom draw {self.player.rect.x}\n\n")
@@ -1714,7 +1775,13 @@ class Level4:
             if self.layout_manager.daytime_layout:
                 if self.game_settings:
                     self.weather.time_speed_multiplier = self.game_settings.environment_speed
-                self.layout_manager.visible_sprites.custom_draw(self.player,dt, self.weather.weather_intensity, self.weather.light_level)
+                self.layout_manager.visible_sprites.custom_draw(
+                    self.player,
+                    dt,
+                    self.weather.weather_intensity,
+                    self.weather.light_level,
+                    camera_focus=camera_focus,
+                )
                 self.weather.update(dt)
                 self.weather_overlay.set_weather(self.weather.weather_type,
                                                  self.weather.weather_intensity,
@@ -1840,7 +1907,7 @@ class Level4:
                     else 0
                 )
                 self.layout_manager.visible_sprites.custom_draw(
-                    self.player, dt, _grass_sway, 0.5
+                    self.player, dt, _grass_sway, 0.5, camera_focus=camera_focus
                 )
             #self.layout_manager.update_weather(self.weather)
             
@@ -1917,9 +1984,16 @@ class Level4:
         self.save_enemy_states(self.current_layout)  # mkght be a big inefficiency
         self.layout_manager.display_time(self.display_surface)
         self._draw_gold_pickup_popup()
+        rts_active = (
+            getattr(self, "rts_session", None) is not None
+            and self.rts_session.is_active()
+        )
         if not self.inventory_open:
             draw_belt_hud(self.display_surface, self.player, self.player.inventory)
-            self._draw_interact_prompt()
+            if rts_active:
+                self.rts_session.draw()
+            else:
+                self._draw_interact_prompt()
         self.player_dead = getattr(self.player, "is_dead", False)
     
         # Grass  !

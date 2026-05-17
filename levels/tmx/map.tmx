@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="17" nextobjectid="551">
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="17" nextobjectid="553">
  <tileset firstgid="1" source="iceobjects1.tsx"/>
  <tileset firstgid="26" source="snow_on_ice_brush_proper1.tsx"/>
  <tileset firstgid="134" source="ROCKLAVA.tsx"/>
@@ -74,7 +74,7 @@
    </properties>
   </object>
  </objectgroup>
- <objectgroup id="16" name="Interactables">
+ <objectgroup id="16" name="Interactables" visible="0">
   <object id="530" x="8656" y="2304"/>
   <object id="531" x="7560" y="1824"/>
  </objectgroup>
@@ -171,8 +171,8 @@
   <object id="208" gid="469" x="5677" y="4939" width="550" height="550"/>
   <object id="209" gid="469" x="5893" y="5043" width="550" height="550"/>
   <object id="210" gid="473" x="725" y="4259" width="550" height="550"/>
-  <object id="211" gid="473" x="3925" y="4459" width="550" height="550"/>
-  <object id="212" gid="473" x="4469" y="4211" width="550" height="550"/>
+  <object id="211" gid="473" x="3607.38" y="4686.08" width="911.338" height="733.617" rotation="355.949"/>
+  <object id="212" gid="473" x="4445" y="4219" width="550" height="550"/>
   <object id="213" gid="473" x="4981" y="4155" width="550" height="550"/>
   <object id="214" gid="473" x="189" y="4203" width="550" height="550"/>
   <object id="215" gid="473" x="1260.4" y="4274.31" width="598.052" height="549.912" rotation="0.125503"/>
@@ -332,10 +332,14 @@
     <property name="interactable_profile" value="chest_metal_snow"/>
    </properties>
   </object>
-  <object id="547" template="../../image_assets/throne_object.tx" x="6122.33" y="1813.36"/>
-  <object id="550" template="../../image_assets/throne_object.tx" name="throne_sized" gid="616" x="7545.91" y="11412.5"/>
+  <object id="551" gid="616" x="6745" y="11339" width="518" height="582"/>
+  <object id="552" gid="616" x="7097" y="11851" width="358" height="382">
+   <properties>
+    <property name="interactable_profile" value="throne_royal"/>
+   </properties>
+  </object>
  </objectgroup>
- <objectgroup id="3" name="Slipery Layer">
+ <objectgroup id="3" name="Slipery Layer" visible="0">
   <properties>
    <property name="slippery_factor" type="float" value="3"/>
   </properties>

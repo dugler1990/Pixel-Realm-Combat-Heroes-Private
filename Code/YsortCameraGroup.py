@@ -172,7 +172,7 @@ class YSortCameraGroup(pygame.sprite.Group):
         for sprite in self.ground_sprites:
             self.ground_surface.blit(sprite.image, sprite.rect.move(-self.min_x, -self.min_y))
     #@profile
-    def custom_draw(self, player,dt, wind_intensity, light_intensity):
+    def custom_draw(self, player,dt, wind_intensity, light_intensity, camera_focus=None):
         
         if self.ground_surface is None:
             self.create_ground_surface()
@@ -184,10 +184,11 @@ class YSortCameraGroup(pygame.sprite.Group):
 
         self.set_grass_render_window_size_with_timeofday(light_intensity)
 
-        self.offset.x = player.rect.centerx - self.half_width 
-        self.offset.y = player.rect.centery - self.half_height
-        self.grass_offset.x = player.rect.centerx - self.grass_half_width 
-        self.grass_offset.y = player.rect.centery - self.grass_half_height
+        focus = camera_focus or player
+        self.offset.x = focus.rect.centerx - self.half_width 
+        self.offset.y = focus.rect.centery - self.half_height
+        self.grass_offset.x = focus.rect.centerx - self.grass_half_width 
+        self.grass_offset.y = focus.rect.centery - self.grass_half_height
 
         if self.ground_surface is not None:
             ground_rect = self.ground_surface.get_rect(topleft=(-self.offset.x, -self.offset.y))
