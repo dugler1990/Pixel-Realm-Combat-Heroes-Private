@@ -1,6 +1,36 @@
 import pygame
 
 
+def nearest_sprite_in_direction(origin, sprites, direction, current=None):
+    """Pick the sprite best aligned with direction (all candidates, ignores camera)."""
+    if direction.length_squared() == 0 or not sprites:
+        return current
+    direction = direction.normalize()
+    if hasattr(origin, "rect"):
+        origin_pt = pygame.math.Vector2(origin.rect.center)
+    else:
+        origin_pt = pygame.math.Vector2(origin)
+
+    best = None
+    best_score = None
+    for sprite in sprites:
+        if current is not None and sprite is current:
+            continue
+        delta = pygame.math.Vector2(sprite.rect.center) - origin_pt
+        if delta.length_squared() == 0:
+            continue
+        candidate_direction = delta.normalize()
+        alignment = candidate_direction.dot(direction)
+        if alignment <= 0.25:
+            continue
+        distance = delta.length()
+        score = (1.0 - alignment) * 1000.0 + distance
+        if best_score is None or score < best_score:
+            best = sprite
+            best_score = score
+    return best if best is not None else current
+
+
 class RtsSelectable:
     """Lightweight selectable wrapper around a world sprite."""
 

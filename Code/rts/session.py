@@ -1,4 +1,5 @@
 import logging
+import time
 
 import pygame
 
@@ -11,7 +12,7 @@ from .categories import ALL_CATEGORIES, FOOD
 from .factions import get_profile
 from .input import RtsInput
 from .resources import ResourceWallet
-from .selection import SelectableRegistry
+from .selection import SelectableRegistry, nearest_sprite_in_direction
 from .ui import BuildMenuPanel, ChiefPanel, ResourceBar, RtsPanel, WorkerCommandPanel
 from .entities import RtsWorkerEntity
 
@@ -60,6 +61,9 @@ class RtsSession:
         self._worker_menu_worker = None
         self._pick_build_worker = None
         self._pick_building = None
+        self._status_message = ""
+        self._status_color = (255, 80, 80)
+        self._status_until = 0.0
 
     @property
     def gather_controller(self):
@@ -231,8 +235,7 @@ class RtsSession:
             if self._try_assign_to_selected_node():
                 return
             if sel is not None and str(getattr(sel.sprite, "kind", "")) == "rts_unit":
-                if sel.sprite not in self.pending_workers:
-                    self.pending_workers.append(sel.sprite)
+                self._open_worker_menu(sel.sprite)
                 return
             if sel is not None:
                 self.state = self.PANEL
@@ -472,21 +475,38 @@ class RtsSession:
         self.state = self.BUILD_MENU
 
     def _open_pick_build_site(self, worker, building):
-        self.build_menu_panel.close()
-        self._pick_build_worker = worker
-        self._pick_building = building
-        self.state = self.PICK_BUILD_SITE
-        self.site_highlight = True
-        self._set_site_highlights(True)
         registry = self.world.get_rts_registry()
         sites = registry.build_sites_for_faction(
             worker.faction_id,
             requires=building.placement_requires,
             available_only=True,
         )
-        if sites:
-            self.selection.selected = self.selection._wrap(sites[0])
+        if not sites:
+            self._flash_message("No build site")
+            return
+
+        self.build_menu_panel.close()
+        self._pick_build_worker = worker
+        self._pick_building = building
+        self.state = self.PICK_BUILD_SITE
+        self.site_highlight = True
+        self._set_site_highlights(True)
         self.refresh_selectables()
+        site = registry.nearest_unbuilt_site(
+            worker.faction_id,
+            building.placement_requires,
+            worker.rect.center,
+        )
+        if site is not None:
+            self._select_build_site_sprite(site)
+            self._snap_camera_to_target(site)
+
+    def _select_build_site_sprite(self, site):
+        for selectable in self.selection.selectables:
+            if selectable.sprite is site:
+                self.selection.selected = selectable
+                return
+        self.selection.selected = self.selection._wrap(site)
 
     def _update_pick_build_site_mode(self, dt):
         self.site_highlight = True
@@ -519,19 +539,33 @@ class RtsSession:
         )
         if not sites:
             return
-        if self.selection.selected is None:
-            self.selection.selected = self.selection._wrap(sites[0])
+        current = self.selection.selected.sprite if self.selection.selected else None
+        if current is None:
+            site = registry.nearest_unbuilt_site(
+                worker.faction_id,
+                building.placement_requires,
+                worker.rect.center,
+            )
+            if site is None:
+                return
+            self._select_build_site_sprite(site)
+            self._snap_camera_to_target(site)
             return
-        current = self.selection.selected.sprite
-        try:
-            idx = next(i for i, s in enumerate(sites) if s is current)
-        except StopIteration:
-            idx = 0
-        if direction.x > 0 or direction.y > 0:
-            idx = (idx + 1) % len(sites)
-        elif direction.x < 0 or direction.y < 0:
-            idx = (idx - 1) % len(sites)
-        self.selection.selected = self.selection._wrap(sites[idx])
+        origin = current.rect.center
+        next_site = nearest_sprite_in_direction(origin, sites, direction, current=current)
+        if next_site is None or next_site is current:
+            return
+        self.selection.selected = self.selection._wrap(next_site)
+        self._snap_camera_to_target(next_site)
+
+    def _flash_message(self, text, color=(255, 80, 80), duration_sec=2.0):
+        self._status_message = str(text)
+        self._status_color = color
+        self._status_until = time.monotonic() + float(duration_sec)
+
+    def _snap_camera_to_target(self, target):
+        self.camera.snap_to(target)
+        self.camera.clamp(self.world.get_map_bounds())
 
     def _try_assign_build_at_site(self):
         sel = self.selection.selected
@@ -655,6 +689,10 @@ class RtsSession:
 
     def _draw_mode_hint(self, surface):
         font = pygame.font.Font(None, 24)
+        if self._status_message and time.monotonic() < self._status_until:
+            rendered = font.render(self._status_message, True, self._status_color)
+            surface.blit(rendered, (16, 72))
+            return
         hints = {
             self.CAMERA: "Arrows move | Tab select | Home snap | Space stand",
             self.SELECT: "Worker Enter=menu | node Enter=gather | G assign | 1-5 cat | Tab back",

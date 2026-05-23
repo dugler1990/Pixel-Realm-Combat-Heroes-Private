@@ -634,58 +634,53 @@ class LayoutManager:
 
 #self.tmx_ground_layers = [  x  for x in  self.tmxdata.layers if x.name.find("Tile")!=1 ]
     
-    def create_ground_layer( self,tmx_ground_layer ):
-            
-        layer_number_posstart = str(tmx_ground_layer).find("[")
-        layer_number_posend = str(tmx_ground_layer).find("]")  ## This is defo not ideal, its how i get layer pos atm
-                                                                # no clearbetter way to do it , i could manage the ids of layers..
-        layer_number = str(tmx_ground_layer)[layer_number_posstart+1:layer_number_posend]   
-        layer_number = int(layer_number)-1
+    def _process_tile_layer(self, tmx_ground_layer):
+        from rts.build.sites_from_tiles import deep_snow_cell_from_props
+        from tmx_tile_layers import tile_properties, tile_surface
+
         layer_name_lower = getattr(tmx_ground_layer, "name", "").lower()
         layer_has_grass = "grass" in layer_name_lower
+        deep_snow_cells = {}
 
         for tile in tmx_ground_layer.tiles():
-            tile_properties = {}
-            try:
-                raw_props = self.tmxdata.get_tile_properties(tile[0], tile[1], layer_number)
-                tile_properties = dict(raw_props) if raw_props else {}
-                valid_interaction_types = [tile_properties.get("valid_interaction_types")]
-            except Exception:
-                valid_interaction_types = []
-            gid = self.tmxdata.get_tile_gid(tile[0], tile[1], layer_number)
-            #print(f"tile:{tile}")
-            #print(gid)
+            tx, ty = tile[0], tile[1]
+            tile_props = tile_properties(self.tmxdata, tmx_ground_layer, tx, ty)
+            valid_interaction_types = [tile_props.get("valid_interaction_types")]
 
-            surface = self.tmxdata.get_tile_image(tile[0], tile[1], layer_number)
+            fid = deep_snow_cell_from_props(tile_props)
+            if fid is not None:
+                deep_snow_cells[(tx, ty)] = fid
+
+            surface = tile_surface(self.tmxdata, tmx_ground_layer, tx, ty)
             if not surface:
                 continue
             surface = surface.copy()
-
-            width, height = surface.get_size()  # Get original size
-            #print(f"Original Size: {width}x{height}")  # Debugging
-
             surface = pygame.transform.scale(surface, (TILESIZE, TILESIZE))
 
-            new_tile = Tile(pos = (tile[0]*TILESIZE,tile[1]*TILESIZE),# could refactor pos its used atleast twice here
-                            groups = [self.ground_sprites],
-                            sprite_type ='ground',
-                            surface = surface, # only surface if imported with pygame func
-                            valid_interaction_types = valid_interaction_types)
-
-            self.tile_map[(tile[0], tile[1])] = new_tile
+            new_tile = Tile(
+                pos=(tx * TILESIZE, ty * TILESIZE),
+                groups=[self.ground_sprites],
+                sprite_type="ground",
+                surface=surface,
+                valid_interaction_types=valid_interaction_types,
+            )
+            self.tile_map[(tx, ty)] = new_tile
 
             if layer_has_grass:
-                gp = tile_properties.get("grass_profile")
+                gp = tile_props.get("grass_profile")
                 if gp is not None and str(gp).strip():
                     resolved = self._resolve_grass_profile(gp)
                     if resolved:
-                        tx, ty = tile[0], tile[1]
-                        self.grass_manager.place_tile(
-                            location=(tx, ty), density=resolved
-                        )
+                        self.grass_manager.place_tile(location=(tx, ty), density=resolved)
                         grid = getattr(self, "grass_tile_grid", None)
                         if grid is not None and 0 <= ty < len(grid) and 0 <= tx < len(grid[0]):
                             grid[ty][tx] = True
+
+        return deep_snow_cells
+
+    def create_ground_layer(self, tmx_ground_layer):
+        """Deprecated alias; use _process_tile_layer."""
+        return self._process_tile_layer(tmx_ground_layer)
 
     def update_tile_image(self, key, position):
         """
@@ -1629,14 +1624,14 @@ class LayoutManager:
                 
             
 
+        deep_snow_cells = {}
         for layout in self.tmx_ground_layers:
-
-            self.create_ground_layer(layout)
+            deep_snow_cells.update(self._process_tile_layer(layout))
 
         try:
-            from rts.build.sites_from_tiles import index_build_sites_from_tmx
+            from rts.build.sites_from_tiles import register_build_sites_from_cells
 
-            indexed = index_build_sites_from_tmx(self)
+            indexed = register_build_sites_from_cells(self, deep_snow_cells)
             if indexed:
                 _tmx_layout_log.debug("Indexed %d RTS build sites from tile properties", indexed)
         except Exception as exc:

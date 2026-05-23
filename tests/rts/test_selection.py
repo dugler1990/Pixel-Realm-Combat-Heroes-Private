@@ -87,3 +87,20 @@ def test_selected_sprite_is_preserved_across_rebuild():
 
     assert registry.selected is not None
     assert registry.selected.sprite is second
+
+
+def test_nearest_sprite_in_direction_picks_aligned_sprite_off_screen():
+    import pygame
+
+    from rts.selection import nearest_sprite_in_direction
+
+    origin = FakeSprite(center=(100, 100), kind="build_site")
+    left = FakeSprite(center=(20, 100), kind="build_site")
+    right = FakeSprite(center=(900, 100), kind="build_site")
+    picked = nearest_sprite_in_direction(
+        origin,
+        [origin, left, right],
+        pygame.math.Vector2(-1, 0),
+        current=origin,
+    )
+    assert picked is left

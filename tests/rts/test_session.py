@@ -116,6 +116,71 @@ def test_enter_opens_panel_only_when_selection_exists():
     assert session.state == RtsSession.PANEL
 
 
+def test_enter_on_worker_opens_worker_menu():
+    throne = FakeSprite(center=(200, 150), kind="seat")
+    worker = FakeSprite(center=(100, 100), kind="rts_unit")
+    worker.faction_id = "eskimo"
+    session, _, input_manager, _ = make_session([throne, worker])
+    session.enter(throne)
+
+    input_manager.press(pygame.K_TAB)
+    session.update(0.016)
+    input_manager.clear_just_pressed()
+
+    session.selection.selected = session.selection._wrap(worker)
+    input_manager.press(pygame.K_RETURN)
+    session.update(0.016)
+
+    assert session.state == RtsSession.WORKER_MENU
+    assert session.worker_command_panel.visible
+    assert session.worker_command_panel.worker is worker
+
+
+def test_open_pick_build_site_with_no_sites_flashes_and_stays_on_build_menu():
+    from rts.build.catalog import get_building
+
+    throne = FakeSprite(center=(200, 150), kind="seat")
+    worker = FakeSprite(center=(100, 100), kind="rts_unit")
+    worker.faction_id = "eskimo"
+    session, _, _, _ = make_session([throne, worker])
+    session.enter(throne)
+    building = get_building("ice_cutting_post")
+    session.state = RtsSession.BUILD_MENU
+    session.build_menu_panel.open(worker, "eskimo", session.wallet)
+
+    session._open_pick_build_site(worker, building)
+
+    assert session.state == RtsSession.BUILD_MENU
+    assert session.build_menu_panel.visible
+    assert session._status_message == "No build site"
+
+
+def test_open_pick_build_site_selects_nearest_site_and_snaps_camera():
+    import pygame
+
+    from rts.build.catalog import get_building
+    from rts.build.site import BuildSite
+
+    throne = FakeSprite(center=(200, 150), kind="seat")
+    worker = FakeSprite(center=(100, 100), kind="rts_unit")
+    worker.faction_id = "eskimo"
+    session, world, _, _ = make_session([throne, worker])
+    registry = world.get_rts_registry()
+    near = BuildSite(pygame.Rect(110, 100, 50, 50), "eskimo")
+    far = BuildSite(pygame.Rect(500, 500, 50, 50), "eskimo")
+    registry.register_build_site(near)
+    registry.register_build_site(far)
+    world.selectables.extend([near, far])
+    session.enter(throne)
+    building = get_building("ice_cutting_post")
+
+    session._open_pick_build_site(worker, building)
+
+    assert session.state == RtsSession.PICK_BUILD_SITE
+    assert session.selection.selected.sprite is near
+    assert session.camera.rect.center == near.rect.center
+
+
 def test_escape_and_tab_back_out_of_panel_and_select_states():
     selectable = FakeSprite(center=(50, 200), kind="seat")
     session, _, input_manager, _ = make_session([selectable])

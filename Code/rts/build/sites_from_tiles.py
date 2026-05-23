@@ -1,15 +1,11 @@
-"""Index build sites from TMX tile custom properties.
-
-Authoring: set deep_snow=true or rts_terrain=deep_snow on tile-layer cells;
-optional build_faction=eskimo. See INTERACTION_TESTING_WORKFLOW.md.
-"""
+"""Register build sites from deep_snow tile cells collected during layout load."""
 
 import pygame
 
 from Settings import TILESIZE
 
 from ..assets import normalize_faction_id
-from .site import BuildSite, SITE_UNBUILT
+from .site import BuildSite
 
 
 def _truthy(val):
@@ -18,7 +14,7 @@ def _truthy(val):
     return str(val).strip().lower() in ("1", "true", "yes", "on")
 
 
-def _is_deep_snow_tile(props):
+def is_deep_snow_tile(props):
     if not props:
         return False
     if _truthy(props.get("deep_snow")):
@@ -28,34 +24,15 @@ def _is_deep_snow_tile(props):
     return False
 
 
-def _faction_from_tile_props(props):
+def faction_from_tile_props(props):
     raw = props.get("build_faction") or props.get("faction_id") or "eskimo"
     return normalize_faction_id(raw)
 
 
-def _layer_index(tmxdata, layer):
-    for idx, lyr in enumerate(tmxdata.layers):
-        if lyr is layer:
-            return idx
-    return 0
-
-
-def _collect_deep_snow_cells(layout_manager):
-    tmx = layout_manager.tmxdata
-    cells = {}
-    for layer in getattr(layout_manager, "tmx_ground_layers", []) or []:
-        layer_number = _layer_index(tmx, layer)
-        for tx, ty in layer.tiles():
-            try:
-                raw_props = tmx.get_tile_properties(tx, ty, layer_number)
-                props = dict(raw_props) if raw_props else {}
-            except Exception:
-                props = {}
-            if not _is_deep_snow_tile(props):
-                continue
-            fid = _faction_from_tile_props(props)
-            cells[(tx, ty)] = fid
-    return cells
+def deep_snow_cell_from_props(props):
+    if not is_deep_snow_tile(props):
+        return None
+    return faction_from_tile_props(props)
 
 
 def _flood_fill_regions(cells):
@@ -86,9 +63,8 @@ def _region_rect(component):
     return pygame.Rect(left, top, right - left, bottom - top)
 
 
-def index_build_sites_from_tmx(layout_manager):
-    """Scan tile layers and register BuildSite regions on layout_manager.rts_registry."""
-    cells = _collect_deep_snow_cells(layout_manager)
+def register_build_sites_from_cells(layout_manager, cells):
+    """Flood-fill deep_snow cells and register BuildSite regions."""
     if not cells:
         return 0
     registry = layout_manager.rts_registry
