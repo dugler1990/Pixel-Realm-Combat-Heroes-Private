@@ -248,6 +248,7 @@
     "interaction_margin": 48,
     "frame_ms": 100,
     "throne_idle": "../Graphics/EnvInteractables/thrones/royal/idle",
+    "rts_faction_id": "eskimo",
     "sit_animations": {
       "sit_down": "../Graphics/barb/sit_down",
       "sit_idle": "../Graphics/barb/sit_idle",
@@ -262,5 +263,95 @@
       "x": 0,
       "y": 0
     }
+  },
+  "throne_eskimo": {
+    "kind": "seat",
+    "interaction_margin": 48,
+    "frame_ms": 100,
+    "throne_idle": "../Graphics/EnvInteractables/thrones/royal/idle",
+    "rts_faction_id": "eskimo",
+    "sit_animations": {
+      "sit_down": "../Graphics/barb/sit_down",
+      "sit_idle": "../Graphics/barb/sit_idle",
+      "sit_up": "../Graphics/barb/sit_up"
+    },
+    "player_offset": {"x": 0, "y": 0},
+    "seat_anchor_mode": "mask_midbottom",
+    "seat_anchor_offset": {"x": 0, "y": 0}
+  },
+  "throne_jungle": {
+    "kind": "seat",
+    "interaction_margin": 48,
+    "frame_ms": 100,
+    "throne_idle": "../Graphics/EnvInteractables/thrones/royal/idle",
+    "rts_faction_id": "jungle_tribe",
+    "sit_animations": {
+      "sit_down": "../Graphics/barb/sit_down",
+      "sit_idle": "../Graphics/barb/sit_idle",
+      "sit_up": "../Graphics/barb/sit_up"
+    },
+    "player_offset": {"x": 0, "y": 0},
+    "seat_anchor_mode": "mask_midbottom",
+    "seat_anchor_offset": {"x": 0, "y": 0}
+  },
+  "rts_node_seal_hole": {
+    "kind": "resource_node",
+    "entity_type": "seal_hole"
+  },
+  "rts_node_seal_colony": {
+    "kind": "resource_node",
+    "entity_type": "seal_colony"
+  },
+  "rts_node_whale_shore": {
+    "kind": "resource_node",
+    "entity_type": "whale_shore"
+  },
+  "rts_node_whale": {
+    "kind": "resource_node",
+    "entity_type": "whale"
+  },
+  "rts_node_walrus_shore": {
+    "kind": "resource_node",
+    "entity_type": "walrus_shore"
+  },
+  "rts_drop_smoking_rack": {
+    "kind": "rts_building",
+    "building_type": "smoking_rack"
+  },
+  "rts_drop_hunters_lodge": {
+    "kind": "rts_building",
+    "building_type": "hunters_lodge"
+  },
+  "rts_drop_rendering_pit": {
+    "kind": "rts_building",
+    "building_type": "rendering_pit"
+  },
+  "rts_drop_rendering_hut": {
+    "kind": "rts_building",
+    "building_type": "rendering_hut"
+  },
+  "rts_drop_ice_cutting_post": {
+    "kind": "rts_building",
+    "building_type": "ice_cutting_post"
+  },
+  "rts_drop_carving_lodge": {
+    "kind": "rts_building",
+    "building_type": "carving_lodge"
+  },
+  "rts_node_fruit_grove": {
+    "kind": "resource_node",
+    "entity_type": "fruit_grove"
+  },
+  "rts_node_clay_bank": {
+    "kind": "resource_node",
+    "entity_type": "clay_bank"
+  },
+  "rts_drop_village_hearth": {
+    "kind": "rts_building",
+    "building_type": "village_hearth"
+  },
+  "rts_drop_wood_store": {
+    "kind": "rts_building",
+    "building_type": "wood_store"
   }
 }

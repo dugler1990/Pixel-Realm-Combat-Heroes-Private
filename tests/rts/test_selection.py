@@ -7,6 +7,7 @@ from fakes import FakeSprite
 
 def test_registry_filters_supported_selectable_types():
     seat = FakeSprite(center=(0, 0), kind="seat")
+    chief = FakeSprite(center=(5, 0), kind="chief")
     building = FakeSprite(center=(10, 0), kind="rts_building")
     unit = FakeSprite(center=(20, 0), kind="rts_unit")
     resource = FakeSprite(center=(30, 0), kind="resource_node")
@@ -14,10 +15,11 @@ def test_registry_filters_supported_selectable_types():
     ignored = FakeSprite(center=(50, 0), kind="tree")
 
     registry = SelectableRegistry()
-    registry.rebuild([seat, building, unit, resource, explicit, ignored])
+    registry.rebuild([seat, chief, building, unit, resource, explicit, ignored])
 
     assert [item.sprite for item in registry.selectables] == [
         seat,
+        chief,
         building,
         unit,
         resource,

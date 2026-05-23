@@ -28,9 +28,21 @@ def _route_object_layer(layer_name, objects):
         return "grass"
     if has_interactables_name:
         return "object"
+    if layer_name_lower == "chiefs":
+        return "chiefs"
+    if layer_name_lower == "resource_nodes":
+        return "resource_nodes"
+    if layer_name_lower == "dropoff_buildings":
+        return "dropoff_buildings"
     if has_effect_name or (has_shape_objects and not has_image_objects):
         return "effect"
     return "object"
+
+
+def test_rts_dedicated_layers_route_correctly():
+    assert _route_object_layer("chiefs", []) == "chiefs"
+    assert _route_object_layer("resource_nodes", []) == "resource_nodes"
+    assert _route_object_layer("dropoff_buildings", []) == "dropoff_buildings"
 
 
 def test_mixed_image_and_shape_layer_routes_to_object_layer():

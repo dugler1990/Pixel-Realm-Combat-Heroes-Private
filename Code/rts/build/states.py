@@ -1,0 +1,5 @@
+BUILD_IDLE = "build_idle"
+MOVING_TO_SITE = "moving_to_site"
+CLEARING_SNOW = "clearing_snow"
+BUILDING = "building"
+BUILD_LOST = "build_lost"

@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="17" nextobjectid="553">
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="20" nextobjectid="589">
  <tileset firstgid="1" source="iceobjects1.tsx"/>
  <tileset firstgid="26" source="snow_on_ice_brush_proper1.tsx"/>
  <tileset firstgid="134" source="ROCKLAVA.tsx"/>
  <tileset firstgid="242" source="MUDROCK.tsx"/>
  <tileset firstgid="350" source="GRASSMUD.tsx"/>
  <tileset firstgid="458" source="objects_all.tsx"/>
- <tileset firstgid="508" source="../../../../Desktop/Pixel-Realm-Combat-Heroes-public/levels/tmx/GRASSMUD.tsx"/>
+ <tileset firstgid="508" source="GRASSMUD.tsx"/>
  <tileset firstgid="616" source="throne.tsx"/>
  <layer id="1" name="Tile Layer 1" width="30" height="20">
   <data encoding="csv">
@@ -333,9 +333,29 @@
    </properties>
   </object>
   <object id="551" gid="616" x="6745" y="11339" width="518" height="582"/>
-  <object id="552" gid="616" x="7097" y="11851" width="358" height="382">
+  <object id="552" gid="616" x="7097" y="11915" width="462" height="446">
    <properties>
-    <property name="interactable_profile" value="throne_royal"/>
+    <property name="interactable_profile" value="throne_eskimo"/>
+   </properties>
+  </object>
+  <object id="553" x="7200" y="12100" width="80" height="80">
+   <properties>
+    <property name="interactable_profile" value="rts_node_seal_hole"/>
+   </properties>
+  </object>
+  <object id="554" x="7350" y="12200" width="80" height="80">
+   <properties>
+    <property name="interactable_profile" value="rts_drop_smoking_rack"/>
+   </properties>
+  </object>
+  <object id="555" x="7150" y="12050" width="48" height="48">
+   <properties>
+    <property name="rts_node_kind" value="worker"/>
+   </properties>
+  </object>
+  <object id="556" gid="616" x="7704" y="540" width="422" height="414">
+   <properties>
+    <property name="interactable_profile" value="throne_jungle"/>
    </properties>
   </object>
  </objectgroup>
@@ -1053,4 +1073,412 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 </data>
  </layer>
+ <objectgroup id="17" name="chiefs">
+  <object id="560" x="7020" y="12080" width="24" height="32">
+   <properties>
+    <property name="rts_type" value="chief"/>
+    <property name="faction_id" value="eskimo"/>
+    <property name="display_name" value="Elder Siku"/>
+    <property name="roam_radius" type="int" value="80"/>
+    <property name="population_total" type="int" value="14"/>
+    <property name="population_workers" type="int" value="0"/>
+    <property name="population_fighters" type="int" value="0"/>
+    <property name="sprite" value="chief_eskimo"/>
+    <property name="throne_id" value="throne_eskimo"/>
+   </properties>
+  </object>
+  <object id="561" x="7620" y="620" width="24" height="32">
+   <properties>
+    <property name="rts_type" value="chief"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="display_name" value="Chieftain Oya"/>
+    <property name="roam_radius" type="int" value="80"/>
+    <property name="population_total" type="int" value="18"/>
+    <property name="population_workers" type="int" value="0"/>
+    <property name="population_fighters" type="int" value="0"/>
+    <property name="sprite" value="chief_jungle"/>
+    <property name="throne_id" value="throne_jungle"/>
+   </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="18" name="resource_nodes">
+  <object id="562" x="6880" y="12060" width="32" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="seal_hole"/>
+    <property name="faction_id" value="eskimo"/>
+    <property name="resource_category" value="food"/>
+    <property name="yield_amount" type="int" value="40"/>
+    <property name="gather_duration" type="float" value="20"/>
+    <property name="max_workers" type="int" value="4"/>
+    <property name="depletable" type="bool" value="false"/>
+    <property name="respawn_seconds" type="float" value="0"/>
+    <property name="dropoff_kind" value="smoking_rack"/>
+    <property name="sprite" value="node_seal_hole"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="563" x="7080" y="12220" width="32" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="seal_hole"/>
+    <property name="faction_id" value="eskimo"/>
+    <property name="resource_category" value="food"/>
+    <property name="yield_amount" type="int" value="40"/>
+    <property name="gather_duration" type="float" value="20"/>
+    <property name="max_workers" type="int" value="4"/>
+    <property name="depletable" type="bool" value="false"/>
+    <property name="respawn_seconds" type="float" value="0"/>
+    <property name="dropoff_kind" value="smoking_rack"/>
+    <property name="sprite" value="node_seal_hole"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="564" x="7240" y="11920" width="32" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="seal_hole"/>
+    <property name="faction_id" value="eskimo"/>
+    <property name="resource_category" value="food"/>
+    <property name="yield_amount" type="int" value="40"/>
+    <property name="gather_duration" type="float" value="20"/>
+    <property name="max_workers" type="int" value="4"/>
+    <property name="depletable" type="bool" value="false"/>
+    <property name="respawn_seconds" type="float" value="0"/>
+    <property name="dropoff_kind" value="smoking_rack"/>
+    <property name="sprite" value="node_seal_hole"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="565" x="6760" y="11780" width="48" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="whale_shore"/>
+    <property name="faction_id" value="eskimo"/>
+    <property name="resource_category" value="fuel"/>
+    <property name="yield_amount" type="int" value="180"/>
+    <property name="gather_duration" type="float" value="90"/>
+    <property name="max_workers" type="int" value="3"/>
+    <property name="depletable" type="bool" value="true"/>
+    <property name="respawn_seconds" type="float" value="300"/>
+    <property name="dropoff_kind" value="rendering_pit"/>
+    <property name="sprite" value="node_whale_shore"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="566" x="6980" y="12340" width="32" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="ice_shelf"/>
+    <property name="faction_id" value="eskimo"/>
+    <property name="resource_category" value="material"/>
+    <property name="yield_amount" type="int" value="25"/>
+    <property name="gather_duration" type="float" value="15"/>
+    <property name="max_workers" type="int" value="3"/>
+    <property name="depletable" type="bool" value="false"/>
+    <property name="respawn_seconds" type="float" value="0"/>
+    <property name="dropoff_kind" value="ice_cutting_post"/>
+    <property name="sprite" value="node_ice_shelf"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="567" x="7140" y="12390" width="32" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="ice_shelf"/>
+    <property name="faction_id" value="eskimo"/>
+    <property name="resource_category" value="material"/>
+    <property name="yield_amount" type="int" value="25"/>
+    <property name="gather_duration" type="float" value="15"/>
+    <property name="max_workers" type="int" value="3"/>
+    <property name="depletable" type="bool" value="false"/>
+    <property name="respawn_seconds" type="float" value="0"/>
+    <property name="dropoff_kind" value="ice_cutting_post"/>
+    <property name="sprite" value="node_ice_shelf"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="568" x="7280" y="11980" width="32" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="walrus_shore"/>
+    <property name="faction_id" value="eskimo"/>
+    <property name="resource_category" value="signature"/>
+    <property name="yield_amount" type="int" value="10"/>
+    <property name="gather_duration" type="float" value="45"/>
+    <property name="max_workers" type="int" value="2"/>
+    <property name="depletable" type="bool" value="true"/>
+    <property name="respawn_seconds" type="float" value="120"/>
+    <property name="dropoff_kind" value="carving_lodge"/>
+    <property name="sprite" value="node_walrus_shore"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="569" x="7420" y="12120" width="32" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="walrus_shore"/>
+    <property name="faction_id" value="eskimo"/>
+    <property name="resource_category" value="signature"/>
+    <property name="yield_amount" type="int" value="10"/>
+    <property name="gather_duration" type="float" value="45"/>
+    <property name="max_workers" type="int" value="2"/>
+    <property name="depletable" type="bool" value="true"/>
+    <property name="respawn_seconds" type="float" value="120"/>
+    <property name="dropoff_kind" value="carving_lodge"/>
+    <property name="sprite" value="node_walrus_shore"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="570" x="7780" y="680" width="32" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="fruit_grove"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="resource_category" value="food"/>
+    <property name="yield_amount" type="int" value="20"/>
+    <property name="gather_duration" type="float" value="8"/>
+    <property name="max_workers" type="int" value="5"/>
+    <property name="depletable" type="bool" value="false"/>
+    <property name="respawn_seconds" type="float" value="0"/>
+    <property name="dropoff_kind" value="village_hearth"/>
+    <property name="sprite" value="node_fruit_grove"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="571" x="7940" y="820" width="32" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="fruit_grove"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="resource_category" value="food"/>
+    <property name="yield_amount" type="int" value="20"/>
+    <property name="gather_duration" type="float" value="8"/>
+    <property name="max_workers" type="int" value="5"/>
+    <property name="depletable" type="bool" value="false"/>
+    <property name="respawn_seconds" type="float" value="0"/>
+    <property name="dropoff_kind" value="village_hearth"/>
+    <property name="sprite" value="node_fruit_grove"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="572" x="8080" y="580" width="32" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="fruit_grove"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="resource_category" value="food"/>
+    <property name="yield_amount" type="int" value="20"/>
+    <property name="gather_duration" type="float" value="8"/>
+    <property name="max_workers" type="int" value="5"/>
+    <property name="depletable" type="bool" value="false"/>
+    <property name="respawn_seconds" type="float" value="0"/>
+    <property name="dropoff_kind" value="village_hearth"/>
+    <property name="sprite" value="node_fruit_grove"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="573" x="7680" y="880" width="24" height="40">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="hardwood_tree"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="resource_category" value="fuel"/>
+    <property name="yield_amount" type="int" value="30"/>
+    <property name="gather_duration" type="float" value="12"/>
+    <property name="max_workers" type="int" value="2"/>
+    <property name="depletable" type="bool" value="true"/>
+    <property name="respawn_seconds" type="float" value="60"/>
+    <property name="dropoff_kind" value="wood_store"/>
+    <property name="sprite" value="node_hardwood_tree"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="574" x="7840" y="920" width="24" height="40">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="hardwood_tree"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="resource_category" value="fuel"/>
+    <property name="yield_amount" type="int" value="30"/>
+    <property name="gather_duration" type="float" value="12"/>
+    <property name="max_workers" type="int" value="2"/>
+    <property name="depletable" type="bool" value="true"/>
+    <property name="respawn_seconds" type="float" value="60"/>
+    <property name="dropoff_kind" value="wood_store"/>
+    <property name="sprite" value="node_hardwood_tree"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="575" x="7980" y="740" width="32" height="24">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="clay_bank"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="resource_category" value="material"/>
+    <property name="yield_amount" type="int" value="20"/>
+    <property name="gather_duration" type="float" value="10"/>
+    <property name="max_workers" type="int" value="3"/>
+    <property name="depletable" type="bool" value="false"/>
+    <property name="respawn_seconds" type="float" value="0"/>
+    <property name="dropoff_kind" value="clay_works"/>
+    <property name="sprite" value="node_clay_bank"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="576" x="8120" y="780" width="32" height="24">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="clay_bank"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="resource_category" value="material"/>
+    <property name="yield_amount" type="int" value="20"/>
+    <property name="gather_duration" type="float" value="10"/>
+    <property name="max_workers" type="int" value="3"/>
+    <property name="depletable" type="bool" value="false"/>
+    <property name="respawn_seconds" type="float" value="0"/>
+    <property name="dropoff_kind" value="clay_works"/>
+    <property name="sprite" value="node_clay_bank"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="577" x="7720" y="1060" width="32" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="obsidian_outcrop"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="resource_category" value="metal"/>
+    <property name="yield_amount" type="int" value="15"/>
+    <property name="gather_duration" type="float" value="25"/>
+    <property name="max_workers" type="int" value="2"/>
+    <property name="depletable" type="bool" value="true"/>
+    <property name="respawn_seconds" type="float" value="180"/>
+    <property name="dropoff_kind" value="knapping_stone"/>
+    <property name="sprite" value="node_obsidian_outcrop"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="578" x="7860" y="1020" width="32" height="32">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="obsidian_outcrop"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="resource_category" value="metal"/>
+    <property name="yield_amount" type="int" value="15"/>
+    <property name="gather_duration" type="float" value="25"/>
+    <property name="max_workers" type="int" value="2"/>
+    <property name="depletable" type="bool" value="true"/>
+    <property name="respawn_seconds" type="float" value="180"/>
+    <property name="dropoff_kind" value="knapping_stone"/>
+    <property name="sprite" value="node_obsidian_outcrop"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="579" x="8020" y="640" width="24" height="24">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="spice_cluster"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="resource_category" value="signature"/>
+    <property name="yield_amount" type="int" value="8"/>
+    <property name="gather_duration" type="float" value="20"/>
+    <property name="max_workers" type="int" value="3"/>
+    <property name="depletable" type="bool" value="false"/>
+    <property name="respawn_seconds" type="float" value="0"/>
+    <property name="dropoff_kind" value="trade_hut"/>
+    <property name="sprite" value="node_spice_cluster"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="580" x="8160" y="680" width="24" height="24">
+   <properties>
+    <property name="rts_type" value="resource_node"/>
+    <property name="node_kind" value="spice_cluster"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="resource_category" value="signature"/>
+    <property name="yield_amount" type="int" value="8"/>
+    <property name="gather_duration" type="float" value="20"/>
+    <property name="max_workers" type="int" value="3"/>
+    <property name="depletable" type="bool" value="false"/>
+    <property name="respawn_seconds" type="float" value="0"/>
+    <property name="dropoff_kind" value="trade_hut"/>
+    <property name="sprite" value="node_spice_cluster"/>
+    <property name="gather_offset_y" type="int" value="0"/>
+   </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="19" name="dropoff_buildings">
+  <object id="581" x="7360" y="12160" width="40" height="40">
+   <properties>
+    <property name="rts_type" value="dropoff_building"/>
+    <property name="dropoff_kind" value="smoking_rack"/>
+    <property name="faction_id" value="eskimo"/>
+    <property name="accepts_categories" value="food,signature"/>
+    <property name="sprite" value="building_smoking_rack"/>
+   </properties>
+  </object>
+  <object id="582" x="7160" y="12040" width="40" height="40">
+   <properties>
+    <property name="rts_type" value="dropoff_building"/>
+    <property name="dropoff_kind" value="rendering_pit"/>
+    <property name="faction_id" value="eskimo"/>
+    <property name="accepts_categories" value="fuel"/>
+    <property name="sprite" value="building_rendering_pit"/>
+   </properties>
+  </object>
+  <object id="583" x="7260" y="12240" width="40" height="40">
+   <properties>
+    <property name="rts_type" value="dropoff_building"/>
+    <property name="dropoff_kind" value="ice_cutting_post"/>
+    <property name="faction_id" value="eskimo"/>
+    <property name="accepts_categories" value="material"/>
+    <property name="sprite" value="building_ice_cutting_post"/>
+   </properties>
+  </object>
+  <object id="584" x="7880" y="760" width="40" height="40">
+   <properties>
+    <property name="rts_type" value="dropoff_building"/>
+    <property name="dropoff_kind" value="village_hearth"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="accepts_categories" value="food"/>
+    <property name="sprite" value="building_village_hearth"/>
+   </properties>
+  </object>
+  <object id="585" x="8040" y="980" width="40" height="40">
+   <properties>
+    <property name="rts_type" value="dropoff_building"/>
+    <property name="dropoff_kind" value="wood_store"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="accepts_categories" value="fuel"/>
+    <property name="sprite" value="building_wood_store"/>
+   </properties>
+  </object>
+  <object id="586" x="8180" y="860" width="40" height="40">
+   <properties>
+    <property name="rts_type" value="dropoff_building"/>
+    <property name="dropoff_kind" value="clay_works"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="accepts_categories" value="material"/>
+    <property name="sprite" value="building_clay_works"/>
+   </properties>
+  </object>
+  <object id="587" x="7760" y="1120" width="40" height="40">
+   <properties>
+    <property name="rts_type" value="dropoff_building"/>
+    <property name="dropoff_kind" value="knapping_stone"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="accepts_categories" value="metal"/>
+    <property name="sprite" value="building_knapping_stone"/>
+   </properties>
+  </object>
+  <object id="588" x="8260" y="720" width="40" height="40">
+   <properties>
+    <property name="rts_type" value="dropoff_building"/>
+    <property name="dropoff_kind" value="trade_hut"/>
+    <property name="faction_id" value="jungle"/>
+    <property name="accepts_categories" value="signature"/>
+    <property name="sprite" value="building_trade_hut"/>
+   </properties>
+  </object>
+ </objectgroup>
 </map>

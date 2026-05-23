@@ -20,6 +20,7 @@ from game_settings import GameSettings
 from SettingsMenu import SettingsMenu
 from DeathMenu import DeathMenu
 from benchmark_runtime import BENCHMARK_RUNTIME
+from rts_validation_runtime import RTS_VALIDATION_RUNTIME
 import psutil
 
 level_8_layout_path = '../levels/Map8'
@@ -85,8 +86,27 @@ class Game:
         self.debug_sprite_count = 0
         self.debug_event_queue_length = 0        
 
-        if BENCHMARK_RUNTIME.enabled:
+        if RTS_VALIDATION_RUNTIME.enabled:
+            self._bootstrap_rts_validation_run()
+        elif BENCHMARK_RUNTIME.enabled:
             self._bootstrap_benchmark_run()
+
+    def _bootstrap_rts_validation_run(self):
+        if not unlocked_player_directory:
+            raise RuntimeError("RTS validation requires at least one selectable player.")
+        self.player_selection.selected_player_info_dir = unlocked_player_directory[0]
+        base = unlocked_player_base_stats[0].copy()
+        self.player_configuration = PlayerConfiguration(
+            input_manager=self.input_manager,
+            base_stats=base,
+            remaining_points=0,
+            game=self,
+        )
+        self.player_configuration.final_stats = base.copy()
+        self.in_start_menu = False
+        self.in_player_selection = False
+        self.in_level_selection = False
+        self.start_level(6)
 
     def _bootstrap_benchmark_run(self):
         if not unlocked_player_directory:
@@ -262,8 +282,11 @@ class Game:
 
             for event in events:
                 if event.type == pygame.QUIT:
+                    exit_code = 0
+                    if RTS_VALIDATION_RUNTIME.shutdown_requested:
+                        exit_code = RTS_VALIDATION_RUNTIME.shutdown_exit_code
                     pygame.quit()
-                    sys.exit()
+                    sys.exit(exit_code)
 
             if self.settings_menu.visible:
                 self.settings_menu.handle_events(events)

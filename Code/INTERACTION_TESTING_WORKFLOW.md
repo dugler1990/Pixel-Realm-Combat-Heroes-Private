@@ -65,3 +65,52 @@ For effect-focused and faction-policy correctness, the validation suite also cov
 - `MultiFactionSpawnerRoute` (different spawned factions, allied deny, hostile allow, aggro split)
 - `PrefilterRoute` (combat prefilter candidate skip/allow behavior)
 - `OwnerInheritanceRoute` (owner team propagation for emitted interaction source_team)
+
+## RTS gather validation (in-game)
+
+Runs the real game (`Main2.py` → `Level4` → `levels/tmx/map.tmx`) with scripted chief/worker/gather scenarios and an on-screen HUD (benchmark-style).
+
+From the `Code` directory — **visible window** (default; watch workers walk and gather):
+
+```bash
+python rts_validation.py
+```
+
+Headless CI (~15s, no window, fast teleports):
+
+```bash
+python rts_validation.py --headless
+```
+
+Do **not** prefix with `SDL_VIDEODRIVER=` — an empty value breaks pygame.
+
+Single scenario:
+
+```bash
+python rts_validation.py --scenario eskimo_gather_delivers
+```
+
+JSON output:
+
+```bash
+python rts_validation.py --json
+```
+
+Visible defaults: **8s hold** after each pass; per-scenario caps in the driver (gather max **38s**, quick checks **12–16s**). Visible pace shortens gather-at-node to 6s (still walk + deliver). Tune if needed:
+
+```bash
+python rts_validation.py --hold-seconds 10
+```
+
+Results are written to `logs/rts_validation_latest.json`. Exit code is 0 on full pass, 1 on any failure.
+
+Requires `chiefs`, `resource_nodes`, and `dropoff_buildings` object layers on the TMX map.
+
+### Eskimo build sites (tile properties)
+
+Ice Cutting Post pads are discovered from **tile-layer** custom properties (not object layers):
+
+- `deep_snow=true` or `rts_terrain=deep_snow` on ground tiles
+- Optional `build_faction=eskimo` (defaults to eskimo)
+
+Connected deep-snow tiles flood-fill into one `BuildSite` at layout load. Remove pre-placed `ice_shelf` resource nodes on those tiles in `levels/tmx/map.tmx` so players must build first. Building catalog: `levels/tmx/rts_buildings.json`.

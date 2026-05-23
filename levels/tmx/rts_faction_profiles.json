@@ -1,0 +1,101 @@
+{
+  "eskimo": {
+    "id": "eskimo",
+    "displayName": "Eskimo",
+    "biome": "arctic",
+    "workerUnitType": "eskimo",
+    "signatureResourceName": "Ivory",
+    "inactiveCategories": [],
+    "foodUpkeepPerUnitPerMin": 0.5,
+    "categoryDisplayNames": {
+      "food": "Seal Meat",
+      "fuel": "Blubber",
+      "material": "Ice",
+      "metal": "Bone",
+      "signature": "Ivory"
+    },
+    "resourceSources": [
+      {
+        "entityType": "seal_hole",
+        "category": "food",
+        "yieldAmount": 40,
+        "gatherDuration": 20,
+        "dropoffBuilding": "smoking_rack"
+      },
+      {
+        "entityType": "whale_shore",
+        "category": "fuel",
+        "yieldAmount": 180,
+        "gatherDuration": 90,
+        "dropoffBuilding": "rendering_pit"
+      },
+      {
+        "entityType": "ice_shelf",
+        "category": "material",
+        "yieldAmount": 25,
+        "gatherDuration": 15,
+        "dropoffBuilding": "ice_cutting_post"
+      },
+      {
+        "entityType": "walrus_shore",
+        "category": "signature",
+        "yieldAmount": 10,
+        "gatherDuration": 45,
+        "dropoffBuilding": "carving_lodge"
+      }
+    ]
+  },
+  "jungle_tribe": {
+    "id": "jungle_tribe",
+    "displayName": "Jungle Tribe",
+    "biome": "jungle",
+    "workerUnitType": "jungle_worker",
+    "signatureResourceName": "Spice",
+    "inactiveCategories": [],
+    "foodUpkeepPerUnitPerMin": 0.8,
+    "resourceSources": [
+      {
+        "entityType": "fruit_grove",
+        "category": "food",
+        "yieldAmount": 20,
+        "gatherDuration": 8,
+        "dropoffBuilding": "village_hearth"
+      },
+      {
+        "entityType": "hunt_camp",
+        "category": "food",
+        "yieldAmount": 20,
+        "gatherDuration": 8,
+        "dropoffBuilding": "village_hearth"
+      },
+      {
+        "entityType": "hardwood_tree",
+        "category": "fuel",
+        "yieldAmount": 30,
+        "gatherDuration": 12,
+        "dropoffBuilding": "wood_store"
+      },
+      {
+        "entityType": "clay_bank",
+        "category": "material",
+        "yieldAmount": 20,
+        "gatherDuration": 10,
+        "dropoffBuilding": "clay_works"
+      },
+      {
+        "entityType": "obsidian_outcrop",
+        "category": "metal",
+        "yieldAmount": 15,
+        "gatherDuration": 25,
+        "dropoffBuilding": "knapping_stone"
+      },
+      {
+        "entityType": "spice_plant",
+        "category": "signature",
+        "yieldAmount": 8,
+        "gatherDuration": 20,
+        "dropoffBuilding": "trade_hut"
+      }
+    ]
+  }
+}

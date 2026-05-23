@@ -18,6 +18,7 @@ Edit [`debug_logging.json`](debug_logging.json) next to this file. Paths under `
 | `mask_ascii` | `game.debug.mask_ascii` | ASCII mask row dump ([`Support.py`](Support.py) `print_mask`). |
 | `quadtree` | `game.quadtree` | Quadtree `print_all` traversal ([`QuadTree.py`](QuadTree.py)). |
 | `effect_environmental` | `game.effect.environmental` | Environmental damage effects (e.g. heat) ([`Effect.py`](Effect.py)). |
+| `rts` | `game.rts` | Worker spawn, gather assign, state transitions, wallet delivery ([`rts/session.py`](rts/session.py), [`rts/gather/controller.py`](rts/gather/controller.py)). |
 
 ## Fields per channel
 

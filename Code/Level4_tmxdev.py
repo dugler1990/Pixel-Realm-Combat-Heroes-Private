@@ -53,8 +53,9 @@ from hashRect import HashableRect
 from Entity import Entity
 from tmx_layout_manager import LayoutManager
 from benchmark_runtime import BENCHMARK_RUNTIME
+from rts_validation_runtime import RTS_VALIDATION_RUNTIME
 from Interaction import InteractionContext, InteractionResolver
-from rts import RtsSession
+from rts import RtsSession, RtsWorldSim
 from rts.world_adapter import RtsWorldAdapter
 from Support import resolve_env_interactable_path
 #with open('triggers.json',r) as file
@@ -107,14 +108,6 @@ class LevelRtsWorldAdapter(RtsWorldAdapter):
     def get_visible_sprites(self):
         return self.level.layout_manager.visible_sprites
 
-    def get_selectable_sprites(self):
-        lm = self.level.layout_manager
-        selectables = list(getattr(lm, "environment_interactables", None) or [])
-        for sprite in lm.visible_sprites.sprites():
-            if getattr(sprite, "rts_selectable", False) and sprite not in selectables:
-                selectables.append(sprite)
-        return selectables
-
     def get_map_bounds(self):
         visible = self.level.layout_manager.visible_sprites
         ground = getattr(visible, "ground_surface", None)
@@ -134,6 +127,68 @@ class LevelRtsWorldAdapter(RtsWorldAdapter):
 
     def is_player_dead(self):
         return bool(getattr(self.level.player, "is_dead", False))
+
+    def get_obstacle_sprites(self):
+        return getattr(self.level.layout_manager, "obstacle_sprites", None)
+
+    def get_obstacle_quad_tree(self):
+        return getattr(self.level.layout_manager, "obstacle_quad_tree", None)
+
+    def get_walk_grid(self):
+        return getattr(self.level.layout_manager, "walk_grid", None)
+
+    def get_rts_registry(self):
+        return getattr(self.level.layout_manager, "rts_registry", None)
+
+    def get_layout_callback_update_quad_tree(self):
+        return self.level.layout_manager.add_obstacle_sprite_to_quad_tree
+
+    def get_selectable_sprites(self, throne_profile_id=""):
+        lm = self.level.layout_manager
+        registry = getattr(lm, "rts_registry", None)
+        selectables = list(getattr(lm, "environment_interactables", None) or [])
+        for sprite in lm.visible_sprites.sprites():
+            if getattr(sprite, "rts_selectable", False) and sprite not in selectables:
+                selectables.append(sprite)
+        if throne_profile_id and registry is not None:
+            chief = registry.get_chief_for_throne(throne_profile_id)
+            filtered = []
+            for sprite in selectables:
+                kind = str(getattr(sprite, "kind", "")).strip().lower()
+                if kind == "chief":
+                    if sprite is chief:
+                        filtered.append(sprite)
+                    continue
+                if kind == "resource_node":
+                    fid = getattr(self.level.rts_session, "faction", None)
+                    if fid is not None and getattr(sprite, "faction_id", "") == fid.id:
+                        filtered.append(sprite)
+                    elif fid is None:
+                        filtered.append(sprite)
+                    continue
+                if kind == "build_site":
+                    fid = getattr(self.level.rts_session, "faction", None)
+                    if fid is not None and getattr(sprite, "faction_id", "") == fid.id:
+                        filtered.append(sprite)
+                    elif fid is None:
+                        filtered.append(sprite)
+                    continue
+                filtered.append(sprite)
+            return filtered
+        return selectables
+
+    def get_sprite_groups(self):
+        lm = self.level.layout_manager
+        return [lm.obstacle_sprites, lm.visible_sprites]
+
+    def get_rts_population_count(self, faction_id=""):
+        from rts.assets import normalize_faction_id
+
+        fid = normalize_faction_id(faction_id)
+        registry = self.get_rts_registry()
+        if registry and fid:
+            return len(registry.workers_by_faction.get(fid, []))
+        return super().get_rts_population_count()
 
 
 def subtract_circle(circle1, circle2, surface):
@@ -351,9 +406,19 @@ class Level4:
         self.evasion_player = EvasionPlayer(self.animation_player, self.create_trap)
         self.current_attack = None
         self.rts_world_adapter = LevelRtsWorldAdapter(self)
-        self.rts_session = RtsSession(self.rts_world_adapter, self.input_manager)
+        self.rts_world_sim = RtsWorldSim()
+        self.rts_world_sim.bind_navigation(self.rts_world_adapter)
+        self.rts_session = RtsSession(
+            self.rts_world_adapter, self.input_manager, self.rts_world_sim
+        )
 
-        if self.benchmark_runtime.enabled:
+        self._rts_validation_driver = None
+        if RTS_VALIDATION_RUNTIME.enabled:
+            from rts_validation_driver import RtsValidationDriver
+
+            self._rts_validation_driver = RtsValidationDriver()
+            self._apply_benchmark_player_survivability()
+        elif self.benchmark_runtime.enabled:
             self._initialize_benchmark_mode()
 
         if restart:
@@ -503,6 +568,38 @@ class Level4:
         x = self.display_surface.get_width() - panel_width - 12
         y = self.display_surface.get_height() - panel_height - 12
         self.display_surface.blit(panel, (x, y))
+
+    def _draw_rts_validation_overlay(self):
+        if not RTS_VALIDATION_RUNTIME.enabled or not RTS_VALIDATION_RUNTIME.overlay_enabled:
+            return
+        state = RTS_VALIDATION_RUNTIME.overlay_state
+        lines = state.get("lines") if state else None
+        if not lines:
+            return
+
+        font = pygame.font.Font(None, 24)
+        padding = 8
+        line_gap = 4
+        phase = str(state.get("phase", "RUNNING")).upper()
+        phase_color = (80, 255, 120) if phase == "PASS" else (255, 80, 80) if phase == "FAIL" else (255, 255, 255)
+
+        surfaces = []
+        for i, line in enumerate(lines):
+            color = phase_color if i == 0 and line == "RTS VALIDATION" else (255, 255, 255)
+            surfaces.append(font.render(line, True, color))
+        max_width = max(surface.get_width() for surface in surfaces)
+        total_height = sum(surface.get_height() for surface in surfaces) + line_gap * (len(surfaces) - 1)
+        panel_width = max_width + padding * 2
+        panel_height = total_height + padding * 2
+        panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+        panel.fill((0, 0, 0, 190))
+
+        y = padding
+        for surface in surfaces:
+            panel.blit(surface, (padding, y))
+            y += surface.get_height() + line_gap
+
+        self.display_surface.blit(panel, (12, 12))
 
     def _start_next_benchmark_case(self):
         case = self.benchmark_runtime.start_next_matrix_case()
@@ -1737,8 +1834,16 @@ class Level4:
         #print(self.player.rect.center)
         #print(self.layout_manager.player.rect.center)
         self.layout_manager.spawner.on_layout_update()
+        if hasattr(self, "rts_world_sim"):
+            self.rts_world_sim.tick(dt_real, self.rts_world_adapter)
         if hasattr(self, "rts_session"):
             self.rts_session.update(dt_real)
+        if getattr(self, "_rts_validation_driver", None) is not None:
+            if self._rts_validation_driver.tick(self, dt_real):
+                RTS_VALIDATION_RUNTIME.write_results()
+                code = 0 if RTS_VALIDATION_RUNTIME.all_passed else 1
+                RTS_VALIDATION_RUNTIME.request_shutdown(code)
+                pygame.event.post(pygame.event.Event(pygame.QUIT))
         camera_focus = (
             self.rts_session.camera_focus()
             if getattr(self, "rts_session", None) is not None and self.rts_session.is_active()
@@ -1915,6 +2020,7 @@ class Level4:
             # Check for and update enemy sprites specifically
             self.ui.display(self.player)
             self._draw_benchmark_overlay()
+            self._draw_rts_validation_overlay()
 
             for sprite in self.layout_manager.visible_sprites.sprites():
                 # debug

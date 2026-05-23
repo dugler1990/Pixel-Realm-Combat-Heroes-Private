@@ -25,6 +25,7 @@ LOGGER_INPUT = "game.input"
 LOGGER_MASK_ASCII = "game.debug.mask_ascii"
 LOGGER_QUADTREE = "game.quadtree"
 LOGGER_EFFECT_ENVIRONMENTAL = "game.effect.environmental"
+LOGGER_RTS = "game.rts"
 
 # Channel keys (used in debug_logging.json) -> logger name
 _CHANNEL_TO_LOGGER: Dict[str, str] = {
@@ -40,6 +41,7 @@ _CHANNEL_TO_LOGGER: Dict[str, str] = {
     "mask_ascii": LOGGER_MASK_ASCII,
     "quadtree": LOGGER_QUADTREE,
     "effect_environmental": LOGGER_EFFECT_ENVIRONMENTAL,
+    "rts": LOGGER_RTS,
 }
 
 _DEFAULT_CHANNELS: Dict[str, Dict[str, Any]] = {
@@ -114,6 +116,12 @@ _DEFAULT_CHANNELS: Dict[str, Dict[str, Any]] = {
         "level": "DEBUG",
         "file": "logs/effect_environmental.log",
         "console": False,
+    },
+    "rts": {
+        "enabled": False,
+        "level": "DEBUG",
+        "file": "logs/rts.log",
+        "console": True,
     },
 }
 

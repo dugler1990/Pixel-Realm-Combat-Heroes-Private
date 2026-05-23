@@ -57,7 +57,14 @@ class SelectableRegistry:
         if getattr(sprite, "rts_selectable", False):
             return True
         kind = str(getattr(sprite, "kind", "")).strip().lower()
-        return kind in ("seat", "rts_building", "rts_unit", "resource_node")
+        return kind in (
+            "seat",
+            "chief",
+            "rts_building",
+            "rts_unit",
+            "resource_node",
+            "build_site",
+        )
 
     def _wrap(self, sprite):
         rts_def = getattr(sprite, "rts_definition", None)

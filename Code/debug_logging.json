@@ -70,5 +70,11 @@
     "level": "DEBUG",
     "file": "logs/effect_environmental.log",
     "console": false
+  },
+  "rts": {
+    "enabled": true,
+    "level": "DEBUG",
+    "file": "logs/rts.log",
+    "console": true
   }
 }

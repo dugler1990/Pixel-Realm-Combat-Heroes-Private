@@ -46,6 +46,15 @@ from Entity import Entity
 from ItemVisual import ItemVisual
 from InteractableChest import InteractableChest
 from InteractableSeat import InteractableSeat
+from navigation.walk_grid import build_walk_grid
+from rts.entities import DropoffBuilding, ResourceNode, RtsWorker
+from rts.registry import RtsWorldRegistry
+from rts.tmx_config import dropoff_config, resource_node_config
+from rts.tmx_spawn import (
+    spawn_chiefs_layer,
+    spawn_dropoff_buildings_layer,
+    spawn_resource_nodes_layer,
+)
 
 _tmx_layout_log = get_tmx_layout_logger()
 
@@ -831,6 +840,12 @@ class LayoutManager:
             )
             return False
 
+    def _try_spawn_rts_object(
+        self, object_, props, x_pos, y_pos, width_scaling_factor, height_scaling_factor
+    ):
+        # Legacy rts_node_kind objects on Object Layer 1 are superseded by dedicated TMX layers.
+        return False
+
     def create_object_layer( self,tmx_object_layer ):
         
         ## Fix discrepancy between tiled map tilesize and game tilesize
@@ -848,6 +863,11 @@ class LayoutManager:
             props = getattr(object_, "properties", None) or {}
 
             if self._try_spawn_animated_env_object(
+                object_, props, x_pos, y_pos, width_scaling_factor, height_scaling_factor
+            ):
+                continue
+
+            if self._try_spawn_rts_object(
                 object_, props, x_pos, y_pos, width_scaling_factor, height_scaling_factor
             ):
                 continue
@@ -933,6 +953,50 @@ class LayoutManager:
                         merged_config=merged,
                         display_size=tuple(int(x) for x in disp),
                     )
+                    continue
+                if kind == "resource_node":
+                    entity_type = str(
+                        merged.get("entity_type") or props.get("rts_entity_type") or ""
+                    ).strip()
+                    if entity_type:
+                        gw = object_.width * width_scaling_factor
+                        gh = object_.height * height_scaling_factor
+                        if gw <= 0:
+                            gw = TILESIZE
+                        if gh <= 0:
+                            gh = TILESIZE
+                        cfg = resource_node_config(entity_type)
+                        node = ResourceNode(
+                            (x_pos + gw / 2, y_pos + gh / 2),
+                            [self.obstacle_sprites, self.visible_sprites],
+                            cfg,
+                            self.rts_registry,
+                        )
+                        self.environment_interactables.append(node)
+                    continue
+                if kind == "rts_building":
+                    building_type = str(
+                        merged.get("building_type")
+                        or merged.get("entity_type")
+                        or props.get("rts_entity_type")
+                        or ""
+                    ).strip()
+                    if building_type:
+                        cx = x_pos + TILESIZE / 2
+                        cy = y_pos + TILESIZE / 2
+                        gw = object_.width * width_scaling_factor
+                        gh = object_.height * height_scaling_factor
+                        if gw > 0 and gh > 0:
+                            cx = x_pos + gw / 2
+                            cy = y_pos + gh / 2
+                        cfg = dropoff_config(building_type)
+                        building = DropoffBuilding(
+                            (cx, cy),
+                            [self.obstacle_sprites, self.visible_sprites],
+                            cfg,
+                            self.rts_registry,
+                        )
+                        self.environment_interactables.append(building)
                     continue
                 _tmx_layout_log.debug(
                     "env interactable kind=%r not implemented; using static Tile",
@@ -1541,6 +1605,7 @@ class LayoutManager:
         self.tmxdata = load_pygame( tmx_path + '/map.tmx' )
         self.tmx_folder = os.path.abspath(tmx_path) if tmx_path else ""
         self.environment_interactables = []
+        self.rts_registry = RtsWorldRegistry()
 
         # Fresh procedural grass for this map (LayoutManager reuses one GrassManager).
         self.grass_manager.grass_tiles.clear()
@@ -1567,6 +1632,15 @@ class LayoutManager:
         for layout in self.tmx_ground_layers:
 
             self.create_ground_layer(layout)
+
+        try:
+            from rts.build.sites_from_tiles import index_build_sites_from_tmx
+
+            indexed = index_build_sites_from_tmx(self)
+            if indexed:
+                _tmx_layout_log.debug("Indexed %d RTS build sites from tile properties", indexed)
+        except Exception as exc:
+            _tmx_layout_log.debug("RTS build site indexing skipped: %s", exc)
 
         self.visible_sprites.set_grass_grid(self.grass_tile_grid)
 
@@ -1600,6 +1674,12 @@ class LayoutManager:
                 self.create_grass_object_layer(layout)
             elif has_interactables_name:
                 self.create_object_layer(layout)
+            elif layer_name_lower == "chiefs":
+                spawn_chiefs_layer(self, layout)
+            elif layer_name_lower in ("resource_nodes", "rts_resource_nodes"):
+                spawn_resource_nodes_layer(self, layout)
+            elif layer_name_lower == "dropoff_buildings":
+                spawn_dropoff_buildings_layer(self, layout)
             elif has_effect_name or (has_shape_objects and not has_image_objects):
                 self.create_effect_layer(layout)
             else:
@@ -1635,7 +1715,12 @@ class LayoutManager:
             backend=self._entity_broadphase_backend(),
             grid_cell_size=self._entity_broadphase_grid_cell_size(),
         )
-                
+        self.walk_grid = build_walk_grid(
+            self.obstacle_quad_tree,
+            self.csv_layout_width,
+            self.csv_layout_height,
+            TILESIZE,
+        )
 
         
         

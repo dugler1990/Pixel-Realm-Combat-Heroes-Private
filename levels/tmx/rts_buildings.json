@@ -1,0 +1,14 @@
+{
+  "ice_cutting_post": {
+    "label": "Ice Cutting Post",
+    "factions": ["eskimo"],
+    "cost": {},
+    "placementRequires": "deep_snow",
+    "clearDurationMs": 8000,
+    "buildDurationMs": 2000,
+    "spawns": {
+      "dropoffKind": "ice_cutting_post",
+      "nodeKind": "ice_shelf"
+    }
+  }
+}

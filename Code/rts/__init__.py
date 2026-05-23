@@ -5,5 +5,6 @@ hosted by a standalone RTS game state.
 """
 
 from .session import RtsSession
+from .world_sim import RtsWorldSim
 
-__all__ = ["RtsSession"]
+__all__ = ["RtsSession", "RtsWorldSim"]

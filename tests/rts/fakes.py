@@ -71,8 +71,18 @@ class FakeWorldAdapter(RtsWorldAdapter):
     def get_visible_sprites(self):
         return self.selectables
 
-    def get_selectable_sprites(self):
+    def get_selectable_sprites(self, throne_profile_id=""):
         return self.selectables
+
+    def get_rts_registry(self):
+        from rts.registry import RtsWorldRegistry
+
+        if not hasattr(self, "_rts_registry") or self._rts_registry is None:
+            self._rts_registry = RtsWorldRegistry()
+        return self._rts_registry
+
+    def get_sprite_groups(self):
+        return []
 
     def get_map_bounds(self):
         return self.map_bounds
@@ -82,3 +92,28 @@ class FakeWorldAdapter(RtsWorldAdapter):
 
     def is_player_dead(self):
         return self.player_dead
+
+    def get_rts_population_count(self, faction_id=""):
+        registry = self.get_rts_registry()
+        if faction_id and registry is not None:
+            from rts.assets import normalize_faction_id
+
+            fid = normalize_faction_id(faction_id)
+            return len(registry.workers_by_faction.get(fid, []))
+        return sum(
+            1
+            for s in self.selectables
+            if str(getattr(s, "kind", "")).strip().lower() == "rts_unit"
+        )
+
+    def get_obstacle_sprites(self):
+        return None
+
+    def get_walk_grid(self):
+        return None
+
+    def get_obstacle_quad_tree(self):
+        return None
+
+    def get_layout_callback_update_quad_tree(self):
+        return None
