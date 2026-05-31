@@ -3,7 +3,17 @@
   "seal_colony": {"maxWorkers": 2, "depletable": false},
   "whale_shore": {"maxWorkers": 3, "depletable": false, "respawnSeconds": 300},
   "whale": {"maxWorkers": 3, "depletable": false, "respawnSeconds": 300},
-  "ice_shelf": {"maxWorkers": 2, "depletable": true},
+  "ice_shelf": {
+    "maxWorkers": 3,
+    "depletable": true,
+    "maxIce": 100,
+    "visualLayers": [
+      {"iceCapacity": 25, "folder": "ice_shelf/layer_0", "frameIntervalSec": 0.2},
+      {"iceCapacity": 25, "folder": "ice_shelf/layer_1", "frameIntervalSec": 0.2},
+      {"iceCapacity": 25, "folder": "ice_shelf/layer_2", "frameIntervalSec": 0.2},
+      {"iceCapacity": 25, "folder": "ice_shelf/layer_3", "frameIntervalSec": 0.2}
+    ]
+  },
   "walrus_shore": {"maxWorkers": 1, "depletable": false},
   "polar_bear_den": {"maxWorkers": 1, "depletable": false},
   "fruit_grove": {"maxWorkers": 3, "depletable": false},

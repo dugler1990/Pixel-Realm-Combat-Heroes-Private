@@ -258,6 +258,40 @@ def resolve_env_interactable_path(raw_path, tmx_folder=None):
     return cand2
 
 
+def normalize_animation_frame(
+    surf,
+    *,
+    target_body_size=(40, 50),
+    canvas_size=(111, 62),
+    foot_y=58,
+):
+    """
+    Scale opaque sprite body to a consistent footprint and anchor feet on canvas.
+    Used for RTS workers whose animation folders share canvas size but differ in mask bbox.
+    """
+    canvas_w, canvas_h = canvas_size
+    target_w, target_h = target_body_size
+    mask = pygame.mask.from_surface(surf)
+    bounds = _mask_opaque_bounds(mask)
+    out = pygame.Surface(canvas_size, pygame.SRCALPHA)
+    if bounds is None or bounds.width <= 0 or bounds.height <= 0:
+        out.blit(surf, (0, 0))
+        return out
+    crop = surf.subsurface(bounds)
+    scale = min(target_w / bounds.width, target_h / bounds.height)
+    new_w = max(1, int(round(bounds.width * scale)))
+    new_h = max(1, int(round(bounds.height * scale)))
+    scaled = pygame.transform.smoothscale(crop, (new_w, new_h))
+    x = canvas_w // 2 - new_w // 2
+    y = int(foot_y) - new_h
+    out.blit(scaled, (x, y))
+    return out
+
+
+def normalize_animation_frames(frames, **kwargs):
+    return [normalize_animation_frame(frame, **kwargs) for frame in frames]
+
+
 def _animation_frame_sort_key(filename):
     """Sort 0.png,1.png,...,10.png in numeric order (plain sorted() is lexicographic)."""
     stem, _, ext = filename.rpartition(".")

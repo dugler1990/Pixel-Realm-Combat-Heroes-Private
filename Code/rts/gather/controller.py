@@ -4,9 +4,8 @@ import pygame
 
 from game_logging import get_debug_logger
 from navigation.grid_pathfinder import find_path
-from navigation.quad_mover import step_toward
 
-from ..entities.worker import (
+from ..entities.gather_states import (
     DELIVERING,
     GATHERING,
     IDLE,
@@ -68,7 +67,12 @@ class GatherController:
             self._wallet = wallet
         dropoff = None
         if self.registry is not None:
-            dropoff = self.registry.find_dropoff(worker.faction_id, node.dropoff_kind)
+            from_pos = getattr(worker, "rect", None) and worker.rect.center
+            if from_pos is None:
+                from_pos = node.gather_point
+            dropoff = self.registry.find_nearest_dropoff(
+                worker.faction_id, node.dropoff_kind, from_pos
+            )
         worker.assigned_node = node
         worker.assigned_dropoff = dropoff
         worker.gather_lost = False
@@ -100,22 +104,34 @@ class GatherController:
                 node.dropoff_kind,
             )
         elif self._walk_grid is not None and not self._plan_path_to(
-            worker, node.gather_point, "assign"
+            worker, self._node_goal(worker, node), "assign"
         ):
             worker.gather_state = LOST
             worker.gather_lost = True
             _rts_log.warning(
                 "assign: no path to node %s from %s",
-                node.gather_point,
+                self._node_goal(worker, node),
                 worker.rect.center,
             )
         return True
+
+    def _node_goal(self, worker, node):
+        if node is None:
+            return None
+        if hasattr(node, "gather_goal_for"):
+            return node.gather_goal_for(worker)
+        return node.gather_point
+
+    def _dropoff_goal(self, dropoff):
+        if dropoff is None:
+            return None
+        return getattr(dropoff, "dropoff_point", None) or dropoff.rect.center
 
     def cancel(self, worker):
         if worker is None:
             return
         if getattr(worker, "_registered", False) and worker.assigned_node is not None:
-            worker.assigned_node.unregister_worker()
+            worker.assigned_node.unregister_worker(worker)
         worker.assigned_node = None
         worker.assigned_dropoff = None
         worker.gather_state = IDLE
@@ -216,14 +232,13 @@ class GatherController:
 
         if state == MOVING_TO_NODE:
             if not worker._registered:
-                if node.has_free_slot():
-                    node.register_worker()
+                if node.has_free_slot() and node.register_worker(worker):
                     worker._registered = True
                 else:
                     worker.gather_state = WAITING_AT_NODE
                     return
             if self._move_along_path(
-                worker, node.gather_point, dt, obstacle_sprites, label="to_node"
+                worker, self._node_goal(worker, node), dt, obstacle_sprites, label="to_node"
             ):
                 worker.gather_state = GATHERING
                 worker._timer = node.gather_duration
@@ -231,20 +246,21 @@ class GatherController:
             return
 
         if state == WAITING_AT_NODE:
-            if node.has_free_slot():
-                node.register_worker()
+            worker.move_target = None
+            if node.has_free_slot() and node.register_worker(worker):
                 worker._registered = True
                 worker.gather_state = MOVING_TO_NODE
                 if self._walk_grid is not None:
-                    self._plan_path_to(worker, node.gather_point, "slot_open")
+                    self._plan_path_to(worker, self._node_goal(worker, node), "slot_open")
             return
 
         if state == GATHERING:
+            worker.move_target = None
             worker._timer -= dt
             if worker._timer <= 0:
                 node.complete_gather_cycle()
                 if worker._registered:
-                    node.unregister_worker()
+                    node.unregister_worker(worker)
                     worker._registered = False
                 worker.gather_state = MOVING_TO_DROPOFF
                 worker._dropoff_path_planned = False
@@ -254,15 +270,16 @@ class GatherController:
         if state == MOVING_TO_DROPOFF:
             if not worker._dropoff_path_planned:
                 worker._dropoff_path_planned = True
+                drop_goal = self._dropoff_goal(dropoff)
                 if self._walk_grid is not None and not self._plan_path_to(
-                    worker, dropoff.rect.center, "to_dropoff"
+                    worker, drop_goal, "to_dropoff"
                 ):
                     worker.gather_state = LOST
                     worker.gather_lost = True
                     self._log_state(worker, "path_failed_dropoff")
                     return
             if self._move_along_path(
-                worker, dropoff.rect.center, dt, obstacle_sprites, label="to_dropoff"
+                worker, self._dropoff_goal(dropoff), dt, obstacle_sprites, label="to_dropoff"
             ):
                 worker.gather_state = DELIVERING
                 worker._timer = 0.25
@@ -270,6 +287,7 @@ class GatherController:
             return
 
         if state == DELIVERING:
+            worker.move_target = None
             worker._timer -= dt
             if worker._timer > 0:
                 return
@@ -297,16 +315,17 @@ class GatherController:
                     id(wallet),
                 )
                 self._log_state(worker, "deliver")
+            if node is not None and hasattr(node, "drain_ice"):
+                node.drain_ice(worker._delivery_amount)
             if node is None or not node.is_active():
                 worker.gather_state = LOST
                 return
             worker._dropoff_path_planned = False
-            if node.has_free_slot():
-                node.register_worker()
+            if node.has_free_slot() and node.register_worker(worker):
                 worker._registered = True
                 worker.gather_state = MOVING_TO_NODE
                 if self._walk_grid is not None:
-                    self._plan_path_to(worker, node.gather_point, "loop")
+                    self._plan_path_to(worker, self._node_goal(worker, node), "loop")
             else:
                 worker.gather_state = WAITING_AT_NODE
 
@@ -323,7 +342,7 @@ class GatherController:
         else:
             target = final_goal
 
-        arrived = self._step_toward_target(
+        arrived = self._advance_to_target(
             unit, target, dt, obstacle_sprites, label, final_goal=final_goal
         )
         if not arrived:
@@ -366,37 +385,32 @@ class GatherController:
         if self._plan_path_to(unit, goal_px, f"replan_{label}"):
             self._stuck_check[wid] = (now, pos)
 
-    def _step_toward_target(self, unit, target, dt, obstacle_sprites, label, final_goal=None):
-        if self._obstacle_quad_tree is not None:
-            speed = float(getattr(unit, "speed", 120.0))
-            skip = self._skip_sprites(unit)
-            old = unit.rect.center
-            arrived = step_toward(
-                unit.rect,
-                target,
-                dt,
-                speed,
-                self._obstacle_quad_tree,
-                skip_sprites=skip,
-                reach=_GATHER_REACH_RADIUS,
-            )
-            if unit.rect.center != old and self._should_log_move(unit, f"{label}_ok", interval=1.0):
-                _rts_log.debug(
-                    "move %s OK worker@%s -> %s",
-                    label,
-                    old,
-                    unit.rect.center,
-                )
-            if arrived and self._should_log_move(unit, f"{label}_arrived", interval=1.0):
+    def _at_target(self, unit, target):
+        if target is None:
+            return False
+        pos = pygame.math.Vector2(unit.rect.center)
+        goal = pygame.math.Vector2(target)
+        return pos.distance_to(goal) <= _GATHER_REACH_RADIUS
+
+    def _set_move_target(self, unit, target):
+        if target is None:
+            unit.move_target = None
+            return
+        unit.move_target = pygame.math.Vector2(target)
+
+    def _advance_to_target(self, unit, target, dt, obstacle_sprites, label, final_goal=None):
+        if self._at_target(unit, target):
+            if self._should_log_move(unit, f"{label}_arrived", interval=1.0):
                 _rts_log.debug(
                     "move %s ARRIVED worker@%s goal=%s",
                     label,
                     unit.rect.center,
                     target,
                 )
-            return arrived
-
-        return self._move_toward(unit, target, dt, obstacle_sprites, label=label)
+            unit.move_target = None
+            return True
+        self._set_move_target(unit, target)
+        return False
 
     def _should_log_move(self, unit, key, interval=_MOVE_LOG_INTERVAL):
         wid = id(unit)

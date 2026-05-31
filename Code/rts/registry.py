@@ -30,7 +30,9 @@ class RtsWorldRegistry:
         if not fid or not kind:
             return
         fac = self.dropoffs_by_faction.setdefault(fid, {})
-        fac[kind] = building
+        bucket = fac.setdefault(kind, [])
+        if building not in bucket:
+            bucket.append(building)
 
     def register_worker(self, worker):
         fid = str(getattr(worker, "faction_id", "")).strip()
@@ -54,9 +56,28 @@ class RtsWorldRegistry:
             out.extend(nodes)
         return out
 
+    def dropoffs_for_kind(self, faction_id, dropoff_kind):
+        fac = self.dropoffs_by_faction.get(str(faction_id or "").strip(), {})
+        return list(fac.get(str(dropoff_kind or "").strip(), []))
+
     def find_dropoff(self, faction_id, dropoff_kind):
-        return self.dropoffs_by_faction.get(str(faction_id or "").strip(), {}).get(
-            str(dropoff_kind or "").strip()
+        dropoffs = self.dropoffs_for_kind(faction_id, dropoff_kind)
+        return dropoffs[0] if dropoffs else None
+
+    def find_nearest_dropoff(self, faction_id, dropoff_kind, from_pos):
+        dropoffs = self.dropoffs_for_kind(faction_id, dropoff_kind)
+        if not dropoffs:
+            return None
+        fx, fy = from_pos
+        def _drop_pos(building):
+            point = getattr(building, "dropoff_point", None)
+            if point is not None:
+                return point
+            return building.rect.center
+
+        return min(
+            dropoffs,
+            key=lambda b: (_drop_pos(b)[0] - fx) ** 2 + (_drop_pos(b)[1] - fy) ** 2,
         )
 
     def register_build_site(self, site):
@@ -64,6 +85,14 @@ class RtsWorldRegistry:
         if not fid:
             return
         self.build_sites_by_faction.setdefault(fid, []).append(site)
+
+    def unregister_build_site(self, site):
+        fid = str(getattr(site, "faction_id", "")).strip()
+        if not fid:
+            return
+        lst = self.build_sites_by_faction.get(fid, [])
+        if site in lst:
+            lst.remove(site)
 
     def build_sites_for_faction(self, faction_id, requires=None, available_only=True):
         fid = str(faction_id or "").strip()

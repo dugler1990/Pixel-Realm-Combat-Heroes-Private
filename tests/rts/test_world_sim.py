@@ -1,14 +1,24 @@
 import pygame
 
+from QuadTree import QuadTree, QuadTreeManager
 from rts.categories import FOOD
 from rts.entities import DropoffBuilding, ResourceNode, RtsWorker
-from rts.entities.worker import DELIVERING
+from rts.entities.gather_states import DELIVERING
 from rts.registry import RtsWorldRegistry
 from rts.resources import ResourceWallet
 from rts.tmx_config import dropoff_config, resource_node_config
 from rts.world_sim import RtsWorldSim
 
 from fakes import FakeWorldAdapter
+
+
+def _empty_quad():
+    return QuadTree(
+        items=[],
+        depth=4,
+        bounding_rect=pygame.Rect(0, 0, 2000, 2000),
+        manager=QuadTreeManager(),
+    )
 
 
 def test_exit_preserves_gather_tasks_via_world_sim():
@@ -43,8 +53,10 @@ def test_world_sim_tick_advances_gather_while_session_inactive():
     world._rts_registry = registry
 
     initial = worker.gather_state
+    quad = _empty_quad()
     for _ in range(80):
         world_sim.tick(0.05, world)
+        worker.update(dt=0.05, QuadTree=quad, entity_quad_tree=quad)
 
     assert worker.gather_state != initial or wallet.get(node.resource_category) > 0
 

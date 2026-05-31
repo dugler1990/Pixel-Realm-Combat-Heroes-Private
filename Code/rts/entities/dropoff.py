@@ -19,6 +19,12 @@ class DropoffBuilding(pygame.sprite.Sprite):
 
         self.image = load_sprite(self.sprite_key)
         self.rect = self.image.get_rect(center=pos)
+        offset_x = int(config.get("dropoff_offset_x", 0) or 0)
+        offset_y = int(config.get("dropoff_offset_y", 36) or 36)
+        self.dropoff_point = (
+            self.rect.centerx + offset_x,
+            self.rect.centery + offset_y,
+        )
         self.display_name = self.dropoff_kind.replace("_", " ").title()
         self.rts_definition = {
             "id": self.dropoff_kind,

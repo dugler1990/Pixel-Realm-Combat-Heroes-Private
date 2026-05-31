@@ -14,6 +14,7 @@ from .input import RtsInput
 from .resources import ResourceWallet
 from .selection import SelectableRegistry, nearest_sprite_in_direction
 from .ui import BuildMenuPanel, ChiefPanel, ResourceBar, RtsPanel, WorkerCommandPanel
+from .combat_context import make_rts_combat_context
 from .entities import RtsWorkerEntity
 
 _rts_log = get_debug_logger("rts")
@@ -363,16 +364,20 @@ class RtsSession:
             chief.rect.centerx + offset[0],
             chief.rect.centery + 40 + offset[1],
         )
-        groups = self.world.get_sprite_groups()
         layout_cb = None
         if hasattr(self.world, "get_layout_callback_update_quad_tree"):
             layout_cb = self.world.get_layout_callback_update_quad_tree()
+        groups = self.world.get_sprite_groups()
+        obstacles = self.world.get_obstacle_sprites()
+        combat_context = make_rts_combat_context(self.world)
         worker = RtsWorkerEntity(
             pos,
             groups,
             chief.faction_id,
             chief.worker_sprite_key,
             chief,
+            obstacle_sprites=obstacles,
+            combat_context=combat_context,
             layout_callback_update_quad_tree=layout_cb,
             world_sim=self.world_sim,
         )
@@ -571,24 +576,53 @@ class RtsSession:
         sel = self.selection.selected
         worker = self._pick_build_worker
         building = self._pick_building
-        if (
-            sel is None
-            or worker is None
-            or building is None
-            or str(getattr(sel.sprite, "kind", "")) != "build_site"
-        ):
+        if sel is None or worker is None or building is None:
+            _rts_log.debug(
+                "assign_build_at_site skipped: sel=%s worker=%s building=%s",
+                sel is not None,
+                worker is not None,
+                building is not None,
+            )
+            return False
+        sel_kind = str(getattr(sel.sprite, "kind", "")).strip().lower()
+        if sel_kind != "build_site":
+            _rts_log.debug(
+                "assign_build_at_site skipped: selected kind=%s (need build_site)",
+                sel_kind,
+            )
             return False
         site = sel.sprite
         wallet = self.world_sim.get_wallet(self._active_faction_id())
+        _rts_log.debug(
+            "assign_build_at_site confirm worker@%s site@%s building=%s site_state=%s",
+            worker.rect.center,
+            site.build_center,
+            building.id,
+            getattr(site, "state", "?"),
+        )
         ok = self.world_sim.assign_build(
             worker, site, building.id, wallet=wallet, world_adapter=self.world
         )
         if ok:
+            _rts_log.debug(
+                "assign_build_at_site ok worker@%s -> site@%s",
+                worker.rect.center,
+                site.build_center,
+            )
             self.site_highlight = False
             self._set_site_highlights(False)
             self._pick_build_worker = None
             self._pick_building = None
             self.state = self.SELECT
+        else:
+            _rts_log.warning(
+                "assign_build_at_site failed worker@%s site@%s building=%s site_state=%s",
+                worker.rect.center,
+                site.build_center,
+                building.id,
+                getattr(site, "state", "?"),
+            )
+            self._flash_message("Build assign failed")
         return ok
 
     def _update_panel_mode(self, dt):

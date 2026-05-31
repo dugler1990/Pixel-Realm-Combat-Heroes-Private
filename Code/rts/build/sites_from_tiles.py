@@ -68,7 +68,7 @@ def register_build_sites_from_cells(layout_manager, cells):
     if not cells:
         return 0
     registry = layout_manager.rts_registry
-    groups = [layout_manager.obstacle_sprites, layout_manager.visible_sprites]
+    groups = [layout_manager.visible_sprites]
     env = layout_manager.environment_interactables
     count = 0
     site_idx = 0

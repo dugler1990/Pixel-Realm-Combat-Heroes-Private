@@ -18,6 +18,9 @@ def test_registry_faction_node_index():
 
 
 def test_chief_population_idle():
+    pygame.init()
+    if not pygame.display.get_surface():
+        pygame.display.set_mode((1, 1))
     registry = RtsWorldRegistry()
     chief = ChiefNPC(
         (0, 0),

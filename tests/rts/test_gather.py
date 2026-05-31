@@ -11,6 +11,27 @@ from rts.resources import ResourceWallet
 from rts.tmx_config import dropoff_config, resource_node_config
 
 
+def _empty_quad():
+    return QuadTree(
+        items=[],
+        depth=4,
+        bounding_rect=pygame.Rect(0, 0, 2000, 2000),
+        manager=QuadTreeManager(),
+    )
+
+
+def _tick_gather(controller, worker, dt, obstacle_sprites=None, wallet=None, walk_grid=None, obstacle_quad_tree=None):
+    controller.update(
+        dt,
+        obstacle_sprites=obstacle_sprites,
+        wallet=wallet,
+        walk_grid=walk_grid,
+        obstacle_quad_tree=obstacle_quad_tree,
+    )
+    quad = obstacle_quad_tree if obstacle_quad_tree is not None else _empty_quad()
+    worker.update(dt=dt, QuadTree=quad, entity_quad_tree=quad)
+
+
 def _wall_grid_and_quad_tree():
     cols, rows, cell = 10, 6, 50
     blocked = [[False] * cols for _ in range(rows)]
@@ -50,7 +71,7 @@ def test_gather_assign_delivers_to_wallet():
 
     controller.assign(worker, node, wallet)
     for _ in range(120):
-        controller.update(0.05, obstacle_sprites=None, wallet=wallet)
+        _tick_gather(controller, worker, 0.05, wallet=wallet)
     assert wallet.get(FOOD) >= 20
 
 
@@ -74,7 +95,7 @@ def test_gather_moves_when_worker_in_obstacle_group():
 
     controller.assign(worker, node, wallet)
     for _ in range(200):
-        controller.update(0.05, obstacles, wallet=wallet)
+        _tick_gather(controller, worker, 0.05, obstacles, wallet=wallet)
     assert worker.rect.center != tuple(start)
     assert wallet.get(FOOD) >= 20
 
@@ -102,7 +123,7 @@ def test_gather_paths_around_wall():
     assert len(worker._path) >= 2
 
     for _ in range(400):
-        controller.update(0.05, obstacles, wallet=wallet)
+        _tick_gather(controller, worker, 0.05, obstacles, wallet=wallet, walk_grid=grid, obstacle_quad_tree=quad)
     assert wallet.get(FOOD) >= 20
     assert not worker.gather_lost
 
@@ -116,7 +137,7 @@ def test_gather_lost_without_dropoff():
     controller = GatherController(registry)
     controller.assign(worker, node, wallet)
     for _ in range(30):
-        controller.update(0.1, obstacle_sprites=None, wallet=wallet)
+        _tick_gather(controller, worker, 0.1, wallet=wallet)
     assert worker.gather_lost or id(worker) not in controller.tasks
 
 
@@ -136,6 +157,34 @@ def test_ice_shelf_delivers_to_ice_cutting_post():
 
     controller.assign(worker, node, wallet)
     for _ in range(120):
-        controller.update(0.05, obstacle_sprites=None, wallet=wallet)
+        _tick_gather(controller, worker, 0.05, wallet=wallet)
     assert wallet.get(MATERIAL) >= 25
     assert node.dropoff_kind == "ice_cutting_post"
+
+
+def test_dropoff_building_exposes_approach_point():
+    pygame.init()
+    if not pygame.display.get_surface():
+        pygame.display.set_mode((1, 1))
+    registry = RtsWorldRegistry()
+    drop_cfg = dropoff_config("ice_cutting_post", "eskimo")
+    dropoff = DropoffBuilding((100, 100), [], drop_cfg, registry)
+    assert dropoff.dropoff_point != dropoff.rect.center
+    assert dropoff.dropoff_point[1] > dropoff.rect.centery
+
+
+def test_assign_picks_nearest_dropoff():
+    pygame.init()
+    if not pygame.display.get_surface():
+        pygame.display.set_mode((1, 1))
+    registry = RtsWorldRegistry()
+    worker = RtsWorker((50, 50), [], "eskimo", "worker_eskimo")
+    node_cfg = resource_node_config("ice_shelf", "eskimo")
+    node = ResourceNode((50, 50), [], node_cfg, registry)
+    near_cfg = dropoff_config("ice_cutting_post", "eskimo")
+    far_cfg = dropoff_config("ice_cutting_post", "eskimo")
+    near = DropoffBuilding((80, 80), [], near_cfg, registry)
+    DropoffBuilding((800, 800), [], far_cfg, registry)
+    controller = GatherController(registry)
+    controller.assign(worker, node, ResourceWallet())
+    assert worker.assigned_dropoff is near

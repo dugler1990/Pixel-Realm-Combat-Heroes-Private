@@ -27,6 +27,7 @@ class BuildingDefinition:
         spawns = data.get("spawns") or {}
         self.spawn_dropoff_kind = str(spawns.get("dropoffKind", "")).strip()
         self.spawn_node_kind = str(spawns.get("nodeKind", "")).strip()
+        self.visual_phases = list(data.get("visualPhases") or data.get("visual_phases") or [])
 
     def matches_faction(self, faction_id):
         fid = normalize_faction_id(faction_id)

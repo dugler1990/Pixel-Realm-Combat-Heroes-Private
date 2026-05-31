@@ -1,6 +1,7 @@
 import pygame
 
 from Interaction import InteractionContext, InteractionResolver
+from rts.combat_context import make_rts_combat_context
 from rts.entities.worker_entity import RtsWorkerEntity
 from rts.gather.controller import GatherController
 from rts.registry import RtsWorldRegistry
@@ -15,7 +16,15 @@ def test_worker_damage_cancels_gather_and_unregisters():
     registry = RtsWorldRegistry()
     sim = RtsWorldSim()
     sim.gather_controller.registry = registry
-    worker = RtsWorkerEntity((50, 50), [], "eskimo_tribe", world_sim=sim, health=1)
+    worker = RtsWorkerEntity(
+        (50, 50),
+        [],
+        "eskimo_tribe",
+        world_sim=sim,
+        health=1,
+        combat_context=make_rts_combat_context(),
+        obstacle_sprites=[],
+    )
     registry.register_worker(worker)
     sim.gather_controller.tasks[id(worker)] = worker
 

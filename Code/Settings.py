@@ -384,6 +384,63 @@ monster_data = {
                 'update_quad_tree': True
                 }
             }
-        }
+        },
+
+	"eskimo_worker": {
+		"health": 50,
+		"exp": 0,
+		"attack_type": "melee",
+		"attack_sound": "../Audio/Attack/Claw.wav",
+		"speed": 4,
+		"resistance": 3,
+		"combat_config": {
+			"melee_attacks": [],
+			"melee_attack_radius": 80,
+			"notice_radius": 360,
+			"combat_context": {},
+		},
+	},
+	"jungle_worker": {
+		"health": 50,
+		"exp": 0,
+		"attack_type": "melee",
+		"attack_sound": "../Audio/Attack/Slash.wav",
+		"speed": 4,
+		"resistance": 3,
+		"combat_config": {
+			"melee_attacks": [],
+			"melee_attack_radius": 80,
+			"notice_radius": 360,
+			"combat_context": {},
+		},
+	},
+	"eskimo_chief": {
+		"health": 200,
+		"exp": 0,
+		"attack_type": "melee",
+		"attack_sound": "../Audio/Attack/Claw.wav",
+		"speed": 3,
+		"resistance": 3,
+		"combat_config": {
+			"melee_attacks": [],
+			"melee_attack_radius": 80,
+			"notice_radius": 360,
+			"combat_context": {},
+		},
+	},
+	"jungle_chief": {
+		"health": 200,
+		"exp": 0,
+		"attack_type": "melee",
+		"attack_sound": "../Audio/Attack/Slash.wav",
+		"speed": 3,
+		"resistance": 3,
+		"combat_config": {
+			"melee_attacks": [],
+			"melee_attack_radius": 80,
+			"notice_radius": 360,
+			"combat_context": {},
+		},
+	},
 	
     }

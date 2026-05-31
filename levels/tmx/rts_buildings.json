@@ -7,8 +7,29 @@
     "clearDurationMs": 8000,
     "buildDurationMs": 2000,
     "spawns": {
-      "dropoffKind": "ice_cutting_post",
       "nodeKind": "ice_shelf"
-    }
+    },
+    "visualPhases": [
+      {
+        "folder": "build/ice_cutting_post/phase_0",
+        "durationSec": 2.0,
+        "frameIntervalSec": 0.15
+      },
+      {
+        "folder": "build/ice_cutting_post/phase_1",
+        "durationSec": 2.0,
+        "frameIntervalSec": 0.15
+      },
+      {
+        "folder": "build/ice_cutting_post/phase_2",
+        "durationSec": 2.0,
+        "frameIntervalSec": 0.15
+      },
+      {
+        "folder": "build/ice_cutting_post/phase_3",
+        "durationSec": 2.0,
+        "frameIntervalSec": 0.15
+      }
+    ]
   }
 }

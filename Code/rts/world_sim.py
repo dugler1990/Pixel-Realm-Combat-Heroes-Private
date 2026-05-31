@@ -18,6 +18,7 @@ class RtsWorldSim:
         self.gather_controller.set_wallet_resolver(self.get_wallet)
         self.build_controller = BuildController()
         self.build_controller.set_wallet_resolver(self.get_wallet)
+        self.build_controller.set_on_build_complete(self._on_build_completed)
         self._wallets = {}
         self._food_upkeep = {}
 
@@ -58,11 +59,41 @@ class RtsWorldSim:
         self.build_controller.cancel(worker)
         return self.gather_controller.assign(worker, node, wallet)
 
+    def _on_build_completed(self, worker, building, spawned_node):
+        if spawned_node is None:
+            return
+        wallet = self.get_wallet(getattr(worker, "faction_id", ""))
+        ok = self.assign_gather(worker, spawned_node, wallet)
+        _rts_log.debug(
+            "auto gather after build ok=%s worker@%s building=%s node=%s",
+            ok,
+            getattr(worker, "rect", None) and worker.rect.center,
+            getattr(building, "id", ""),
+            getattr(spawned_node, "node_kind", ""),
+        )
+
     def assign_build(self, worker, site, building_id, wallet=None, world_adapter=None):
+        worker_pos = getattr(worker, "rect", None) and worker.rect.center
+        site_pos = getattr(site, "build_center", None) if site is not None else None
+        _rts_log.debug(
+            "assign_build request worker@%s site@%s building_id=%s site_state=%s",
+            worker_pos,
+            site_pos,
+            building_id,
+            getattr(site, "state", None) if site is not None else None,
+        )
         self.gather_controller.cancel(worker)
-        return self.build_controller.assign(
+        ok = self.build_controller.assign(
             worker, site, building_id, wallet=wallet, world_adapter=world_adapter
         )
+        _rts_log.debug(
+            "assign_build result ok=%s worker@%s site@%s building_id=%s",
+            ok,
+            worker_pos,
+            site_pos,
+            building_id,
+        )
+        return ok
 
     def food_upkeep_for(self, faction_id):
         fid = normalize_faction_id(faction_id)
@@ -85,6 +116,7 @@ class RtsWorldSim:
                 chief.population_workers = max(0, int(chief.population_workers) - 1)
 
     def tick(self, dt, world_adapter):
+        """Run gather/build FSM and set worker move_target before level Entity.update moves units."""
         registry = world_adapter.get_rts_registry()
         if registry is None:
             return
@@ -94,8 +126,6 @@ class RtsWorldSim:
         self.ensure_factions_from_registry(registry)
 
         obstacles = world_adapter.get_obstacle_sprites()
-        for chief in list(registry.chiefs.values()):
-            chief.update(dt, obstacles)
         for fac_nodes in registry.faction_node_index.values():
             for cat_list in fac_nodes.values():
                 for node in cat_list:
