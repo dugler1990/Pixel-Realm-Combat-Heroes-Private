@@ -46,10 +46,10 @@ class RtsWorldSim:
             self.get_wallet(fid)
 
     def bind_navigation(self, world_adapter):
-        walk_grid = world_adapter.get_walk_grid()
+        walk_grid_cache = world_adapter.get_walk_grid_cache()
         obstacle_quad_tree = world_adapter.get_obstacle_quad_tree()
-        self.gather_controller.set_navigation(walk_grid, obstacle_quad_tree)
-        self.build_controller.set_navigation(walk_grid, obstacle_quad_tree)
+        self.gather_controller.set_navigation(walk_grid_cache, obstacle_quad_tree)
+        self.build_controller.set_navigation(walk_grid_cache, obstacle_quad_tree)
 
     def cancel_worker_jobs(self, worker):
         self.gather_controller.cancel(worker)
@@ -131,18 +131,18 @@ class RtsWorldSim:
                 for node in cat_list:
                     node.update(dt)
 
-        walk_grid = world_adapter.get_walk_grid()
+        walk_grid_cache = world_adapter.get_walk_grid_cache()
         obstacle_quad_tree = world_adapter.get_obstacle_quad_tree()
         self.gather_controller.update(
             dt,
             obstacles,
-            walk_grid=walk_grid,
+            walk_grid_cache=walk_grid_cache,
             obstacle_quad_tree=obstacle_quad_tree,
         )
         self.build_controller.update(
             dt,
             obstacles,
-            walk_grid=walk_grid,
+            walk_grid_cache=walk_grid_cache,
             obstacle_quad_tree=obstacle_quad_tree,
         )
 

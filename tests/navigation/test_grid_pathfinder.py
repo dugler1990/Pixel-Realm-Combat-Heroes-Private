@@ -10,7 +10,7 @@ def _grid_with_vertical_wall(cols, rows, wall_col, gap_row=None, cell_size=50):
         if gap_row is not None and row == gap_row:
             continue
         blocked[row][wall_col] = True
-    return WalkGrid(blocked, cell_size, cols * cell_size, rows * cell_size)
+    return WalkGrid(blocked, cell_size, cell_size, cols * cell_size, rows * cell_size)
 
 
 def test_path_goes_around_wall():
@@ -33,6 +33,6 @@ def test_path_empty_when_fully_walled_goal():
 
 
 def test_nearest_walkable_for_blocked_start():
-    grid = WalkGrid([[True, False], [False, False]], 50, 100, 100)
+    grid = WalkGrid([[True, False], [False, False]], 50, 50, 100, 100)
     path = find_path(grid, (25, 25), (75, 75))
     assert len(path) >= 1

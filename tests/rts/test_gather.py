@@ -20,12 +20,20 @@ def _empty_quad():
     )
 
 
-def _tick_gather(controller, worker, dt, obstacle_sprites=None, wallet=None, walk_grid=None, obstacle_quad_tree=None):
+class _TestWalkGridCache:
+    def __init__(self, grid):
+        self._grid = grid
+
+    def get(self, footprint_w, footprint_h):
+        return self._grid
+
+
+def _tick_gather(controller, worker, dt, obstacle_sprites=None, wallet=None, walk_grid_cache=None, obstacle_quad_tree=None):
     controller.update(
         dt,
         obstacle_sprites=obstacle_sprites,
         wallet=wallet,
-        walk_grid=walk_grid,
+        walk_grid_cache=walk_grid_cache,
         obstacle_quad_tree=obstacle_quad_tree,
     )
     quad = obstacle_quad_tree if obstacle_quad_tree is not None else _empty_quad()
@@ -41,7 +49,7 @@ def _wall_grid_and_quad_tree():
         if row == gap_row:
             continue
         blocked[row][wall_col] = True
-    grid = WalkGrid(blocked, cell, cols * cell, rows * cell)
+    grid = WalkGrid(blocked, cell, cell, cols * cell, rows * cell)
 
     wall = pygame.sprite.Sprite()
     wall.rect = pygame.Rect(wall_col * cell, cell, cell, (rows - 1) * cell)
@@ -117,13 +125,14 @@ def test_gather_paths_around_wall():
     dropoff = DropoffBuilding((25, 50), [], drop_cfg, registry)
     wallet = ResourceWallet()
     controller = GatherController(registry)
-    controller.set_navigation(walk_grid=grid, obstacle_quad_tree=quad)
+    cache = _TestWalkGridCache(grid)
+    controller.set_navigation(walk_grid_cache=cache, obstacle_quad_tree=quad)
 
     assert controller.assign(worker, node, wallet)
     assert len(worker._path) >= 2
 
     for _ in range(400):
-        _tick_gather(controller, worker, 0.05, obstacles, wallet=wallet, walk_grid=grid, obstacle_quad_tree=quad)
+        _tick_gather(controller, worker, 0.05, obstacles, wallet=wallet, walk_grid_cache=cache, obstacle_quad_tree=quad)
     assert wallet.get(FOOD) >= 20
     assert not worker.gather_lost
 

@@ -19,6 +19,7 @@ class DropoffBuilding(pygame.sprite.Sprite):
 
         self.image = load_sprite(self.sprite_key)
         self.rect = self.image.get_rect(center=pos)
+        self.mask = pygame.mask.from_surface(self.image)
         offset_x = int(config.get("dropoff_offset_x", 0) or 0)
         offset_y = int(config.get("dropoff_offset_y", 36) or 36)
         self.dropoff_point = (

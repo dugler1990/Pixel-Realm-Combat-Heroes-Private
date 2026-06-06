@@ -46,6 +46,8 @@ class RtsWorkerEntity(RtsTribeMember):
             layout_callback_update_quad_tree=layout_callback_update_quad_tree,
             center_pos=True,
             health=health,
+            team_id="neutral_passive",
+            sprite_type="rts_worker",
         )
         self.kind = "rts_unit"
         self.chief = chief
@@ -67,8 +69,6 @@ class RtsWorkerEntity(RtsTribeMember):
         self._registered = False
         self._delivery_category = ""
         self._delivery_amount = 0
-        self.team_id = "neutral_passive"
-        self.sprite_type = "rts_worker"
         self.rts_definition = {
             "id": "worker",
             "display_name": "Worker",

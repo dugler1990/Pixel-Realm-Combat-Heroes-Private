@@ -30,10 +30,10 @@
     "console": false
   },
   "combat": {
-    "enabled": true,
+    "enabled": false,
     "level": "DEBUG",
     "file": "logs/combat.log",
-    "console": true
+    "console": false
   },
   "player_item": {
     "enabled": false,
@@ -72,9 +72,9 @@
     "console": false
   },
   "rts": {
-    "enabled": true,
+    "enabled": false,
     "level": "DEBUG",
     "file": "logs/rts.log",
-    "console": true
+    "console": false
   }
 }

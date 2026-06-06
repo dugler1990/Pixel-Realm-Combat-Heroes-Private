@@ -4,6 +4,7 @@ import pygame
 
 from game_logging import get_debug_logger
 from navigation.grid_pathfinder import find_path
+from navigation.unit_footprint import pathfinding_footprint_for_unit
 
 from ..entities.gather_states import (
     DELIVERING,
@@ -17,7 +18,7 @@ from ..entities.gather_states import (
 
 _rts_log = get_debug_logger("rts")
 _MOVE_LOG_INTERVAL = 0.5
-_GATHER_REACH_RADIUS = 14.0
+_GATHER_REACH_RADIUS = 90.0
 _STUCK_REPLAN_SECONDS = 2.0
 
 
@@ -29,7 +30,7 @@ class GatherController:
         self._wallet_resolver = None
         self._last_logged_state = {}
         self._move_log_next = {}
-        self._walk_grid = None
+        self._walk_grid_cache = None
         self._obstacle_quad_tree = None
         self._stuck_check = {}
 
@@ -48,11 +49,17 @@ class GatherController:
                 return wallet
         return self._wallet
 
-    def set_navigation(self, walk_grid=None, obstacle_quad_tree=None):
-        if walk_grid is not None:
-            self._walk_grid = walk_grid
+    def set_navigation(self, walk_grid_cache=None, obstacle_quad_tree=None):
+        if walk_grid_cache is not None:
+            self._walk_grid_cache = walk_grid_cache
         if obstacle_quad_tree is not None:
             self._obstacle_quad_tree = obstacle_quad_tree
+
+    def _grid_for_unit(self, unit):
+        if self._walk_grid_cache is None:
+            return None
+        fw, fh = pathfinding_footprint_for_unit(unit)
+        return self._walk_grid_cache.get(fw, fh)
 
     def assign(self, worker, node, wallet=None):
         if worker is None or node is None:
@@ -103,7 +110,7 @@ class GatherController:
                 worker.faction_id,
                 node.dropoff_kind,
             )
-        elif self._walk_grid is not None and not self._plan_path_to(
+        elif self._walk_grid_cache is not None and not self._plan_path_to(
             worker, self._node_goal(worker, node), "assign"
         ):
             worker.gather_state = LOST
@@ -146,11 +153,11 @@ class GatherController:
             "gather cancel worker@%s", getattr(worker, "rect", None) and worker.rect.center
         )
 
-    def update(self, dt, obstacle_sprites=None, wallet=None, walk_grid=None, obstacle_quad_tree=None):
+    def update(self, dt, obstacle_sprites=None, wallet=None, walk_grid_cache=None, obstacle_quad_tree=None):
         if wallet is not None:
             self._wallet = wallet
-        if walk_grid is not None:
-            self._walk_grid = walk_grid
+        if walk_grid_cache is not None:
+            self._walk_grid_cache = walk_grid_cache
         if obstacle_quad_tree is not None:
             self._obstacle_quad_tree = obstacle_quad_tree
         for worker in list(self.tasks.values()):
@@ -172,11 +179,17 @@ class GatherController:
         )
 
     def _plan_path_to(self, worker, goal_px, reason=""):
-        grid = self._walk_grid
+        grid = self._grid_for_unit(worker)
         if grid is None:
             worker._path = []
             worker._path_index = 0
-            return True
+            _rts_log.warning(
+                "path failed worker@%s -> %s reason=%s (no walk grid for footprint)",
+                worker.rect.center,
+                goal_px,
+                reason,
+            )
+            return False
         path = find_path(grid, worker.rect.center, goal_px)
         if not path:
             worker._path = []
@@ -250,7 +263,7 @@ class GatherController:
             if node.has_free_slot() and node.register_worker(worker):
                 worker._registered = True
                 worker.gather_state = MOVING_TO_NODE
-                if self._walk_grid is not None:
+                if self._walk_grid_cache is not None:
                     self._plan_path_to(worker, self._node_goal(worker, node), "slot_open")
             return
 
@@ -271,7 +284,7 @@ class GatherController:
             if not worker._dropoff_path_planned:
                 worker._dropoff_path_planned = True
                 drop_goal = self._dropoff_goal(dropoff)
-                if self._walk_grid is not None and not self._plan_path_to(
+                if self._walk_grid_cache is not None and not self._plan_path_to(
                     worker, drop_goal, "to_dropoff"
                 ):
                     worker.gather_state = LOST
@@ -324,7 +337,7 @@ class GatherController:
             if node.has_free_slot() and node.register_worker(worker):
                 worker._registered = True
                 worker.gather_state = MOVING_TO_NODE
-                if self._walk_grid is not None:
+                if self._walk_grid_cache is not None:
                     self._plan_path_to(worker, self._node_goal(worker, node), "loop")
             else:
                 worker.gather_state = WAITING_AT_NODE
@@ -366,7 +379,7 @@ class GatherController:
         return True
 
     def _maybe_replan_stuck(self, unit, goal_px, label):
-        if self._walk_grid is None:
+        if self._walk_grid_cache is None:
             return
         wid = id(unit)
         now = time.monotonic()

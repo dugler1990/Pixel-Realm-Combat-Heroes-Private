@@ -4,7 +4,7 @@ import random
 import pygame
 
 from Support import import_folder, normalize_animation_frames
-from friendly import Friendly
+from combat_unit import CombatUnit
 from hashRect import HashableRect
 from Interaction import InteractionContext
 
@@ -13,8 +13,8 @@ from ..behavior_drivers import WALK_STATUSES, pick_driver, DriverContext
 from ..tribe_monsters import monster_name_for_faction
 
 
-class RtsTribeMember(Friendly):
-    """RTS worker/chief using Friendly locomotion and pluggable behavior drivers."""
+class RtsTribeMember(CombatUnit):
+    """RTS worker/chief using CombatUnit locomotion and pluggable behavior drivers."""
 
     def __init__(
         self,
@@ -31,6 +31,8 @@ class RtsTribeMember(Friendly):
         layout_callback_update_quad_tree=None,
         center_pos=True,
         health=None,
+        team_id="enemy",
+        sprite_type=None,
     ):
         self._tribe_sprite_key = sprite_key
         self._center_pos = center_pos
@@ -57,6 +59,8 @@ class RtsTribeMember(Friendly):
             combat_context,
             persistent,
             layout_callback_update_quad_tree=layout_callback_update_quad_tree,
+            team_id=team_id,
+            sprite_type=sprite_type,
         )
 
         self.faction_id = normalize_faction_id(faction_id)

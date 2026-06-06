@@ -45,7 +45,7 @@ class RtsWorldAdapter:
     def get_obstacle_quad_tree(self):
         return None
 
-    def get_walk_grid(self):
+    def get_walk_grid_cache(self):
         return None
 
     def get_rts_registry(self):

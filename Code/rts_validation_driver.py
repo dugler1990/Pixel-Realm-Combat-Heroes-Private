@@ -73,7 +73,7 @@ def _gather_update(session, level, dt, wallet=None):
         dt,
         lm.obstacle_sprites,
         wallet if wallet is not None else session.wallet,
-        walk_grid=getattr(lm, "walk_grid", None),
+        walk_grid_cache=getattr(lm, "walk_grid_cache", None),
         obstacle_quad_tree=getattr(lm, "obstacle_quad_tree", None),
     )
 

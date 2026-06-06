@@ -21,7 +21,6 @@ from Support import *
 from random import choice, randint
 from Weapon import Weapon
 from UI import UI
-from Enemy import Enemy
 from Particles import AnimationPlayer
 from Magic import MagicPlayer
 from Evasion import EvasionPlayer
@@ -134,8 +133,8 @@ class LevelRtsWorldAdapter(RtsWorldAdapter):
     def get_obstacle_quad_tree(self):
         return getattr(self.level.layout_manager, "obstacle_quad_tree", None)
 
-    def get_walk_grid(self):
-        return getattr(self.level.layout_manager, "walk_grid", None)
+    def get_walk_grid_cache(self):
+        return getattr(self.level.layout_manager, "walk_grid_cache", None)
 
     def get_rts_registry(self):
         return getattr(self.level.layout_manager, "rts_registry", None)
@@ -294,6 +293,7 @@ class Level4:
         self._show_interact_prompt = False
         self.attack_selection_open = False 
         self.player_config_open = False
+        self._frame_number = 0
         self.selected_player_info_dir = selected_player_info_dir
         self.layouts_dir = layouts_dir
         self.input_manager = input_manager
@@ -321,7 +321,12 @@ class Level4:
         self.attack_sprites = pygame.sprite.Group()
         self.attackable_sprites = pygame.sprite.Group()
         self.enemy_attack_sprites = pygame.sprite.Group()
-        self.interaction_resolver = InteractionResolver(telemetry_sink=self.benchmark_runtime.metrics)
+        sink = (
+            self.benchmark_runtime.metrics
+            if self.benchmark_runtime.enabled and self.benchmark_runtime.metrics_enabled
+            else None
+        )
+        self.interaction_resolver = InteractionResolver(telemetry_sink=sink)
 
 
         if layout_manager :
@@ -2022,6 +2027,12 @@ class Level4:
             self._draw_benchmark_overlay()
             self._draw_rts_validation_overlay()
 
+            self._frame_number += 1
+            entity_id_map = {
+                s.id: s
+                for s in self.layout_manager.visible_sprites.sprites()
+                if hasattr(s, "id")
+            }
             for sprite in self.layout_manager.visible_sprites.sprites():
                 # debug
                 # if hasattr(sprite, 'frozen'):
@@ -2030,7 +2041,12 @@ class Level4:
 
 
                 if hasattr(sprite, 'enemy_update'):
-                    sprite.enemy_update(None, self.layout_manager.entity_quad_tree)
+                    sprite.enemy_update(
+                        None,
+                        self.layout_manager.entity_quad_tree,
+                        frame_number=self._frame_number,
+                        entity_id_map=entity_id_map,
+                    )
                 elif isinstance( sprite, Trap):
                     enemies_in_range = self.check_trap_triggers(sprite)
                     # Prolly pass  enemies to activate to freeze them n that.

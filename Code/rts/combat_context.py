@@ -16,6 +16,8 @@ def make_rts_combat_context(world_adapter=None):
         "trigger_death_particles": _noop,
         "add_exp": _noop,
     }
+    if level is not None and hasattr(level, "emit_enemy_melee_hit"):
+        ctx["enemy_melee_hit"] = level.emit_enemy_melee_hit
     if update_quad_tree is not None:
         ctx["update_quad_tree"] = update_quad_tree
     return ctx

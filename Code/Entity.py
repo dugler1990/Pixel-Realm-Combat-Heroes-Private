@@ -207,6 +207,81 @@ class Entity(pygame.sprite.Sprite):
             )
         return displacement
 
+    def _use_mask_entity_collision_normal(self):
+        cfg = getattr(self, "combat_config", None) or {}
+        return bool(cfg.get("use_mask_entity_collision_normal", False))
+
+    def _use_mask_obstacle_collision_normal(self):
+        cfg = getattr(self, "combat_config", None) or {}
+        return bool(cfg.get("use_mask_obstacle_collision_normal", False))
+
+    def _mask_normal_from_overlap_mask(self, self_mask, overlap_mask):
+        """Unit push-out normal from overlap pixels; None if degenerate."""
+        try:
+            cx, cy = overlap_mask.centroid()
+        except AttributeError:
+            rects = overlap_mask.get_bounding_rects()
+            if not rects:
+                return None
+            br = rects[0]
+            cx = br.centerx
+            cy = br.centery
+        mw, mh = self_mask.get_size()
+        scx = mw / 2.0
+        scy = mh / 2.0
+        nx = scx - cx
+        ny = scy - cy
+        length = math.sqrt(nx * nx + ny * ny)
+        if length < 1e-6:
+            return None
+        return nx / length, ny / length
+
+    def _apply_mask_collision_min_deflect(self, nx, ny):
+        cfg = getattr(self, "combat_config", None) or {}
+        min_deg = float(cfg.get("mask_collision_min_deflect_deg", 0) or 0)
+        if min_deg <= 0:
+            return nx, ny
+
+        direction = getattr(self, "direction", None)
+        if direction is None or direction.length_squared() <= 0:
+            return nx, ny
+
+        mag = direction.length()
+        ax = direction.x / mag
+        ay = direction.y / mag
+        para = nx * ax + ny * ay
+        perp = nx * (-ay) + ny * ax
+        min_sin = math.sin(math.radians(min_deg))
+        if abs(perp) >= min_sin:
+            return nx, ny
+
+        sign = 1 if perp >= 0 else -1
+        if abs(perp) < 1e-9:
+            sign = 1
+        tx = -ay * sign
+        ty = ax * sign
+        new_nx = para * ax + min_sin * tx
+        new_ny = para * ay + min_sin * ty
+        length = math.sqrt(new_nx * new_nx + new_ny * new_ny)
+        if length < 1e-6:
+            return nx, ny
+        return new_nx / length, new_ny / length
+
+    def _mask_collision_push_normal(self, self_mask, self_rect, other_mask, other_rect):
+        """Single overlap_mask pass: (has_overlap, normal). normal None => rect fallback."""
+        dx = other_rect.x - self_rect.x
+        dy = other_rect.y - self_rect.y
+        try:
+            overlap_mask = self_mask.overlap_mask(other_mask, (dx, dy))
+        except Exception:
+            return False, None
+        if overlap_mask.count() == 0:
+            return False, None
+        raw = self._mask_normal_from_overlap_mask(self_mask, overlap_mask)
+        if raw is None:
+            return True, None
+        return True, self._apply_mask_collision_min_deflect(raw[0], raw[1])
+
     def _apply_entity_displacement(self, QuadTree, self_rect, self_hitbox, displacement_x, displacement_y):
         new_left = self_hitbox.left + displacement_x
         new_top = self_hitbox.top + displacement_y
@@ -249,6 +324,7 @@ class Entity(pygame.sprite.Sprite):
 
         for obstacle in nearby_obstacles:
             do_collision = True
+            normal = None
 
             if mask_log.isEnabledFor(logging.DEBUG):
                 parts = [
@@ -300,32 +376,46 @@ class Entity(pygame.sprite.Sprite):
                     parts.append("  Offset (dx, dy): (%s, %s)" % (dx, dy))
                     mask_log.debug("\n".join(parts))
 
-                overlap = self_mask.overlap_area(obstacle.mask, (dx, dy))
-
-                if mask_log.isEnabledFor(logging.DEBUG):
-                    mask_log.debug(
-                        "  Mask overlap check - dx: %s, dy: %s, overlap: %s", dx, dy, overlap
+                if self._use_mask_obstacle_collision_normal():
+                    has_overlap, normal = self._mask_collision_push_normal(
+                        self_mask, self_rect, obstacle.mask, obstacle_rect
                     )
-
-                if overlap == 0:
-                    do_collision = False
-                    if mask_log.isEnabledFor(logging.DEBUG):
-                        mask_log.debug("  Mask filter worked - no collision (overlap == 0)")
-                else:
                     if mask_log.isEnabledFor(logging.DEBUG):
                         mask_log.debug(
-                            "  Mask collision confirmed - overlap: %s pixels", overlap
+                            "  Mask overlap check - dx: %s, dy: %s, overlap: %s",
+                            dx,
+                            dy,
+                            has_overlap,
                         )
+                    if not has_overlap:
+                        do_collision = False
+                        if mask_log.isEnabledFor(logging.DEBUG):
+                            mask_log.debug("  Mask filter worked - no collision (overlap == 0)")
+                    elif mask_log.isEnabledFor(logging.DEBUG):
+                        mask_log.debug("  Mask collision confirmed")
+                else:
+                    overlap = self_mask.overlap_area(obstacle.mask, (dx, dy))
+
+                    if mask_log.isEnabledFor(logging.DEBUG):
+                        mask_log.debug(
+                            "  Mask overlap check - dx: %s, dy: %s, overlap: %s", dx, dy, overlap
+                        )
+
+                    if overlap == 0:
+                        do_collision = False
+                        if mask_log.isEnabledFor(logging.DEBUG):
+                            mask_log.debug("  Mask filter worked - no collision (overlap == 0)")
+                    else:
+                        if mask_log.isEnabledFor(logging.DEBUG):
+                            mask_log.debug(
+                                "  Mask collision confirmed - overlap: %s pixels", overlap
+                            )
+                    normal = None
             else:
                 if mask_log.isEnabledFor(logging.DEBUG):
                     mask_log.debug("  Skipping mask check - using rect collision")
 
             if do_collision:
-                collision_normal = math.atan2(
-                    obstacle_rect.centery - self_centery, obstacle_rect.centerx - self_centerx
-                )
-                rebound_angle = collision_normal + math.pi
-
                 penetration_x = max(
                     0, self_rect.right - obstacle_rect.left, obstacle_rect.right - self_rect.left
                 )
@@ -334,8 +424,17 @@ class Entity(pygame.sprite.Sprite):
                 )
                 penetration_depth = math.sqrt(penetration_x ** 2 + penetration_y ** 2) ** 1.5
 
-                total_displacement_x += math.cos(rebound_angle)
-                total_displacement_y += math.sin(rebound_angle)
+                if normal:
+                    total_displacement_x += normal[0]
+                    total_displacement_y += normal[1]
+                else:
+                    collision_normal = math.atan2(
+                        obstacle_rect.centery - self_centery,
+                        obstacle_rect.centerx - self_centerx,
+                    )
+                    rebound_angle = collision_normal + math.pi
+                    total_displacement_x += math.cos(rebound_angle)
+                    total_displacement_y += math.sin(rebound_angle)
                 max_penetration_depth = max(max_penetration_depth, penetration_depth)
 
         displacement_magnitude = math.sqrt(
@@ -365,23 +464,36 @@ class Entity(pygame.sprite.Sprite):
         exponent,
     ):
         do_colision = True
+        normal = None
         if self_mask and entity.mask:
             entity_rect = entity.rect
             dx = entity_rect.x - self_rect.x
             dy = entity_rect.y - self_rect.y
-            overlap = self_mask.overlap_area(entity.mask, (dx, dy))
-            if overlap == 0:
-                do_colision = False
+            if self._use_mask_entity_collision_normal():
+                has_overlap, normal = self._mask_collision_push_normal(
+                    self_mask, self_rect, entity.mask, entity_rect
+                )
+                if not has_overlap:
+                    do_colision = False
+            else:
+                if self_mask.overlap_area(entity.mask, (dx, dy)) == 0:
+                    do_colision = False
 
         if do_colision and entity.direction:
             entity_direction_mag = entity.direction.magnitude()
             if entity_direction_mag == 0:
-                collision_normal = math.atan2(
-                    entity.rect.centery - self_centery, entity.rect.centerx - self_centerx
-                )
-                rebound_angle = collision_normal + math.pi
-                displacement_x = displacement_obstacles * math.cos(rebound_angle)
-                displacement_y = displacement_obstacles * math.sin(rebound_angle)
+                if normal:
+                    nx, ny = normal
+                    displacement_x = displacement_obstacles * nx
+                    displacement_y = displacement_obstacles * ny
+                else:
+                    collision_normal = math.atan2(
+                        entity.rect.centery - self_centery,
+                        entity.rect.centerx - self_centerx,
+                    )
+                    rebound_angle = collision_normal + math.pi
+                    displacement_x = displacement_obstacles * math.cos(rebound_angle)
+                    displacement_y = displacement_obstacles * math.sin(rebound_angle)
                 self_hitbox.left += displacement_x
                 self_hitbox.top += displacement_y
                 if self.benchmark_runtime.enabled:
@@ -392,18 +504,22 @@ class Entity(pygame.sprite.Sprite):
                     1 + math.exp(exponent * (1 - size_ratio))
                 )
                 relative_velocity = self_direction_mag - entity_direction_mag
-                direction_dx = self_centerx - entity.rect.centerx
-                direction_dy = self_centery - entity.rect.centery
-                collision_normal = math.atan2(direction_dy, direction_dx)
-                rebound_angle = collision_normal
                 displacement_entities *= (
                     1.5 if relative_velocity > 0 else 0.5 if relative_velocity < 0 else 1
                 )
                 displacement_entities = self._apply_benchmark_pushback_tuners(
                     displacement_entities
                 )
-                displacement_x = displacement_entities * math.cos(rebound_angle)
-                displacement_y = displacement_entities * math.sin(rebound_angle)
+                if normal:
+                    nx, ny = normal
+                    displacement_x = displacement_entities * nx
+                    displacement_y = displacement_entities * ny
+                else:
+                    direction_dx = self_centerx - entity.rect.centerx
+                    direction_dy = self_centery - entity.rect.centery
+                    collision_normal = math.atan2(direction_dy, direction_dx)
+                    displacement_x = displacement_entities * math.cos(collision_normal)
+                    displacement_y = displacement_entities * math.sin(collision_normal)
                 self._apply_entity_displacement(
                     QuadTree, self_rect, self_hitbox, displacement_x, displacement_y
                 )
@@ -513,8 +629,20 @@ class Entity(pygame.sprite.Sprite):
             if displacement_entities == 0:
                 continue
 
-            normal_x = dx / distance
-            normal_y = dy / distance
+            normal = None
+            if (
+                self._use_mask_entity_collision_normal()
+                and self.mask
+                and entity.mask
+            ):
+                _, normal = self._mask_collision_push_normal(
+                    self.mask, self_rect, entity.mask, entity.rect
+                )
+            if normal:
+                normal_x, normal_y = normal
+            else:
+                normal_x = dx / distance
+                normal_y = dy / distance
             displacement_x = displacement_entities * normal_x
             displacement_y = displacement_entities * normal_y
             self._apply_entity_displacement(
@@ -522,6 +650,13 @@ class Entity(pygame.sprite.Sprite):
             )
             if self.benchmark_runtime.enabled:
                 self.benchmark_runtime.metrics.record_collision_resolved()
+
+    def _entity_entity_push_params(self):
+        cfg = getattr(self, "combat_config", None) or {}
+        return (
+            cfg.get("entity_collision_push_static", 1),
+            cfg.get("entity_collision_push_moving", 1.1),
+        )
 
     #@profile
     def collision(self, QuadTree, entity_quad_tree, speed = 0):# Speed is just to adjust displacement when colliding with objects so you dont go through
@@ -558,8 +693,7 @@ class Entity(pygame.sprite.Sprite):
         
             """
             
-        displacement_obstacles = 1
-        base_displacement_entities = 1.1
+        displacement_obstacles, base_displacement_entities = self._entity_entity_push_params()
         exponent = 4
 
         self_rect = self.rect

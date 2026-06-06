@@ -46,7 +46,7 @@ from Entity import Entity
 from ItemVisual import ItemVisual
 from InteractableChest import InteractableChest
 from InteractableSeat import InteractableSeat
-from navigation.walk_grid import build_walk_grid
+from navigation.walk_grid_cache import WalkGridCache
 from rts.entities import DropoffBuilding, ResourceNode, RtsWorker
 from rts.registry import RtsWorldRegistry
 from rts.tmx_config import dropoff_config, resource_node_config
@@ -149,6 +149,9 @@ class LayoutManager:
         # Setup timer
         
         self.start_ticks = pygame.time.get_ticks()
+        self._time_font = pygame.font.Font(None, 36)
+        self._time_string = None
+        self._time_surface = None
         
 
     
@@ -182,13 +185,12 @@ class LayoutManager:
     
         # Format time as MM:SS
         time_string = f"{minutes:02}:{seconds:02}"
-        
-        # Render time string
-        text_surface = pygame.font.Font(None, 36).render(time_string, True, (255, 255, 255))
-        
-        # Position the text at the top-left corner
-        
-        display_surface.blit(text_surface, (display_surface.get_size()[0]/2, 10))
+
+        if time_string != self._time_string:
+            self._time_string = time_string
+            self._time_surface = self._time_font.render(time_string, True, (255, 255, 255))
+
+        display_surface.blit(self._time_surface, (display_surface.get_size()[0] / 2, 10))
     
     
     def add_obstacle_sprite_to_quad_tree(self, obstacle_sprite, alive=True, remove_existing = True):
@@ -217,6 +219,37 @@ class LayoutManager:
     def remove_obstacle_sprite_from_quad_tree(self, obstacle_sprite):# not used at the moment
         # Remove the obstacle sprite from the quadtree
         self.obstacle_quad_tree.delete(obstacle_sprite)
+
+    def _obstacle_quad_item_for_sprite(self, sprite, _id=-1):
+        mask = sprite.mask if hasattr(sprite, "mask") else None
+        return HashableRect(sprite.rect, _id=_id, mask=mask)
+
+    def register_obstacle_sprite(self, sprite, *, live=False):
+        """Convert an obstacle_sprites member to HashableRect; optionally register live."""
+        existing = getattr(sprite, "_obstacle_quad_item", None)
+        if existing is not None:
+            return existing
+
+        _id = -1
+        if live:
+            next_id = getattr(self, "_dynamic_obstacle_next_id", None)
+            if next_id is None:
+                next_id = -10000
+            _id = next_id
+            self._dynamic_obstacle_next_id = next_id - 1
+
+        item = self._obstacle_quad_item_for_sprite(sprite, _id=_id)
+        sprite._obstacle_quad_item = item
+
+        if live:
+            quad_tree = getattr(self, "obstacle_quad_tree", None)
+            if quad_tree is not None:
+                quad_tree.insert(item, alive=True, remove_existing=True)
+            walk_cache = getattr(self, "walk_grid_cache", None)
+            if walk_cache is not None:
+                walk_cache.block_walk_grid_cells_for_item(item)
+
+        return item
 
     def set_player(self, player):
         """Sets the player object for layout interaction."""
@@ -1687,16 +1720,7 @@ class LayoutManager:
         
         items = []
         for sprite in self.obstacle_sprites:
-            #left, top, width, height = sprite.rect
-            #right = left + width
-            #bottom = top + height
-            
-            if hasattr(sprite, "mask"):
-                mask = sprite.mask
-            else: mask = None
-            
-            item = HashableRect(sprite.rect, mask = mask)
-            items.append(item)
+            items.append(self.register_obstacle_sprite(sprite, live=False))
             
         self.obstacle_quad_tree_manager = QuadTreeManager()
         self.obstacle_quad_tree = QuadTree(items = items,
@@ -1710,12 +1734,12 @@ class LayoutManager:
             backend=self._entity_broadphase_backend(),
             grid_cell_size=self._entity_broadphase_grid_cell_size(),
         )
-        self.walk_grid = build_walk_grid(
+        self.walk_grid_cache = WalkGridCache(
             self.obstacle_quad_tree,
             self.csv_layout_width,
             self.csv_layout_height,
-            TILESIZE,
         )
+        self.walk_grid_cache.prewarm_rts_workers()
 
         
         

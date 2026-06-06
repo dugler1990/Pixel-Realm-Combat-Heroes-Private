@@ -16,6 +16,37 @@ FOCUS_BODY = 0
 FOCUS_BACKPACK = 1
 FOCUS_BELT = 2
 
+_BELT_HUD_FONT = None
+_BELT_LABEL_SURFACES = None
+_BELT_QTY_SURFACES = {}
+
+
+def _belt_hud_font():
+    global _BELT_HUD_FONT
+    if _BELT_HUD_FONT is None:
+        _BELT_HUD_FONT = pygame.font.Font(None, 16)
+    return _BELT_HUD_FONT
+
+
+def _belt_label_surfaces():
+    global _BELT_LABEL_SURFACES
+    if _BELT_LABEL_SURFACES is None:
+        font = _belt_hud_font()
+        _BELT_LABEL_SURFACES = [
+            font.render(str(i + 1), True, (180, 180, 180))
+            for i in range(BELT_SLOT_COUNT)
+        ]
+    return _BELT_LABEL_SURFACES
+
+
+def _belt_qty_surface(quantity):
+    qty = int(quantity)
+    cached = _BELT_QTY_SURFACES.get(qty)
+    if cached is None:
+        cached = _belt_hud_font().render(str(qty), True, (255, 255, 255))
+        _BELT_QTY_SURFACES[qty] = cached
+    return cached
+
 
 def _item_is_stackable(item):
     return getattr(item, "effect_type", None) == "consumable"
@@ -120,7 +151,7 @@ def draw_belt_hud(screen, player, inventory):
     W, H = screen.get_size()
     x0 = (W - total_w) // 2
     y0 = H - slot_h - 18
-    small_font = pygame.font.Font(None, 16)
+    label_surfaces = _belt_label_surfaces()
     for i in range(BELT_SLOT_COUNT):
         r = pygame.Rect(x0 + i * (slot_w + gap), y0, slot_w, slot_h)
         locked = i >= cap
@@ -137,9 +168,9 @@ def draw_belt_hud(screen, player, inventory):
                 img = pygame.transform.scale(img, (slot_w - 4, slot_h - 4))
                 screen.blit(img, (r.x + 2, r.y + 2))
             if src.quantity > 1:
-                t = small_font.render(str(src.quantity), True, (255, 255, 255))
+                t = _belt_qty_surface(src.quantity)
                 screen.blit(t, (r.right - t.get_width() - 2, r.bottom - t.get_height() - 2))
-        lbl = small_font.render(str(i + 1), True, (180, 180, 180))
+        lbl = label_surfaces[i]
         screen.blit(lbl, (r.centerx - lbl.get_width() // 2, r.y - 14))
 
 

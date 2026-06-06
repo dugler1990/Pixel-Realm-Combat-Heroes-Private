@@ -80,6 +80,13 @@ def load_sprite(sprite_key, fallback_size=(32, 32), fallback_color=(200, 200, 20
     return surf
 
 
+def sprite_footprint_size(sprite_key):
+    key = str(sprite_key or "").strip()
+    if key in PLACEHOLDER_SPECS:
+        return PLACEHOLDER_SPECS[key][0]
+    return (32, 32)
+
+
 def normalize_faction_id(faction_id):
     fid = str(faction_id or "").strip().lower()
     if fid == "jungle":

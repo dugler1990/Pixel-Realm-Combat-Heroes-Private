@@ -134,7 +134,7 @@ monster_data = {
                "combat_config":{
                 "melee_attacks": [{"damage": 8, "cooldown": 1500}],
                "melee_attack_radius": 80, 
-               "notice_radius": 360,
+               "notice_radius": 1000,
                
                 'combat_context':{
                     'damage_player': True,
@@ -153,7 +153,7 @@ monster_data = {
                "combat_config":{
                 "melee_attacks": [{"damage": 8, "cooldown": 1500}],
                "melee_attack_radius": 80, 
-               "notice_radius": 360,
+               "notice_radius": 1000,
                
                 'combat_context':{
                     'damage_player': True,
@@ -173,7 +173,7 @@ monster_data = {
              "combat_config":{
              "melee_attacks": [{"damage": 80, "cooldown": 1500}],
              "melee_attack_radius": 120, 
-             "notice_radius": 400,
+             "notice_radius": 1000,
              
                 'combat_context':{
                     'damage_player': True,
@@ -192,7 +192,7 @@ monster_data = {
                "combat_config":{
                 "melee_attacks": [{"damage": 9, "cooldown": 1000}],
                "melee_attack_radius": 60, 
-               "notice_radius": 350,
+               "notice_radius": 1000,
                    
                 'combat_context':{
                     'damage_player': True,
@@ -212,7 +212,7 @@ monster_data = {
                 "combat_config":{
                 "melee_attacks": [{"damage": 6, "cooldown": 1000}],
                 "melee_attack_radius": 50, 
-                "notice_radius": 300,
+                "notice_radius": 1000,
                 
                 'combat_context':{
                     'damage_player': True,
@@ -286,7 +286,7 @@ monster_data = {
                                       # infact, each parry, like each attack should have its own radius, 
                                       # i need to create new classes.
             "ranged_attack_radius": 350,
-            "notice_radius": 400,
+            "notice_radius": 1000,
             "melee_attacks": [],
             "ranged_attacks": [{"type": "demon_dog_projectile", "damage": 15, "cooldown": 1500}],
             "melee_parry_chance": 0.0,
@@ -314,7 +314,7 @@ monster_data = {
                                       # infact, each parry, like each attack should have its own radius, 
                                       # i need to create new classes.
             "ranged_attack_radius": 350,
-            "notice_radius": 400,
+            "notice_radius": 1000,
             "melee_attacks": [],
             "ranged_attacks": [{"type": "demon_dog_projectile", "damage": 15, "cooldown": 1500}],
             "melee_parry_chance": 0.0,
@@ -367,7 +367,7 @@ monster_data = {
                 "melee_notice_radius": 200,
                 "melee_attack_radius": 50,
                 "ranged_attack_radius": 400,
-                "notice_radius": 600,
+                "notice_radius": 10000,
                 "melee_attacks": [{"damage": 15, "cooldown": 700}],
                 "ranged_attacks": [{"type": "demon_dog_projectile", "damage": 15, "cooldown": 1500}],
                 "melee_parry_chance": 0.5,
@@ -394,9 +394,14 @@ monster_data = {
 		"speed": 4,
 		"resistance": 3,
 		"combat_config": {
-			"melee_attacks": [],
+			"melee_attacks": [{"damage": 6, "cooldown": 1000}],
 			"melee_attack_radius": 80,
-			"notice_radius": 360,
+			"notice_radius": 1000,
+			"entity_collision_push_static": 15,
+			"entity_collision_push_moving": 3.0,
+			"use_mask_entity_collision_normal": True,
+			"use_mask_obstacle_collision_normal": True,
+			"mask_collision_min_deflect_deg": 30,
 			"combat_context": {},
 		},
 	},
@@ -408,9 +413,9 @@ monster_data = {
 		"speed": 4,
 		"resistance": 3,
 		"combat_config": {
-			"melee_attacks": [],
+			"melee_attacks": [{"damage": 6, "cooldown": 1000}],
 			"melee_attack_radius": 80,
-			"notice_radius": 360,
+			"notice_radius": 1000,
 			"combat_context": {},
 		},
 	},
@@ -422,9 +427,9 @@ monster_data = {
 		"speed": 3,
 		"resistance": 3,
 		"combat_config": {
-			"melee_attacks": [],
+			"melee_attacks": [{"damage": 10, "cooldown": 1200}],
 			"melee_attack_radius": 80,
-			"notice_radius": 360,
+			"notice_radius": 1000,
 			"combat_context": {},
 		},
 	},
@@ -436,9 +441,9 @@ monster_data = {
 		"speed": 3,
 		"resistance": 3,
 		"combat_config": {
-			"melee_attacks": [],
+			"melee_attacks": [{"damage": 10, "cooldown": 1200}],
 			"melee_attack_radius": 80,
-			"notice_radius": 360,
+			"notice_radius": 1000,
 			"combat_context": {},
 		},
 	},

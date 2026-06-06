@@ -21,7 +21,6 @@ from Support import *
 from random import choice, randint
 from Weapon import Weapon
 from UI import UI
-from Enemy import Enemy
 from Particles import AnimationPlayer
 from Magic import MagicPlayer
 from Evasion import EvasionPlayer

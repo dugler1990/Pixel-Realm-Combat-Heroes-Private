@@ -3,7 +3,7 @@ import json
 import math
 import random
 import pygame
-from Enemy import Enemy  # Make sure to import your Enemy class
+from combat_unit import CombatUnit
 from Settings import TILESIZE
 from game_logging import get_debug_logger
 from random import randint
@@ -563,6 +563,40 @@ class Spawner:
         return context
 
 
+    def _team_id_for_spawn_config(self, config):
+        validated = self._validate_spawn_team_id(
+            config.get("spawn_team_id"),
+            source_object_id=config.get("_spawn_source_object_id"),
+        )
+        return validated if validated else "enemy"
+
+    def _create_combat_unit(
+        self,
+        monster_name,
+        scaled_pos,
+        config,
+        *,
+        combat_context,
+        special_attacks,
+        item_drop_info,
+        persistent,
+        team_id,
+    ):
+        return CombatUnit(
+            monster_name=monster_name,
+            pos=scaled_pos,
+            groups=[
+                self.level.layout_manager.visible_sprites,
+                self.level.attackable_sprites,
+            ],
+            obstacle_sprites=self.level.layout_manager.obstacle_sprites,
+            combat_context=combat_context,
+            special_attacks=special_attacks,
+            persistent=persistent,
+            item_drop_info=item_drop_info,
+            team_id=team_id,
+        )
+
     def spawn_enemy(self, config, pos=None):
 
         #print( f"enemy spawn attempt {config}, {pos}" )
@@ -570,6 +604,7 @@ class Spawner:
             pos = config['pos']
         # Scale position by TILESIZE
         scaled_pos = (pos[0] * TILESIZE, pos[1] * TILESIZE)
+        team_id = self._team_id_for_spawn_config(config)
         
         monster_config = monster_data[config['type']]
         #if config['type'] == 'ice_mage':
@@ -614,17 +649,16 @@ class Spawner:
                 item_drop_info['gold_drop'] = default_drop['gold_drop']
         else:
             item_drop_info = get_default_item_drop_for_monster(config['type'])
-        enemy = Enemy(  monster_name=config['type'], 
-                        pos=scaled_pos,
-                        groups=[self.level.layout_manager.visible_sprites, self.level.attackable_sprites],
-                        obstacle_sprites=self.level.layout_manager.obstacle_sprites,
-                        combat_context=combat_context,
-                        special_attacks=special_attacks,
-                        persistent=config.get('persistent', False),
-                        item_drop_info=item_drop_info )
-        spawn_team_id = config.get("spawn_team_id")
-        if isinstance(spawn_team_id, str) and spawn_team_id.strip():
-            enemy.team_id = spawn_team_id.strip()
+        enemy = self._create_combat_unit(
+            config['type'],
+            scaled_pos,
+            config,
+            combat_context=combat_context,
+            special_attacks=special_attacks,
+            item_drop_info=item_drop_info,
+            persistent=config.get('persistent', False),
+            team_id=team_id,
+        )
         enemy._spawn_source_object_id = config.get('_spawn_source_object_id')
         enemy._spawn_type = str(config.get('type', ''))
         self.enemies.append(enemy)
@@ -714,22 +748,48 @@ class Spawner:
 
    
     
+    def restore_enemy(self, enemy_state):
+        """Restore a persistent combat unit from saved layout state (pixel position)."""
+        monster_type = enemy_state.get("type") or enemy_state.get("monster_name")
+        if not monster_type:
+            return None
+        scaled_pos = tuple(enemy_state["position"])
+        config = {
+            "type": monster_type,
+            "persistent": True,
+            "spawn_team_id": enemy_state.get("team_id") or enemy_state.get("spawn_team_id"),
+        }
+        monster_config = monster_data[monster_type]
+        combat_config = monster_config.get("combat_config", {})
+        combat_context = self.generate_combat_context(
+            self.level, combat_config.get("combat_context", {})
+        )
+        special_attacks_config = combat_config.get("special_attacks", [])
+        special_attacks = [
+            SpecialAttacks.create_special_attack(attack)
+            for attack in special_attacks_config
+        ]
+        item_drop_info = get_default_item_drop_for_monster(monster_type)
+        team_id = self._team_id_for_spawn_config(config)
+        enemy = self._create_combat_unit(
+            monster_type,
+            scaled_pos,
+            config,
+            combat_context=combat_context,
+            special_attacks=special_attacks,
+            item_drop_info=item_drop_info,
+            persistent=True,
+            team_id=team_id,
+        )
+        if "health" in enemy_state:
+            enemy.health = enemy_state["health"]
+        self.enemies.append(enemy)
+        return enemy
+
     def restore_persistent_enemies(self, layout_path):
         if layout_path in self.persistent_enemy_data:
             for enemy_state in self.persistent_enemy_data[layout_path]:
-                # Reinitialize the enemy based on the saved state
-                enemy = Enemy(
-                    enemy_state['type'],
-                    enemy_state['position'],
-                    [self.level.layout_manager.visible_sprites, self.level.attackable_sprites],
-                    self.level.layout_manager.obstacle_sprites,
-                    self.level.damage_player,
-                    self.level.trigger_death_particles,
-                    self.level.add_exp,
-                    persistent=True
-                )
-                enemy.health = enemy_state['health']  # Restore the health state
-                self.enemies.append(enemy)
+                self.restore_enemy(enemy_state)
 
 
     def track_enemy_layouts(self):

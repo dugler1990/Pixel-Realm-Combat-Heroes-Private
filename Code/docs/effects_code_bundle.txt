@@ -1,0 +1,985 @@
+================================================================================
+PIXEL REALM — ENVIRONMENTAL EFFECTS CODE BUNDLE
+Generated for review. Paths are relative to Code/
+================================================================================
+
+OVERVIEW
+--------
+Environmental effects (slippery ice, heat zones, etc.) are Tiled shape objects on
+layers named *Effect* (or shape-only object layers). At load time they become
+EffectArea instances in per-layer quad trees. Each frame, Entity.check_effects()
+detects mask overlap and applies Effect subclasses from EFFECT_REGISTRY.
+
+Flow:
+  TMX Effect layer → EffectArea (rect + mask + properties)
+  → Entity.check_effects() → active_effects + InteractionContext(effect_state)
+  → entity.effect_state → Entity.move() friction/accel modifiers
+  → apply_environmental_damage() for HeatEffect
+
+Registry keys (Tiled object properties):
+  slippery_factor → SlipperyEffect (movement)
+  heat            → HeatEffect (damage over time)
+
+Key files in this bundle:
+  Effect.py, EffectArea.py
+  Entity.py (move effect modifiers, check_effects, apply_environmental_damage)
+  Interaction.py (InteractionContext fields)
+  tmx_layout_manager.py (load effect layers from TMX)
+  Level4_tmxdev.py (game loop: check_effects each frame)
+  Player.py (effect_state + environmental damage)
+  YsortCameraGroup.py (debug draw effect rects)
+  interaction_validation.py (effect lifecycle tests)
+
+================================================================================
+
+
+================================================================================
+FILE: Effect.py
+================================================================================
+
+# Import DEFAULT_FRICTION from Entity to keep friction values aligned
+import math
+
+try:
+    from Entity import DEFAULT_FRICTION
+except ImportError:
+    # Fallback if import fails (shouldn't happen in normal use)
+    DEFAULT_FRICTION = 0.5
+
+from game_logging import get_debug_logger
+
+_effect_env_log = get_debug_logger("effect_environmental")
+
+# slippery_factor is log-mapped to s in [0, 1] between _SLIP_F_MIN and _SLIP_F_MAX.
+# *_MIN / *_MAX below = output when slippery_factor is at that end of the range (see _SLIP_F_MIN / _SLIP_F_MAX).
+_SLIP_F_MIN = 0.1
+_SLIP_F_MAX = 50.0
+_SLIP_FRIC_MIN = 0.2   # friction_mult at slippery_factor == _SLIP_F_MIN
+_SLIP_FRIC_MAX = 0.99  # friction_mult at slippery_factor == _SLIP_F_MAX
+_SLIP_ACC_MIN = 0.48   # acceleration_mult at slippery_factor == _SLIP_F_MIN
+_SLIP_ACC_MAX = 0.3    # acceleration_mult at slippery_factor == _SLIP_F_MAX (can be < _SLIP_ACC_MIN)
+
+
+def _slippery_normalized_s(f: float) -> float:
+    """Map slippery_factor to [0,1] using log space between _SLIP_F_MIN and _SLIP_F_MAX."""
+    if f <= _SLIP_F_MIN:
+        return 0.0
+    if f >= _SLIP_F_MAX:
+        return 1.0
+    log_lo = math.log(_SLIP_F_MIN)
+    log_hi = math.log(_SLIP_F_MAX)
+    return (math.log(f) - log_lo) / (log_hi - log_lo)
+
+
+class Effect:
+    """
+    Base class for all effects.
+    Effects modify entity behavior while active.
+    """
+    def __init__(self, properties):
+        self.properties = properties
+    
+    def apply(self, entity):
+        """Called when effect is first applied to entity"""
+        pass
+    
+    def remove(self, entity):
+        """Called when effect is removed from entity"""
+        pass
+    
+    def get_acceleration_multiplier(self):
+        """Return acceleration multiplier (1.0 = normal)"""
+        return 1.0
+    
+    def get_friction_multiplier(self):
+        """Absolute friction mult for velocity when no input (higher = more slide).
+        Entity.move averages this across active effects.
+        Return DEFAULT_FRICTION for neutral.
+        """
+        return DEFAULT_FRICTION  # Use same default as Entity
+    
+    def should_persist_after_exit(self):
+        """Return True if effect should persist after leaving effect area"""
+        return False
+
+    def get_environmental_damage(self, entity, dt):
+        """Return (amount, damage_type) for damage this frame, or None. Override in damage effects."""
+        return None
+
+
+class SlipperyEffect(Effect):
+    """
+    One Tiled property ``slippery_factor`` maps to blend s in [0,1] (log scale on
+    [_SLIP_F_MIN, _SLIP_F_MAX]). Same s drives two linear outputs:
+
+    - friction_multiplier: lerp between _SLIP_FRIC_MIN and _SLIP_FRIC_MAX
+    - acceleration_multiplier: lerp between _SLIP_ACC_MIN and _SLIP_ACC_MAX
+
+    ``f <= 0`` is neutral (DEFAULT_FRICTION, accel 1.0).
+
+    Entity.move averages friction across effects, uses min for accel, and maps
+    accel into separate parallel/perpendicular input response gains for drift control.
+    """
+    def __init__(self, properties):
+        super().__init__(properties)
+        raw = properties.get('slippery_factor', _SLIP_F_MIN)
+        try:
+            f = float(raw)
+        except (TypeError, ValueError):
+            f = _SLIP_F_MIN
+        self.slippery_factor = f
+
+        if f <= 0:
+            self.friction_multiplier = DEFAULT_FRICTION
+            self.acceleration_multiplier = 1.0
+        else:
+            s = _slippery_normalized_s(f)
+            self.friction_multiplier = _SLIP_FRIC_MIN + (_SLIP_FRIC_MAX - _SLIP_FRIC_MIN) * s
+            self.acceleration_multiplier = _SLIP_ACC_MIN + (_SLIP_ACC_MAX - _SLIP_ACC_MIN) * s
+    
+    def get_acceleration_multiplier(self):
+        return self.acceleration_multiplier
+    
+    def get_friction_multiplier(self):
+        return self.friction_multiplier
+    
+    def should_persist_after_exit(self):
+        """Slippery effect stops immediately when leaving"""
+        return False
+
+
+class HeatEffect(Effect):
+    """
+    Heat effect: damages entity over time based on 'heat' property (damage per second)
+    and entity's fire_resistance. damage_this_frame = max(0, heat - fire_resistance) * dt.
+    """
+    def __init__(self, properties):
+        super().__init__(properties)
+        self.heat = float(properties.get('heat', 0))
+
+    def get_environmental_damage(self, entity, dt):
+        _effect_env_log.debug("trying to get environmental damage")
+        resistance = getattr(entity, 'fire_resistance', 0)
+        amount = max(0.0, self.heat - resistance) * dt
+        if amount <= 0:
+            return None
+        return (amount, 'heat')
+
+
+# Effect Registry: Maps property keys to Effect classes
+EFFECT_REGISTRY = {
+    'slippery_factor': SlipperyEffect,
+    'heat': HeatEffect,
+}
+
+
+================================================================================
+FILE: EffectArea.py
+================================================================================
+
+class EffectArea:
+    """
+    Minimal EffectArea used in the QuadTree:
+      - .rect  : pygame.Rect (game coords) used for broad-phase
+      - .mask  : pygame.Mask (pixel mask in local surface coords) created at load time
+      - .properties : dict from Tiled object properties
+      - ._id : stable id string
+      - .tmx_object : original pytmx object (kept for later reference)
+    """
+    def __init__(self, rect: "pygame.Rect", mask: "pygame.Mask", properties: dict = None, _id: str = None, tmx_object=None):
+        self._id = _id if _id is not None else f"effect_{id(self)}"
+        self.rect = rect
+        self.mask = mask
+        self.properties = properties or {}
+        self._tmx_object = tmx_object
+        # QuadTree expects direct left/top/right/bottom attributes
+        self.left = rect.left
+        self.top = rect.top
+        self.right = rect.right
+        self.bottom = rect.bottom
+
+    def __hash__(self):
+        return hash(self._id)
+
+    def __eq__(self, other):
+        return isinstance(other, EffectArea) and self._id == other._id
+
+    def __repr__(self):
+        return f"<EffectArea id={self._id} rect={self.rect} props={self.properties}>"
+
+
+================================================================================
+FILE: Interaction.py
+================================================================================
+
+from dataclasses import dataclass, field
+import json
+import os
+from typing import Any, Dict, Optional, Set, Tuple
+
+from game_logging import get_debug_logger
+
+_interaction_log = get_debug_logger("combat")
+
+
+@dataclass
+class InteractionContext:
+    kind: str
+    source_kind: str
+    source: Any = None
+    owner: Any = None
+    source_team: Optional[str] = None
+    target: Any = None
+    amount: Optional[float] = None
+    attack_type: Optional[str] = None
+    phase: Optional[str] = None
+    effect_key: Optional[str] = None
+    effect_area_id: Optional[Any] = None
+    tags: Set[str] = field(default_factory=set)
+
+
+
+================================================================================
+FILE: Entity.py
+================================================================================
+
+        self.velocity = pygame.math.Vector2(0, 0)  # Current velocity for movement
+        self.weight = 1.0  # Weight affects acceleration (higher weight = slower acceleration)
+        self.max_collision_distance_squared = 10000
+        self.max_collision_distance = 10
+        self.mask = None
+        self._collision_probe_rect = pygame.Rect(0, 0, 1, 1)
+        # Flag to track whether move method has been called before
+        self.move_not_called_before = True
+        # Active effects tracking: {effect_area_id: effect_instance}
+        self.active_effects = {}
+        # Interaction-driven effect state keyed by effect name, e.g. {"slippery": {...}}
+        self.effect_state = {}
+        self.fire_resistance = 0  # Reduces heat (and future fire) damage; can be set from stats later
+
+
+================================================================================
+FILE: Entity.py
+================================================================================
+
+        # Surface effects (SlipperyEffect): one monotonic slippery_factor scale.
+        # Acceleration: MIN (strictest surface wins when overlapping zones).
+        # Friction: arithmetic mean of each active effect's friction mult (avoids product blow-up when zones overlap).
+        acceleration_multiplier = 1.0  # Start with normal (1.0)
+        friction_samples = []
+        
+        slippery_state = self.effect_state.get("slippery")
+        if slippery_state:
+            acc_mult = slippery_state.get("acceleration_multiplier")
+            fric_mult = slippery_state.get("friction_multiplier")
+            if acc_mult is not None and acc_mult < acceleration_multiplier:
+                acceleration_multiplier = acc_mult
+            if fric_mult is not None:
+                friction_samples.append(fric_mult)
+        elif self.active_effects:
+            # Backward-compatible fallback while effect-state migration settles.
+            for effect in self.active_effects.values():
+                acc_mult = effect.get_acceleration_multiplier()
+                fric_mult = effect.get_friction_multiplier()
+                if acc_mult < acceleration_multiplier:
+                    acceleration_multiplier = acc_mult
+                friction_samples.append(fric_mult)
+        
+        if friction_samples:
+            friction_multiplier = sum(friction_samples) / len(friction_samples)
+        else:
+            friction_multiplier = DEFAULT_FRICTION
+        
+        # Apply input acceleration
+        if input_direction.x != 0 or input_direction.y != 0:
+            # Momentum-aware input response: split desired change into parallel/perpendicular components.
+            # Weight affects response: heavier entities respond slower.
+            weight_factor = 1.0 / self.weight  # Inverse relationship
+            base_response = BASE_ACCELERATION * weight_factor
+            # Derive a slip-strength proxy from mean friction; >DEFAULT means more slip.
+            slip_strength = 0.0
+            if friction_multiplier > DEFAULT_FRICTION:
+                slip_strength = (friction_multiplier - DEFAULT_FRICTION) / max(1e-6, (1.0 - DEFAULT_FRICTION))
+                slip_strength = max(0.0, min(1.0, slip_strength))
+            parallel_surface_response = acceleration_multiplier * (1.0 - SLIP_PARALLEL_SUPPRESSION * slip_strength)
+            perp_surface_response = acceleration_multiplier * (1.0 - SLIP_PERP_SUPPRESSION * slip_strength)
+            parallel_gain = base_response * PARALLEL_RESPONSE_GAIN * parallel_surface_response
+            perp_gain = base_response * PERP_RESPONSE_GAIN * perp_surface_response
+            target_velocity = input_direction * speed * MAX_VELOCITY_MULTIPLIER
+            desired_delta = target_velocity - self.velocity
+            # Momentum axis is current velocity direction; if too slow, fall back to current input.
+            velocity_length_sq = self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y
+            if velocity_length_sq > (LOW_SPEED_MOMENTUM_EPS * LOW_SPEED_MOMENTUM_EPS):
+                momentum_axis = self.velocity.normalize()
+            else:
+                momentum_axis = input_direction
+            delta_parallel = momentum_axis * desired_delta.dot(momentum_axis)
+            delta_perp = desired_delta - delta_parallel
+            self.velocity += (delta_parallel * parallel_gain) + (delta_perp * perp_gain)
+            # Continuous drag while pushing if mean friction below DEFAULT; high-slip surfaces skip this.
+            if friction_multiplier < DEFAULT_FRICTION - 1e-9:
+                r = max(friction_multiplier / DEFAULT_FRICTION, 0.05)
+                self.velocity *= (1.0 - HELD_SURFACE_DRAG_BLEND) + HELD_SURFACE_DRAG_BLEND * r
+        else:
+            # Apply friction when no input: velocity *= friction_multiplier each frame.
+            # Higher mult = keep more speed when coasting; lower = lose speed faster.
+            self.velocity *= friction_multiplier
+            # Stop very small velocities to prevent jitter
+            if (self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y) < 0.01:
+                self.velocity = pygame.math.Vector2(0, 0)
+
+
+================================================================================
+FILE: Entity.py
+================================================================================
+
+    def check_effects(self, effect_quad_trees):
+        """
+        Check if entity is colliding with any effect areas.
+        Effects don't block movement - they just detect presence and apply properties.
+        Uses two-phase collision: broad phase (rect) then narrow phase (mask-on-mask).
+        Same pattern as entity/obstacle collisions for consistency.
+        """
+        if not effect_quad_trees:
+            return
+
+        _mask_log = get_collision_mask_logger()
+
+        # Track currently colliding effect instances (area + effect key)
+        current_effect_instance_ids = set()
+        
+        # BROAD PHASE: Use rect for quad tree query (same as entity/obstacle collisions)
+        entity_rect = HashableRect(self.rect, self.id)
+        
+        # Check each effect layer's quad tree
+        for layer_name, effect_tree in effect_quad_trees.items():
+            nearby_effects = effect_tree.hit(entity_rect)
+            
+            # NARROW PHASE: For each nearby effect, check mask-on-mask collision
+            for effect_area in nearby_effects:
+                do_collision = True  # Assume collision from broad phase
+
+                if _mask_log.isEnabledFor(logging.DEBUG):
+                    parts = [
+                        "Effect collision - self.mask: %s, effect_area.mask: %s"
+                        % (self.mask is not None, getattr(effect_area, "mask", None) is not None),
+                    ]
+                    if self.mask:
+                        parts.append("  self.mask size: %s" % (self.mask.get_size(),))
+                    if hasattr(effect_area, "mask") and effect_area.mask:
+                        parts.append(
+                            "  effect_area.mask size: %s" % (effect_area.mask.get_size(),)
+                        )
+                    _mask_log.debug("\n".join(parts))
+
+                # If both have masks, do precise mask-on-mask check (same as entity collisions)
+                if self.mask and effect_area.mask:
+                    # Calculate offset using rect positions (same as entity collisions)
+                    # IMPORTANT: Both masks are created from surfaces starting at (0,0)
+                    # The rect positions represent where those surfaces are in world space
+                    dx = effect_area.rect.x - self.rect.x
+                    dy = effect_area.rect.y - self.rect.y
+
+                    if _mask_log.isEnabledFor(logging.DEBUG):
+                        entity_mask_size = self.mask.get_size()
+                        effect_mask_size = effect_area.mask.get_size()
+                        parts = [
+                            "  Entity rect: %s (x=%s, y=%s, w=%s, h=%s)"
+                            % (
+                                self.rect,
+                                self.rect.x,
+                                self.rect.y,
+                                self.rect.width,
+                                self.rect.height,
+                            ),
+                            "  Effect rect: %s (x=%s, y=%s, w=%s, h=%s)"
+                            % (
+                                effect_area.rect,
+                                effect_area.rect.x,
+                                effect_area.rect.y,
+                                effect_area.rect.width,
+                                effect_area.rect.height,
+                            ),
+                            "  Entity mask size: %s, Effect mask size: %s"
+                            % (entity_mask_size, effect_mask_size),
+                            "  Entity rect size: (%s, %s), Effect rect size: (%s, %s)"
+                            % (
+                                self.rect.width,
+                                self.rect.height,
+                                effect_area.rect.width,
+                                effect_area.rect.height,
+                            ),
+                            "  Offset (dx, dy): (%s, %s)" % (dx, dy),
+                        ]
+                        if entity_mask_size != (self.rect.width, self.rect.height):
+                            parts.append(
+                                "  WARNING: Entity mask size %s != rect size (%s, %s)"
+                                % (
+                                    entity_mask_size,
+                                    self.rect.width,
+                                    self.rect.height,
+                                )
+                            )
+                        if effect_mask_size != (
+                            effect_area.rect.width,
+                            effect_area.rect.height,
+                        ):
+                            parts.append(
+                                "  WARNING: Effect mask size %s != rect size (%s, %s)"
+                                % (
+                                    effect_mask_size,
+                                    effect_area.rect.width,
+                                    effect_area.rect.height,
+                                )
+                            )
+                        _mask_log.debug("\n".join(parts))
+
+                    overlap = self.mask.overlap_area(effect_area.mask, (dx, dy))
+
+                    if _mask_log.isEnabledFor(logging.DEBUG):
+                        reverse_overlap = effect_area.mask.overlap_area(
+                            self.mask, (-dx, -dy)
+                        )
+                        _mask_log.debug(
+                            "  Mask overlap check - dx: %s, dy: %s, overlap: %s",
+                            dx,
+                            dy,
+                            overlap,
+                        )
+                        _mask_log.debug(
+                            "  Reverse overlap check (effect->entity): overlap: %s",
+                            reverse_overlap,
+                        )
+
+                    if overlap == 0:
+                        do_collision = False  # No overlap, no collision
+                        if _mask_log.isEnabledFor(logging.DEBUG):
+                            _mask_log.debug(
+                                "  Mask filter worked - no collision (overlap == 0)"
+                            )
+                    else:
+                        if _mask_log.isEnabledFor(logging.DEBUG):
+                            _mask_log.debug(
+                                "  Mask collision confirmed - overlap: %s pixels, effect_id: %s",
+                                overlap,
+                                effect_area._id,
+                            )
+                else:
+                    if _mask_log.isEnabledFor(logging.DEBUG):
+                        _mask_log.debug(
+                            "  Skipping mask check for effect - using rect collision"
+                        )
+
+                if do_collision:
+                    effect_area_id = effect_area._id
+
+                    # Allow mixed effect areas: process each matching registry key independently.
+                    for prop_key, effect_class in EFFECT_REGISTRY.items():
+                        if prop_key not in effect_area.properties:
+                            continue
+                        effect_instance_id = (effect_area_id, prop_key)
+                        current_effect_instance_ids.add(effect_instance_id)
+
+                        if _mask_log.isEnabledFor(logging.DEBUG):
+                            _mask_log.debug(
+                                "  Effect instance in current set: %s", effect_instance_id
+                            )
+
+                        if effect_instance_id not in self.active_effects:
+                            effect_instance = effect_class(effect_area.properties)
+                            self.active_effects[effect_instance_id] = effect_instance
+                            effect_instance.apply(self)
+                            self._emit_effect_state_interaction(
+                                effect_key=prop_key,
+                                phase="begin",
+                                effect_instance=effect_instance,
+                                effect_area_id=effect_area_id,
+                            )
+                            if _mask_log.isEnabledFor(logging.DEBUG):
+                                _mask_log.debug(
+                                    "  Effect APPLIED: %s, velocity: %s",
+                                    effect_instance_id,
+                                    self.velocity,
+                                )
+                        else:
+                            effect_instance = self.active_effects[effect_instance_id]
+                            self._emit_effect_state_interaction(
+                                effect_key=prop_key,
+                                phase="tick",
+                                effect_instance=effect_instance,
+                                effect_area_id=effect_area_id,
+                            )
+        
+        # Remove effects that are no longer colliding
+        effects_to_remove = []
+        for effect_instance_id, effect_instance in self.active_effects.items():
+            if effect_instance_id not in current_effect_instance_ids:
+                # Check if effect should persist after exit
+                if not effect_instance.should_persist_after_exit():
+                    effect_instance.remove(self)
+                    effect_area_id, effect_key = effect_instance_id
+                    self._emit_effect_state_interaction(
+                        effect_key=effect_key,
+                        phase="end",
+                        effect_instance=effect_instance,
+                        effect_area_id=effect_area_id,
+                    )
+                    effects_to_remove.append(effect_instance_id)
+                    if _mask_log.isEnabledFor(logging.DEBUG):
+                        _mask_log.debug(
+                            "  Effect REMOVED: %s (no longer colliding, velocity: %s)",
+                            effect_instance_id,
+                            self.velocity,
+                        )
+        
+        # Remove effects that shouldn't persist
+        for effect_instance_id in effects_to_remove:
+            del self.active_effects[effect_instance_id]
+        
+        if _mask_log.isEnabledFor(logging.DEBUG):
+            if self.active_effects:
+                _mask_log.debug(
+                    "  Active effects after cleanup: %s, velocity: %s",
+                    list(self.active_effects.keys()),
+                    self.velocity,
+                )
+            elif effects_to_remove:
+                _mask_log.debug(
+                    "  All effects removed, velocity: %s", self.velocity
+                )
+
+    def apply_environmental_damage(self, dt):
+        """Apply damage from active effects that provide environmental damage (e.g. heat)."""
+        #print(f"applying environmental damage")
+        #print(self.active_effects)
+        resolver = self._get_interaction_resolver()
+        for (effect_area_id, effect_key), effect in self.active_effects.items():
+            if hasattr(effect, 'get_environmental_damage'):
+                result = effect.get_environmental_damage(self, dt)
+                if result:
+                    amount, damage_type = result
+                    if amount > 0:
+                        ctx = InteractionContext(
+                            kind="damage",
+                            source_kind="environment",
+                            source=effect,
+                            owner=None,
+                            source_team="environment",
+                            target=self,
+                            amount=amount,
+                            attack_type=damage_type,
+                            effect_key=effect_key,
+                            effect_area_id=effect_area_id,
+                            tags={"environment", effect_key},
+                        )
+                        if resolver is not None:
+                            resolver.apply(ctx)
+                        elif self.can_receive_interaction(ctx):
+                            self.receive_interaction(ctx)
+
+    def _get_interaction_resolver(self):
+        if hasattr(self, "level") and hasattr(self.level, "interaction_resolver"):
+            return self.level.interaction_resolver
+        return None
+
+    def _emit_effect_state_interaction(self, effect_key, phase, effect_instance, effect_area_id):
+        ctx = InteractionContext(
+            kind="effect_state",
+            source_kind="environment",
+            source=effect_instance,
+            owner=None,
+            source_team="environment",
+            target=self,
+            phase=phase,
+            effect_key=effect_key,
+            effect_area_id=effect_area_id,
+            tags={"environment", "effect_state", effect_key, phase},
+        )
+        resolver = self._get_interaction_resolver()
+        if resolver is not None:
+            resolver.apply(ctx)
+        elif self.can_receive_interaction(ctx):
+            self.receive_interaction(ctx)
+
+    def take_environmental_damage(self, amount, damage_type):
+        """Override in subclasses that have health. Base Entity does nothing."""
+        pass
+
+    def can_receive_interaction(self, ctx: InteractionContext):
+        return True
+
+    def receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            effect_key = ctx.effect_key
+            if not effect_key:
+                return
+            phase = ctx.phase or "tick"
+            if phase == "end":
+                self.effect_state.pop(effect_key, None)
+                return
+            payload = {"phase": phase, "source": ctx.source}
+            if effect_key == "slippery" and isinstance(ctx.source, SlipperyEffect):
+                payload["acceleration_multiplier"] = ctx.source.get_acceleration_multiplier()
+                payload["friction_multiplier"] = ctx.source.get_friction_multiplier()
+            self.effect_state[effect_key] = payload
+            return
+        return
+
+
+================================================================================
+FILE: tmx_layout_manager.py
+================================================================================
+
+    def _make_effect_area_from_tiled_object(self, obj, layer_name, idx):
+        """
+        Convert a pytmx shape (rect/ellipse/polygon) into an EffectArea.
+        This:
+          • computes the game-space rect
+          • draws the shape ONLY to generate a mask
+          • stores rect + mask + properties + original tmx object
+        """
+    
+        # --- Tiled → Game space scaling ---
+        tw = self.tmxdata.tilewidth
+        th = self.tmxdata.tileheight
+        sx = self.TILESIZE / tw
+        sy = self.TILESIZE / th
+    
+        x_game = obj.x * sx
+        y_game = obj.y * sy
+        w_game = obj.width * sx
+        h_game = obj.height * sy
+    
+        surf_w = max(1, int(round(w_game)))
+        surf_h = max(1, int(round(h_game)))
+    
+        # Local surface just for mask creation
+        surf = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
+    
+        # --- Determine shape + draw to local surface ---
+        if getattr(obj, "points", None):  # polygon
+            pts = [(int(px * sx), int(py * sy)) for px, py in obj.points]
+            pygame.draw.polygon(surf, (255, 255, 255, 255), pts)
+        elif getattr(obj, "ellipse", False):  # ellipse
+            pygame.draw.ellipse(surf, (255, 255, 255, 255), (0, 0, surf_w, surf_h))
+        else:  # rectangle fallback
+            pygame.draw.rect(surf, (255, 255, 255, 255), (0, 0, surf_w, surf_h))
+    
+        # --- Create mask ---
+        mask = pygame.mask.from_surface(surf)
+        
+        # --- Rect in game coords ---
+        # Your engine uses Tiled Y as top-left, so no subtract of height.
+        rect = pygame.Rect(int(x_game), int(y_game), surf_w, surf_h)
+    
+        _fx_log = get_tmx_effect_placement_logger()
+        if _fx_log.isEnabledFor(logging.DEBUG):
+            mask_pixel_count = mask.count() if mask else 0
+            expected_ellipse_area = (
+                math.pi * (surf_w / 2) * (surf_h / 2)
+                if getattr(obj, "ellipse", False)
+                else surf_w * surf_h
+            )
+            _fx_log.debug(
+                "Effect %s_%s:\n"
+                "  TMX raw: obj.x=%s, obj.y=%s, obj.width=%s, obj.height=%s\n"
+                "  Scaling: sx=%s, sy=%s, TILESIZE=%s, tilewidth=%s, tileheight=%s\n"
+                "  Calculated: x_game=%s, y_game=%s, w_game=%s, h_game=%s\n"
+                "  Final rect: %s (surf_w=%s, surf_h=%s)\n"
+                "  Mask pixel count: %s, Expected ellipse area: %.1f\n"
+                "  Mask size: %s",
+                layer_name,
+                idx,
+                obj.x,
+                obj.y,
+                obj.width,
+                obj.height,
+                sx,
+                sy,
+                self.TILESIZE,
+                tw,
+                th,
+                x_game,
+                y_game,
+                w_game,
+                h_game,
+                rect,
+                surf_w,
+                surf_h,
+                mask_pixel_count,
+                expected_ellipse_area,
+                mask.get_size() if mask else "None",
+            )
+    
+        # --- Properties ---
+        props = dict(obj.properties) if hasattr(obj, "properties") else {}
+    
+        # --- Create final EffectArea ---
+        area = EffectArea(
+            rect=rect,
+            mask=mask,
+            properties=props,
+            _id=f"effect_{layer_name}_{idx}",
+            tmx_object=obj
+        )
+
+        return area
+
+    
+    
+    
+    def create_effect_layer(self, tmx_object_layer):
+        _fx_layer_log = get_tmx_effect_placement_logger()
+        _fx_layer_log.debug("creating effect layer")
+        _fx_layer_log.debug("%s", tmx_object_layer)
+        items = []
+        layer_name = getattr(tmx_object_layer, "name", f"effect_layer_{len(getattr(self,'effect_quad_trees',{}))}")
+        for idx, obj in enumerate(tmx_object_layer):
+            area = self._make_effect_area_from_tiled_object(obj, layer_name, idx)
+            items.append(area)
+    
+        manager = QuadTreeManager()
+        tree = QuadTree(
+            items=items,
+            depth=8,
+            bounding_rect=pygame.rect.Rect(0, 0, self.csv_layout_width, self.csv_layout_height),
+            manager=manager
+        )
+    
+        # ensure dicts exist (initialize in start_map_layout)
+        if not hasattr(self, "effect_quad_trees"):
+            self.effect_quad_trees = {}
+            self.effect_quad_tree_managers = {}
+            self.all_effect_areas = []  # Store all effect areas for debug visualization
+    
+        self.effect_quad_trees[layer_name] = tree
+        self.effect_quad_tree_managers[layer_name] = manager
+        self.all_effect_areas.extend(items)  # Add to debug list
+        
+        # Update debug visualization in visible_sprites
+        if hasattr(self, 'visible_sprites'):
+            self.visible_sprites.debug_effect_areas = self.all_effect_areas
+        
+        return tree
+
+
+================================================================================
+FILE: tmx_layout_manager.py
+================================================================================
+
+        for layout in self.tmx_object_layers:
+            # Check if layer name contains "Effect" OR if any object has no image (shape-based effects)
+            layer_name = getattr(layout, "name", "")
+            layer_name_lower = layer_name.lower()
+            has_effect_name = layer_name.find("Effect") != -1
+            has_spawner_name = layer_name_lower.find("spawner") != -1
+            has_placed_entities_name = "placed_entities" in layer_name_lower
+            has_item_name = "item" in layer_name_lower
+            has_grass_name = "grass" in layer_name_lower
+            has_interactables_name = "interactable" in layer_name_lower
+            has_shape_objects = any(getattr(obj, "image", None) is None for obj in layout)
+            has_image_objects = any(getattr(obj, "image", None) is not None for obj in layout)
+            
+            if has_spawner_name:
+                # Process spawner layer
+                if hasattr(self, 'spawner'):
+                    self.create_spawner_layer(layout)
+                else:
+                    _tmx_layout_log.debug(
+                        "Warning: Spawner layer %r found but spawner not set. Skipping spawner processing.",
+                        layer_name,
+                    )
+            elif has_placed_entities_name:
+                self.create_placed_entity_layer(layout)
+            elif has_item_name:
+                self.create_item_object_layer(layout)
+            elif has_grass_name:
+                self.create_grass_object_layer(layout)
+            elif has_interactables_name:
+                self.create_object_layer(layout)
+            elif layer_name_lower == "chiefs":
+                spawn_chiefs_layer(self, layout)
+            elif layer_name_lower in ("resource_nodes", "rts_resource_nodes"):
+                spawn_resource_nodes_layer(self, layout)
+            elif layer_name_lower == "dropoff_buildings":
+                spawn_dropoff_buildings_layer(self, layout)
+            elif has_effect_name or (has_shape_objects and not has_image_objects):
+                self.create_effect_layer(layout)
+            else:
+                self.create_object_layer(layout)
+
+
+================================================================================
+FILE: Level4_tmxdev.py
+================================================================================
+
+                # Check for effect collisions (separate from physics collisions)
+                if isinstance(sprite, Entity):
+                    sprite.check_effects(self.layout_manager.effect_quad_trees)
+                    sprite.apply_environmental_damage(dt)
+
+
+================================================================================
+FILE: Player.py
+================================================================================
+
+    def can_receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            return True
+        if ctx.kind != "damage":
+            return False
+        if ctx.source_team == self.team_id:
+            return False
+        return True
+
+    def receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            super().receive_interaction(ctx)
+            return
+        if ctx.kind != "damage":
+            return
+        amount = ctx.amount
+        if amount is None:
+            source = ctx.source
+            if source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
+                if ctx.attack_type == "weapon":
+                    amount = source.get_full_weapon_damage()
+                else:
+                    amount = source.get_full_magic_damage()
+        if amount is None:
+            return
+        health_before = self.health
+        if ctx.source_kind == "environment":
+            self.take_environmental_damage(amount, ctx.attack_type)
+            _combat_log.debug(
+                "player_damage_ingress source_kind=%r source_team=%r amount=%r attack_type=%r health_before=%r health_after=%r",
+                ctx.source_kind,
+                ctx.source_team,
+                amount,
+                ctx.attack_type,
+                health_before,
+                self.health,
+            )
+            return
+        self.get_damage(amount, ctx.attack_type)
+        _combat_log.debug(
+            "player_damage_ingress source_kind=%r source_team=%r amount=%r attack_type=%r health_before=%r health_after=%r",
+            ctx.source_kind,
+            ctx.source_team,
+            amount,
+            ctx.attack_type,
+            health_before,
+            self.health,
+        )
+
+    def take_environmental_damage(self, amount, damage_type):
+        """Apply environmental damage (e.g. heat); reuses vulnerability via get_damage. No attack_type so particle branch is skipped until environmental types are defined."""
+        self.get_damage(amount, None)
+
+
+================================================================================
+FILE: YsortCameraGroup.py
+================================================================================
+
+        self.debug_effect_areas = []  # For debug visualization of effect collision rects
+        self.runtime_debug_effect_rects = DEBUG_DRAW_EFFECT_RECTS
+
+
+================================================================================
+FILE: YsortCameraGroup.py
+================================================================================
+
+        # DEBUG: Draw effect collision rects in red to compare with visual circles
+        if self.runtime_debug_effect_rects:
+            for effect_area in self.debug_effect_areas:
+                if hasattr(effect_area, 'rect'):
+                    # Draw rect outline in red
+                    rect_screen = pygame.Rect(
+                        effect_area.rect.x - self.offset.x,
+                        effect_area.rect.y - self.offset.y,
+                        effect_area.rect.width,
+                        effect_area.rect.height
+                    )
+                    pygame.draw.rect(self.display_surface, (255, 0, 0), rect_screen, 2)  # Red outline, 2px thick
+
+
+================================================================================
+FILE: interaction_validation.py
+================================================================================
+
+def _run_slippery_lifecycle_route():
+    resolver = InteractionResolver()
+    target = StubTarget(team_id="player", allow=True)
+    begin_ctx = InteractionContext(
+        kind="effect_state",
+        source_kind="environment",
+        source_team="environment",
+        target=target,
+        effect_key="slippery",
+        phase="begin",
+        tags={"environment", "effect_state", "slippery"},
+    )
+    tick_ctx = InteractionContext(
+        kind="effect_state",
+        source_kind="environment",
+        source_team="environment",
+        target=target,
+        effect_key="slippery",
+        phase="tick",
+        tags={"environment", "effect_state", "slippery"},
+    )
+    end_ctx = InteractionContext(
+        kind="effect_state",
+        source_kind="environment",
+        source_team="environment",
+        target=target,
+        effect_key="slippery",
+        phase="end",
+        tags={"environment", "effect_state", "slippery"},
+    )
+    ok_begin = resolver.apply(begin_ctx)
+    ok_tick = resolver.apply(tick_ctx)
+    ok_end = resolver.apply(end_ctx)
+    passed = ok_begin and ok_tick and ok_end and "slippery" not in target.effect_state
+    return ScenarioResult(
+        "SlipperyLifecycleRoute",
+        passed,
+        (
+            f"begin={ok_begin} tick={ok_tick} end={ok_end} "
+            f"effect_present={'slippery' in target.effect_state}"
+        ),
+    )
+
+
+def _run_mixed_effect_route():
+    resolver = InteractionResolver()
+    target = StubTarget(team_id="player", allow=True)
+    heat_ctx = InteractionContext(
+        kind="damage",
+        source_kind="environment",
+        source_team="environment",
+        target=target,
+        amount=2,
+        attack_type="heat",
+        effect_key="heat",
+        tags={"environment", "heat"},
+    )
+    slippery_ctx = InteractionContext(
+        kind="effect_state",
+        source_kind="environment",
+        source_team="environment",
+        target=target,
+        effect_key="slippery",
+        phase="begin",
+        tags={"environment", "effect_state", "slippery"},
+    )
+    ok_heat = resolver.apply(heat_ctx)
+    ok_slip = resolver.apply(slippery_ctx)
+    passed = ok_heat and ok_slip and target.health == 98 and "slippery" in target.effect_state
+    return ScenarioResult(
+        "MixedEffectRoute",
+        passed,
+        (
+            f"heat={ok_heat} slippery={ok_slip} "
+            f"health={target.health} effect_present={'slippery' in target.effect_state}"
+        ),

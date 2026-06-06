@@ -1,0 +1,407 @@
+# Aggro target selection — code extract for cache / spatial-query optimization
+# Generated for review before implementing perf fix.
+#
+# Profile summary (game_cProfile.py):
+#   - ~8.7M can_aggro / should_aggro calls per ~2.8k frames
+#   - select_hostile_target scans ALL visible_sprites every enemy_update
+#   - entity_quad_tree is passed to enemy_update but NOT used for target pick
+#
+# Intended optimizations:
+#   1. Query entity_quad_tree within notice_radius instead of visible.sprites()
+#   2. Prefilter with can_potentially_affect(source.team_id, candidate.team_id) before can_aggro
+#   3. Cache selected target; invalidate on death, out-of-radius, retaliation window change
+#   4. Skip _record_aggro_check when telemetry_sink is None (normal play)
+#
+# Primary edit target: combat_unit.py select_hostile_target + combat_update
+# Also review duplicates: Enemy.py, friendly.py
+#
+================================================================================
+# FILE: Code/combat_unit.py (aggro state init)
+================================================================================
+
+        self.team_id = team_id
+        self.sprite_type = sprite_type if sprite_type is not None else "enemy"
+        self.recent_attacker_team_id = None
+        self.recent_attacker_until_ms = 0
+
+================================================================================
+# FILE: Code/combat_unit.py (distance helpers)
+================================================================================
+
+    def get_target_distance_direction(self, target):
+        enemy_vec = pygame.math.Vector2(self.rect.center)
+        target_vec = pygame.math.Vector2(target.rect.center)
+        distance = (target_vec - enemy_vec).magnitude()
+        if distance > 0:
+            direction = (target_vec - enemy_vec).normalize()
+        else:
+            direction = pygame.math.Vector2()
+        return(distance, direction)
+
+    def get_player_distance_direction(self, player):
+        return self.get_target_distance_direction(player)
+
+    def _is_valid_aggro_target(self, candidate):
+        if candidate is self:
+            return False
+        if not hasattr(candidate, "rect"):
+            return False
+        if hasattr(candidate, "health") and getattr(candidate, "health", 1) <= 0:
+            return False
+        return True
+
+================================================================================
+# FILE: Code/combat_unit.py (HOT PATH — select_hostile_target)
+================================================================================
+
+    def select_hostile_target(self):
+        level = self.combat_context.get("level") if isinstance(self.combat_context, dict) else None
+        resolver = getattr(level, "interaction_resolver", None) if level is not None else None
+        if resolver is None:
+            return self.combat_context.get("default_target")
+        visible = getattr(level.layout_manager, "visible_sprites", None)
+        if visible is None:
+            return self.combat_context.get("default_target")
+
+        now = pygame.time.get_ticks()
+        retaliate_until = getattr(self, "retaliate_until_ms", 0)
+        retaliate_team = getattr(self, "retaliate_team_id", None)
+        if retaliate_team and now < retaliate_until:
+            prefer_team = retaliate_team
+        elif now < self.recent_attacker_until_ms:
+            prefer_team = self.recent_attacker_team_id
+        else:
+            prefer_team = None
+
+        notice_radius = float(self.combat_config.get("notice_radius", math.inf))
+
+        best_target = None
+        best_distance = math.inf
+        for candidate in visible.sprites():
+            if not self._is_valid_aggro_target(candidate):
+                continue
+            if not resolver.can_aggro(self, candidate):
+                continue
+            if prefer_team is not None and getattr(candidate, "team_id", None) != prefer_team:
+                continue
+            distance, _ = self.get_target_distance_direction(candidate)
+            if distance > notice_radius:
+                continue
+            if distance < best_distance:
+                best_distance = distance
+                best_target = candidate
+
+        if best_target is None and prefer_team is not None:
+            for candidate in visible.sprites():
+                if not self._is_valid_aggro_target(candidate):
+                    continue
+                if not resolver.can_aggro(self, candidate):
+                    continue
+                distance, _ = self.get_target_distance_direction(candidate)
+                if distance > notice_radius:
+                    continue
+                if distance < best_distance:
+                    best_distance = distance
+                    best_target = candidate
+
+        return best_target
+
+================================================================================
+# FILE: Code/combat_unit.py (cache invalidation triggers — receive_interaction)
+================================================================================
+
+    def receive_interaction(self, ctx: InteractionContext):
+        ...
+        source_team = ctx.source_team
+        if source_team and source_team != self.team_id:
+            self.recent_attacker_team_id = source_team
+            ...
+            self.recent_attacker_until_ms = pygame.time.get_ticks() + retaliation_window_ms
+        ...
+
+================================================================================
+# FILE: Code/combat_unit.py (combat loop)
+================================================================================
+
+    def resume_default(self):
+        self.status = "idle"
+        self.direction = pygame.math.Vector2(0, 0)
+
+    def combat_update(self, player=None, quadtree=None):
+        if not self.frozen:
+            target = self.select_hostile_target()
+            if target is None:
+                self.resume_default()
+                return
+            self.actions(target, quadtree)
+
+    def enemy_update(self, player=None, quadtree=None):
+        """Deprecated: use combat_update."""
+        self.combat_update(player, quadtree)
+
+================================================================================
+# FILE: Code/Enemy.py (duplicate select_hostile_target — NO notice_radius filter)
+================================================================================
+
+    def select_hostile_target(self):
+        level = self.combat_context.get("level") if isinstance(self.combat_context, dict) else None
+        resolver = getattr(level, "interaction_resolver", None)
+        if resolver is None:
+            return self.combat_context.get("default_target")
+        visible = getattr(level.layout_manager, "visible_sprites", None)
+        if visible is None:
+            return self.combat_context.get("default_target")
+        best_target = None
+        best_distance = math.inf
+        for candidate in visible.sprites():
+            if not self._is_valid_aggro_target(candidate):
+                continue
+            if not resolver.can_aggro(self, candidate):
+                continue
+            distance, _ = self.get_target_distance_direction(candidate)
+            if distance < best_distance:
+                best_distance = distance
+                best_target = candidate
+        return best_target
+
+================================================================================
+# FILE: Code/friendly.py (duplicate select_hostile_target)
+================================================================================
+
+    def select_hostile_target(self):
+        level = self.combat_context.get("level") if isinstance(self.combat_context, dict) else None
+        resolver = getattr(level, "interaction_resolver", None) if level is not None else None
+        if resolver is None or level is None:
+            return None
+        visible = getattr(level.layout_manager, "visible_sprites", None)
+        if visible is None:
+            return None
+
+        now = pygame.time.get_ticks()
+        prefer_team = (
+            self.recent_attacker_team_id
+            if now < self.recent_attacker_until_ms
+            else None
+        )
+
+        best_target = None
+        best_distance = math.inf
+        for candidate in visible.sprites():
+            if not self._is_valid_aggro_target(candidate):
+                continue
+            if not resolver.can_aggro(self, candidate):
+                continue
+            if prefer_team is not None and getattr(candidate, "team_id", None) != prefer_team:
+                continue
+            distance, _ = self.get_enemy_distance_direction(candidate)
+            if distance < best_distance:
+                best_distance = distance
+                best_target = candidate
+
+        if best_target is None and prefer_team is not None:
+            for candidate in visible.sprites():
+                if not self._is_valid_aggro_target(candidate):
+                    continue
+                if not resolver.can_aggro(self, candidate):
+                    continue
+                distance, _ = self.get_enemy_distance_direction(candidate)
+                if distance < best_distance:
+                    best_distance = distance
+                    best_target = candidate
+
+        return best_target
+
+================================================================================
+# FILE: Code/Interaction.py — FactionPolicy.should_aggro (called millions of times)
+================================================================================
+
+    def should_aggro(self, source: Any, target: Any) -> bool:
+        source_id = getattr(source, "team_id", None)
+        target_id = getattr(target, "team_id", None)
+        source_faction = self.resolve_faction(source_id)
+        target_faction = self.resolve_faction(target_id)
+        if source_faction is None or target_faction is None:
+            return False
+        relation = self.resolve_relation(source_id, target_id)
+        aggro_mode = source_faction.get("aggro_mode", "hostile_only")
+        if aggro_mode == "never":
+            return False
+        if aggro_mode == "all":
+            return True
+        if aggro_mode == "hostile_only":
+            return relation == "hostile"
+        if aggro_mode == "retaliate_only":
+            retaliate_team = getattr(source, "retaliate_team_id", None)
+            retaliate_until = getattr(source, "retaliate_until_ms", 0)
+            return retaliate_team == target_id and retaliate_until > 0
+        return relation == "hostile"
+
+    def register_retaliation(self, target: Any, attacker_team: Optional[str], now_ms: int):
+        ...
+        setattr(target, "retaliate_team_id", attacker_team)
+        setattr(target, "retaliate_until_ms", now_ms + retaliation_window_ms)
+
+================================================================================
+# FILE: Code/Interaction.py — InteractionResolver aggro + prefilter
+================================================================================
+
+    def _record_aggro_check(self, allowed: bool):
+        sink = self.telemetry_sink
+        if sink is not None and hasattr(sink, "record_aggro_check"):
+            sink.record_aggro_check(allowed)
+
+    def can_potentially_affect(self, source_team: Optional[str], target_team: Optional[str], kind: str = "damage") -> bool:
+        if kind != "damage":
+            return True
+        probe_ctx = InteractionContext(kind="damage", source_kind="prefilter")
+        allowed = self.faction_policy.can_apply_damage(source_team, target_team, probe_ctx)
+        self._record_prefilter(skipped=not allowed)
+        return allowed
+
+    def can_aggro(self, source: Any, target: Any) -> bool:
+        allowed = self.faction_policy.should_aggro(source, target)
+        self._record_aggro_check(allowed)
+        return allowed
+
+================================================================================
+# FILE: Code/config/faction_policy.json (team pair hostility — prefilter reference)
+================================================================================
+
+    "pairs": [
+      {"a": "enemy_1", "b": "enemy_2", "relation": "ally"},
+      {"a": "enemy_1", "b": "enemy_3", "relation": "hostile"},
+      {"a": "enemy_2", "b": "enemy_3", "relation": "hostile"},
+      ...
+    ]
+
+================================================================================
+# FILE: Code/Level4_tmxdev.py — resolver wiring + enemy_update loop
+================================================================================
+
+        self.interaction_resolver = InteractionResolver(telemetry_sink=self.benchmark_runtime.metrics)
+
+            for sprite in self.layout_manager.visible_sprites.sprites():
+                if hasattr(sprite, 'enemy_update'):
+                    sprite.enemy_update(None, self.layout_manager.entity_quad_tree)
+
+================================================================================
+# FILE: Code/Level4_tmxdev.py — prefilter pattern already used for projectiles
+================================================================================
+
+                        if not self.interaction_resolver.can_potentially_affect(
+                            source_team=source_team,
+                            target_team=target_team,
+                            kind=interaction_kind,
+                        ):
+                            continue
+
+================================================================================
+# FILE: Code/Entity.py — spatial query pattern (reuse for aggro)
+================================================================================
+
+        query_self = HashableRect(self_rect, self.id)
+        nearby_obstacles = QuadTree.hit(query_self)
+        nearby_entities = entity_quad_tree.hit(query_self)
+
+================================================================================
+# FILE: Code/benchmark_broadphase.py — MovingEntityBroadphaseAdapter
+================================================================================
+
+class MovingEntityBroadphaseAdapter:
+    """Adapter preserving the old .insert/.hit calls used by entities."""
+
+    def hit(self, rect):
+        return self.backend.query(rect, query_id=getattr(rect, "_id", -1))
+
+    def query(self, rect, item_id=-1):
+        return self.backend.query(rect, query_id=item_id)
+
+# Suggested aggro query: inflate rect by notice_radius, then entity_quad_tree.hit(...)
+# Map HashableRect hits back to live sprites via item_mapping / _id
+
+================================================================================
+# FILE: Code/hashRect.py
+================================================================================
+
+class HashableRect:
+    def __init__(self, rect, _id = -1, direction = None, sprite_type = None, mask = None):
+        self._id = _id
+        self.rect = rect
+        ...
+
+================================================================================
+# FILE: Code/Spawner.py — combat context (default_target = player)
+================================================================================
+
+    def generate_combat_context(self, level, combat_config):
+        context = {
+            "level": level,
+            "default_target": level.player,
+        }
+        ...
+
+================================================================================
+# FILE: Code/CombatStrategy.py — decide_action uses notice_radius vs TARGET distance
+================================================================================
+
+    def decide_action(self, enemy, target):
+        distance, _ = enemy.get_target_distance_direction(target)
+        if distance <= enemy.combat_config['melee_attack_radius'] and enemy.can_attack:
+            enemy.status = "attack"
+        elif distance <= enemy.combat_config['notice_radius'] :
+            enemy.status = "move"
+        else:
+            enemy.status = "idle"
+
+================================================================================
+# FILE: Code/benchmark_runtime.py — aggro telemetry (only when benchmark enabled)
+================================================================================
+
+    def record_aggro_check(self, allowed: bool):
+        self.aggro_checks_total += 1
+        if allowed:
+            self.aggro_allowed_total += 1
+
+# Level wires: InteractionResolver(telemetry_sink=self.benchmark_runtime.metrics)
+# In normal play, pass telemetry_sink=None to avoid hot-path counter overhead.
+
+================================================================================
+# FILE: tests/rts/test_notice_radius_targeting.py — behavior to preserve
+================================================================================
+
+def test_select_hostile_target_respects_notice_radius():
+    ...
+    unit.combat_config = {"notice_radius": 100}
+    ...
+    target = CombatUnit.select_hostile_target(unit)
+    assert target is near
+
+================================================================================
+# FILE: Code/interaction_validation.py — aggro policy expectations
+================================================================================
+
+    enemy1_to_enemy2 = resolver.can_aggro(enemy1, enemy2)  # ally pair -> False
+    enemy1_to_enemy3 = resolver.can_aggro(enemy1, enemy3)  # hostile pair -> True
+    ...
+    policy.register_retaliation(neutral, "enemy_1", 1000)
+    neutral_to_enemy_after_hit = resolver.can_aggro(neutral, enemy1)  # retaliate_only
+
+================================================================================
+# CACHE INVALIDATION CHECKLIST (implementation notes)
+================================================================================
+#
+# Re-scan when any of:
+#   - cached target is None, dead, or fails _is_valid_aggro_target
+#   - cached target distance > notice_radius
+#   - recent_attacker_until_ms or retaliate_until_ms crosses now (prefer_team change)
+#   - optional: every N frames as safety refresh
+#
+# Spatial query sketch:
+#   r = int(notice_radius)
+#   query = HashableRect(self.rect.inflate(r*2, r*2), self.id)
+#   for hit in entity_quad_tree.hit(query):
+#       candidate = resolve_sprite_from_broadphase(hit)
+#       if resolver.can_potentially_affect(self.team_id, candidate.team_id):
+#           if resolver.can_aggro(self, candidate): ...
+#
+# QuadTree hit returns HashableRect; need mapping back to sprite (see collision code).

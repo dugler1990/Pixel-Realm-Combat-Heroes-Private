@@ -109,7 +109,7 @@ class FakeWorldAdapter(RtsWorldAdapter):
     def get_obstacle_sprites(self):
         return None
 
-    def get_walk_grid(self):
+    def get_walk_grid_cache(self):
         return None
 
     def get_obstacle_quad_tree(self):

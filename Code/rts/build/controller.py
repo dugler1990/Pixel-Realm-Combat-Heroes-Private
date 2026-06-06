@@ -4,6 +4,7 @@ import pygame
 
 from game_logging import get_debug_logger
 from navigation.grid_pathfinder import find_path
+from navigation.unit_footprint import pathfinding_footprint_for_unit
 
 from ..entities import DropoffBuilding, ResourceNode
 from ..tmx_config import dropoff_config, resource_node_config
@@ -22,7 +23,7 @@ class BuildController:
         self.tasks = {}
         self._on_build_complete = None
         self._wallet_resolver = None
-        self._walk_grid = None
+        self._walk_grid_cache = None
         self._obstacle_quad_tree = None
         self._stuck_check = {}
         self._last_logged_state = {}
@@ -35,11 +36,17 @@ class BuildController:
         """Optional callback(worker, building, spawned_node) after a successful build."""
         self._on_build_complete = callback
 
-    def set_navigation(self, walk_grid=None, obstacle_quad_tree=None):
-        if walk_grid is not None:
-            self._walk_grid = walk_grid
+    def set_navigation(self, walk_grid_cache=None, obstacle_quad_tree=None):
+        if walk_grid_cache is not None:
+            self._walk_grid_cache = walk_grid_cache
         if obstacle_quad_tree is not None:
             self._obstacle_quad_tree = obstacle_quad_tree
+
+    def _grid_for_unit(self, unit):
+        if self._walk_grid_cache is None:
+            return None
+        fw, fh = pathfinding_footprint_for_unit(unit)
+        return self._walk_grid_cache.get(fw, fh)
 
     def _wallet_for_worker(self, worker):
         if self._wallet_resolver is not None and worker is not None:
@@ -142,7 +149,7 @@ class BuildController:
 
         goal = site.build_center
         path_len = 0
-        if self._walk_grid is not None:
+        if self._walk_grid_cache is not None:
             if not self._plan_path(worker, goal):
                 self._set_build_lost(worker, "no_path_on_assign")
                 return False
@@ -150,14 +157,14 @@ class BuildController:
         self._log_state(worker, "assign")
         _rts_log.debug(
             "build assign ok worker@%s faction=%s -> site@%s building=%s "
-            "site_state=%s path_len=%s walk_grid=%s",
+            "site_state=%s path_len=%s walk_grid_cache=%s",
             worker.rect.center,
             worker.faction_id,
             goal,
             building.id,
             getattr(site, "state", "?"),
             path_len,
-            self._walk_grid is not None,
+            self._walk_grid_cache is not None,
         )
         return True
 
@@ -182,20 +189,26 @@ class BuildController:
             getattr(worker, "rect", None) and worker.rect.center,
         )
 
-    def update(self, dt, obstacle_sprites=None, walk_grid=None, obstacle_quad_tree=None):
-        if walk_grid is not None:
-            self._walk_grid = walk_grid
+    def update(self, dt, obstacle_sprites=None, walk_grid_cache=None, obstacle_quad_tree=None):
+        if walk_grid_cache is not None:
+            self._walk_grid_cache = walk_grid_cache
         if obstacle_quad_tree is not None:
             self._obstacle_quad_tree = obstacle_quad_tree
         for worker in list(self.tasks.values()):
             self._step_worker(worker, float(dt or 0), obstacle_sprites)
 
     def _plan_path(self, worker, goal_px):
-        if self._walk_grid is None:
+        grid = self._grid_for_unit(worker)
+        if grid is None:
             worker._build_path = []
             worker._build_path_index = 0
-            return True
-        path = find_path(self._walk_grid, worker.rect.center, goal_px)
+            _rts_log.warning(
+                "build path failed worker@%s -> %s (no walk grid for footprint)",
+                worker.rect.center,
+                goal_px,
+            )
+            return False
+        path = find_path(grid, worker.rect.center, goal_px)
         if not path:
             worker._build_path = []
             worker._build_path_index = 0
@@ -361,20 +374,23 @@ class BuildController:
         center = site.build_center
         fid = worker.faction_id
 
+        spawned_obstacles = []
         spawned_node = None
         if building.spawn_node_kind:
             node_cfg = resource_node_config(building.spawn_node_kind, fid)
             spawned_node = ResourceNode(center, groups, node_cfg, registry)
-            if hasattr(adapter, "level"):
-                lm = adapter.level.layout_manager
-                lm.environment_interactables.append(spawned_node)
+            spawned_obstacles.append(spawned_node)
 
         if building.spawn_dropoff_kind:
             drop_cfg = dropoff_config(building.spawn_dropoff_kind, fid)
             dropoff = DropoffBuilding(center, groups, drop_cfg, registry)
-            if hasattr(adapter, "level"):
-                lm = adapter.level.layout_manager
-                lm.environment_interactables.append(dropoff)
+            spawned_obstacles.append(dropoff)
+
+        if hasattr(adapter, "level"):
+            lm = adapter.level.layout_manager
+            for spawned in spawned_obstacles:
+                lm.environment_interactables.append(spawned)
+                lm.register_obstacle_sprite(spawned, live=True)
 
         self._retire_build_site(site, adapter, registry)
 

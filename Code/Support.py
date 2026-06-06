@@ -3,6 +3,7 @@ import os
 from os import walk
 import pygame
 from game_logging import get_debug_logger
+from ImageCache import ImageCache
 
 _mask_ascii_log = get_debug_logger("mask_ascii")
 
@@ -61,6 +62,14 @@ def _mask_opaque_bounds(mask):
     if right <= left or bottom <= top:
         return None
     return pygame.Rect(left, top, right - left, bottom - top)
+
+
+def mask_footprint_size(mask):
+    """Opaque mask bounding box as (width, height) in pixels, or None if empty."""
+    bounds = _mask_opaque_bounds(mask)
+    if bounds is None:
+        return None
+    return bounds.width, bounds.height
 
 
 def mask_midbottom_world(sprite_rect, mask):
@@ -301,15 +310,22 @@ def _animation_frame_sort_key(filename):
 
 
 def import_folder(path, scale=None):
+    norm = os.path.normpath(path)
+    cache_key = ImageCache.folder_cache_key(norm, scale)
+    cached = ImageCache._folder_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     surface_list = []
-    for _, __, img_files in walk(path):
+    for _, __, img_files in walk(norm):
         for image in sorted(img_files, key=_animation_frame_sort_key):
-            full_path = os.path.join(path, image)
-            image_surf = pygame.image.load(full_path).convert_alpha()
+            full_path = os.path.join(norm, image)
+            image_surf = ImageCache.load_image(full_path)
             if scale:
                 image_surf = pygame.transform.scale(image_surf, scale)
-                #image_surf.set_alpha(200)
             surface_list.append(image_surf)
+
+    ImageCache._folder_cache[cache_key] = surface_list
     return surface_list
 
 

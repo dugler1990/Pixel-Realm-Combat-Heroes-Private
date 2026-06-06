@@ -39,6 +39,8 @@ class RtsChiefEntity(RtsTribeMember):
             monster_name=monster_name_for_faction(faction_id, sprite_key),
             behavior="roam",
             center_pos=True,
+            team_id="friendly",
+            sprite_type="friendly",
         )
         self.kind = "chief"
         self.spawn_center = pygame.math.Vector2(pos)

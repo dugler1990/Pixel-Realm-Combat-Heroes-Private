@@ -1,6 +1,6 @@
 import pygame
 from Trap import Trap
-from Enemy import Enemy
+from combat_unit import CombatUnit
 from Interaction import InteractionContext
 
 class IceClone(Trap):
@@ -28,7 +28,7 @@ class IceClone(Trap):
         for sprite in self.groups[0]:
         #     if isinstance(sprite, Enemy) and sprite.frozen == False:  # Assuming there's an Enemy class
         #         sprite.freeze()  # Assuming enemies have a freeze method
-            if isinstance(sprite, Enemy) and not sprite.frozen:
+            if isinstance(sprite, CombatUnit) and not sprite.frozen:
                 distance = pygame.math.Vector2(sprite.rect.center).distance_to(self.rect.center)
                 if distance < self.radius+180:
                     sprite.freeze()
