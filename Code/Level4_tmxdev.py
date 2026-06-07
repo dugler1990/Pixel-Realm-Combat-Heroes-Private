@@ -2055,7 +2055,10 @@ class Level4:
                 
                 # Check for effect collisions (separate from physics collisions)
                 if isinstance(sprite, Entity):
-                    sprite.check_effects(self.layout_manager.effect_quad_trees)
+                    sprite.check_effects(
+                        self.layout_manager.effect_quad_trees,
+                        self.layout_manager.effect_cell_grid,
+                    )
                     sprite.apply_environmental_damage(dt)
                        
              

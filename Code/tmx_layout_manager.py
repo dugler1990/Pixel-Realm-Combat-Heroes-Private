@@ -29,6 +29,7 @@ from QuadTree import QuadTree
 from QuadTree import QuadTreeManager
 from hashRect import HashableRect
 from EffectArea import EffectArea
+from effect_cell_grid import EffectCellGrid
 from Torch import Torch
 from Tree import Tree
 from AnimationSprite import AnimationSprite
@@ -1629,6 +1630,7 @@ class LayoutManager:
         self.effect_quad_trees = {}         
         self.effect_quad_tree_managers = {}
         self.all_effect_areas = []  # Store all effect areas for debug visualization 
+        self.effect_cell_grid = None
         
         self.tmxdata = load_pygame( tmx_path + '/map.tmx' )
         self.tmx_folder = os.path.abspath(tmx_path) if tmx_path else ""
@@ -1713,9 +1715,12 @@ class LayoutManager:
             else:
                 self.create_object_layer(layout)
             
-            
-            
-        
+        self.effect_cell_grid = EffectCellGrid.build(
+            self.all_effect_areas,
+            self.TILESIZE,
+            self.csv_layout_width,
+            self.csv_layout_height,
+        )
         
         
         items = []

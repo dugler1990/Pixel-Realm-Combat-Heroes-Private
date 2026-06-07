@@ -890,7 +890,7 @@ class Entity(pygame.sprite.Sprite):
                 self.hitbox.left += displacement_x
                 self.hitbox.top += displacement_y
     
-    def check_effects(self, effect_quad_trees):
+    def check_effects(self, effect_quad_trees, effect_cell_grid=None):
         """
         Check if entity is colliding with any effect areas.
         Effects don't block movement - they just detect presence and apply properties.
@@ -899,6 +899,10 @@ class Entity(pygame.sprite.Sprite):
         """
         if not effect_quad_trees:
             return
+
+        if not self.active_effects and effect_cell_grid is not None:
+            if not effect_cell_grid.intersects_rect(self.rect):
+                return
 
         _mask_log = get_collision_mask_logger()
 
