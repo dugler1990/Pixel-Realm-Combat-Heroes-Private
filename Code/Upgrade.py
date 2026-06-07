@@ -4,16 +4,16 @@ import os
 from inputManager import InputManager
 
 class Upgrade:
-    def __init__(self, player, input_manager):
+    def __init__(self, player, input_manager, backend):
         self.input_manager = input_manager
         self.player = player
-        self.display_surface = pygame.display.get_surface()
+        self.backend = backend
         self.attribute_names = list(player.upgrade_stat_order)
         self.attribute_nr = len(self.attribute_names)
         self.max_values = [player.max_stats[k] for k in player.upgrade_stat_order]
         self.font = pygame.font.Font(UI_FONT, UI_FONT_SIZE)
-        self.height = self.display_surface.get_size()[1] * 0.8
-        self.width = self.display_surface.get_size()[0] // 6
+        self.height = self.backend.get_size()[1] * 0.8
+        self.width = self.backend.get_size()[0] // 6
         self.selection_index = 0
         self.selection_time = None
         self.can_move = True
@@ -50,10 +50,10 @@ class Upgrade:
     def create_items(self):
         self.item_list = []
         for index in range(self.attribute_nr):
-            full_width = self.display_surface.get_size()[0]
+            full_width = self.backend.get_size()[0]
             increment = full_width // self.attribute_nr
             left = (index * increment) + (increment - self.width) // 2
-            top = self.display_surface.get_size()[1] * 0.1
+            top = self.backend.get_size()[1] * 0.1
             col = UpgradeColumn(left, top, self.width, self.height, index, self.font)
             self.item_list.append(col)
 
@@ -65,7 +65,7 @@ class Upgrade:
             value = self.player.get_value_by_index(index)
             max_value = self.max_values[index]
             cost = self.player.get_cost_by_index(index)
-            col.display(self.display_surface, self.selection_index, name, value, max_value, cost)
+            col.display(self.backend.raw_surface, self.selection_index, name, value, max_value, cost)
 
     def selection_cooldown(self):
         if not self.can_move:

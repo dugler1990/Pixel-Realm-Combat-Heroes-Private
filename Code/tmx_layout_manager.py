@@ -90,12 +90,14 @@ class LayoutManager:
                  restore_persistent_enemies_callback=None,
                  initialize_map_items_callback=None,
                  benchmark_runtime=None,
+                 backend=None,
                  ):
         # This class manages layouts of a level with triggers and logs
         self.start_map_layout(selected_player_info_dir = selected_player_info_dir,
                         TILESIZE = TILESIZE,
                         restore_persistent_enemies_callback=restore_persistent_enemies_callback,
-                        initialize_map_items_callback=initialize_map_items_callback)
+                        initialize_map_items_callback=initialize_map_items_callback,
+                        backend=backend)
         self.benchmark_runtime = benchmark_runtime or BENCHMARK_RUNTIME
 
     def start_map_layout(self,
@@ -105,7 +107,8 @@ class LayoutManager:
                          initialize_map_items_callback=None,
                          Player = None, 
                          daytime_layout = True,
-                         prepared_daytimeoverlay = None):# this last param sucks, showing how bad my map change logic is.
+                         prepared_daytimeoverlay = None,
+                         backend=None):# this last param sucks, showing how bad my map change logic is.
         # This function initializes the LayoutManager instance
         self.TILESIZE = TILESIZE
         self.csv_layout_width = 40* TILESIZE # TODO hard coded atm, i am not sure exactly how to configure this config ( i am initializing the QuadTree before accessing layout csvs thats the only issue, initialize it after and keep that info)
@@ -136,7 +139,9 @@ class LayoutManager:
         self.overhead_areas = []
     
         # Initialize camera group for sorting sprites
-        self.visible_sprites = YSortCameraGroup(self.ground_sprites, self.grass_manager, self.overhead_areas)
+        self.visible_sprites = YSortCameraGroup(
+            self.ground_sprites, self.grass_manager, self.overhead_areas, backend=backend
+        )
         self.environment_interactables = []
         self._env_interactable_profiles = {}
     
@@ -177,7 +182,7 @@ class LayoutManager:
     
     
     
-    def display_time( self, display_surface):
+    def display_time(self, backend):
         # Calculate elapsed time in milliseconds
         elapsed_ticks = pygame.time.get_ticks() - self.start_ticks
         elapsed_seconds = elapsed_ticks // 1000
@@ -191,7 +196,7 @@ class LayoutManager:
             self._time_string = time_string
             self._time_surface = self._time_font.render(time_string, True, (255, 255, 255))
 
-        display_surface.blit(self._time_surface, (display_surface.get_size()[0] / 2, 10))
+        backend.blit(self._time_surface, (backend.get_size()[0] / 2, 10))
     
     
     def add_obstacle_sprite_to_quad_tree(self, obstacle_sprite, alive=True, remove_existing = True):

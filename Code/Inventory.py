@@ -139,7 +139,7 @@ class InventorySlot:
             screen.blit(ov, self.rect.topleft)
 
 
-def draw_belt_hud(screen, player, inventory):
+def draw_belt_hud(backend, player, inventory):
     """Bottom-center belt bar during gameplay (inventory closed)."""
     if not getattr(player, "has_belt", False):
         return
@@ -149,29 +149,30 @@ def draw_belt_hud(screen, player, inventory):
     slot_w, slot_h = 36, 36
     gap = 8
     total_w = BELT_SLOT_COUNT * slot_w + (BELT_SLOT_COUNT - 1) * gap
-    W, H = screen.get_size()
+    W, H = backend.get_size()
     x0 = (W - total_w) // 2
     y0 = H - slot_h - 18
     label_surfaces = _belt_label_surfaces()
+    draw_surface = backend.raw_surface
     for i in range(BELT_SLOT_COUNT):
         r = pygame.Rect(x0 + i * (slot_w + gap), y0, slot_w, slot_h)
         locked = i >= cap
         src = inventory.slots[inventory.belt_start_index + i]
-        pygame.draw.rect(screen, (200, 160, 80), r, 2)
+        pygame.draw.rect(draw_surface, (200, 160, 80), r, 2)
         if locked:
             ov = pygame.Surface((r.width, r.height), pygame.SRCALPHA)
             ov.fill((40, 40, 40, 180))
-            screen.blit(ov, r.topleft)
+            backend.blit(ov, r.topleft)
         elif src.item is not None and src.quantity > 0:
             ip = getattr(src.item, "image_path", None)
             if ip:
                 img = ImageCache.load_scaled(ip, (slot_w - 4, slot_h - 4))
-                screen.blit(img, (r.x + 2, r.y + 2))
+                backend.blit(img, (r.x + 2, r.y + 2))
             if src.quantity > 1:
                 t = _belt_qty_surface(src.quantity)
-                screen.blit(t, (r.right - t.get_width() - 2, r.bottom - t.get_height() - 2))
+                backend.blit(t, (r.right - t.get_width() - 2, r.bottom - t.get_height() - 2))
         lbl = label_surfaces[i]
-        screen.blit(lbl, (r.centerx - lbl.get_width() // 2, r.y - 14))
+        backend.blit(lbl, (r.centerx - lbl.get_width() // 2, r.y - 14))
 
 
 class Inventory:

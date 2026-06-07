@@ -101,8 +101,12 @@ class LevelRtsWorldAdapter(RtsWorldAdapter):
     def get_player(self):
         return self.level.player
 
+    def get_render_backend(self):
+        return self.level.backend
+
     def get_display_surface(self):
-        return self.level.display_surface
+        # Deprecated Phase 0 — use get_render_backend().
+        return self.level.backend.raw_surface
 
     def get_visible_sprites(self):
         return self.level.layout_manager.visible_sprites
@@ -234,7 +238,7 @@ LAYOUT_TO_LEVEL = {
 
 
 class Level4:
-    def __init__(self, input_manager, selected_player_info_dir, layouts_dir, player_stats, level_number=None, game_settings=None):
+    def __init__(self, input_manager, selected_player_info_dir, layouts_dir, player_stats, level_number=None, game_settings=None, backend=None):
         self.level_number = level_number
         self.game_settings = game_settings
         self.benchmark_runtime = BENCHMARK_RUNTIME
@@ -247,7 +251,8 @@ class Level4:
         self.start_map(input_manager=input_manager,
                        selected_player_info_dir=selected_player_info_dir,
                        layouts_dir=layouts_dir,
-                       player_stats=player_stats)
+                       player_stats=player_stats,
+                       backend=backend)
 
 
     def start_map(self,
@@ -255,7 +260,7 @@ class Level4:
                   selected_player_info_dir,
                   layouts_dir,
                   player_stats=None,
-                  display_surface = None,
+                  backend=None,
                   layout_manager= None,
                   Player = None,
                   restart = False,
@@ -272,18 +277,10 @@ class Level4:
         self.last_trigger_time = None
         self.trigger_cooldown = 5000  # 1 second cooldown
         
-        if display_surface:
-            # Set old display surface : maybe this is the problem actually, maybe killing the sprites kills the surface or something
-            #print("set display surface from previous level")
-            self.display_surface = display_surface
-        else:
-            self.display_surface = pygame.display.get_surface()  # This returns None Maybe i need to do what ever else is done before this
-                                                                 # like what ever is in Main.py.... this is so backwards.        
-            # Set up a new display surface with transparency
-            self.display_surface = pygame.display.set_mode(self.display_surface.get_size(), pygame.SRCALPHA)
+        assert backend is not None, "Level4 requires a render backend from Main2"
+        self.backend = backend
 
-        
-        self.weather_overlay = WeatherOverlay(self.display_surface)
+        self.weather_overlay = WeatherOverlay(self.backend)
         self.game_paused = False
         self._gold_popup_until_ms = 0
         self._gold_popup_amount = 0
@@ -303,7 +300,7 @@ class Level4:
         self.input_manager.reset()
         self.current_layout = None
         self.layouts_dir = layouts_dir
-        self.ui=UI()
+        self.ui=UI(self.backend)
         with open(f"{layouts_dir}/initial_layout_name.txt", "r") as file:
             initial_layout_dir = file.read().strip()
         _game_flow_log.debug("layout dir  : %s", layouts_dir)
@@ -345,7 +342,7 @@ class Level4:
                 restore_persistent_enemies_callback=self.restore_persistent_enemies,
                 initialize_map_items_callback=self.initialize_map_items,  # Pass the method reference directly
                 benchmark_runtime=self.benchmark_runtime,
-                
+                backend=self.backend,
                 )        
 
         # Level-wide caps for Spawner (read in Spawner.__init__ via getattr(level, "global_spawn_limits")).
@@ -368,7 +365,7 @@ class Level4:
         #else:print("None")
         
         if not restart :         
-            self.layout_manager.daytime_brightness_overlay.set_display_surface(self.display_surface)
+            self.layout_manager.daytime_brightness_overlay.set_backend(self.backend)
             self.layout_manager.initialize_layout( initial_layout_dir ) # Convention: initial layout is defined by naming convention       
         
         self.current_layout = initial_layout_dir
@@ -408,7 +405,7 @@ class Level4:
             self.weather.time_speed_multiplier = self.game_settings.environment_speed
         
         
-        self.upgrade = Upgrade(self.player, self.input_manager)
+        self.upgrade = Upgrade(self.player, self.input_manager, self.backend)
         self.animation_player = AnimationPlayer()
         self.magic_player = MagicPlayer(self.animation_player)
         self.evasion_player = EvasionPlayer(self.animation_player, self.create_trap)
@@ -466,7 +463,7 @@ class Level4:
                                                   )
             
             if self.layout_manager.daytime_brightness_overlay:
-                self.layout_manager.daytime_brightness_overlay.set_display_surface(self.display_surface) # TODO: done separately in both restart and not restart....terrible
+                self.layout_manager.daytime_brightness_overlay.set_backend(self.backend) # TODO: done separately in both restart and not restart....terrible
 
     def _initialize_benchmark_mode(self):
         random.seed(self.benchmark_runtime.seed)
@@ -573,9 +570,9 @@ class Level4:
             panel.blit(surface, (padding, y))
             y += surface.get_height() + line_gap
 
-        x = self.display_surface.get_width() - panel_width - 12
-        y = self.display_surface.get_height() - panel_height - 12
-        self.display_surface.blit(panel, (x, y))
+        x = self.backend.get_size()[0] - panel_width - 12
+        y = self.backend.get_size()[1] - panel_height - 12
+        self.backend.blit(panel, (x, y))
 
     def _draw_rts_validation_overlay(self):
         if not RTS_VALIDATION_RUNTIME.enabled or not RTS_VALIDATION_RUNTIME.overlay_enabled:
@@ -607,7 +604,7 @@ class Level4:
             panel.blit(surface, (padding, y))
             y += surface.get_height() + line_gap
 
-        self.display_surface.blit(panel, (12, 12))
+        self.backend.blit(panel, (12, 12))
 
     def _start_next_benchmark_case(self):
         case = self.benchmark_runtime.start_next_matrix_case()
@@ -965,10 +962,10 @@ class Level4:
         rect = surf.get_rect()
         # Above draw_belt_hud (slots ~H-54..H-18 plus slot labels)
         rect.midbottom = (
-            self.display_surface.get_width() // 2,
-            self.display_surface.get_height() - 80,
+            self.backend.get_size()[0] // 2,
+            self.backend.get_size()[1] - 80,
         )
-        self.display_surface.blit(surf, rect)
+        self.backend.blit(surf, rect)
 
     def try_interact_nearby_environment(self):
         if not self.input_manager.is_key_just_pressed(pygame.K_SPACE):
@@ -1296,7 +1293,7 @@ class Level4:
                 self.start_map(input_manager = self.input_manager,
                                selected_player_info_dir = self.selected_player_info_dir,
                                layouts_dir = trigger.destination_layout,
-                               display_surface=self.display_surface,
+                               backend=self.backend,
                                layout_manager=self.layout_manager,
                                Player = self.player,
                                restart = True,
@@ -1734,11 +1731,11 @@ class Level4:
         text = f"Gold +{amt}"
         surf = font.render(text, True, (255, 215, 0))
         shadow = font.render(text, True, (30, 22, 0))
-        w, h = self.display_surface.get_size()
+        w, h = self.backend.get_size()
         x = (w - surf.get_width()) // 2
         y = int(h * 0.70)
-        self.display_surface.blit(shadow, (x + 2, y + 2))
-        self.display_surface.blit(surf, (x, y))
+        self.backend.blit(shadow, (x + 2, y + 2))
+        self.backend.blit(surf, (x, y))
 
     def toggle_attack_selection(self):
         self.game_paused = not self.game_paused
@@ -1832,7 +1829,7 @@ class Level4:
         dt = dt / FPS
         dt = dt_real
         self.wind_timer += dt
-        self.display_surface.fill((0, 0, 0)) 
+        self.backend.fill((0, 0, 0)) 
         #print(FPS)
         #print(self.player.rect.center)
          
@@ -1874,18 +1871,18 @@ class Level4:
             if self.upgrade_menu_open:
                 self.upgrade.display()
             elif self.inventory_open:
-                self.player.inventory.display(self.display_surface)
+                self.player.inventory.display(self.backend.raw_surface)
                 self.player.inventory.input()
                 for sprite in self.layout_manager.visible_sprites:
                     if isinstance(sprite, ItemVisual):
                         sprite.update(dt)
             elif self.attack_selection_open:
-                self.player.attack_selection.display(self.display_surface)
+                self.player.attack_selection.display(self.backend.raw_surface)
                 self.player.attack_selection.input()
                 self.player.update_derived_attributes()
             elif self.player_config_open:
                 
-                self.player.player_config.draw(self.display_surface) # TODO: align naming convensions of these screens.
+                self.player.player_config.draw(self.backend.raw_surface) # TODO: align naming convensions of these screens.
                 self.player.player_config.handle_events(self)
                 #self.player.stats = self.player.player_config.final_stats
                 
@@ -1941,12 +1938,12 @@ class Level4:
                     brightness_factor = 0.007
                 
                 # Create a surface for the brightness effect
-                brightness_surface = pygame.Surface(self.display_surface.get_size(), pygame.SRCALPHA)
+                brightness_surface = pygame.Surface(self.backend.get_size(), pygame.SRCALPHA)
                 brightness_surface.fill((0, 0, 0, 0))  # Fill with transparent
                 
                 # Player position
-                center_x = self.display_surface.get_width() // 2
-                center_y = self.display_surface.get_height() // 2
+                center_x = self.backend.get_size()[0] // 2
+                center_y = self.backend.get_size()[1] // 2
                 
                 # Helper function to calculate distance between two points
                 def calculate_distance(x1, y1, x2, y2):
@@ -1991,7 +1988,7 @@ class Level4:
                                                    (torch_center_x, torch_center_y), radius)
                 
                 # Now we need to combine the brightness effects
-                self.display_surface.blit(brightness_surface, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+                self.backend.blit(brightness_surface, (0, 0), flags=pygame.BLEND_RGBA_ADD)
 
                
                 
@@ -2117,14 +2114,14 @@ class Level4:
                         pygame.event.post(pygame.event.Event(pygame.QUIT))
 
         self.save_enemy_states(self.current_layout)  # mkght be a big inefficiency
-        self.layout_manager.display_time(self.display_surface)
+        self.layout_manager.display_time(self.backend)
         self._draw_gold_pickup_popup()
         rts_active = (
             getattr(self, "rts_session", None) is not None
             and self.rts_session.is_active()
         )
         if not self.inventory_open:
-            draw_belt_hud(self.display_surface, self.player, self.player.inventory)
+            draw_belt_hud(self.backend, self.player, self.player.inventory)
             if rts_active:
                 self.rts_session.draw()
             else:

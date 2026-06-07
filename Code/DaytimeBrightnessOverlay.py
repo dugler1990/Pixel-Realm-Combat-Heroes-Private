@@ -2,8 +2,8 @@ import pygame
 import math
 
 class DaytimeBrightnessOverlay:
-    def __init__(self, display_surface=None):
-        self.display_surface = display_surface
+    def __init__(self, backend=None):
+        self.backend = backend
         self.current_time = 0  # Current time of day in hours
         self.brightness = 1.0  # Default brightness
         self.day_length = 24  # Total length of a day in hours
@@ -16,8 +16,13 @@ class DaytimeBrightnessOverlay:
         # Calculate brightness based on the time of day
         self.calculate_brightness()
         
+    def set_backend(self, backend):
+        self.backend = backend
+
     def set_display_surface(self, display_surface):
-        self.display_surface = display_surface
+        """Deprecated Phase 0 — use set_backend."""
+        from render_backend import CPUBackend
+        self.backend = CPUBackend(display_surface)
 
     def calculate_brightness(self):
         # Calculate brightness based on the time of day
@@ -42,9 +47,11 @@ class DaytimeBrightnessOverlay:
 
 
     def draw(self):
+        if self.backend is None:
+            return
         # Create a surface with the same dimensions as the display surface
-        brightness_surface = pygame.Surface(self.display_surface.get_size())
+        brightness_surface = pygame.Surface(self.backend.get_size())
         # Fill the surface with white color based on the brightness
         brightness_surface.fill((255 * self.brightness, 255 * self.brightness, 255 * self.brightness))
         # Blit the brightness surface onto the display surface with blend mode
-        self.display_surface.blit(brightness_surface, (0, 0), special_flags=pygame.BLEND_RGB_MULT)
+        self.backend.blit(brightness_surface, (0, 0), flags=pygame.BLEND_RGB_MULT)

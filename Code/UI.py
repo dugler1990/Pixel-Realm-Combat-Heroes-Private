@@ -6,10 +6,10 @@ import os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 class UI:
-    def __init__(self):
+    def __init__(self, backend):
         
         # General
-        self.display_surface = pygame.display.get_surface()
+        self.backend = backend
         self.font = pygame.font.Font(UI_FONT, UI_FONT_SIZE)
 
         # Bar Setup
@@ -34,8 +34,10 @@ class UI:
             self.magic_graphics.append(magic)
 
     def show_bar(self, current, max_amount, bg_rect, color):
+        # pygame.draw requires a native Surface (Phase 0 shim).
+        draw_surface = self.backend.raw_surface
         # Draw Background
-        pygame.draw.rect(self.display_surface, UI_BG_COLOR, bg_rect)
+        pygame.draw.rect(draw_surface, UI_BG_COLOR, bg_rect)
 
         # Converting Stats to Pixels
         ratio = current / max_amount
@@ -44,8 +46,8 @@ class UI:
         current_rect.width = current_width
 
         # Drawing the Bar
-        pygame.draw.rect(self.display_surface, color, current_rect)
-        pygame.draw.rect(self.display_surface, UI_BORDER_COLOR, bg_rect, 3)
+        pygame.draw.rect(draw_surface, color, current_rect)
+        pygame.draw.rect(draw_surface, UI_BORDER_COLOR, bg_rect, 3)
 
     def show_exp(self, exp):
         exp_value = int(exp)
@@ -53,21 +55,23 @@ class UI:
             self._exp_value = exp_value
             self._exp_surface = self.font.render(str(exp_value), False, TEXT_COLOR)
         text_surf = self._exp_surface
-        x = self.display_surface.get_size()[0] - 20
-        y = self.display_surface.get_size()[1] - 20
+        x = self.backend.get_size()[0] - 20
+        y = self.backend.get_size()[1] - 20
         text_rect = text_surf.get_rect(bottomright = (x, y))
 
-        pygame.draw.rect(self.display_surface, UI_BG_COLOR, text_rect.inflate(20, 20))
-        self.display_surface.blit(text_surf, text_rect)
-        pygame.draw.rect(self.display_surface, UI_BORDER_COLOR, text_rect.inflate(20, 20), 3)
+        draw_surface = self.backend.raw_surface
+        pygame.draw.rect(draw_surface, UI_BG_COLOR, text_rect.inflate(20, 20))
+        self.backend.blit(text_surf, text_rect)
+        pygame.draw.rect(draw_surface, UI_BORDER_COLOR, text_rect.inflate(20, 20), 3)
 
     def selection_box(self, left, top, has_switched):
         bg_rect = pygame.Rect(left, top, ITEM_BOX_SIZE, ITEM_BOX_SIZE)
-        pygame.draw.rect(self.display_surface, UI_BG_COLOR, bg_rect)
+        draw_surface = self.backend.raw_surface
+        pygame.draw.rect(draw_surface, UI_BG_COLOR, bg_rect)
         if has_switched:
-            pygame.draw.rect(self.display_surface, UI_BORDER_COLOR_ACTIVE, bg_rect, 3)
+            pygame.draw.rect(draw_surface, UI_BORDER_COLOR_ACTIVE, bg_rect, 3)
         else:
-            pygame.draw.rect(self.display_surface, UI_BORDER_COLOR, bg_rect, 3)
+            pygame.draw.rect(draw_surface, UI_BORDER_COLOR, bg_rect, 3)
         return bg_rect
 
     def weapon_overlay(self, weapon_index, has_switched):
@@ -75,23 +79,23 @@ class UI:
         weapon_surf = self.weapon_graphics[weapon_index]
         weapon_rect = weapon_surf.get_rect(center = bg_rect.center)
 
-        self.display_surface.blit(weapon_surf, weapon_rect)
+        self.backend.blit(weapon_surf, weapon_rect)
 
     def magic_overlay(self, magic_index, has_switched):
         bg_rect = self.selection_box(100, 630, has_switched) # Magix Box (80, 635) in Tutorial
         magic_surf = self.magic_graphics[magic_index]
         magic_rect = magic_surf.get_rect(center = bg_rect.center)
 
-        self.display_surface.blit(magic_surf, magic_rect)
+        self.backend.blit(magic_surf, magic_rect)
 
     def show_level(self, level):
         if self._level_value != level or self._level_surface is None:
             self._level_value = level
             self._level_surface = self.font.render(f"Level: {level}", False, TEXT_COLOR)
         level_text = self._level_surface
-        x = self.display_surface.get_size()[0] - 20
+        x = self.backend.get_size()[0] - 20
         y =  20  # Position it above the exp display
-        self.display_surface.blit(level_text, (x - level_text.get_width(), y))
+        self.backend.blit(level_text, (x - level_text.get_width(), y))
 
 
     def display(self, player):

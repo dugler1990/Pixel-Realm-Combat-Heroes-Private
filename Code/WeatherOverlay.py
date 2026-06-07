@@ -2,8 +2,8 @@ from Support import *
 from Settings import *
 
 class WeatherOverlay:
-    def __init__(self, display_surface):
-        self.display_surface = display_surface
+    def __init__(self, backend):
+        self.backend = backend
         self.weather_type = None
         self.current_animation = []
         self.current_frame_index = 0
@@ -87,4 +87,4 @@ class WeatherOverlay:
         if self.active:
             # Render the current frame of the animation
             frame = self.current_animation[self.current_frame_index]
-            self.display_surface.blit(frame, (0, 0))
+            self.backend.blit(frame, (0, 0))

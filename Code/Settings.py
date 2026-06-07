@@ -1,5 +1,7 @@
 import os
 
+import pygame
+
 # This is for file (images specifically) importing (This line changes the directory to where the project is saved)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -10,6 +12,8 @@ HEIGHT = 400#950
 WINDOW_WIDTH_RATIO = 0.6
 WINDOW_HEIGHT_RATIO = 0.6
 FPS = 30
+RENDER_BACKEND = "cpu"  # "cpu" | "gpu" (gpu in Phase 1)
+DISPLAY_FLAGS = pygame.SRCALPHA
 TILESIZE = 150
 # Fraction of window width and height (1–100) used for the grass subsurface; centered on the display.
 GRASS_VIEWPORT_PERCENT = 100

@@ -21,6 +21,7 @@ from SettingsMenu import SettingsMenu
 from DeathMenu import DeathMenu
 from benchmark_runtime import BENCHMARK_RUNTIME
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
+from render_backend import create_backend
 import psutil
 
 level_8_layout_path = '../levels/Map8'
@@ -45,7 +46,8 @@ class Game:
             dw, dh = WIDTH, HEIGHT
         w = max(1, int(dw * WINDOW_WIDTH_RATIO))
         h = max(1, int(dh * WINDOW_HEIGHT_RATIO))
-        self.screen = pygame.display.set_mode((w, h))
+        self.backend = create_backend(w, h)
+        self.screen = self.backend.raw_surface
         self.WIDTH = w
         self.HEIGHT = h
 
@@ -175,6 +177,7 @@ class Game:
                 player_stats,
                 level_number=level_number,
                 game_settings=self.settings,
+                backend=self.backend,
             )
             if dev_restore and player_position is not None:
                 self.level.player.rect.topleft = tuple(player_position)
@@ -361,7 +364,7 @@ class Game:
                 self.debug_info_surfaces[key] = {'surface': text_surface, 'value': value}
 
             # Blit the cached text surface
-            self.screen.blit(self.debug_info_surfaces[key]['surface'], (10, current_y))
+            self.backend.blit(self.debug_info_surfaces[key]['surface'], (10, current_y))
             current_y -= text_spacing
 
 

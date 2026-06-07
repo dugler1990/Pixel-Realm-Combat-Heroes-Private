@@ -21,6 +21,7 @@ from Inventory import (  # noqa: E402
     InventorySlot,
     draw_belt_hud,
 )
+from render_backend import CPUBackend  # noqa: E402
 from tmx_layout_manager import LayoutManager  # noqa: E402
 
 
@@ -55,7 +56,7 @@ def test_ui_show_exp_renders_only_on_value_change(pygame_headless):
     from UI import UI
 
     ui = UI.__new__(UI)
-    ui.display_surface = pygame_headless
+    ui.backend = CPUBackend(pygame_headless)
     ui.font = mock_font
     ui._exp_value = None
     ui._exp_surface = None
@@ -81,7 +82,7 @@ def test_ui_show_level_renders_only_on_value_change(pygame_headless):
     from UI import UI
 
     ui = UI.__new__(UI)
-    ui.display_surface = pygame_headless
+    ui.backend = CPUBackend(pygame_headless)
     ui.font = mock_font
     ui._level_value = None
     ui._level_surface = None
@@ -110,13 +111,14 @@ def test_display_time_renders_only_on_string_change(pygame_headless):
     lm._time_string = None
     lm._time_surface = None
 
+    backend = CPUBackend(pygame_headless)
     with mock.patch("pygame.time.get_ticks", return_value=500):
-        lm.display_time(pygame_headless)
-        lm.display_time(pygame_headless)
+        lm.display_time(backend)
+        lm.display_time(backend)
     assert render_calls == ["00:00"]
 
     with mock.patch("pygame.time.get_ticks", return_value=1500):
-        lm.display_time(pygame_headless)
+        lm.display_time(backend)
     assert render_calls == ["00:00", "00:01"]
 
 
@@ -144,8 +146,9 @@ def test_draw_belt_hud_label_cache(pygame_headless):
 
     with mock.patch("pygame.font.Font") as font_cls:
         font_cls.return_value.render.side_effect = counting_render
-        draw_belt_hud(pygame_headless, player, inventory)
-        draw_belt_hud(pygame_headless, player, inventory)
+        backend = CPUBackend(pygame_headless)
+        draw_belt_hud(backend, player, inventory)
+        draw_belt_hud(backend, player, inventory)
 
     assert len(render_calls) == BELT_SLOT_COUNT
 
@@ -161,8 +164,9 @@ def test_draw_belt_hud_qty_cache_shared_across_slots(pygame_headless):
 
     with mock.patch("pygame.font.Font") as font_cls:
         font_cls.return_value.render.side_effect = counting_render
-        draw_belt_hud(pygame_headless, player, inventory)
-        draw_belt_hud(pygame_headless, player, inventory)
+        backend = CPUBackend(pygame_headless)
+        draw_belt_hud(backend, player, inventory)
+        draw_belt_hud(backend, player, inventory)
 
     # 4 slot labels + 1 shared qty surface for two slots both showing 3
     assert len(render_calls) == BELT_SLOT_COUNT + 1

@@ -139,10 +139,10 @@ class RtsSession:
         return self.world.get_player()
 
     def camera_rect(self):
-        surface = self.world.get_display_surface()
-        if surface is None:
+        backend = self.world.get_render_backend()
+        if backend is None:
             return None
-        width, height = surface.get_size()
+        width, height = backend.get_size()
         return pygame.Rect(
             self.camera.rect.centerx - width // 2,
             self.camera.rect.centery - height // 2,
@@ -636,38 +636,40 @@ class RtsSession:
     def draw(self):
         if not self.is_active():
             return
-        surface = self.world.get_display_surface()
-        if surface is None:
+        backend = self.world.get_render_backend()
+        if backend is None:
             return
-        offset = self._camera_offset(surface)
-        self._draw_node_highlights(surface, offset)
-        self._draw_site_highlights(surface, offset)
+        # Phase 0 shim: RTS UI panels still take a native Surface.
+        panel_surface = backend.raw_surface
+        offset = self._camera_offset(backend)
+        self._draw_node_highlights(backend, offset)
+        self._draw_site_highlights(backend, offset)
         self.resource_bar.draw(
-            surface,
+            panel_surface,
             self.wallet,
             self.faction,
             low_food=self.world_sim.low_food_for_faction(self._active_faction_id()),
         )
         if self.state != self.CHIEF_PANEL:
-            self.panel.draw_highlight(surface, self.selection.selected, offset)
+            self.panel.draw_highlight(panel_surface, self.selection.selected, offset)
         if self.state == self.PANEL:
             self.panel.draw(
-                surface,
+                panel_surface,
                 self.selection.selected,
                 self.wallet.to_legacy(),
                 self.queue,
             )
         if self.state == self.CHIEF_PANEL:
-            self.chief_panel.draw(surface)
+            self.chief_panel.draw(panel_surface)
         if self.state == self.WORKER_MENU:
-            self.worker_command_panel.draw(surface, self.wallet)
+            self.worker_command_panel.draw(panel_surface, self.wallet)
         if self.state == self.BUILD_MENU:
-            self.build_menu_panel.draw(surface)
-        self._draw_mode_hint(surface)
+            self.build_menu_panel.draw(panel_surface)
+        self._draw_mode_hint(backend)
         if _rts_log.isEnabledFor(logging.DEBUG):
-            self._draw_debug_overlay(surface)
+            self._draw_debug_overlay(backend)
 
-    def _draw_debug_overlay(self, surface):
+    def _draw_debug_overlay(self, backend):
         font = pygame.font.Font(None, 22)
         y = 96
         fid = self._active_faction_id() or "none"
@@ -686,19 +688,19 @@ class RtsSession:
             lines.append("  (no gather tasks)")
         for line in lines:
             surf = font.render(line, True, (120, 255, 160))
-            surface.blit(surf, (16, y))
+            backend.blit(surf, (16, y))
             y += 20
 
-    def _draw_node_highlights(self, surface, offset):
+    def _draw_node_highlights(self, backend, offset):
         registry = self.world.get_rts_registry()
         fid = self._active_faction_id()
         for node in registry.nodes_for_faction(fid):
             if not getattr(node, "highlighted", False):
                 continue
             rect = node.rect.move(-offset.x, -offset.y)
-            pygame.draw.rect(surface, (255, 220, 80), rect.inflate(6, 6), 2)
+            pygame.draw.rect(backend.raw_surface, (255, 220, 80), rect.inflate(6, 6), 2)
 
-    def _draw_site_highlights(self, surface, offset):
+    def _draw_site_highlights(self, backend, offset):
         if not self.site_highlight:
             return
         registry = self.world.get_rts_registry()
@@ -712,20 +714,20 @@ class RtsSession:
             if not getattr(site, "highlighted", False):
                 continue
             rect = site.rect.move(-offset.x, -offset.y)
-            pygame.draw.rect(surface, (120, 200, 255), rect.inflate(8, 8), 2)
+            pygame.draw.rect(backend.raw_surface, (120, 200, 255), rect.inflate(8, 8), 2)
 
-    def _camera_offset(self, surface):
-        width, height = surface.get_size()
+    def _camera_offset(self, backend):
+        width, height = backend.get_size()
         return pygame.math.Vector2(
             self.camera.rect.centerx - width // 2,
             self.camera.rect.centery - height // 2,
         )
 
-    def _draw_mode_hint(self, surface):
+    def _draw_mode_hint(self, backend):
         font = pygame.font.Font(None, 24)
         if self._status_message and time.monotonic() < self._status_until:
             rendered = font.render(self._status_message, True, self._status_color)
-            surface.blit(rendered, (16, 72))
+            backend.blit(rendered, (16, 72))
             return
         hints = {
             self.CAMERA: "Arrows move | Tab select | Home snap | Space stand",
@@ -739,4 +741,4 @@ class RtsSession:
         }
         text = hints.get(self.state, "")
         rendered = font.render(text, True, (240, 240, 220))
-        surface.blit(rendered, (16, 72))
+        backend.blit(rendered, (16, 72))

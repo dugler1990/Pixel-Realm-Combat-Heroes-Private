@@ -37,12 +37,12 @@ def _faction_outline_color(team_id):
 
 
 class YSortCameraGroup(pygame.sprite.Group):
-    def __init__(self, ground_sprites, grass_manager,overhead_areas):
+    def __init__(self, ground_sprites, grass_manager, overhead_areas, backend=None):
         super().__init__()
-        self.display_surface = pygame.display.get_surface()
-        self.window_width, self.window_height = self.display_surface.get_size()
-        self.half_width = self.display_surface.get_size()[0] // 2
-        self.half_height = self.display_surface.get_size()[1] // 2
+        self.backend = backend
+        self.window_width, self.window_height = self.backend.get_size()
+        self.half_width = self.backend.get_size()[0] // 2
+        self.half_height = self.backend.get_size()[1] // 2
 
         self._apply_grass_viewport()
         
@@ -93,14 +93,15 @@ class YSortCameraGroup(pygame.sprite.Group):
             BENCHMARK_RUNTIME.metrics.record_grass_force_call()
 
     def _apply_grass_viewport(self):
-        W, H = self.display_surface.get_size()
+        W, H = self.backend.get_size()
         p = self._grass_viewport_percent() / 100.0
         gw = max(1, int(W * p))
         gh = max(1, int(H * p))
         x = (W - gw) // 2
         y = (H - gh) // 2
         clip_rect = pygame.Rect(x, y, gw, gh).clip(pygame.Rect(0, 0, W, H))
-        self.grass_surface = self.display_surface.subsurface(clip_rect)
+        # Phase 0: grass draws in-place on a display subsurface (requires raw_surface).
+        self.grass_surface = self.backend.raw_surface.subsurface(clip_rect)
         self.grass_half_width = self.grass_surface.get_width() // 2
         self.grass_half_height = self.grass_surface.get_height() // 2
 
@@ -177,7 +178,7 @@ class YSortCameraGroup(pygame.sprite.Group):
         if self.ground_surface is None:
             self.create_ground_surface()
 
-        W, H = self.display_surface.get_size()
+        W, H = self.backend.get_size()
         self.window_width, self.window_height = W, H
         self.half_width = W // 2
         self.half_height = H // 2
@@ -192,7 +193,7 @@ class YSortCameraGroup(pygame.sprite.Group):
 
         if self.ground_surface is not None:
             ground_rect = self.ground_surface.get_rect(topleft=(-self.offset.x, -self.offset.y))
-            self.display_surface.blit(self.ground_surface, ground_rect.topleft)
+            self.backend.blit(self.ground_surface, ground_rect.topleft)
             
         # Shared wind mode keeps one base sway angle for visible grass; legacy mode
         # preserves the current position-dependent wave across the field.
@@ -249,7 +250,7 @@ class YSortCameraGroup(pygame.sprite.Group):
             #print(sprite)
             #print(dir(sprite))
             offset_pos = sprite.rect.topleft - self.offset
-            self.display_surface.blit(sprite.image, offset_pos)
+            self.backend.blit(sprite.image, offset_pos)
             if self._grass_disturbance_enabled() and hasattr(sprite, "monster_name"):
                 if sprite.monster_name == 'raccoon':
                     self._apply_grass_force( sprite.rect.center , 110 , 40)
@@ -265,7 +266,7 @@ class YSortCameraGroup(pygame.sprite.Group):
             #print(f"area : {area}")
             #print(f"player pos : {player.rect.center}")
             if area.colliderect(player.rect):
-                self.display_surface.blit(image_section, (area.x - self.offset.x, area.y - self.offset.y))
+                self.backend.blit(image_section, (area.x - self.offset.x, area.y - self.offset.y))
         
         # DEBUG: Draw effect collision rects in red to compare with visual circles
         if self.runtime_debug_effect_rects:
@@ -278,7 +279,7 @@ class YSortCameraGroup(pygame.sprite.Group):
                         effect_area.rect.width,
                         effect_area.rect.height
                     )
-                    pygame.draw.rect(self.display_surface, (255, 0, 0), rect_screen, 2)  # Red outline, 2px thick
+                    pygame.draw.rect(self.backend.raw_surface, (255, 0, 0), rect_screen, 2)  # Red outline, 2px thick
         
         # Runtime debug mode: highlight player with a clear outline.
         if self.runtime_debug_player_highlight:
@@ -287,7 +288,7 @@ class YSortCameraGroup(pygame.sprite.Group):
                 int(player.rect.centery - self.offset.y),
             )
             highlight_radius = max(24, int(max(player.rect.width, player.rect.height) * 0.75))
-            pygame.draw.circle(self.display_surface, (255, 255, 0), player_center, highlight_radius, 3)
+            pygame.draw.circle(self.backend.raw_surface, (255, 255, 0), player_center, highlight_radius, 3)
 
         if self.runtime_debug_faction_outlines:
             for sprite in self.sprites():
@@ -302,7 +303,7 @@ class YSortCameraGroup(pygame.sprite.Group):
                 )
                 team_id = getattr(sprite, "team_id", None)
                 pygame.draw.rect(
-                    self.display_surface,
+                    self.backend.raw_surface,
                     _faction_outline_color(team_id),
                     rect_screen,
                     2,
@@ -317,7 +318,7 @@ class YSortCameraGroup(pygame.sprite.Group):
         
         for sprite in self.sprites():
             if isinstance(sprite, AnimatedEnvironmentSprite):
-                sprite.update(weather, self.display_surface)
+                sprite.update(weather, self.backend.raw_surface)
             else:
                 sprite.update(dt)
     def _update_single_sprite(
@@ -390,7 +391,7 @@ class YSortCameraGroup(pygame.sprite.Group):
         """
         tile_x, tile_y = tile_position
         tile_size = TILESIZE  # Adjust this based on your tile size
-        screen_width, screen_height = self.display_surface.get_size()
+        screen_width, screen_height = self.backend.get_size()
         screen_left = self.offset.x
         screen_right = self.offset.x + screen_width
         screen_top = self.offset.y

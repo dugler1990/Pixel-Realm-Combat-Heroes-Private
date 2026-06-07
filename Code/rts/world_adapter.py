@@ -11,6 +11,9 @@ class RtsWorldAdapter:
     def get_display_surface(self):
         raise NotImplementedError
 
+    def get_render_backend(self):
+        raise NotImplementedError
+
     def get_visible_sprites(self):
         raise NotImplementedError
 

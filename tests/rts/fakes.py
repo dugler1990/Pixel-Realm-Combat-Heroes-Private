@@ -1,5 +1,6 @@
 import pygame
 
+from render_backend import CPUBackend
 from rts.world_adapter import RtsWorldAdapter
 
 
@@ -67,6 +68,9 @@ class FakeWorldAdapter(RtsWorldAdapter):
 
     def get_display_surface(self):
         return self.surface
+
+    def get_render_backend(self):
+        return CPUBackend(self.surface)
 
     def get_visible_sprites(self):
         return self.selectables

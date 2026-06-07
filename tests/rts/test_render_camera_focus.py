@@ -4,6 +4,7 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
 import pygame
 
+from render_backend import CPUBackend
 from YsortCameraGroup import YSortCameraGroup
 
 
@@ -33,7 +34,8 @@ def make_camera_group(player, obj):
     pygame.display.init()
     pygame.display.set_mode((200, 200))
     ground = pygame.sprite.Group(FakeSprite((100, 100), color=(0, 40, 0), size=(400, 400)))
-    group = YSortCameraGroup(ground, FakeGrassManager(), [])
+    backend = CPUBackend(pygame.display.get_surface())
+    group = YSortCameraGroup(ground, FakeGrassManager(), [], backend=backend)
     group.add(obj)
     group.add(player)
     return group
