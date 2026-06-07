@@ -1,11 +1,12 @@
 import math
 import pygame
 from Settings import TILESIZE
+from ImageCache import ImageCache
 class ItemVisual(pygame.sprite.Sprite):
     def __init__(self, item, groups):
         super().__init__(groups)
         self.item = item  # Reference to the logical item
-        image_raw = pygame.image.load(item.image_path).convert_alpha()
+        image_raw = ImageCache.load_image(item.image_path)
         self.image = scale_image_to_tile( image_raw, TILESIZE/2 )
         self.rect = self.image.get_rect(topleft=item.pos)
         self.float_offset = item.float_offset

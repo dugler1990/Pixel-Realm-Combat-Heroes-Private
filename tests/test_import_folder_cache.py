@@ -29,9 +29,11 @@ def pygame_headless():
 def clear_image_caches():
     ImageCache.cache.clear()
     ImageCache._folder_cache.clear()
+    ImageCache._scaled_cache.clear()
     yield
     ImageCache.cache.clear()
     ImageCache._folder_cache.clear()
+    ImageCache._scaled_cache.clear()
 
 
 def _make_frame(size):

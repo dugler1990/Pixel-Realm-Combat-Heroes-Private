@@ -15,6 +15,10 @@ class UI:
         # Bar Setup
         self.health_bar_rect = pygame.Rect(10, 10, HEALTH_BAR_WIDTH, BAR_HEIGHT)
         self.energy_bar_rect = pygame.Rect(10, 34, ENERGY_BAR_WIDTH, BAR_HEIGHT)
+        self._exp_value = None
+        self._exp_surface = None
+        self._level_value = None
+        self._level_surface = None
 
         # Convert Weapon Dictionary
         self.weapon_graphics = []
@@ -44,7 +48,11 @@ class UI:
         pygame.draw.rect(self.display_surface, UI_BORDER_COLOR, bg_rect, 3)
 
     def show_exp(self, exp):
-        text_surf = self.font.render(str(int(exp)), False, TEXT_COLOR)
+        exp_value = int(exp)
+        if self._exp_value != exp_value or self._exp_surface is None:
+            self._exp_value = exp_value
+            self._exp_surface = self.font.render(str(exp_value), False, TEXT_COLOR)
+        text_surf = self._exp_surface
         x = self.display_surface.get_size()[0] - 20
         y = self.display_surface.get_size()[1] - 20
         text_rect = text_surf.get_rect(bottomright = (x, y))
@@ -77,7 +85,10 @@ class UI:
         self.display_surface.blit(magic_surf, magic_rect)
 
     def show_level(self, level):
-        level_text = self.font.render(f"Level: {level}", False, TEXT_COLOR)
+        if self._level_value != level or self._level_surface is None:
+            self._level_value = level
+            self._level_surface = self.font.render(f"Level: {level}", False, TEXT_COLOR)
+        level_text = self._level_surface
         x = self.display_surface.get_size()[0] - 20
         y =  20  # Position it above the exp display
         self.display_surface.blit(level_text, (x - level_text.get_width(), y))

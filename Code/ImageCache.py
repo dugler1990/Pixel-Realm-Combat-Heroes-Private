@@ -6,6 +6,7 @@ import pygame
 class ImageCache:
     cache = {}
     _folder_cache = {}
+    _scaled_cache = {}
 
     @staticmethod
     def _normalize_path(path):
@@ -30,6 +31,20 @@ class ImageCache:
         if norm not in ImageCache.cache:
             ImageCache.cache[norm] = pygame.image.load(norm).convert_alpha()
         return ImageCache.cache[norm]
+
+    @staticmethod
+    def load_scaled(path, size):
+        """Load and scale an image, caching by normalized path and target size."""
+        scale = ImageCache._scale_key(size)
+        if scale is None:
+            raise ValueError("size is required for load_scaled")
+        key = (ImageCache._normalize_path(path), scale)
+        cached = ImageCache._scaled_cache.get(key)
+        if cached is None:
+            base = ImageCache.load_image(path)
+            cached = pygame.transform.scale(base, tuple(scale))
+            ImageCache._scaled_cache[key] = cached
+        return cached
 
     @staticmethod
     def load_folder(folder):

@@ -18,7 +18,7 @@ GRASS_VIEWPORT_PERCENT = 100
 # - "shared_patch" — one shared sway angle for all visible grass (whole patch in sync); slightly faster, smoother.
 GRASS_WIND_MODE = "shared_patch"
 # Wind rotation quantization in degrees (GrassManager cache buckets). Lower = smoother motion, more unique tile variants.
-GRASS_ROTATION_BUCKET_DEGREES = 1
+GRASS_ROTATION_BUCKET_DEGREES = 6
 
 # Benchmark mode (off by default). Used for isolated moving-entity collision tests.
 BENCHMARK_ENABLED = False
@@ -68,6 +68,7 @@ ENTITY_BROADPHASE_BACKEND = "grid"  # "quadtree" | "grid"
 ENTITY_BROADPHASE_GRID_CELL_SIZE = 450
 
 # Debug settings
+SHOW_DEBUG_OVERLAY = False  # FPS / memory overlay in Main2 (separate from GameSettings.debug_mode)
 DEBUG_DRAW_MASKS = True  # Draw collision masks for all entities and objects
 DEBUG_DRAW_EFFECT_RECTS = True  # Draw effect collision rects in red
 DEBUG_DRAW_FACTION_OUTLINES = False  # Seeds GameSettings.debug_faction_outlines; toggle also in settings (Ctrl+Shift+S)

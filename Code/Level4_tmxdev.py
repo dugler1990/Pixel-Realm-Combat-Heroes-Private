@@ -291,6 +291,9 @@ class Level4:
         self.upgrade_menu_open = False
         self.inventory_open = False
         self._show_interact_prompt = False
+        self._interact_font = pygame.font.Font(None, 28)
+        self._interact_surfaces = {}
+        self._interact_prompt_text = "[Space] Interact"
         self.attack_selection_open = False 
         self.player_config_open = False
         self._frame_number = 0
@@ -945,20 +948,27 @@ class Level4:
             return True
         return False
 
+    def _interact_prompt_surface(self, text):
+        cached = self._interact_surfaces.get(text)
+        if cached is None:
+            cached = self._interact_font.render(text, True, (240, 240, 240))
+            self._interact_surfaces[text] = cached
+        return cached
+
     def _draw_interact_prompt(self):
         if not getattr(self, "_show_interact_prompt", False):
             return
         if getattr(self, "game_paused", False) or self.inventory_open:
             return
-        font = pygame.font.Font(None, 28)
-        text = font.render("[Space] Interact", True, (240, 240, 240))
-        rect = text.get_rect()
+        text = getattr(self, "_interact_prompt_text", "[Space] Interact")
+        surf = self._interact_prompt_surface(text)
+        rect = surf.get_rect()
         # Above draw_belt_hud (slots ~H-54..H-18 plus slot labels)
         rect.midbottom = (
             self.display_surface.get_width() // 2,
             self.display_surface.get_height() - 80,
         )
-        self.display_surface.blit(text, rect)
+        self.display_surface.blit(surf, rect)
 
     def try_interact_nearby_environment(self):
         if not self.input_manager.is_key_just_pressed(pygame.K_SPACE):

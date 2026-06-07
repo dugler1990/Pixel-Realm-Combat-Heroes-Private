@@ -302,10 +302,17 @@ class BenchmarkRuntimeState:
         self.last_metrics_log_at = now
         self.metrics.reset()
         self.case_phase = "measure"
+        self._sync_broadphase_metrics_recording()
 
     def begin_warmup(self):
         self.warmup_started_at = time.time()
         self.case_phase = "warmup"
+        self._sync_broadphase_metrics_recording()
+
+    def _sync_broadphase_metrics_recording(self):
+        from benchmark_broadphase import set_metrics_recording
+
+        set_metrics_recording(self.enabled and self.metrics_enabled)
 
     def warmup_elapsed(self) -> bool:
         if self.case_phase != "warmup":
@@ -740,3 +747,7 @@ BENCHMARK_RUNTIME = BenchmarkRuntimeState(
     enemy_type=_env_str("PRCH_BENCHMARK_ENEMY_TYPE", BENCHMARK_ENEMY_TYPE),
     enemy_mix_spec=_env_str("PRCH_BENCHMARK_ENEMY_MIX", BENCHMARK_ENEMY_MIX),
 )
+
+from benchmark_broadphase import set_metrics_recording  # noqa: E402
+
+set_metrics_recording(False)

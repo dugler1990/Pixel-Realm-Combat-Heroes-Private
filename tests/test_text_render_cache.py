@@ -42,6 +42,58 @@ def clear_belt_text_caches():
     Inventory._BELT_QTY_SURFACES.clear()
 
 
+def test_ui_show_exp_renders_only_on_value_change(pygame_headless):
+    render_calls = []
+
+    def fake_render(text, antialias, color):
+        render_calls.append(text)
+        return pygame.Surface((40, 20), pygame.SRCALPHA)
+
+    mock_font = mock.Mock()
+    mock_font.render.side_effect = fake_render
+
+    from UI import UI
+
+    ui = UI.__new__(UI)
+    ui.display_surface = pygame_headless
+    ui.font = mock_font
+    ui._exp_value = None
+    ui._exp_surface = None
+
+    ui.show_exp(100)
+    ui.show_exp(100)
+    assert render_calls == ["100"]
+
+    ui.show_exp(101)
+    assert render_calls == ["100", "101"]
+
+
+def test_ui_show_level_renders_only_on_value_change(pygame_headless):
+    render_calls = []
+
+    def fake_render(text, antialias, color):
+        render_calls.append(text)
+        return pygame.Surface((60, 20), pygame.SRCALPHA)
+
+    mock_font = mock.Mock()
+    mock_font.render.side_effect = fake_render
+
+    from UI import UI
+
+    ui = UI.__new__(UI)
+    ui.display_surface = pygame_headless
+    ui.font = mock_font
+    ui._level_value = None
+    ui._level_surface = None
+
+    ui.show_level(3)
+    ui.show_level(3)
+    assert render_calls == ["Level: 3"]
+
+    ui.show_level(4)
+    assert render_calls == ["Level: 3", "Level: 4"]
+
+
 def test_display_time_renders_only_on_string_change(pygame_headless):
     render_calls = []
 

@@ -72,7 +72,7 @@ class Game:
         #self.player_configuration = PlayerConfiguration(self, self.input_manager)    
         self.in_level_selection = False  # New state for level selection
         self.current_level_number = None
-        self.show_debug_info = True 
+        self.show_debug_info = SHOW_DEBUG_OVERLAY
 
         # Debug info update variables
         self.last_debug_update = 0

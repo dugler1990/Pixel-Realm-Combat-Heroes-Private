@@ -5,19 +5,24 @@ import pygame
 from QuadTree import QuadTree, QuadTreeManager
 from benchmark_runtime import BENCHMARK_RUNTIME
 
+_RECORD_METRICS = False
 
-def _benchmark_metrics_active():
-    return BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled
+
+def set_metrics_recording(active: bool):
+    global _RECORD_METRICS
+    _RECORD_METRICS = bool(active)
 
 
 def _record_benchmark_maintenance(op):
-    if _benchmark_metrics_active():
-        BENCHMARK_RUNTIME.metrics.record_maintenance(op)
+    if not _RECORD_METRICS:
+        return
+    BENCHMARK_RUNTIME.metrics.record_maintenance(op)
 
 
 def _record_benchmark_query(candidates):
-    if _benchmark_metrics_active():
-        BENCHMARK_RUNTIME.metrics.record_query(candidates)
+    if not _RECORD_METRICS:
+        return
+    BENCHMARK_RUNTIME.metrics.record_query(candidates)
 
 
 class DynamicUniformGridBroadphase:

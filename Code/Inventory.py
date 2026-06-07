@@ -1,4 +1,5 @@
 import pygame
+from ImageCache import ImageCache
 from game_logging import get_debug_logger
 
 _player_item_log = get_debug_logger("player_item")
@@ -164,8 +165,7 @@ def draw_belt_hud(screen, player, inventory):
         elif src.item is not None and src.quantity > 0:
             ip = getattr(src.item, "image_path", None)
             if ip:
-                img = pygame.image.load(ip).convert_alpha()
-                img = pygame.transform.scale(img, (slot_w - 4, slot_h - 4))
+                img = ImageCache.load_scaled(ip, (slot_w - 4, slot_h - 4))
                 screen.blit(img, (r.x + 2, r.y + 2))
             if src.quantity > 1:
                 t = _belt_qty_surface(src.quantity)
