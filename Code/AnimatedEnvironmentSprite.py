@@ -20,6 +20,7 @@ class AnimatedEnvironmentSprite(pygame.sprite.Sprite):
         self.previous_light_level = 1  # Assume starting during the day
         self.wind_intensity_threshold = 1  # Threshold for wind intensity change to update
         self.light_level_threshold = 0.1  # Threshold for light level change to update
+        self._uncacheable_image = False
 
     def react_to_wind(self, wind_direction, wind_intensity):
         if self.affected_by_wind and abs(wind_intensity - self.previous_wind_intensity) > self.wind_intensity_threshold:
@@ -31,6 +32,11 @@ class AnimatedEnvironmentSprite(pygame.sprite.Sprite):
         # Placeholder for how frames change with wind, to be overridden by subclasses
         pass
 
+    # _uncacheable_image is managed as an instance attribute (set in __init__).
+    # It is True only when update_light() has replaced self.image with a temporary
+    # brightness-adjusted copy, and resets to False when the frame advances back to
+    # an original surface from self.frames. Mirrors Enemy.py freeze/thaw pattern.
+
     def update_light(self, light_level):
         if abs(light_level - self.previous_light_level) > self.light_level_threshold:
             # Adjust brightness based on light level
@@ -39,6 +45,7 @@ class AnimatedEnvironmentSprite(pygame.sprite.Sprite):
             faded_image.fill((255 * light_level, 255 * light_level, 255 * light_level, 255), special_flags=pygame.BLEND_RGBA_MULT)
             self.image = original_image.copy()
             self.image.blit(faded_image, (0, 0))
+            self._uncacheable_image = True
             self.previous_light_level = light_level
 
     def update(self, weather, dt = None):
@@ -54,6 +61,7 @@ class AnimatedEnvironmentSprite(pygame.sprite.Sprite):
         if now - self.last_update > self.animation_speed:
             self.frame_index = (self.frame_index + 1) % len(self.frames)
             self.image = self.frames[self.frame_index]
+            self._uncacheable_image = False
             self.last_update = now
 
     def update_animations_with_weather(self, weather):

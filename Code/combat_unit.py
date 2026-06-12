@@ -315,27 +315,40 @@ class CombatUnit(Entity):
     
     
     def import_graphics_left_right(self, name):
+        from ImageCache import ImageCache
         self.animations = {
-            "idle": {"right": [], "left": []}, 
-            "move": {"right": [], "left": []}, 
+            "idle": {"right": [], "left": []},
+            "move": {"right": [], "left": []},
             "attack": {"right": [], "left": []}
         }
         main_path = f"../Graphics/Monsters/{name}/"
-    
-        # Standard animations
+
+        # Standard animations — cache flipped frames in ImageCache so the GPU atlas picks them up.
+        # All instances of the same monster share the same Surface objects for both directions.
         for animation in self.animations.keys():
-            self.animations[animation]["right"] = import_folder(main_path + animation)
-            self.animations[animation]["left"] = [pygame.transform.flip(img, True, False) for img in self.animations[animation]["right"]]
-    
+            right_frames = import_folder(main_path + animation)
+            self.animations[animation]["right"] = right_frames
+            flipped_key = ImageCache.folder_cache_key(main_path + animation + "__flipped", None)
+            if flipped_key not in ImageCache._folder_cache:
+                ImageCache._folder_cache[flipped_key] = [
+                    pygame.transform.flip(img, True, False) for img in right_frames
+                ]
+            self.animations[animation]["left"] = ImageCache._folder_cache[flipped_key]
+
         # Check for SpecialAttacks folder
         special_attacks_path = os.path.join(main_path, "SpecialAttacks")
         if os.path.exists(special_attacks_path) and os.path.isdir(special_attacks_path):
             for special_attack in os.listdir(special_attacks_path):
                 special_attack_path = os.path.join(special_attacks_path, special_attack)
                 if os.path.isdir(special_attack_path):
-                    self.animations[special_attack] = {"right": [], "left": []}
-                    self.animations[special_attack]["right"] = import_folder(special_attack_path)
-                    self.animations[special_attack]["left"] = [pygame.transform.flip(img, True, False) for img in self.animations[special_attack]["right"]]
+                    right_frames = import_folder(special_attack_path)
+                    self.animations[special_attack] = {"right": right_frames, "left": []}
+                    flipped_key = ImageCache.folder_cache_key(special_attack_path + "__flipped", None)
+                    if flipped_key not in ImageCache._folder_cache:
+                        ImageCache._folder_cache[flipped_key] = [
+                            pygame.transform.flip(img, True, False) for img in right_frames
+                        ]
+                    self.animations[special_attack]["left"] = ImageCache._folder_cache[flipped_key]
 
 
 

@@ -12,7 +12,7 @@ HEIGHT = 400#950
 WINDOW_WIDTH_RATIO = 0.6
 WINDOW_HEIGHT_RATIO = 0.6
 FPS = 30
-RENDER_BACKEND = "cpu"  # "cpu" | "gpu" (gpu in Phase 1)
+RENDER_BACKEND = os.environ.get("RENDER_BACKEND", "gpu")  # "cpu" | "gpu" — override via env for profiling
 DISPLAY_FLAGS = pygame.SRCALPHA
 TILESIZE = 150
 # Fraction of window width and height (1–100) used for the grass subsurface; centered on the display.
@@ -23,6 +23,10 @@ GRASS_VIEWPORT_PERCENT = 100
 GRASS_WIND_MODE = "shared_patch"
 # Wind rotation quantization in degrees (GrassManager cache buckets). Lower = smoother motion, more unique tile variants.
 GRASS_ROTATION_BUCKET_DEGREES = 6
+# Grass GPU renderer (Phase A proof). When True and RENDER_BACKEND == "gpu", grass blades
+# render via the per-blade instanced shader path (rotation in the vertex shader) instead of
+# the CPU bitmap tile-cache path. Toggle here to A/B the two; no effect in CPU backend.
+GRASS_GPU_INSTANCED = True
 
 # Benchmark mode (off by default). Used for isolated moving-entity collision tests.
 BENCHMARK_ENABLED = False
@@ -47,7 +51,7 @@ BENCHMARK_METRICS_CSV_PATH = "../logs/benchmark_metrics.csv"
 BENCHMARK_AUTO_RUN_SECONDS = 15.0
 BENCHMARK_WARMUP_SECONDS = 5.0
 BENCHMARK_SPAWN_MAX_RING = 3  # Keep benchmark entities near player center
-BENCHMARK_GRASS_ENABLED = False
+BENCHMARK_GRASS_ENABLED = True
 BENCHMARK_GRASS_WIND_MODE = GRASS_WIND_MODE
 BENCHMARK_GRASS_VIEWPORT_PERCENT = GRASS_VIEWPORT_PERCENT
 BENCHMARK_GRASS_DISTURBANCE_ENABLED = True
@@ -58,23 +62,15 @@ BENCHMARK_GRASS_SWAY_INTENSITY = 3.0
 # Blade IDs are alphabetical indices in Graphics/Grass — low indices tend to shorter blades, high to taller.
 BENCHMARK_ARENA_GRASS_DENSITY = 72
 BENCHMARK_ARENA_GRASS_OPTIONS = [0, 1, 2, 3, 8, 9, 10, 11]
-# Grass force clustering (benchmark + grass enabled only): beyond player_radius, only one blade per subcell group runs force math; followers copy leader rotation.
-BENCHMARK_GRASS_CLUSTER_FORCES_ENABLED = False
-BENCHMARK_GRASS_CLUSTER_PLAYER_RADIUS_PX = 280.0
-BENCHMARK_GRASS_CLUSTER_SUBCELL_PX = 40
-BENCHMARK_GRASS_CLUSTER_GROUP_SIZE = 3
-BENCHMARK_GRASS_CLUSTER_JITTER_DEG = 0.0
-# Mixed into deterministic follower jitter; defaults to BENCHMARK_SEED for reproducible A/B runs.
-BENCHMARK_GRASS_CLUSTER_JITTER_SEED = BENCHMARK_SEED
 
 # Normal gameplay moving-entity broadphase defaults.
 ENTITY_BROADPHASE_BACKEND = "grid"  # "quadtree" | "grid"
 ENTITY_BROADPHASE_GRID_CELL_SIZE = 450
 
 # Debug settings
-SHOW_DEBUG_OVERLAY = False  # FPS / memory overlay in Main2 (separate from GameSettings.debug_mode)
-DEBUG_DRAW_MASKS = True  # Draw collision masks for all entities and objects
-DEBUG_DRAW_EFFECT_RECTS = True  # Draw effect collision rects in red
+SHOW_DEBUG_OVERLAY = True  # FPS / memory overlay in Main2 (separate from GameSettings.debug_mode)
+DEBUG_DRAW_MASKS = False  # Draw collision masks for all entities and objects
+DEBUG_DRAW_EFFECT_RECTS = False  # Draw effect collision rects in red
 DEBUG_DRAW_FACTION_OUTLINES = False  # Seeds GameSettings.debug_faction_outlines; toggle also in settings (Ctrl+Shift+S)
 # When True, entity mask PNGs are written under Graphics/Masks (dev/asset pipeline only).
 EXPORT_ENTITY_MASKS_TO_DISK = False
@@ -95,7 +91,6 @@ UI_FONT = "../Graphics/Font/Joystix.ttf"
 UI_FONT_SIZE = 18
 
 # General Colors
-WATER_COLOR = "#71ddee"
 UI_BG_COLOR = "#222222"
 UI_BORDER_COLOR = "#111111"
 TEXT_COLOR = "#EEEEEE"

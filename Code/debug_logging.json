@@ -76,5 +76,11 @@
     "level": "DEBUG",
     "file": "logs/rts.log",
     "console": false
+  },
+  "grass": {
+    "enabled": true,
+    "level": "INFO",
+    "file": "logs/grass.log",
+    "console": true
   }
 }

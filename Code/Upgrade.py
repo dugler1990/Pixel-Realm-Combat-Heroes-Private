@@ -60,12 +60,14 @@ class Upgrade:
     def display(self):
         self.input()
         self.selection_cooldown()
+        overlay = self.backend.compose()
         for index, col in enumerate(self.item_list):
             name = self.attribute_names[index]
             value = self.player.get_value_by_index(index)
             max_value = self.max_values[index]
             cost = self.player.get_cost_by_index(index)
-            col.display(self.backend.raw_surface, self.selection_index, name, value, max_value, cost)
+            col.display(overlay, self.selection_index, name, value, max_value, cost)
+        self.backend.blit(overlay, (0, 0))
 
     def selection_cooldown(self):
         if not self.can_move:

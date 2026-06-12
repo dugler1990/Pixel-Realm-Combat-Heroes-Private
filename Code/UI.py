@@ -34,10 +34,8 @@ class UI:
             self.magic_graphics.append(magic)
 
     def show_bar(self, current, max_amount, bg_rect, color):
-        # pygame.draw requires a native Surface (Phase 0 shim).
-        draw_surface = self.backend.raw_surface
         # Draw Background
-        pygame.draw.rect(draw_surface, UI_BG_COLOR, bg_rect)
+        self.backend.draw_rect(UI_BG_COLOR, bg_rect)
 
         # Converting Stats to Pixels
         ratio = current / max_amount
@@ -46,32 +44,32 @@ class UI:
         current_rect.width = current_width
 
         # Drawing the Bar
-        pygame.draw.rect(draw_surface, color, current_rect)
-        pygame.draw.rect(draw_surface, UI_BORDER_COLOR, bg_rect, 3)
+        self.backend.draw_rect(color, current_rect)
+        self.backend.draw_rect(UI_BORDER_COLOR, bg_rect, 3)
 
     def show_exp(self, exp):
         exp_value = int(exp)
         if self._exp_value != exp_value or self._exp_surface is None:
             self._exp_value = exp_value
+            if self._exp_surface is not None:
+                self.backend.invalidate_texture(self._exp_surface)
             self._exp_surface = self.font.render(str(exp_value), False, TEXT_COLOR)
         text_surf = self._exp_surface
         x = self.backend.get_size()[0] - 20
         y = self.backend.get_size()[1] - 20
         text_rect = text_surf.get_rect(bottomright = (x, y))
 
-        draw_surface = self.backend.raw_surface
-        pygame.draw.rect(draw_surface, UI_BG_COLOR, text_rect.inflate(20, 20))
-        self.backend.blit(text_surf, text_rect)
-        pygame.draw.rect(draw_surface, UI_BORDER_COLOR, text_rect.inflate(20, 20), 3)
+        self.backend.draw_rect(UI_BG_COLOR, text_rect.inflate(20, 20))
+        self.backend.blit(text_surf, text_rect, cache_key=id(text_surf))
+        self.backend.draw_rect(UI_BORDER_COLOR, text_rect.inflate(20, 20), 3)
 
     def selection_box(self, left, top, has_switched):
         bg_rect = pygame.Rect(left, top, ITEM_BOX_SIZE, ITEM_BOX_SIZE)
-        draw_surface = self.backend.raw_surface
-        pygame.draw.rect(draw_surface, UI_BG_COLOR, bg_rect)
+        self.backend.draw_rect(UI_BG_COLOR, bg_rect)
         if has_switched:
-            pygame.draw.rect(draw_surface, UI_BORDER_COLOR_ACTIVE, bg_rect, 3)
+            self.backend.draw_rect(UI_BORDER_COLOR_ACTIVE, bg_rect, 3)
         else:
-            pygame.draw.rect(draw_surface, UI_BORDER_COLOR, bg_rect, 3)
+            self.backend.draw_rect(UI_BORDER_COLOR, bg_rect, 3)
         return bg_rect
 
     def weapon_overlay(self, weapon_index, has_switched):
@@ -79,23 +77,25 @@ class UI:
         weapon_surf = self.weapon_graphics[weapon_index]
         weapon_rect = weapon_surf.get_rect(center = bg_rect.center)
 
-        self.backend.blit(weapon_surf, weapon_rect)
+        self.backend.blit(weapon_surf, weapon_rect, cache_key=id(weapon_surf))
 
     def magic_overlay(self, magic_index, has_switched):
         bg_rect = self.selection_box(100, 630, has_switched) # Magix Box (80, 635) in Tutorial
         magic_surf = self.magic_graphics[magic_index]
         magic_rect = magic_surf.get_rect(center = bg_rect.center)
 
-        self.backend.blit(magic_surf, magic_rect)
+        self.backend.blit(magic_surf, magic_rect, cache_key=id(magic_surf))
 
     def show_level(self, level):
         if self._level_value != level or self._level_surface is None:
             self._level_value = level
+            if self._level_surface is not None:
+                self.backend.invalidate_texture(self._level_surface)
             self._level_surface = self.font.render(f"Level: {level}", False, TEXT_COLOR)
         level_text = self._level_surface
         x = self.backend.get_size()[0] - 20
         y =  20  # Position it above the exp display
-        self.backend.blit(level_text, (x - level_text.get_width(), y))
+        self.backend.blit(level_text, (x - level_text.get_width(), y), cache_key=id(level_text))
 
 
     def display(self, player):

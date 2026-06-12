@@ -8,8 +8,6 @@ class PlayerConfiguration:
                  game = None):
 
         self.input_manager = input_manager
-        if game : 
-            self.screen = game.screen
         self.base_stats = base_stats
         self.final_stats = base_stats.copy()
         self.remaining_points = remaining_points
@@ -146,8 +144,6 @@ class PlayerConfiguration:
 
         # Draw stickman based on actual stats
         self.draw_stickman()
-
-        pygame.display.update()
 
     def draw_stickman(self):
         center_x, center_y = 550, 200

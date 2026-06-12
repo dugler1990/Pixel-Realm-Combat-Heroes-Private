@@ -401,6 +401,8 @@ class Level4:
         self.attackable_sprites.add(self.player)
         self._seed_default_belt_if_needed()
         self.weather = Weather()
+        if BENCHMARK_RUNTIME.enabled:
+            self.weather.weather_type = 'clear'
         if self.game_settings:
             self.weather.time_speed_multiplier = self.game_settings.environment_speed
         
@@ -675,10 +677,13 @@ class Level4:
         self._benchmark_walls.clear()
         self._benchmark_wall_items.clear()
 
+        from ImageCache import ImageCache
+        wall_surface = pygame.Surface((TILESIZE, TILESIZE), pygame.SRCALPHA)
+        wall_surface.fill((255, 0, 255, 140))
+        ImageCache._folder_cache[ImageCache.folder_cache_key("__benchmark_wall__")] = [wall_surface]
+
         def spawn_wall_tile(tx, ty):
-            # Visible debug wall surface so benchmark containment is obvious on screen.
-            surface = pygame.Surface((TILESIZE, TILESIZE), pygame.SRCALPHA)
-            surface.fill((255, 0, 255, 140))
+            surface = wall_surface
             wall = Tile(
                 (int(tx * TILESIZE), int(ty * TILESIZE)),
                 [self.layout_manager.visible_sprites, self.layout_manager.obstacle_sprites],
@@ -1871,18 +1876,23 @@ class Level4:
             if self.upgrade_menu_open:
                 self.upgrade.display()
             elif self.inventory_open:
-                self.player.inventory.display(self.backend.raw_surface)
+                overlay = self.backend.compose()
+                self.player.inventory.display(overlay)
+                self.backend.blit(overlay, (0, 0))
                 self.player.inventory.input()
                 for sprite in self.layout_manager.visible_sprites:
                     if isinstance(sprite, ItemVisual):
                         sprite.update(dt)
             elif self.attack_selection_open:
-                self.player.attack_selection.display(self.backend.raw_surface)
+                overlay = self.backend.compose()
+                self.player.attack_selection.display(overlay)
+                self.backend.blit(overlay, (0, 0))
                 self.player.attack_selection.input()
                 self.player.update_derived_attributes()
             elif self.player_config_open:
-                
-                self.player.player_config.draw(self.backend.raw_surface) # TODO: align naming convensions of these screens.
+                overlay = self.backend.compose()
+                self.player.player_config.draw(overlay) # TODO: align naming convensions of these screens.
+                self.backend.blit(overlay, (0, 0))
                 self.player.player_config.handle_events(self)
                 #self.player.stats = self.player.player_config.final_stats
                 

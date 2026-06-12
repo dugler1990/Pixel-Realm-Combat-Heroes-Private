@@ -639,8 +639,9 @@ class RtsSession:
         backend = self.world.get_render_backend()
         if backend is None:
             return
-        # Phase 0 shim: RTS UI panels still take a native Surface.
-        panel_surface = backend.raw_surface
+        # RTS UI panels draw onto an offscreen surface, composited once per frame
+        # (keeps panel code backend-agnostic — see RenderBackend.compose).
+        panel_surface = backend.compose()
         offset = self._camera_offset(backend)
         self._draw_node_highlights(backend, offset)
         self._draw_site_highlights(backend, offset)
@@ -665,6 +666,7 @@ class RtsSession:
             self.worker_command_panel.draw(panel_surface, self.wallet)
         if self.state == self.BUILD_MENU:
             self.build_menu_panel.draw(panel_surface)
+        backend.blit(panel_surface, (0, 0))
         self._draw_mode_hint(backend)
         if _rts_log.isEnabledFor(logging.DEBUG):
             self._draw_debug_overlay(backend)
@@ -698,7 +700,7 @@ class RtsSession:
             if not getattr(node, "highlighted", False):
                 continue
             rect = node.rect.move(-offset.x, -offset.y)
-            pygame.draw.rect(backend.raw_surface, (255, 220, 80), rect.inflate(6, 6), 2)
+            backend.draw_rect((255, 220, 80), rect.inflate(6, 6), 2)
 
     def _draw_site_highlights(self, backend, offset):
         if not self.site_highlight:
@@ -714,7 +716,7 @@ class RtsSession:
             if not getattr(site, "highlighted", False):
                 continue
             rect = site.rect.move(-offset.x, -offset.y)
-            pygame.draw.rect(backend.raw_surface, (120, 200, 255), rect.inflate(8, 8), 2)
+            backend.draw_rect((120, 200, 255), rect.inflate(8, 8), 2)
 
     def _camera_offset(self, backend):
         width, height = backend.get_size()

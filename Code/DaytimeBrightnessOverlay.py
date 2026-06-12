@@ -49,9 +49,5 @@ class DaytimeBrightnessOverlay:
     def draw(self):
         if self.backend is None:
             return
-        # Create a surface with the same dimensions as the display surface
-        brightness_surface = pygame.Surface(self.backend.get_size())
-        # Fill the surface with white color based on the brightness
-        brightness_surface.fill((255 * self.brightness, 255 * self.brightness, 255 * self.brightness))
-        # Blit the brightness surface onto the display surface with blend mode
-        self.backend.blit(brightness_surface, (0, 0), flags=pygame.BLEND_RGB_MULT)
+        v = int(255 * self.brightness)
+        self.backend.fill((v, v, v), flags=pygame.BLEND_RGB_MULT)

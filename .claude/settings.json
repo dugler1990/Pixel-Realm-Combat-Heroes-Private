@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)",
+      "Bash(ps aux *)",
+      "Read(//tmp/**)",
+      "Bash(python3 -c \"import ast; [ast.parse\\(open\\(f\\).read\\(\\), f\\) for f in ['Code/render_backend.py','Code/YsortCameraGroup.py','Code/AnimatedEnvironmentSprite.py','Code/Enemy.py']]\")",
+      "Bash(RENDER_BACKEND=gpu PRCH_BENCHMARK_ENABLED=1 PRCH_BENCHMARK_ENTITY_COUNT=60 PRCH_BENCHMARK_AUTO_RUN_SECONDS=15 PRCH_BENCHMARK_WARMUP_SECONDS=5 PRCH_BENCHMARK_RUN_LABEL=phase2a_gpu_cache_60_nometrics PRCH_BENCHMARK_METRICS_ENABLED=0 timeout 90 python3 Main2.py > /tmp/gpu_cache_60_nometrics.log 2>&1; tail -10 /tmp/gpu_cache_60_nometrics.log)",
+      "Bash(RENDER_BACKEND=gpu PRCH_BENCHMARK_ENABLED=1 PRCH_BENCHMARK_ENTITY_COUNT=60 PRCH_BENCHMARK_AUTO_RUN_SECONDS=15 PRCH_BENCHMARK_WARMUP_SECONDS=5 PRCH_BENCHMARK_RUN_LABEL=phase2a_gpu_cache_60_nometrics2 PRCH_BENCHMARK_METRICS_ENABLED=0 timeout 120 python3 -u Main2.py)",
+      "Bash(echo \"EXIT=$?\")"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  }
+}

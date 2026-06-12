@@ -47,7 +47,6 @@ class Game:
         w = max(1, int(dw * WINDOW_WIDTH_RATIO))
         h = max(1, int(dh * WINDOW_HEIGHT_RATIO))
         self.backend = create_backend(w, h)
-        self.screen = self.backend.raw_surface
         self.WIDTH = w
         self.HEIGHT = h
 
@@ -188,6 +187,8 @@ class Game:
                     entity_quad_tree=self.level.layout_manager.entity_quad_tree
                 )
             self.current_level_number = level_number
+            if hasattr(self.backend, 'build_atlas'):
+                self.backend.build_atlas()
             self.set_state("level")
 
     def set_state(self, new_state):
@@ -225,7 +226,9 @@ class Game:
 
     def _state_player_configuration(self, dt):
         self.player_configuration.handle_events()
-        self.player_configuration.draw()
+        overlay = self.backend.compose()
+        self.player_configuration.draw(overlay)
+        self.backend.blit(overlay, (0, 0))
         _game_flow_log.debug(
             "in main finished indicattor: %s", self.player_configuration.finished
         )
@@ -318,9 +321,12 @@ class Game:
                 self.update_debug_info()
                 self.display_debug_info()
 
-            self.settings_menu.draw(self.screen)
+            if self.settings_menu.visible:
+                overlay = self.backend.compose()
+                self.settings_menu.draw(overlay)
+                self.backend.blit(overlay, (0, 0))
 
-            pygame.display.update()
+            self.backend.present()
             dt = self.clock.tick(self.settings.fps_cap) /1000
 
 
@@ -359,12 +365,17 @@ class Game:
         for key, value in debug_info:
             # Check if the surface needs to be updated
             if key not in self.debug_info_surfaces or self.debug_info_surfaces[key]['value'] != value:
+                # Free the old GPU texture (keyed by surface id) before discarding the surface
+                if key in self.debug_info_surfaces:
+                    self.backend.invalidate_texture(self.debug_info_surfaces[key]['surface'])
                 # Render new text surface and cache it
                 text_surface = font.render(value, True, pygame.Color('white'))
                 self.debug_info_surfaces[key] = {'surface': text_surface, 'value': value}
 
-            # Blit the cached text surface
-            self.backend.blit(self.debug_info_surfaces[key]['surface'], (10, current_y))
+            # Blit the cached text surface — cache_key=id(surface) lets the GPU backend
+            # upload it once and reuse the texture every frame instead of re-uploading.
+            surf = self.debug_info_surfaces[key]['surface']
+            self.backend.blit(surf, (10, current_y), cache_key=id(surf))
             current_y -= text_spacing
 
 

@@ -20,10 +20,10 @@ class PlayerSelection:
     def __init__(self, game, input_manager):
         self.game = game
         self.input_manager = input_manager
-        self.screen = game.screen
         self.grid_columns = 4
         self.grid_rows = 3
-        self.grid_size = self.screen.get_width() // self.grid_columns, self.screen.get_height() // self.grid_rows
+        backend_width, backend_height = self.game.backend.get_size()
+        self.grid_size = backend_width // self.grid_columns, backend_height // self.grid_rows
         self.selected_option = (0, 0)  # (row, column)
         self.default_player_image = pygame.image.load("../Graphics/Orange_Wizard/down_idle/0.png").convert()
         self.selected_player_info_dir = None
@@ -37,22 +37,23 @@ class PlayerSelection:
             player_image = pygame.image.load(image_path).convert()
             self._selection_images[index] = pygame.transform.scale(player_image, target_size)
 
-    def draw_grid(self):
+    def draw_grid(self, surface):
         for row in range(self.grid_rows):
             for col in range(self.grid_columns):
                 rect = pygame.Rect(col * self.grid_size[0], row * self.grid_size[1], self.grid_size[0], self.grid_size[1])
                 if (row, col) == self.selected_option:
-                    pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
+                    pygame.draw.rect(surface, (255, 255, 255), rect, 2)
                 else:
-                    pygame.draw.rect(self.screen, (100, 100, 100), rect, 1)
+                    pygame.draw.rect(surface, (100, 100, 100), rect, 1)
                 if (row,col) in unlocked_player_positions :  # Example to draw the default player image in the first cell
                     index = unlocked_player_position_to_index[(row, col)]
-                    self.screen.blit(self._selection_images[index], (rect.x, rect.y))
+                    surface.blit(self._selection_images[index], (rect.x, rect.y))
 
     def draw(self):
-        self.screen.fill((0, 0, 0))  # Clear screen
-        self.draw_grid()
-        pygame.display.flip()
+        surface = self.game.backend.compose()
+        surface.fill((0, 0, 0))  # Clear screen
+        self.draw_grid(surface)
+        self.game.backend.blit(surface, (0, 0))
 
     def handle_events(self):
         row, col = self.selected_option

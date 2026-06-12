@@ -153,12 +153,11 @@ def draw_belt_hud(backend, player, inventory):
     x0 = (W - total_w) // 2
     y0 = H - slot_h - 18
     label_surfaces = _belt_label_surfaces()
-    draw_surface = backend.raw_surface
     for i in range(BELT_SLOT_COUNT):
         r = pygame.Rect(x0 + i * (slot_w + gap), y0, slot_w, slot_h)
         locked = i >= cap
         src = inventory.slots[inventory.belt_start_index + i]
-        pygame.draw.rect(draw_surface, (200, 160, 80), r, 2)
+        backend.draw_rect((200, 160, 80), r, 2)
         if locked:
             ov = pygame.Surface((r.width, r.height), pygame.SRCALPHA)
             ov.fill((40, 40, 40, 180))

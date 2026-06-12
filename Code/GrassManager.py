@@ -76,6 +76,7 @@ import math
 from collections import defaultdict
 from copy import deepcopy
 
+import numpy as np
 import pygame
 
 BLADE_POS = 0
@@ -285,6 +286,85 @@ class GrassManager:
             }
         return None
 
+    def update_render_gpu(self, surf_size, dt, offset=(0, 0), rot_function=None):
+        """GPU mode: yield (surface, screen_pos, cache_key) per visible tile.
+        Caller blits each directly to the backend instead of compositing to grass_surface."""
+        visible_tile_range = (
+            int(surf_size[0] // self.tile_size) + 1,
+            int(surf_size[1] // self.tile_size) + 1,
+        )
+        base_pos = (int(offset[0] // self.tile_size), int(offset[1] // self.tile_size))
+
+        for y in range(visible_tile_range[1]):
+            for x in range(visible_tile_range[0]):
+                pos = (base_pos[0] + x, base_pos[1] + y)
+                if pos in self.grass_tiles:
+                    tile = self.grass_tiles[pos]
+                    if rot_function:
+                        tile.set_rotation(rot_function(tile.loc[0], tile.loc[1]))
+                    surf, cache_key = tile.get_render_surface_for_gpu(dt)
+                    screen_pos = (
+                        tile.loc[0] - offset[0] - tile.padding,
+                        tile.loc[1] - offset[1] - tile.padding,
+                    )
+                    yield surf, screen_pos, cache_key
+
+    def update_render_gpu_instanced(self, surf_size, dt, offset=(0, 0), screen_origin=(0, 0), rot_function=None):
+        """GPU instanced mode: build the instance array for one draw call covering every
+        visible blade, instead of baking per-tile bitmaps. Each row is
+        [center_x, center_y, blade_id, angle_deg]. The per-blade math (clamp(rot +
+        true_rotation*wind_scale, -90, 90) + screen center) is vectorized across ALL
+        visible blades at once (cost scales with blade count, not tile count). Mirrors
+        update_render_gpu's wind (set_rotation, before emit) + settle (after emit) side
+        effects, so the shared CPU disturbance physics evolves identically.
+        Returns (rows, count, visible_tiles, custom_tiles)."""
+        visible_tile_range = (
+            int(surf_size[0] // self.tile_size) + 1,
+            int(surf_size[1] // self.tile_size) + 1,
+        )
+        base_pos = (int(offset[0] // self.tile_size), int(offset[1] // self.tile_size))
+
+        # Pass 1: gather visible tiles + apply wind (same per-tile set_rotation as before).
+        visible = []
+        custom_tiles = 0
+        for y in range(visible_tile_range[1]):
+            for x in range(visible_tile_range[0]):
+                pos = (base_pos[0] + x, base_pos[1] + y)
+                if pos in self.grass_tiles:
+                    tile = self.grass_tiles[pos]
+                    if tile.custom_blade_data:
+                        custom_tiles += 1
+                    if rot_function:
+                        tile.set_rotation(rot_function(tile.loc[0], tile.loc[1]))
+                    visible.append(tile)
+
+        if not visible:
+            return np.empty((0, 4), dtype=np.float32), 0, 0, 0
+
+        # Pass 2: one global vectorized emit over every visible blade.
+        pos_arr = np.concatenate([c._np_pos for c in visible])              # (M, 2)
+        ids = np.concatenate([c._np_id for c in visible])                   # (M,)
+        wind = np.concatenate([c._np_wind for c in visible])               # (M,)
+        cur = np.concatenate([c._current_rotations() for c in visible])     # (M,)
+        counts = np.array([c._np_id.shape[0] for c in visible])
+        locs = np.array([c.loc for c in visible], dtype=np.float32)         # (ntiles, 2)
+        true_rots = np.array([c.true_rotation for c in visible], dtype=np.float32)
+        blade_loc = np.repeat(locs, counts, axis=0)                         # (M, 2)
+        blade_true_rot = np.repeat(true_rots, counts)                       # (M,)
+
+        m = pos_arr.shape[0]
+        out = np.empty((m, 4), dtype=np.float32)
+        out[:, 0] = blade_loc[:, 0] + pos_arr[:, 0] - offset[0] + screen_origin[0]
+        out[:, 1] = blade_loc[:, 1] + pos_arr[:, 1] - offset[1] + screen_origin[1]
+        out[:, 2] = ids
+        out[:, 3] = np.clip(cur + blade_true_rot * wind, -90.0, 90.0)
+
+        # Pass 3: settle disturbed blades (after emit, identical to before).
+        for tile in visible:
+            tile._settle(dt)
+
+        return out, m, len(visible), custom_tiles
+
 # an asset manager that contains functionality for rendering blades of grass
 class GrassAssets:
     def __init__(self, path, gm):
@@ -320,6 +400,12 @@ class GrassCell:
         self.size = tile_size
         self.placements = []
         self.blades = []
+        # Cached static blade-layout arrays for the GPU instanced emit (rebuilt in
+        # _build_emit_arrays whenever self.blades changes). Empty until placements added.
+        self._np_pos = np.empty((0, 2), dtype=np.float32)
+        self._np_id = np.empty((0,), dtype=np.float32)
+        self._np_base_rot = np.empty((0,), dtype=np.float32)
+        self._np_wind = np.empty((0,), dtype=np.float32)
         self.master_rotation = 0
         self.precision = 30
         self.padding = self.gm.padding
@@ -408,7 +494,19 @@ class GrassCell:
             self.blades = combined_blades
             self.base_id = new_base_id
         self.custom_blade_data = None
+        self._build_emit_arrays()
         self.update_render_data()
+
+    def _build_emit_arrays(self):
+        """Cache the static blade layout as numpy arrays for the vectorized GPU emit.
+        Rebuilt only here — the sole place self.blades changes after init."""
+        b = self.blades
+        self._np_pos = np.array(
+            [[p[BLADE_POS][0], p[BLADE_POS][1]] for p in b], dtype=np.float32
+        ).reshape(-1, 2)
+        self._np_id = np.array([p[BLADE_ID] for p in b], dtype=np.float32)
+        self._np_base_rot = np.array([p[BLADE_ROT] for p in b], dtype=np.float32)
+        self._np_wind = np.array([p[BLADE_WIND_SCALE] for p in b], dtype=np.float32)
 
     def _ensure_custom_blade_data(self):
         if not self.custom_blade_data:
@@ -555,6 +653,44 @@ class GrassCell:
             ),
         )
 
+    def _settle(self, dt):
+        """Relax disturbed blades back toward their rest rotation; once all are within
+        epsilon of base, clear custom_blade_data so the tile resumes the cheap path.
+        Shared by the CPU render(), the GPU bitmap path, and the GPU instanced path."""
+        if not self.custom_blade_data:
+            return
+        matching = True
+        settle_epsilon = 0.1
+        for i, blade in enumerate(self.custom_blade_data):
+            if blade is None:
+                blade = list(self.blades[i])
+                self.custom_blade_data[i] = blade
+            blade[BLADE_ROT] = normalize(
+                blade[BLADE_ROT],
+                blade[BLADE_STIFFNESS] * dt,
+                self.blades[i][BLADE_ROT],
+            )
+            if abs(blade[BLADE_ROT] - self.blades[i][BLADE_ROT]) <= settle_epsilon:
+                blade[BLADE_ROT] = self.blades[i][BLADE_ROT]
+            else:
+                matching = False
+        if matching:
+            self.custom_blade_data = None
+
+    def _current_rotations(self):
+        """Return the (N,) array of each blade's current BLADE_ROT: the static base
+        rotations, with disturbed (custom) blades overridden. Used by the GPU instanced
+        emit, which adds wind (true_rotation*wind_scale) and clamps, vectorized across
+        all visible blades at once. Undisturbed cells return the cached array directly
+        (no copy); disturbed cells read custom rotations once."""
+        if not self.custom_blade_data:
+            return self._np_base_rot
+        cur = self._np_base_rot.copy()
+        for i, blade in enumerate(self.custom_blade_data):
+            if blade is not None:
+                cur[i] = blade[BLADE_ROT]
+        return cur
+
     # render the tile's image based on its current state and return the data
     def render_tile(self, render_shadow=False):
         # make a new padded surface (to fit blades spilling out of the tile)
@@ -628,25 +764,23 @@ class GrassCell:
             surf.blit(self.gm.grass_cache[self.render_data], (self.loc[0] - offset[0] - self.padding, self.loc[1] - offset[1] - self.padding))
 
         # attempt to move blades back to their base position
+        self._settle(dt)
+
+
+    def get_render_surface_for_gpu(self, dt):
+        """Return (surface, cache_key) for direct GPU blit — bypasses grass_surface.
+        cache_key is render_data tuple for standard tiles, None for custom blade tiles."""
         if self.custom_blade_data:
-            matching = True
-            settle_epsilon = 0.1
-            for i, blade in enumerate(self.custom_blade_data):
-                if blade is None:
-                    blade = list(self.blades[i])
-                    self.custom_blade_data[i] = blade
-                blade[BLADE_ROT] = normalize(
-                    blade[BLADE_ROT],
-                    blade[BLADE_STIFFNESS] * dt,
-                    self.blades[i][BLADE_ROT],
-                )
-                if abs(blade[BLADE_ROT] - self.blades[i][BLADE_ROT]) <= settle_epsilon:
-                    blade[BLADE_ROT] = self.blades[i][BLADE_ROT]
-                else:
-                    matching = False
-            # mark the data as non-custom once in base position so the cache can be used
-            if matching:
-                self.custom_blade_data = None
+            surf, cache_key = self.render_tile(), None
+        else:
+            if self.render_data not in self.gm.grass_cache:
+                self.gm.grass_cache[self.render_data] = self.render_tile()
+            surf, cache_key = self.gm.grass_cache[self.render_data], self.render_data
+
+        # attempt to move blades back to their base position (mirrors GrassCell.render)
+        self._settle(dt)
+
+        return surf, cache_key
 
 
 GrassTile = GrassCell

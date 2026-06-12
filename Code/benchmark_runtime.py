@@ -102,6 +102,10 @@ class BenchmarkMetrics:
     aggro_allowed_total: int = 0
     interactions_prefilter_checked_total: int = 0
     interactions_prefilter_skipped_total: int = 0
+    gpu_texture_uploads_total: int = 0
+    gpu_texture_upload_ms_total: float = 0.0
+    gpu_cache_hits_total: int = 0
+    gpu_draw_calls_total: int = 0
 
     def reset(self):
         self.frame_times_ms.clear()
@@ -130,6 +134,20 @@ class BenchmarkMetrics:
         self.aggro_allowed_total = 0
         self.interactions_prefilter_checked_total = 0
         self.interactions_prefilter_skipped_total = 0
+        self.gpu_texture_uploads_total = 0
+        self.gpu_texture_upload_ms_total = 0.0
+        self.gpu_cache_hits_total = 0
+        self.gpu_draw_calls_total = 0
+
+    def record_gpu_texture_upload(self, elapsed_ms: float):
+        self.gpu_texture_uploads_total += 1
+        self.gpu_texture_upload_ms_total += max(0.0, float(elapsed_ms))
+
+    def record_gpu_cache_hit(self):
+        self.gpu_cache_hits_total += 1
+
+    def record_gpu_draw_call(self):
+        self.gpu_draw_calls_total += 1
 
     def record_frame(self, dt_seconds: float):
         self.frame_times_ms.append(max(0.0, dt_seconds) * 1000.0)
@@ -239,6 +257,14 @@ class BenchmarkMetrics:
             "interactions_rejected_no_receive": self.interactions_rejected_no_receive,
             "aggro_checks_total": self.aggro_checks_total,
             "aggro_allowed_total": self.aggro_allowed_total,
+            "gpu_texture_uploads_total": self.gpu_texture_uploads_total,
+            "gpu_texture_upload_ms_total": self.gpu_texture_upload_ms_total,
+            "gpu_texture_upload_ms_avg": (
+                self.gpu_texture_upload_ms_total / self.gpu_texture_uploads_total
+                if self.gpu_texture_uploads_total else 0.0
+            ),
+            "gpu_cache_hits_total": self.gpu_cache_hits_total,
+            "gpu_draw_calls_total": self.gpu_draw_calls_total,
             "interactions_prefilter_checked_total": self.interactions_prefilter_checked_total,
             "interactions_prefilter_skipped_total": self.interactions_prefilter_skipped_total,
         }

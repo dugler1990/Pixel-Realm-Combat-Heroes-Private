@@ -7,10 +7,10 @@ class LevelSelection:
     def __init__(self, game, input_manager):
         self.game = game
         self.input_manager = input_manager
-        self.screen = game.screen
         self.grid_columns = 4
         self.grid_rows = 3
-        self.grid_size = self.screen.get_width() // self.grid_columns, self.screen.get_height() // self.grid_rows
+        backend_width, backend_height = self.game.backend.get_size()
+        self.grid_size = backend_width // self.grid_columns, backend_height // self.grid_rows
         self.selected_option = (0, 0)  # (row, column)
         self.level_images = {}
         self.unlocked_levels_positions = self.load_level_images()
@@ -26,18 +26,19 @@ class LevelSelection:
                     unlocked_levels.append((row, col))
         return unlocked_levels
 
-    def draw_grid(self):
+    def draw_grid(self, surface):
         for row in range(self.grid_rows):
             for col in range(self.grid_columns):
                 rect = pygame.Rect(col * self.grid_size[0], row * self.grid_size[1], self.grid_size[0], self.grid_size[1])
-                pygame.draw.rect(self.screen, (255, 255, 255) if (row, col) == self.selected_option else (100, 100, 100), rect, 2 if (row, col) == self.selected_option else 1)
+                pygame.draw.rect(surface, (255, 255, 255) if (row, col) == self.selected_option else (100, 100, 100), rect, 2 if (row, col) == self.selected_option else 1)
                 if (row, col) in self.level_images:
-                    self.screen.blit(pygame.transform.scale(self.level_images[(row, col)], self.grid_size), (rect.x, rect.y))
+                    surface.blit(pygame.transform.scale(self.level_images[(row, col)], self.grid_size), (rect.x, rect.y))
 
     def draw(self):
-        self.screen.fill((0, 0, 0))  # Clear screen
-        self.draw_grid()
-        pygame.display.flip()
+        surface = self.game.backend.compose()
+        surface.fill((0, 0, 0))  # Clear screen
+        self.draw_grid(surface)
+        self.game.backend.blit(surface, (0, 0))
 
 
     def handle_events(self):

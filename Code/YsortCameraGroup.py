@@ -6,6 +6,7 @@ from Settings import (
     TILESIZE,
     GRASS_VIEWPORT_PERCENT,
     GRASS_WIND_MODE,
+    GRASS_GPU_INSTANCED,
     DEBUG_DRAW_MASKS,
     DEBUG_DRAW_EFFECT_RECTS,
     DEBUG_DRAW_FACTION_OUTLINES,
@@ -16,6 +17,9 @@ from Entity import Entity
 from AnimatedEnvironmentSprite import AnimatedEnvironmentSprite
 from Torch import Torch
 from benchmark_runtime import BENCHMARK_RUNTIME
+from game_logging import get_debug_logger
+
+_grass_log = get_debug_logger("grass")
 
 _KNOWN_FACTION_OUTLINE_COLORS = {
     "player": (72, 220, 120),
@@ -100,8 +104,14 @@ class YSortCameraGroup(pygame.sprite.Group):
         x = (W - gw) // 2
         y = (H - gh) // 2
         clip_rect = pygame.Rect(x, y, gw, gh).clip(pygame.Rect(0, 0, W, H))
-        # Phase 0: grass draws in-place on a display subsurface (requires raw_surface).
-        self.grass_surface = self.backend.raw_surface.subsurface(clip_rect)
+        if self.backend.raw_surface is not None:
+            # CPU: in-place subsurface — grass blits land directly on the framebuffer.
+            self.grass_surface = self.backend.raw_surface.subsurface(clip_rect)
+            self._grass_clip_rect = None
+        else:
+            # GPU: offscreen surface, composited explicitly after grass renders.
+            self.grass_surface = pygame.Surface(clip_rect.size, pygame.SRCALPHA)
+            self._grass_clip_rect = clip_rect
         self.grass_half_width = self.grass_surface.get_width() // 2
         self.grass_half_height = self.grass_surface.get_height() // 2
 
@@ -156,6 +166,7 @@ class YSortCameraGroup(pygame.sprite.Group):
         else:
             # Redraw only the area of the changed tile
             self.ground_surface.blit(tile.image, tile.rect.move(-self.min_x, -self.min_y))
+            self.backend.invalidate_texture(self.ground_surface)
 
     def create_ground_surface(self):
         if not self.ground_sprites:
@@ -193,7 +204,7 @@ class YSortCameraGroup(pygame.sprite.Group):
 
         if self.ground_surface is not None:
             ground_rect = self.ground_surface.get_rect(topleft=(-self.offset.x, -self.offset.y))
-            self.backend.blit(self.ground_surface, ground_rect.topleft)
+            self.backend.blit(self.ground_surface, ground_rect.topleft, cache_key=id(self.ground_surface))
             
         # Shared wind mode keeps one base sway angle for visible grass; legacy mode
         # preserves the current position-dependent wave across the field.
@@ -225,32 +236,76 @@ class YSortCameraGroup(pygame.sprite.Group):
         #print( self.offset )
         
         # Draw grass relative to player
-        grass_stats = None
-        if self._grass_benchmark_active():
-            started_at = time.perf_counter()
-            grass_stats = self.grass_manager.update_render(self.grass_surface,
-                                         dt, 
-                                         offset=(self.grass_offset.x , 
-                                                 self.grass_offset.y ),
-                                      rot_function=rot_function,
-                                      collect_stats=True )
-            BENCHMARK_RUNTIME.metrics.record_grass_update(
-                (time.perf_counter() - started_at) * 1000.0,
-                visible_tiles=(grass_stats or {}).get("visible_tiles", 0),
-                custom_tiles=(grass_stats or {}).get("custom_tiles", 0),
-            )
+        if self._grass_clip_rect is not None:
+            # GPU mode: blit each tile directly to the backend — no intermediate surface.
+            if not getattr(self, "_grass_path_logged", False):
+                _grass_log.info(
+                    "GPU grass path: %s",
+                    "INSTANCED (per-blade shader)" if GRASS_GPU_INSTANCED else "bitmap tile-cache",
+                )
+                self._grass_path_logged = True
+            clip_x, clip_y = self._grass_clip_rect.topleft
+            started_at = time.perf_counter() if self._grass_benchmark_active() else None
+            if GRASS_GPU_INSTANCED:
+                # Phase A proof: per-blade rotation in the GPU shader, one instanced
+                # draw for the whole field. Crude (no exact pivot/shading parity).
+                if not self.backend.grass_atlas_ready:
+                    self.backend.build_grass_atlas(self.grass_manager.ga.blades)
+                rows, count, visible_tiles, custom_tiles = self.grass_manager.update_render_gpu_instanced(
+                    self._grass_clip_rect.size, dt,
+                    offset=(self.grass_offset.x, self.grass_offset.y),
+                    screen_origin=(clip_x, clip_y),
+                    rot_function=rot_function)
+                self.backend.draw_grass_instances(rows, count, self.grass_manager.shade_amount)
+            else:
+                visible_tiles = 0
+                custom_tiles = 0
+                for tile_surf, (tx, ty), cache_key in self.grass_manager.update_render_gpu(
+                        self._grass_clip_rect.size, dt,
+                        offset=(self.grass_offset.x, self.grass_offset.y),
+                        rot_function=rot_function):
+                    self.backend.blit(tile_surf, (tx + clip_x, ty + clip_y), cache_key=cache_key)
+                    visible_tiles += 1
+                    if cache_key is None:
+                        custom_tiles += 1
+            if started_at is not None:
+                BENCHMARK_RUNTIME.metrics.record_grass_update(
+                    (time.perf_counter() - started_at) * 1000.0,
+                    visible_tiles=visible_tiles,
+                    custom_tiles=custom_tiles,
+                )
         else:
-            self.grass_manager.update_render(self.grass_surface,
-                                             dt, 
-                                             offset=(self.grass_offset.x , 
-                                                     self.grass_offset.y ),
-                                          rot_function=rot_function )
+            # CPU mode: existing pipeline — blit tiles to grass_surface subsurface.
+            if self._grass_benchmark_active():
+                started_at = time.perf_counter()
+                grass_stats = self.grass_manager.update_render(self.grass_surface,
+                                             dt,
+                                             offset=(self.grass_offset.x,
+                                                     self.grass_offset.y),
+                                          rot_function=rot_function,
+                                          collect_stats=True)
+                BENCHMARK_RUNTIME.metrics.record_grass_update(
+                    (time.perf_counter() - started_at) * 1000.0,
+                    visible_tiles=(grass_stats or {}).get("visible_tiles", 0),
+                    custom_tiles=(grass_stats or {}).get("custom_tiles", 0),
+                )
+            else:
+                self.grass_manager.update_render(self.grass_surface,
+                                                 dt,
+                                                 offset=(self.grass_offset.x,
+                                                         self.grass_offset.y),
+                                              rot_function=rot_function)
+
         player_drawn = False
         for sprite in sorted(self.sprites(), key=lambda sprite: sprite.rect.centery):
             #print(sprite)
             #print(dir(sprite))
             offset_pos = sprite.rect.topleft - self.offset
-            self.backend.blit(sprite.image, offset_pos)
+            # Sprites that rebuild self.image as a brand-new Surface on transitions
+            # (lighting recolor, freeze/thaw) have no stable identity to cache against —
+            # route them through the always-upload path, same as grass/overlays.
+            cache_key = None if getattr(sprite, "_uncacheable_image", False) else id(sprite.image)
+            self.backend.blit(sprite.image, offset_pos, cache_key=cache_key)
             if self._grass_disturbance_enabled() and hasattr(sprite, "monster_name"):
                 if sprite.monster_name == 'raccoon':
                     self._apply_grass_force( sprite.rect.center , 110 , 40)
@@ -279,7 +334,7 @@ class YSortCameraGroup(pygame.sprite.Group):
                         effect_area.rect.width,
                         effect_area.rect.height
                     )
-                    pygame.draw.rect(self.backend.raw_surface, (255, 0, 0), rect_screen, 2)  # Red outline, 2px thick
+                    self.backend.draw_rect((255, 0, 0), rect_screen, 2)  # Red outline, 2px thick
         
         # Runtime debug mode: highlight player with a clear outline.
         if self.runtime_debug_player_highlight:
@@ -288,7 +343,7 @@ class YSortCameraGroup(pygame.sprite.Group):
                 int(player.rect.centery - self.offset.y),
             )
             highlight_radius = max(24, int(max(player.rect.width, player.rect.height) * 0.75))
-            pygame.draw.circle(self.backend.raw_surface, (255, 255, 0), player_center, highlight_radius, 3)
+            self.backend.draw_circle((255, 255, 0), player_center, highlight_radius, 3)
 
         if self.runtime_debug_faction_outlines:
             for sprite in self.sprites():
@@ -302,12 +357,7 @@ class YSortCameraGroup(pygame.sprite.Group):
                     hb.height,
                 )
                 team_id = getattr(sprite, "team_id", None)
-                pygame.draw.rect(
-                    self.backend.raw_surface,
-                    _faction_outline_color(team_id),
-                    rect_screen,
-                    2,
-                )
+                self.backend.draw_rect(_faction_outline_color(team_id), rect_screen, 2)
 
     #@profile
     

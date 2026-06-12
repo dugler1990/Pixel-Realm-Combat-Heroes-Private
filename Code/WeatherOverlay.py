@@ -87,4 +87,4 @@ class WeatherOverlay:
         if self.active:
             # Render the current frame of the animation
             frame = self.current_animation[self.current_frame_index]
-            self.backend.blit(frame, (0, 0))
+            self.backend.blit(frame, (0, 0), cache_key=id(frame))
