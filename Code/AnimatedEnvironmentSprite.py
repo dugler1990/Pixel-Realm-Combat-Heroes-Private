@@ -65,9 +65,8 @@ class AnimatedEnvironmentSprite(pygame.sprite.Sprite):
             self.last_update = now
 
     def update_animations_with_weather(self, weather):
-        if hasattr(weather,"light_intensity"): #### TODO : this is a mess from just passing None into the weather as opposed to having it able to deal with 
-                                                          # no weather area, need to work on the weather object particularly when there is no weather.
-            self.update_light(weather.light_level)
-        if type(weather) != float :   
+        # Day/night darkening is handled holistically by the GPU light-map
+        # (Lighting.LightingManager), not per-sprite tinting — so no update_light here.
+        if type(weather) != float:
             if weather:
                 self.react_to_wind(weather.wind_direction, weather.wind_intensity)

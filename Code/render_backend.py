@@ -231,6 +231,7 @@ class GPUBackend(RenderBackend):
         self._batch_texture = None
 
         self._init_grass_pipeline()
+        self._init_light_pipeline()
 
         glEnable(GL_BLEND)
         glBlendFunc(*_DEFAULT_BLEND_FUNC)
@@ -267,6 +268,26 @@ class GPUBackend(RenderBackend):
             x,     y,     u0, v0, r, g, b, a,
             x + w, y + h, u1, v1, r, g, b, a,
             x,     y + h, u0, v1, r, g, b, a,
+        ]
+        self._batch_count += 1
+
+    def _push_quad(self, texture, corners, uv_rect, tint=(1.0, 1.0, 1.0, 1.0)):
+        """Like _push_batch but with 4 explicit corner (x,y) points (TL, TR, BR, BL),
+        so the quad can be a sheared parallelogram (used for directional shadows)."""
+        if texture != self._batch_texture or self._batch_count >= _MAX_BATCH_SIZE:
+            self._flush_batch()
+            self._batch_texture = texture
+        tl, tr, br, bl = corners
+        u0, v0, u1, v1 = uv_rect
+        r, g, b, a = tint
+        i = self._batch_count * _FLOATS_PER_QUAD
+        self._batch_verts[i:i + _FLOATS_PER_QUAD] = [
+            tl[0], tl[1], u0, v0, r, g, b, a,
+            tr[0], tr[1], u1, v0, r, g, b, a,
+            br[0], br[1], u1, v1, r, g, b, a,
+            tl[0], tl[1], u0, v0, r, g, b, a,
+            br[0], br[1], u1, v1, r, g, b, a,
+            bl[0], bl[1], u0, v1, r, g, b, a,
         ]
         self._batch_count += 1
 
@@ -496,6 +517,116 @@ class GPUBackend(RenderBackend):
         if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
             BENCHMARK_RUNTIME.metrics.record_gpu_draw_call()
 
+    # --- day/night light-map (Phase L) -------------------------------------
+    # An offscreen FBO is cleared to a time-of-day ambient, lights are drawn into
+    # it additively (radial brush), then the whole scene is multiplied by it.
+
+    def _init_light_pipeline(self):
+        # Screen-sized color texture, linear-filtered for a smooth light-map.
+        self._light_tex = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, self._light_tex)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, self._width, self._height, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, None)
+        glBindTexture(GL_TEXTURE_2D, 0)
+
+        self._light_fbo = glGenFramebuffers(1)
+        glBindFramebuffer(GL_FRAMEBUFFER, self._light_fbo)
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, self._light_tex, 0)
+        status = glCheckFramebufferStatus(GL_FRAMEBUFFER)
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        if status != GL_FRAMEBUFFER_COMPLETE:
+            raise RuntimeError(f"light FBO incomplete: {status}")
+
+        self._light_brush_tex = self._make_radial_brush()
+
+    @staticmethod
+    def _make_radial_brush(size=128, falloff=2.2):
+        """Soft radial gradient (white center -> black edge), linear-filtered. The
+        reusable light 'shape'; per-light color/intensity come from the draw tint."""
+        coords = np.linspace(-1.0, 1.0, size, dtype=np.float32)
+        xx, yy = np.meshgrid(coords, coords)
+        d = np.sqrt(xx * xx + yy * yy)
+        b = (np.clip(1.0 - d, 0.0, 1.0) ** falloff * 255.0).astype(np.uint8)
+        rgba = np.ascontiguousarray(np.dstack([b, b, b, b]))
+        tex = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, tex)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        return tex
+
+    def begin_light_pass(self, ambient):
+        """Bind the light FBO and clear it to the ambient darkness floor [0,1]."""
+        self._flush_batch()  # commit any pending world draws to the default framebuffer
+        glBindFramebuffer(GL_FRAMEBUFFER, self._light_fbo)
+        glViewport(0, 0, self._width, self._height)
+        a = max(0.0, min(1.0, float(ambient)))
+        glClearColor(a, a, a, 1.0)
+        glClear(GL_COLOR_BUFFER_BIT)
+        glBlendFunc(GL_ONE, GL_ONE)  # additive accumulation of lights
+
+    def draw_light(self, center, radius, color):
+        """Add one radial light into the light-map. color is (r,g,b) with intensity
+        already folded in (values may exceed 1; the RGBA8 target clamps)."""
+        if radius <= 0:
+            return
+        cx, cy = center
+        r = float(radius)
+        dest_rect = (cx - r, cy - r, 2.0 * r, 2.0 * r)
+        tint = (color[0], color[1], color[2], 1.0)
+        self._push_batch(self._light_brush_tex, dest_rect, (0.0, 0.0, 1.0, 1.0), tint)
+
+    def end_light_pass(self):
+        self._flush_batch()  # flush accumulated light quads into the FBO
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        glViewport(0, 0, self._width, self._height)
+        glBlendFunc(*_DEFAULT_BLEND_FUNC)
+
+    def composite_lights(self):
+        """Multiply the default framebuffer (the drawn world) by the light-map.
+        tex_rect V is flipped because the FBO stores screen-top at v=1."""
+        self._flush_batch()
+        glBlendFunc(GL_DST_COLOR, GL_ZERO)
+        self._push_batch(self._light_tex, (0, 0, self._width, self._height), (0.0, 1.0, 1.0, 0.0))
+        self._flush_batch()
+        glBlendFunc(*_DEFAULT_BLEND_FUNC)
+
+    def draw_shadow(self, image, corners, cache_key, strength):
+        """Draw a dark, sheared silhouette of `image` (a directional shadow) at the
+        4 given screen corners (TL, TR, BR, BL). Reuses the sprite's already-resident
+        atlas / large-cache texture (no re-upload); scratch-uploads only as a fallback.
+        tint=(0,0,0,strength) under default alpha blend -> darkens the ground by the
+        sprite's alpha silhouette."""
+        if strength <= 0:
+            return
+        atlas_uv = self._atlas_uv.get(cache_key) if cache_key is not None else None
+        if atlas_uv is not None:
+            texture, uv = self._atlas_texture, atlas_uv
+        elif cache_key is not None and cache_key in self._large_cache:
+            texture, uv = self._large_cache[cache_key], (0.0, 0.0, 1.0, 1.0)
+        else:
+            w, h = image.get_size()
+            if w == 0 or h == 0:
+                return
+            pixels = pygame.image.tostring(image.convert_alpha(), "RGBA", False)
+            texture, uv = self._texture, (0.0, 0.0, 1.0, 1.0)
+            glBindTexture(GL_TEXTURE_2D, texture)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels)
+            glBindTexture(GL_TEXTURE_2D, 0)
+
+        self._push_quad(texture, corners, uv, (0.0, 0.0, 0.0, float(strength)))
+        if texture != self._atlas_texture:
+            # non-atlas (large-cache / scratch) can't batch with atlas draws — flush now
+            self._flush_batch()
+
     def blit(self, surface, dest, *, flags=0, area=None, cache_key=None):
         src = surface.subsurface(area) if area is not None else surface
         width, height = src.get_size()
@@ -611,6 +742,10 @@ class GPUBackend(RenderBackend):
             texture_ids.append(self._atlas_texture)
         if getattr(self, "_grass_atlas_texture", None) is not None:
             texture_ids.append(self._grass_atlas_texture)
+        if getattr(self, "_light_tex", None) is not None:
+            texture_ids.append(self._light_tex)
+        if getattr(self, "_light_brush_tex", None) is not None:
+            texture_ids.append(self._light_brush_tex)
         texture_ids.extend(self._large_cache.values())
         glDeleteTextures(texture_ids)
         self._large_cache.clear()
@@ -620,6 +755,8 @@ class GPUBackend(RenderBackend):
             glDeleteVertexArrays(1, [self._grass_vao])
             glDeleteBuffers(1, [self._grass_corner_vbo])
             glDeleteBuffers(1, [self._grass_inst_vbo])
+        if getattr(self, "_light_fbo", None) is not None:
+            glDeleteFramebuffers(1, [self._light_fbo])
 
     def __del__(self):
         try:

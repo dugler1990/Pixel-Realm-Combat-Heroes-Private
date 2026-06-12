@@ -35,7 +35,7 @@ from AnimationSprite import AnimationSprite
 from Trap import Trap
 from Tree import Tree 
 from Torch import Torch
-from Weather import Weather
+from Weather import Weather, climate_by_name
 from AnimatedEnvironmentSprite import AnimatedEnvironmentSprite
 from WaterTile import WaterTile
 from WeatherOverlay import WeatherOverlay
@@ -364,9 +364,11 @@ class Level4:
             #print(display_surface)
         #else:print("None")
         
-        if not restart :         
+        if not restart :
             self.layout_manager.daytime_brightness_overlay.set_backend(self.backend)
-            self.layout_manager.initialize_layout( initial_layout_dir ) # Convention: initial layout is defined by naming convention       
+            if self.layout_manager.lighting:
+                self.layout_manager.lighting.set_backend(self.backend)
+            self.layout_manager.initialize_layout( initial_layout_dir ) # Convention: initial layout is defined by naming convention
         
         self.current_layout = initial_layout_dir
 
@@ -400,7 +402,9 @@ class Level4:
         self.layout_manager.set_player(self.player)
         self.attackable_sprites.add(self.player)
         self._seed_default_belt_if_needed()
-        self.weather = Weather()
+        # Level-authored climate when the layout specifies one (tmx 'climate_name'
+        # property surfaces as layout_manager.climate_name), else the Settings default.
+        self.weather = Weather(climate_by_name(getattr(self.layout_manager, 'climate_name', None)))
         if BENCHMARK_RUNTIME.enabled:
             self.weather.weather_type = 'clear'
         if self.game_settings:
@@ -466,6 +470,8 @@ class Level4:
             
             if self.layout_manager.daytime_brightness_overlay:
                 self.layout_manager.daytime_brightness_overlay.set_backend(self.backend) # TODO: done separately in both restart and not restart....terrible
+            if self.layout_manager.lighting:
+                self.layout_manager.lighting.set_backend(self.backend)
 
     def _initialize_benchmark_mode(self):
         random.seed(self.benchmark_runtime.seed)
@@ -1902,103 +1908,39 @@ class Level4:
             if self.layout_manager.daytime_layout:
                 if self.game_settings:
                     self.weather.time_speed_multiplier = self.game_settings.environment_speed
+                shadow = (self.layout_manager.lighting.sun_shadow(self.weather.current_time)
+                          if self.layout_manager.lighting else None)
                 self.layout_manager.visible_sprites.custom_draw(
                     self.player,
                     dt,
                     self.weather.weather_intensity,
                     self.weather.light_level,
                     camera_focus=camera_focus,
+                    shadow=shadow,
                 )
                 self.weather.update(dt)
                 self.weather_overlay.set_weather(self.weather.weather_type,
                                                  self.weather.weather_intensity,
                                                  self.weather.wind_direction)
-                self.layout_manager.daytime_brightness_overlay.set_time_of_day( self.weather.current_time )
-                self.layout_manager.daytime_brightness_overlay.draw()
                 if self.weather.weather_type != 'clear':
-                    self.weather_overlay.update(dt) 
+                    self.weather_overlay.update(dt)
                     self.weather_overlay.draw()
                 
                 wind_force = self.weather.calculate_wind_force()
-                
-                # TODO: Should be placed in the Player, not level.
-                #### Player brightness circles / vision at night
-                   
-                                
-                # TODO: atleast refactor this, it seems that it needs OFFSET from camera group so level is not a terrible place for it
-                #       ideally find a way to have it in torch and player as opposed to here.
-                # Define brightness settings for Torch 
-                # torch_brightness_radius = 220
-                # num_circles = 6  
-                # #torch_brightness_factor = 0
-                
-                               
-                                # Player brightness settings
-                self.brightness_radius = 240
-                num_circles = 6  # Adjust as needed
-                
-                # Determine brightness factor based on weather conditions
-                if (self.weather.current_time > 18 and self.weather.current_time <= 20) or (self.weather.current_time <= 10 and self.weather.current_time > 9):
-                    brightness_factor = 0.008
-                elif (self.weather.current_time > 20 and self.weather.current_time <= 22) or (self.weather.current_time <= 9 and self.weather.current_time > 7):
-                    brightness_factor = 0.009
-                elif self.weather.current_time > 22 or self.weather.current_time <= 7:
-                    brightness_factor = 0.012
-                else:
-                    brightness_factor = 0.007
-                
-                # Create a surface for the brightness effect
-                brightness_surface = pygame.Surface(self.backend.get_size(), pygame.SRCALPHA)
-                brightness_surface.fill((0, 0, 0, 0))  # Fill with transparent
-                
-                # Player position
-                center_x = self.backend.get_size()[0] // 2
-                center_y = self.backend.get_size()[1] // 2
-                
-                # Helper function to calculate distance between two points
-                def calculate_distance(x1, y1, x2, y2):
-                    return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-                
-                # Draw brightness for player and torches on a per-circle basis
-                for i in range(num_circles):
-                    radius = self.brightness_radius * (1 / ((i + 1) ** 0.70))
-                    player_brightness = brightness_factor * (1.58 ** i)  # Player brightness for this circle
-                
-                    # Draw the player circle
-                    pygame.draw.circle(brightness_surface,
-                                       (255 * player_brightness, 255 * player_brightness, 255 * player_brightness, 255),
-                                       (center_x, center_y), radius)
-                
-                    # Handle torch circles
-                    for sprite in self.layout_manager.visible_sprites.sprites():
-                        if isinstance(sprite, Torch):
-                            torch_center_x = sprite.rect.centerx - self.layout_manager.visible_sprites.offset.x
-                            torch_center_y = sprite.rect.centery - self.layout_manager.visible_sprites.offset.y
-                
-                            # Calculate torch brightness for this circle
-                            torch_brightness = brightness_factor * (1.58 ** i)
-                
-                            # Check if the torch circle overlaps with the player's circle
-                            distance_to_player = calculate_distance(torch_center_x, torch_center_y, center_x, center_y)
-                
-                            if distance_to_player < (radius):  # Overlap detected
-                                # Compare the brightness of the torch and the player for this circle
-                                if torch_brightness > player_brightness:
-                                    # Torch is brighter, draw the torch circle
-                                    pygame.draw.circle(brightness_surface,
-                                                       (255 * torch_brightness, 255 * torch_brightness, 255 * torch_brightness, 255),
-                                                       (torch_center_x, torch_center_y), radius)
-                                else:
-                                    # Player is brighter, skip drawing the torch circle in this region
-                                    continue
-                            else:
-                                # No overlap, draw the torch circle normally
-                                pygame.draw.circle(brightness_surface,
-                                                   (255 * torch_brightness, 255 * torch_brightness, 255 * torch_brightness, 255),
-                                                   (torch_center_x, torch_center_y), radius)
-                
-                # Now we need to combine the brightness effects
-                self.backend.blit(brightness_surface, (0, 0), flags=pygame.BLEND_RGBA_ADD)
+
+                # GPU day/night lighting (Phase L): ambient darkness floor by time-of-day
+                # + additive radial pools for the player, torches, and registered lights,
+                # composited as a multiply light-map. Runs after the world + rain overlay
+                # and before the HUD, so the world is lit but the UI stays full-bright.
+                lighting = self.layout_manager.lighting
+                if lighting is not None:
+                    W, H = self.backend.get_size()
+                    offset = self.layout_manager.visible_sprites.offset
+                    torches = [s for s in self.layout_manager.visible_sprites.sprites()
+                               if isinstance(s, Torch)]
+                    lighting.render(self.backend, self.weather.current_time,
+                                    (offset.x, offset.y), (W, H),
+                                    torches=torches, player_center=(W // 2, H // 2))
 
                
                 

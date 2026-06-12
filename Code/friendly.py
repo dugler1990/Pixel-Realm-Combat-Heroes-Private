@@ -390,11 +390,7 @@ class Friendly(Entity):
         if self.frozen:
             #print("FROZEN")
             self.image = self.frozen_image
-            new_rect = self.image.get_rect(center=self.hitbox.center)
-            #if new_rect.size != self.rect.size:
-                
-                #print(f"Rect size mismatch: original {self.rect.size}, new {new_rect.size}")
-            self.rect = new_rect
+            self.rect = self._grounded_rect(self.image, self.mask)
         else:
         
             if self.animations_left_right_indicator:
@@ -426,7 +422,7 @@ class Friendly(Entity):
     
             self.image = animation[int(self.frame_index)]
             self.mask = masks[int(self.frame_index)]
-            self.rect = self.image.get_rect(center = self.hitbox.center)
+            self.rect = self._grounded_rect(self.image, self.mask)
     
             if not self.vulnerable:
                 alpha = self.wave_value()

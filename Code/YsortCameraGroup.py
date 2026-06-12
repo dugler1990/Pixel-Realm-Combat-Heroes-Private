@@ -62,6 +62,10 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.t=0 # forgrass rotaryfunctin, name it better.
         self.last_player_grass_force_center = None
         self.grass_force_threshold_sq = 10  # 4px movement threshold before re-applying player force
+        # Memoized transparent padding below the feet, per frame image (id -> px). Lets
+        # directional shadows anchor at the real feet (mask bottom) not the image bottom.
+        # Computed once per unique frame from its mask; the dict just remembers that.
+        self._shadow_feet_pad = {}
         
         # Threading.
         self.executor = ThreadPoolExecutor(max_workers=4)
@@ -184,7 +188,22 @@ class YSortCameraGroup(pygame.sprite.Group):
         for sprite in self.ground_sprites:
             self.ground_surface.blit(sprite.image, sprite.rect.move(-self.min_x, -self.min_y))
     #@profile
-    def custom_draw(self, player,dt, wind_intensity, light_intensity, camera_focus=None):
+    def _feet_pad(self, image):
+        """Transparent padding (px) below the feet for a frame image = image height minus
+        the bottom of its opaque mask. Computed once per unique frame and memoized."""
+        key = id(image)
+        pad = self._shadow_feet_pad.get(key)
+        if pad is None:
+            rects = pygame.mask.from_surface(image).get_bounding_rects()
+            if rects:
+                bottom = max(r.bottom for r in rects)
+                pad = max(0, image.get_height() - bottom)
+            else:
+                pad = 0
+            self._shadow_feet_pad[key] = pad
+        return pad
+
+    def custom_draw(self, player,dt, wind_intensity, light_intensity, camera_focus=None, shadow=None):
         
         if self.ground_surface is None:
             self.create_ground_surface()
@@ -295,6 +314,29 @@ class YSortCameraGroup(pygame.sprite.Group):
                                                  offset=(self.grass_offset.x,
                                                          self.grass_offset.y),
                                               rot_function=rot_function)
+
+        # Directional shadow pre-pass: dark sheared silhouettes on the ground, under all
+        # sprites (drawn before them). shadow = (dir_x, dir_y, length_scale, strength).
+        if shadow is not None and shadow[3] > 0:
+            sdx, sdy, slen, sstr = shadow
+            for sprite in self.sprites():
+                if not getattr(sprite, "casts_shadow", False):
+                    continue
+                if getattr(sprite, "_uncacheable_image", False):
+                    continue  # per-frame recolored frame -> no stable texture, skip
+                img = sprite.image
+                iw, ih = img.get_size()
+                x0 = sprite.rect.left - self.offset.x
+                # Anchor at the real feet (mask bottom), not the image bottom, so sprites
+                # with transparent padding below their feet don't appear to float.
+                yb = sprite.rect.bottom - self.offset.y - self._feet_pad(img)
+                reach = ih * slen
+                if x0 > W + reach or x0 + iw < -reach or yb > H + reach or yb - ih < -reach:
+                    continue  # off-screen
+                sx = sdx * reach
+                sy = sdy * reach
+                corners = ((x0 + sx, yb + sy), (x0 + iw + sx, yb + sy), (x0 + iw, yb), (x0, yb))
+                self.backend.draw_shadow(img, corners, id(img), sstr)
 
         player_drawn = False
         for sprite in sorted(self.sprites(), key=lambda sprite: sprite.rect.centery):

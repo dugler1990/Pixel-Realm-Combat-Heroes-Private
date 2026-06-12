@@ -21,6 +21,7 @@ import pygame
 from Settings import *
 from Tile import Tile
 from DaytimeBrightnessOverlay import DaytimeBrightnessOverlay
+from Lighting import LightingManager
 import pytmx
 from YsortCameraGroup import YSortCameraGroup
 from pytmx.util_pygame import load_pygame
@@ -175,9 +176,13 @@ class LayoutManager:
         if self.daytime_layout:
             if prepared_daytimeoverlay:
                 self.daytime_brightness_overlay = prepared_daytimeoverlay
-            else: 
+            else:
                 self.daytime_brightness_overlay = DaytimeBrightnessOverlay()
         else: self.daytime_brightness_overlay = None
+
+        # GPU day/night lighting (Phase L) — owns ambient + radial light sources,
+        # replacing the flat brightness overlay's role in the tmx level loop.
+        self.lighting = LightingManager() if self.daytime_layout else None
     
     
     

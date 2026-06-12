@@ -5,7 +5,7 @@ import os
 import math
 from hashRect import HashableRect
 from game_logging import get_collision_mask_logger
-from Support import print_mask
+from Support import print_mask, position_surface_mask_midbottom_at
 from Effect import EFFECT_REGISTRY, SlipperyEffect
 from benchmark_runtime import BENCHMARK_RUNTIME
 from Interaction import InteractionContext
@@ -27,6 +27,7 @@ SLIP_PERP_SUPPRESSION = 0.72  # Strongly reduce turning authority on high-slip s
 LOW_SPEED_MOMENTUM_EPS = 0.1  # Use input axis as momentum axis below this speed.
 
 class Entity(pygame.sprite.Sprite):
+    casts_shadow = True  # entities (player/enemies/friendlies) drop directional shadows
     # Class-level variable to keep track of IDs
     id_counter = 0
     benchmark_runtime = BENCHMARK_RUNTIME
@@ -55,6 +56,16 @@ class Entity(pygame.sprite.Sprite):
         else:
             def empty_func_is_not_nicey(*args, alive = True, remove_existing = True):pass
             self.layout_callback_update_quad_tree  =  empty_func_is_not_nicey
+
+    def _grounded_rect(self, image, mask):
+        """Rect that stands `image` on its feet: the mask's opaque mid-bottom sits at the
+        hitbox bottom-centre, rather than centering the image on the hitbox centre (which
+        leaves sprites floating, since art has transparent padding below the feet). Falls
+        back to centering when there's no mask."""
+        if mask is None:
+            return image.get_rect(center=self.hitbox.center)
+        return position_surface_mask_midbottom_at(image, mask, self.hitbox.midbottom)
+
     #@profile
     def move(self, speed, QuadTree,entity_quad_tree, update_quad_tree = True):
         

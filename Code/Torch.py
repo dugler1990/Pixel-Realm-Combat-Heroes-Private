@@ -3,6 +3,8 @@ from Support import import_folder
 from AnimatedEnvironmentSprite import AnimatedEnvironmentSprite
 
 class Torch(AnimatedEnvironmentSprite):
+    casts_shadow = True  # torch post drops a directional shadow (its flame is a light source)
+
     def __init__(self, pos, groups, config, speed = 100):
         # Load frames based on the provided configuration
         self.animation_config = {state: import_folder(path) for state, path in config.items()}

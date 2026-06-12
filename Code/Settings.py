@@ -28,6 +28,12 @@ GRASS_ROTATION_BUCKET_DEGREES = 6
 # the CPU bitmap tile-cache path. Toggle here to A/B the two; no effect in CPU backend.
 GRASS_GPU_INSTANCED = True
 
+# Weather / time-of-day (see Weather.py). Real seconds for a full 24h day-night cycle
+# (also paces precipitation spells). Default climate used when a level doesn't specify one;
+# must be a key in Weather.CLIMATES ("temperate" | "snowy_cold" | "clear" | "stormy").
+DAY_LENGTH_SECONDS = 180
+WEATHER_DEFAULT_CLIMATE = "temperate"
+
 # Benchmark mode (off by default). Used for isolated moving-entity collision tests.
 BENCHMARK_ENABLED = False
 BENCHMARK_LAYOUT_DIR = "../levels/benchmark"

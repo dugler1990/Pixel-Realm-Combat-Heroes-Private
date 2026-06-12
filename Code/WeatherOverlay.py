@@ -4,6 +4,9 @@ from Settings import *
 class WeatherOverlay:
     def __init__(self, backend):
         self.backend = backend
+        # Scale weather frames to the actual window size (not the Settings WIDTH/HEIGHT
+        # constants), so the overlay covers the whole screen regardless of window size.
+        screen_size = self.backend.get_size()
         self.weather_type = None
         self.current_animation = []
         self.current_frame_index = 0
@@ -12,28 +15,28 @@ class WeatherOverlay:
         self.weather_animations = {
             'rain_left': {
                 1: import_folder( path = "../Graphics/Weather/Rain/left/Mild", 
-                                  scale = (WIDTH,HEIGHT)),
+                                  scale = screen_size),
                 2: import_folder( path = "../Graphics/Weather/Rain/left/Heavy",
-                                 scale = (WIDTH,HEIGHT))
+                                 scale = screen_size)
             },
             'rain_right': {
                 1: import_folder( path = "../Graphics/Weather/Rain/right/Mild", 
-                                  scale = (WIDTH,HEIGHT)),
+                                  scale = screen_size),
                 2: import_folder( path = "../Graphics/Weather/Rain/right/Heavy",
-                                 scale = (WIDTH,HEIGHT))
+                                 scale = screen_size)
             },
             'snow_right': {
                 1: import_folder(path = "../Graphics/Weather/Snow/right/Mild",
-                                 scale = (WIDTH,HEIGHT)),
+                                 scale = screen_size),
                 2: import_folder(path = "../Graphics/Weather/Snow/right/Heavy",
-                                 scale = (WIDTH,HEIGHT))
+                                 scale = screen_size)
             },
             
             'snow_left': {
                 1: import_folder(path = "../Graphics/Weather/Snow/left/Mild",
-                                 scale = (WIDTH,HEIGHT)),
+                                 scale = screen_size),
                 2: import_folder(path = "../Graphics/Weather/Snow/left/Heavy",
-                                 scale = (WIDTH,HEIGHT))
+                                 scale = screen_size)
             }
         }
         self.active = False
