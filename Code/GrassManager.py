@@ -274,7 +274,7 @@ class GrassManager:
         custom_tiles = 0
         for pos in render_list:
             tile = self.grass_tiles[pos]
-            if collect_stats and tile.custom_blade_data:
+            if collect_stats and tile._disturbed:
                 custom_tiles += 1
             tile.render(surf, dt, offset=offset)
             if rot_function:
@@ -332,7 +332,7 @@ class GrassManager:
                 pos = (base_pos[0] + x, base_pos[1] + y)
                 if pos in self.grass_tiles:
                     tile = self.grass_tiles[pos]
-                    if tile.custom_blade_data:
+                    if tile._disturbed:
                         custom_tiles += 1
                     if rot_function:
                         tile.set_rotation(rot_function(tile.loc[0], tile.loc[1]))
@@ -406,6 +406,11 @@ class GrassCell:
         self._np_id = np.empty((0,), dtype=np.float32)
         self._np_base_rot = np.empty((0,), dtype=np.float32)
         self._np_wind = np.empty((0,), dtype=np.float32)
+        self._np_force_scale = np.empty((0,), dtype=np.float32)
+        self._np_stiffness = np.empty((0,), dtype=np.float32)
+        # Per-blade current rotation == the disturbance state. Equals _np_base_rot at rest;
+        # apply_force displaces it and _settle relaxes it back. Replaces custom_blade_data.
+        self._np_cur_rot = np.empty((0,), dtype=np.float32)
         self.master_rotation = 0
         self.precision = 30
         self.padding = self.gm.padding
@@ -413,8 +418,9 @@ class GrassCell:
         self.base_id = self.gm.grass_id
         self.gm.grass_id += 1
 
-        # custom_blade_data is used when the blade's current state should not be cached. all grass tiles will try to return to a cached state
-        self.custom_blade_data = None
+        # _disturbed is True while any blade differs from its base (uncached state); all
+        # grass cells try to relax back to the cached base rotation via _settle.
+        self._disturbed = False
 
         self.update_render_data()
 
@@ -493,13 +499,12 @@ class GrassCell:
         else:
             self.blades = combined_blades
             self.base_id = new_base_id
-        self.custom_blade_data = None
         self._build_emit_arrays()
         self.update_render_data()
 
     def _build_emit_arrays(self):
-        """Cache the static blade layout as numpy arrays for the vectorized GPU emit.
-        Rebuilt only here — the sole place self.blades changes after init."""
+        """Cache the static blade layout as numpy arrays for the vectorized GPU emit and the
+        force/settle math. Rebuilt only here — the sole place self.blades changes after init."""
         b = self.blades
         self._np_pos = np.array(
             [[p[BLADE_POS][0], p[BLADE_POS][1]] for p in b], dtype=np.float32
@@ -507,41 +512,37 @@ class GrassCell:
         self._np_id = np.array([p[BLADE_ID] for p in b], dtype=np.float32)
         self._np_base_rot = np.array([p[BLADE_ROT] for p in b], dtype=np.float32)
         self._np_wind = np.array([p[BLADE_WIND_SCALE] for p in b], dtype=np.float32)
-
-    def _ensure_custom_blade_data(self):
-        if not self.custom_blade_data:
-            self.custom_blade_data = [list(blade) for blade in self.blades]
+        self._np_force_scale = np.array([p[BLADE_FORCE_SCALE] for p in b], dtype=np.float32)
+        self._np_stiffness = np.array([p[BLADE_STIFFNESS] for p in b], dtype=np.float32)
+        # disturbance state resets to rest whenever the static layout is rebuilt
+        self._np_cur_rot = self._np_base_rot.copy()
+        self._disturbed = False
 
     def _apply_force_one_blade(self, i, force_point, force_radius, force_dropoff):
-        blade = self.blades[i]
-        blade_x = self.loc[0] + blade[0][0]
-        blade_y = self.loc[1] + blade[0][1]
+        """Single-blade force application — used only by the (currently unused) cluster path.
+        The hot non-cluster path in apply_force is fully vectorized and does not call this."""
+        blade_x = self.loc[0] + self._np_pos[i, 0]
+        blade_y = self.loc[1] + self._np_pos[i, 1]
         dx = blade_x - force_point[0]
         dy = blade_y - force_point[1]
         dist_sq = dx * dx + dy * dy
 
         force_radius_sq = force_radius * force_radius
-        outer_radius = force_radius + force_dropoff
-        outer_radius_sq = outer_radius * outer_radius
+        outer_radius_sq = (force_radius + force_dropoff) ** 2
 
         if dist_sq < force_radius_sq:
-            force = 2
+            force = 2.0
         elif dist_sq >= outer_radius_sq:
             return
         else:
-            dis = math.sqrt(dist_sq)
-            dis = max(0, dis - force_radius)
-            force = 1 - min(dis / force_dropoff, 1)
-        force *= blade[BLADE_FORCE_SCALE]
-        dir_ = 1 if force_point[0] > blade_x else -1
-        if (
-            not self.custom_blade_data[i]
-            or abs(self.custom_blade_data[i][BLADE_ROT] - self.blades[i][BLADE_ROT])
-            <= abs(force) * 90
-        ):
-            updated = list(self.blades[i])
-            updated[BLADE_ROT] = blade[BLADE_ROT] + dir_ * force * 90
-            self.custom_blade_data[i] = updated
+            dis = max(0.0, math.sqrt(dist_sq) - force_radius)
+            force = 1.0 - min(dis / force_dropoff, 1.0)
+        force *= float(self._np_force_scale[i])
+        dir_ = 1.0 if force_point[0] > blade_x else -1.0
+        base_rot = float(self._np_base_rot[i])
+        if abs(float(self._np_cur_rot[i]) - base_rot) <= abs(force) * 90:
+            self._np_cur_rot[i] = base_rot + dir_ * force * 90
+            self._disturbed = True
 
     # apply a force that affects each blade individually based on distance instead of the rotation of the entire tile
     def apply_force(
@@ -553,7 +554,7 @@ class GrassCell:
         cluster_cfg=None,
         stats_out=None,
     ):
-        if not self.blades:
+        if self._np_pos.shape[0] == 0:
             return
 
         use_cluster = (
@@ -563,11 +564,48 @@ class GrassCell:
         )
 
         if not use_cluster:
-            self._ensure_custom_blade_data()
-            for i in range(len(self.blades)):
-                self._apply_force_one_blade(i, force_point, force_radius, force_dropoff)
+            # Hot path: one vectorized pass over every blade in the tile (replaces the
+            # per-blade Python loop). Semantics match the old _apply_force_one_blade.
+            fx = float(force_point[0])
+            fy = float(force_point[1])
+            bx = self.loc[0] + self._np_pos[:, 0]
+            by = self.loc[1] + self._np_pos[:, 1]
+            dx = bx - fx
+            dy = by - fy
+            dist_sq = dx * dx + dy * dy
+
+            force_radius = float(force_radius)
+            force_dropoff = float(force_dropoff)
+            r_sq = force_radius * force_radius
+            outer_sq = (force_radius + force_dropoff) ** 2
+
+            within = dist_sq < r_sq
+            in_band = (~within) & (dist_sq < outer_sq)
+            affected = within | in_band
+            if not affected.any():
+                return
+
+            # magnitude: 2 inside the core, linear falloff across the dropoff band
+            force = np.where(within, 2.0, 0.0).astype(np.float32)
+            if in_band.any():
+                dis = np.clip(np.sqrt(dist_sq) - force_radius, 0.0, None)
+                band_force = (1.0 - np.clip(dis / force_dropoff, 0.0, 1.0)).astype(np.float32)
+                force = np.where(in_band, band_force, force)
+            force = force * self._np_force_scale
+
+            dir_ = np.where(fx > bx, 1.0, -1.0)
+            new_rot = self._np_base_rot + dir_ * force * 90.0
+
+            # hysteresis: only override a blade if its current displacement is small relative
+            # to the incoming force (matches the per-blade rule in _apply_force_one_blade).
+            allow = np.abs(self._np_cur_rot - self._np_base_rot) <= np.abs(force) * 90.0
+            upd = affected & allow
+            if upd.any():
+                self._np_cur_rot[upd] = new_rot[upd]
+                self._disturbed = True
             return
 
+        # --- cluster mode (leader/follower grouping; currently unused) ---
         ax, ay = float(cluster_anchor[0]), float(cluster_anchor[1])
         r_sq = float(cluster_cfg["player_radius_px"]) ** 2
         sub = int(cluster_cfg["subcell_px"])
@@ -575,30 +613,20 @@ class GrassCell:
         jitter_max = float(cluster_cfg["jitter_deg"])
         jseed = int(cluster_cfg["jitter_seed"])
 
-        self._ensure_custom_blade_data()
-
-        near = []
-        far = []
-        for i, blade in enumerate(self.blades):
-            wx = self.loc[0] + blade[0][0]
-            wy = self.loc[1] + blade[0][1]
-            d_sq = (wx - ax) * (wx - ax) + (wy - ay) * (wy - ay)
-            if d_sq <= r_sq:
-                near.append(i)
-            else:
-                far.append(i)
+        wx_all = self.loc[0] + self._np_pos[:, 0]
+        wy_all = self.loc[1] + self._np_pos[:, 1]
+        d_sq = (wx_all - ax) ** 2 + (wy_all - ay) ** 2
+        near = np.nonzero(d_sq <= r_sq)[0]
+        far = np.nonzero(d_sq > r_sq)[0]
 
         for i in near:
-            self._apply_force_one_blade(i, force_point, force_radius, force_dropoff)
+            self._apply_force_one_blade(int(i), force_point, force_radius, force_dropoff)
 
         buckets = defaultdict(list)
         for i in far:
-            blade = self.blades[i]
-            wx = self.loc[0] + blade[0][0]
-            wy = self.loc[1] + blade[0][1]
-            bx = int(wx // sub)
-            by = int(wy // sub)
-            buckets[(bx, by)].append((wx, wy, i))
+            wx = float(wx_all[i])
+            wy = float(wy_all[i])
+            buckets[(int(wx // sub), int(wy // sub))].append((wx, wy, int(i)))
 
         for (bx, by), items in buckets.items():
             items.sort(key=lambda t: (t[0], t[1], t[2]))
@@ -609,17 +637,13 @@ class GrassCell:
                     continue
                 leader = chunk[0]
                 self._apply_force_one_blade(leader, force_point, force_radius, force_dropoff)
-                leader_row = self.custom_blade_data[leader]
-                if leader_row is None:
-                    continue
-                leader_rot = leader_row[BLADE_ROT]
+                leader_rot = float(self._np_cur_rot[leader])
                 for fj in chunk[1:]:
-                    row = list(self.blades[fj])
                     jitter = _cluster_follower_jitter_deg(
                         jseed, self.loc, bx, by, fj, jitter_max
                     )
-                    row[BLADE_ROT] = max(-90, min(90, leader_rot + jitter))
-                    self.custom_blade_data[fj] = row
+                    self._np_cur_rot[fj] = max(-90.0, min(90.0, leader_rot + jitter))
+                    self._disturbed = True
                     if stats_out is not None:
                         stats_out["cluster_follower_copies"] = (
                             stats_out.get("cluster_follower_copies", 0) + 1
@@ -644,52 +668,37 @@ class GrassCell:
             return True
         return False
 
-    def _blade_render_rotation(self, blade):
-        return max(
-            -90,
-            min(
-                90,
-                blade[BLADE_ROT] + self.true_rotation * blade[BLADE_WIND_SCALE],
-            ),
-        )
+    def _blade_render_rotation(self, cur_rot, wind_scale):
+        return max(-90, min(90, cur_rot + self.true_rotation * wind_scale))
 
     def _settle(self, dt):
         """Relax disturbed blades back toward their rest rotation; once all are within
-        epsilon of base, clear custom_blade_data so the tile resumes the cheap path.
-        Shared by the CPU render(), the GPU bitmap path, and the GPU instanced path."""
-        if not self.custom_blade_data:
+        epsilon of base, drop back to the cheap (cached) path. Shared by the CPU render(),
+        the GPU bitmap path, and the GPU instanced path."""
+        if not self._disturbed:
             return
-        matching = True
         settle_epsilon = 0.1
-        for i, blade in enumerate(self.custom_blade_data):
-            if blade is None:
-                blade = list(self.blades[i])
-                self.custom_blade_data[i] = blade
-            blade[BLADE_ROT] = normalize(
-                blade[BLADE_ROT],
-                blade[BLADE_STIFFNESS] * dt,
-                self.blades[i][BLADE_ROT],
-            )
-            if abs(blade[BLADE_ROT] - self.blades[i][BLADE_ROT]) <= settle_epsilon:
-                blade[BLADE_ROT] = self.blades[i][BLADE_ROT]
-            else:
-                matching = False
-        if matching:
-            self.custom_blade_data = None
+        amt = self._np_stiffness * dt
+        diff = self._np_base_rot - self._np_cur_rot
+        # move toward base by amt, snapping to base when within amt (matches normalize())
+        self._np_cur_rot = np.where(
+            np.abs(diff) <= amt,
+            self._np_base_rot,
+            self._np_cur_rot + np.clip(diff, -amt, amt),
+        )
+        # snap blades within epsilon of base back to exact base
+        close = np.abs(self._np_cur_rot - self._np_base_rot) <= settle_epsilon
+        if close.any():
+            self._np_cur_rot[close] = self._np_base_rot[close]
+        if close.all():
+            self._disturbed = False
 
     def _current_rotations(self):
-        """Return the (N,) array of each blade's current BLADE_ROT: the static base
-        rotations, with disturbed (custom) blades overridden. Used by the GPU instanced
-        emit, which adds wind (true_rotation*wind_scale) and clamps, vectorized across
-        all visible blades at once. Undisturbed cells return the cached array directly
-        (no copy); disturbed cells read custom rotations once."""
-        if not self.custom_blade_data:
-            return self._np_base_rot
-        cur = self._np_base_rot.copy()
-        for i, blade in enumerate(self.custom_blade_data):
-            if blade is not None:
-                cur[i] = blade[BLADE_ROT]
-        return cur
+        """Return the (N,) array of each blade's current BLADE_ROT. Used by the GPU instanced
+        emit, which adds wind (true_rotation*wind_scale) and clamps, vectorized across all
+        visible blades at once. Returns the live array directly; the caller concatenates
+        (which copies), so no defensive copy is needed."""
+        return self._np_cur_rot if self._disturbed else self._np_base_rot
 
     # render the tile's image based on its current state and return the data
     def render_tile(self, render_shadow=False):
@@ -697,11 +706,8 @@ class GrassCell:
         surf = pygame.Surface((self.size + self.padding * 2, self.size + self.padding * 2))
         surf.set_colorkey((0, 0, 0))
 
-        # use custom_blade_data if it's active (uncached). otherwise use the base data (cached).
-        if self.custom_blade_data:
-            blades = self.custom_blade_data
-        else:
-            blades = self.blades
+        # current per-blade rotation: disturbed cells read _np_cur_rot, at-rest cells base
+        cur = self._np_cur_rot if self._disturbed else self._np_base_rot
 
         # render the shadows of each blade if applicable
         if render_shadow:
@@ -720,10 +726,7 @@ class GrassCell:
             shadow_surf.set_alpha(self.gm.ground_shadow[2])
 
         # render each blade using the asset manager
-        for i, blade in enumerate(blades):
-            if blade is None:
-                # Defensive fallback for partial custom data; should be rare.
-                blade = self.blades[i]
+        for i, blade in enumerate(self.blades):
             self.ga.render_blade(
                 surf,
                 blade[BLADE_ID],
@@ -731,7 +734,7 @@ class GrassCell:
                     blade[BLADE_POS][0] + self.padding,
                     blade[BLADE_POS][1] + self.padding,
                 ),
-                self._blade_render_rotation(blade),
+                self._blade_render_rotation(float(cur[i]), blade[BLADE_WIND_SCALE]),
             )
 
         # return surf and shadow_surf if applicable
@@ -748,7 +751,7 @@ class GrassCell:
     # draw the grass itself
     def render(self, surf, dt, offset=(0, 0)):
         # render a new grass tile image if using custom uncached data otherwise use cached data if possible
-        if self.custom_blade_data:
+        if self._disturbed:
             surf.blit(self.render_tile(), (self.loc[0] - offset[0] - self.padding, self.loc[1] - offset[1] - self.padding))
 
         else:
@@ -770,7 +773,7 @@ class GrassCell:
     def get_render_surface_for_gpu(self, dt):
         """Return (surface, cache_key) for direct GPU blit — bypasses grass_surface.
         cache_key is render_data tuple for standard tiles, None for custom blade tiles."""
-        if self.custom_blade_data:
+        if self._disturbed:
             surf, cache_key = self.render_tile(), None
         else:
             if self.render_data not in self.gm.grass_cache:

@@ -40,6 +40,9 @@ class FactionPolicy:
         }
         self.archetype_relations: Dict[str, Dict[str, str]] = {}
         self.pair_relations: Dict[Tuple[str, str], str] = {}
+        # Memoizes resolve_relation by (source_id, target_id). Faction config is static after
+        # load, so this is safe; cleared in _load_external_config on any (re)load.
+        self._relation_cache: Dict[Tuple[Optional[str], Optional[str]], str] = {}
         self._load_external_config()
 
     def _config_path(self):
@@ -230,6 +233,9 @@ class FactionPolicy:
             key = tuple(sorted((a, b)))
             self.pair_relations[key] = relation
 
+        # config changed — drop any memoized relations resolved against the old tables
+        self._relation_cache = {}
+
         _interaction_log.debug(
             "Faction policy v2 loaded factions=%d archetypes=%d config=%s",
             len(self.factions),
@@ -246,6 +252,16 @@ class FactionPolicy:
         return None
 
     def resolve_relation(self, source_id: Optional[str], target_id: Optional[str]) -> str:
+        cache = self._relation_cache
+        cache_key = (source_id, target_id)
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+        result = self._resolve_relation_uncached(source_id, target_id)
+        cache[cache_key] = result
+        return result
+
+    def _resolve_relation_uncached(self, source_id: Optional[str], target_id: Optional[str]) -> str:
         if source_id is None or target_id is None:
             return self.relations_defaults["fallback"]
         source = self.resolve_faction(source_id)

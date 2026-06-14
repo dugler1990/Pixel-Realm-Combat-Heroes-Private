@@ -27,6 +27,7 @@ LOGGER_QUADTREE = "game.quadtree"
 LOGGER_EFFECT_ENVIRONMENTAL = "game.effect.environmental"
 LOGGER_RTS = "game.rts"
 LOGGER_GRASS = "game.grass"
+LOGGER_NETWORK = "game.network"
 
 # Channel keys (used in debug_logging.json) -> logger name
 _CHANNEL_TO_LOGGER: Dict[str, str] = {
@@ -44,6 +45,7 @@ _CHANNEL_TO_LOGGER: Dict[str, str] = {
     "effect_environmental": LOGGER_EFFECT_ENVIRONMENTAL,
     "rts": LOGGER_RTS,
     "grass": LOGGER_GRASS,
+    "network": LOGGER_NETWORK,
 }
 
 _DEFAULT_CHANNELS: Dict[str, Dict[str, Any]] = {
@@ -129,6 +131,12 @@ _DEFAULT_CHANNELS: Dict[str, Dict[str, Any]] = {
         "enabled": True,
         "level": "INFO",
         "file": "logs/grass.log",
+        "console": True,
+    },
+    "network": {
+        "enabled": False,
+        "level": "DEBUG",
+        "file": "logs/network.log",
         "console": True,
     },
 }

@@ -9,10 +9,12 @@ from Inventory import draw_belt_hud
 from ItemVisual import ItemVisual
 import pygame
 from Settings import *
+import logging
 from game_logging import get_debug_logger
 
 _game_flow_log = get_debug_logger("game_flow")
 _combat_log = get_debug_logger("combat")
+_net_log = get_debug_logger("network")
 from Tile import Tile
 from Trigger import Trigger
 from Player import SpecificPlayer
@@ -1855,11 +1857,15 @@ class Level4:
                 if pid != my_id and pid not in self.remote_players:
                     self._spawn_remote_player(pid, message["character"],
                                               message["x"], message["y"])
+                    _net_log.debug("%s: player_joined %s at (%s,%s)",
+                                   my_id, pid, message["x"], message["y"])
 
             elif mtype == MSG_PLAYER_LEFT:
-                remote = self.remote_players.pop(message["player_id"], None)
+                pid = message["player_id"]
+                remote = self.remote_players.pop(pid, None)
                 if remote is not None:
                     remote.kill()  # removes it from every sprite group at once
+                    _net_log.debug("%s: player_left %s", my_id, pid)
 
             elif mtype == MSG_STATE_UPDATE:
                 for pid, snap in message["players"].items():
@@ -1875,18 +1881,22 @@ class Level4:
                         # the only way late joiners learn about them.
                         remote = self._spawn_remote_player(pid, snap["character"],
                                                            snap["x"], snap["y"])
+                        _net_log.debug("%s: lazy-spawned %s from state_update", my_id, pid)
                     remote.apply_snapshot(snap["x"], snap["y"],
                                           snap["direction_x"], snap["direction_y"],
                                           snap["status"])
-                    # Diagnostic (PRCH_MP_DEBUG=1): log where I am vs where I render
-                    # the remote, ~once/sec. Comparing this client's `gap` to the
-                    # other client's should give exact negatives; any mismatch is
-                    # the cross-screen position bug.
-                    if os.environ.get("PRCH_MP_DEBUG") and self._frame_number % 60 == 0:
+                    # Diagnostic (enable the "network" channel in debug_logging.json):
+                    # log where I am vs where I render the remote, ~once/sec. This
+                    # client's `gap` should be the exact negative of the other
+                    # client's; any mismatch is a cross-screen position bug.
+                    # Gated on the channel being enabled so it's a no-op (and
+                    # touches no extra attributes) when the channel is off.
+                    if _net_log.isEnabledFor(logging.DEBUG) and self._frame_number % 60 == 0:
                         me_c = self.player.rect.center
                         rp_c = remote.rect.center
-                        print(f"[mpdbg] {my_id}: self={me_c} sees {pid}={rp_c} "
-                              f"gap=({rp_c[0]-me_c[0]},{rp_c[1]-me_c[1]})", flush=True)
+                        _net_log.debug("%s: self=%s sees %s=%s gap=(%s,%s)",
+                                       my_id, me_c, pid, rp_c,
+                                       rp_c[0] - me_c[0], rp_c[1] - me_c[1])
 
     def _spawn_remote_player(self, player_id, character, x, y):
         remote = RemotePlayer(

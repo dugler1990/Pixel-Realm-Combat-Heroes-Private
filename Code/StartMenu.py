@@ -8,7 +8,7 @@ class StartMenu:
         self.game = game
         self.input_manager = input_manager
         self.font = pygame.font.Font(None, 40)
-        self.options = ["Start Game", "Settings"]
+        self.options = ["Start Game", "Multiplayer (dev)", "Settings"]
         self.selected_option = 0
 
     def draw(self):
@@ -27,7 +27,14 @@ class StartMenu:
         elif self.input_manager.is_key_just_pressed(pygame.K_DOWN):
             self.selected_option = min(len(self.options) - 1, self.selected_option + 1)
         elif self.input_manager.is_key_just_pressed(pygame.K_RETURN):
-            if self.selected_option == 0:  # Start Game Selected
+            selected = self.options[self.selected_option]
+            if selected == "Start Game":
                 self.game.in_start_menu = False
-            elif self.selected_option == 1:  # Settings Selected
+            elif selected == "Multiplayer (dev)":
+                # Dev convenience (no env vars): proceed through the normal
+                # player-selection screen, then Main2 short-circuits straight to
+                # level 6 + connect. See Game._state_player_selection.
+                self.game.multiplayer_pending = True
+                self.game.in_start_menu = False
+            elif selected == "Settings":
                 _game_flow_log.debug("Settings selected")

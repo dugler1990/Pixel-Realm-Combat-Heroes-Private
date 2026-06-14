@@ -82,5 +82,11 @@
     "level": "INFO",
     "file": "logs/grass.log",
     "console": true
+  },
+  "network": {
+    "enabled": false,
+    "level": "DEBUG",
+    "file": "logs/network.log",
+    "console": true
   }
 }

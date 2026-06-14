@@ -63,7 +63,8 @@ class Game:
         self.start_menu = StartMenu(self, self.input_manager)
         self.player_selection = PlayerSelection(self, self.input_manager)
         self.in_start_menu = True
-        self.in_player_selection = False        
+        self.in_player_selection = False
+        self.multiplayer_pending = False  # set by the "Multiplayer (dev)" menu entry
         self.state = "start_menu"  # Managing game states using a state variable
         pygame.mixer.set_num_channels(max(16, pygame.mixer.get_num_channels()))
         pygame.mixer.set_reserved(1)
@@ -131,13 +132,23 @@ class Game:
         self.start_level(6)
 
     def _bootstrap_multiplayer_run(self):
+        # Env-var launch path (PRCH_MULTIPLAYER_ENABLED=1): character/player_id
+        # come from MULTIPLAYER_RUNTIME. The "Multiplayer (dev)" menu entry uses
+        # the same _start_multiplayer_session with a menu-picked character.
         if not unlocked_player_directory:
             raise RuntimeError("Multiplayer requires at least one selectable player.")
-        if MULTIPLAYER_RUNTIME.character in unlocked_player_directory:
-            character_index = unlocked_player_directory.index(MULTIPLAYER_RUNTIME.character)
+        self._start_multiplayer_session(MULTIPLAYER_RUNTIME.character, MULTIPLAYER_RUNTIME.player_id)
+
+    def _start_multiplayer_session(self, character_dir, player_id):
+        """Build a zero-point config for `character_dir`, load level 6, and
+        connect+join the server as `player_id`. Shared by the env-var bootstrap
+        and the menu entry so the connect logic lives in exactly one place."""
+        if character_dir in unlocked_player_directory:
+            character_index = unlocked_player_directory.index(character_dir)
         else:
             character_index = 0
-        self.player_selection.selected_player_info_dir = unlocked_player_directory[character_index]
+            character_dir = unlocked_player_directory[0]
+        self.player_selection.selected_player_info_dir = character_dir
         base = unlocked_player_base_stats[character_index].copy()
         self.player_configuration = PlayerConfiguration(
             input_manager=self.input_manager,
@@ -149,6 +160,7 @@ class Game:
         self.in_start_menu = False
         self.in_player_selection = False
         self.in_level_selection = False
+        self.multiplayer_pending = False
         self.start_level(6)
 
         # Apply the per-player spawn offset to the ACTUAL local player, not just
@@ -165,13 +177,12 @@ class Game:
 
         join_x, join_y = player.rect.centerx, player.rect.centery
         self.level.mp_client = MultiplayerClient(
-            MULTIPLAYER_RUNTIME.host, MULTIPLAYER_RUNTIME.port, MULTIPLAYER_RUNTIME.player_id
+            MULTIPLAYER_RUNTIME.host, MULTIPLAYER_RUNTIME.port, player_id
         )
-        self.level.mp_client.send_join(self.player_selection.selected_player_info_dir, join_x, join_y)
+        self.level.mp_client.send_join(character_dir, join_x, join_y)
         print(
             f"[multiplayer] connected to {MULTIPLAYER_RUNTIME.host}:{MULTIPLAYER_RUNTIME.port} "
-            f"as {MULTIPLAYER_RUNTIME.player_id} ({self.player_selection.selected_player_info_dir}) "
-            f"at ({join_x}, {join_y})"
+            f"as {player_id} ({character_dir}) at ({join_x}, {join_y})"
         )
 
     def _close_multiplayer(self):
@@ -270,6 +281,16 @@ class Game:
         self.player_selection.handle_events()
         self.player_selection.draw()
         if not self.in_player_selection:
+            if self.multiplayer_pending:
+                # "Multiplayer (dev)" path: skip stat-config / level-selection
+                # screens, go straight to level 6 + connect with the just-picked
+                # character. player_id must be unique per process (two clients
+                # sharing an id = the server treats them as one player).
+                player_id = os.getenv("PRCH_MULTIPLAYER_PLAYER_ID") or f"player-{os.getpid()}"
+                self._start_multiplayer_session(
+                    self.player_selection.selected_player_info_dir, player_id
+                )
+                return
             self.set_state("player_configuration")
             selected_player_base_stats = self.player_selection.base_stats
             _game_flow_log.debug("BASE STATS: ")
