@@ -62,10 +62,6 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.t=0 # forgrass rotaryfunctin, name it better.
         self.last_player_grass_force_center = None
         self.grass_force_threshold_sq = 10  # 4px movement threshold before re-applying player force
-        # Memoized transparent padding below the feet, per frame image (id -> px). Lets
-        # directional shadows anchor at the real feet (mask bottom) not the image bottom.
-        # Computed once per unique frame from its mask; the dict just remembers that.
-        self._shadow_feet_pad = {}
         
         # Threading.
         self.executor = ThreadPoolExecutor(max_workers=4)
@@ -188,21 +184,6 @@ class YSortCameraGroup(pygame.sprite.Group):
         for sprite in self.ground_sprites:
             self.ground_surface.blit(sprite.image, sprite.rect.move(-self.min_x, -self.min_y))
     #@profile
-    def _feet_pad(self, image):
-        """Transparent padding (px) below the feet for a frame image = image height minus
-        the bottom of its opaque mask. Computed once per unique frame and memoized."""
-        key = id(image)
-        pad = self._shadow_feet_pad.get(key)
-        if pad is None:
-            rects = pygame.mask.from_surface(image).get_bounding_rects()
-            if rects:
-                bottom = max(r.bottom for r in rects)
-                pad = max(0, image.get_height() - bottom)
-            else:
-                pad = 0
-            self._shadow_feet_pad[key] = pad
-        return pad
-
     def custom_draw(self, player,dt, wind_intensity, light_intensity, camera_focus=None, shadow=None):
         
         if self.ground_surface is None:
@@ -227,7 +208,7 @@ class YSortCameraGroup(pygame.sprite.Group):
             
         # Shared wind mode keeps one base sway angle for visible grass; legacy mode
         # preserves the current position-dependent wave across the field.
-        self.t += dt*60*wind_intensity
+        self.t += dt*120*wind_intensity
         if self._grass_wind_mode() == "shared_patch":
             shared_angle = int(math.sin(self.t / 60) * 15)
             rot_function = lambda x, y, angle=shared_angle: angle
@@ -317,7 +298,7 @@ class YSortCameraGroup(pygame.sprite.Group):
 
         # Directional shadow pre-pass: dark sheared silhouettes on the ground, under all
         # sprites (drawn before them). shadow = (dir_x, dir_y, length_scale, strength).
-        if shadow is not None and shadow[3] > 0:
+        if shadow is not None and shadow[3] > 0 and hasattr(self.backend, "draw_shadow"):
             sdx, sdy, slen, sstr = shadow
             for sprite in self.sprites():
                 if not getattr(sprite, "casts_shadow", False):
@@ -327,9 +308,8 @@ class YSortCameraGroup(pygame.sprite.Group):
                 img = sprite.image
                 iw, ih = img.get_size()
                 x0 = sprite.rect.left - self.offset.x
-                # Anchor at the real feet (mask bottom), not the image bottom, so sprites
-                # with transparent padding below their feet don't appear to float.
-                yb = sprite.rect.bottom - self.offset.y - self._feet_pad(img)
+                # Shadow base sits at the sprite's bottom edge (feet, once art is cropped).
+                yb = sprite.rect.bottom - self.offset.y
                 reach = ih * slen
                 if x0 > W + reach or x0 + iw < -reach or yb > H + reach or yb - ih < -reach:
                     continue  # off-screen

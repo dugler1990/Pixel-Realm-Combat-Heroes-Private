@@ -157,6 +157,8 @@ def load_entity_masks_from_disk(monster_name, animations_dict, animations_left_r
                         if not os.path.isfile(image_path):
                             return None
                         surf = pygame.image.load(image_path).convert_alpha()
+                        if surf.get_size() != animation_set[i].get_size():
+                            return None  # stale cache (art changed size) -> rebuild
                         frames.append(pygame.mask.from_surface(surf))
                     masks_temp[left_right_key] = frames
                 out[key] = masks_temp
@@ -170,6 +172,8 @@ def load_entity_masks_from_disk(monster_name, animations_dict, animations_left_r
                 if not os.path.isfile(image_path):
                     return None
                 surf = pygame.image.load(image_path).convert_alpha()
+                if surf.get_size() != animation_set[i].get_size():
+                    return None  # stale cache (art changed size) -> rebuild
                 frames.append(pygame.mask.from_surface(surf))
             out[key] = {"default": frames}
         return out

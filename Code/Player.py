@@ -522,7 +522,7 @@ class BasePlayer(Entity):
         if self.status.startswith("sit_"):
             self._position_sprite_for_seat()
         else:
-            self.rect = self._grounded_rect(self.image, self.mask)
+            self.rect = self.image.get_rect(center = self.hitbox.center)
         if not self.vulnerable:
             alpha = self.wave_value()
             self.image.set_alpha(alpha)

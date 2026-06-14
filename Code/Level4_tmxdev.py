@@ -57,6 +57,9 @@ from Interaction import InteractionContext, InteractionResolver
 from rts import RtsSession, RtsWorldSim
 from rts.world_adapter import RtsWorldAdapter
 from Support import resolve_env_interactable_path
+# Multiplayer (additive; inert unless a multiplayer bootstrap set self.mp_client).
+from network import MSG_PLAYER_JOINED, MSG_PLAYER_LEFT, MSG_STATE_UPDATE
+from RemotePlayer import RemotePlayer
 #with open('triggers.json',r) as file
 #triggers = json.loads(file.read())
 
@@ -1833,9 +1836,77 @@ class Level4:
 
 
 
+    # -- Multiplayer (v0): drain the network inbox and reconcile RemotePlayers.
+    #    Only ever called when self.mp_client exists (multiplayer bootstrap ran);
+    #    runs entirely on the main thread, the only place RemotePlayers are
+    #    created/destroyed or have apply_snapshot() called (plan: receive thread
+    #    never touches pygame objects). See "Game flow integration" in the plan.
+    def _process_multiplayer_inbox(self):
+        if not hasattr(self, "remote_players"):
+            self.remote_players = {}
+        my_id = self.mp_client.player_id
+
+        _msgs = self.mp_client.poll()
+        for message in _msgs:
+            mtype = message.get("type")
+
+            if mtype == MSG_PLAYER_JOINED:
+                pid = message["player_id"]
+                if pid != my_id and pid not in self.remote_players:
+                    self._spawn_remote_player(pid, message["character"],
+                                              message["x"], message["y"])
+
+            elif mtype == MSG_PLAYER_LEFT:
+                remote = self.remote_players.pop(message["player_id"], None)
+                if remote is not None:
+                    remote.kill()  # removes it from every sprite group at once
+
+            elif mtype == MSG_STATE_UPDATE:
+                for pid, snap in message["players"].items():
+                    if pid == my_id:
+                        continue  # the server echoes our own entry; never apply it locally
+                    remote = self.remote_players.get(pid)
+                    if remote is None:
+                        # Lazily spawn on first state_update too. This is load-
+                        # bearing, not just defensive: a client that joins AFTER
+                        # another player never receives a player_joined for that
+                        # pre-existing player (the server only broadcasts joins
+                        # to sockets present at join time), so state_update is
+                        # the only way late joiners learn about them.
+                        remote = self._spawn_remote_player(pid, snap["character"],
+                                                           snap["x"], snap["y"])
+                    remote.apply_snapshot(snap["x"], snap["y"],
+                                          snap["direction_x"], snap["direction_y"],
+                                          snap["status"])
+                    # Diagnostic (PRCH_MP_DEBUG=1): log where I am vs where I render
+                    # the remote, ~once/sec. Comparing this client's `gap` to the
+                    # other client's should give exact negatives; any mismatch is
+                    # the cross-screen position bug.
+                    if os.environ.get("PRCH_MP_DEBUG") and self._frame_number % 60 == 0:
+                        me_c = self.player.rect.center
+                        rp_c = remote.rect.center
+                        print(f"[mpdbg] {my_id}: self={me_c} sees {pid}={rp_c} "
+                              f"gap=({rp_c[0]-me_c[0]},{rp_c[1]-me_c[1]})", flush=True)
+
+    def _spawn_remote_player(self, player_id, character, x, y):
+        remote = RemotePlayer(
+            player_id=player_id,
+            character_assets=character,
+            center=(x, y),
+            groups=[self.layout_manager.visible_sprites],
+            obstacle_sprites=self.layout_manager,
+            initial_stats=self.player_base_stats,
+            level=self,
+            input_manager=self.input_manager,
+            QuadTree=self.layout_manager.obstacle_quad_tree,
+            entity_quad_tree=self.layout_manager.entity_quad_tree,
+        )
+        self.remote_players[player_id] = remote
+        return remote
+
     #@profile
     def run(self,dt):
- 
+
         dt_real = dt   # dno what the dt divided by fps is .... some wierd desperate attempt to make something work..
         dt = dt / FPS
         dt = dt_real
@@ -1844,9 +1915,14 @@ class Level4:
         #print(FPS)
         #print(self.player.rect.center)
          
-        self.check_triggers() # i guess i need to pass persist data ?  
+        self.check_triggers() # i guess i need to pass persist data ?
         if self.input_manager.is_key_just_pressed(pygame.K_F5):
             self._full_dev_reload()
+        # Multiplayer (additive, inert unless PRCH_MULTIPLAYER_ENABLED=1): drain
+        # the network inbox up front so RemotePlayers have this tick's latest
+        # snapshot before update_parallel ticks them.
+        if getattr(self, "mp_client", None) is not None:
+            self._process_multiplayer_inbox()
         if self.benchmark_runtime.enabled:
             if self.input_manager.is_key_just_pressed(pygame.K_F6):
                 self._toggle_pushback_floor()
@@ -2079,7 +2155,22 @@ class Level4:
             else:
                 self._draw_interact_prompt()
         self.player_dead = getattr(self.player, "is_dead", False)
-    
+
+        # Multiplayer (additive, inert unless PRCH_MULTIPLAYER_ENABLED=1 -- see
+        # Code/multiplayer_runtime.py): report this frame's local player state to
+        # the server now that update_parallel/custom_draw have run, so position
+        # and direction/attacking reflect this frame. v0 is a position relay --
+        # we send the player's ACTUAL rect.center (from Entity.move) so remotes
+        # render exactly where we are, not a server re-simulation that drifts.
+        if getattr(self, "mp_client", None) is not None:
+            self.mp_client.send_state(
+                self.player.rect.centerx,
+                self.player.rect.centery,
+                self.player.direction.x,
+                self.player.direction.y,
+                self.player.attacking,
+            )
+
         # Grass  !
 
         ## Apply current wind force every certain time

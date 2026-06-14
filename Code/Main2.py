@@ -21,6 +21,8 @@ from SettingsMenu import SettingsMenu
 from DeathMenu import DeathMenu
 from benchmark_runtime import BENCHMARK_RUNTIME
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
+from multiplayer_runtime import MULTIPLAYER_RUNTIME
+from network import MultiplayerClient
 from render_backend import create_backend
 import psutil
 
@@ -91,6 +93,8 @@ class Game:
             self._bootstrap_rts_validation_run()
         elif BENCHMARK_RUNTIME.enabled:
             self._bootstrap_benchmark_run()
+        elif MULTIPLAYER_RUNTIME.enabled:
+            self._bootstrap_multiplayer_run()
 
     def _bootstrap_rts_validation_run(self):
         if not unlocked_player_directory:
@@ -125,6 +129,59 @@ class Game:
         self.in_player_selection = False
         self.in_level_selection = False
         self.start_level(6)
+
+    def _bootstrap_multiplayer_run(self):
+        if not unlocked_player_directory:
+            raise RuntimeError("Multiplayer requires at least one selectable player.")
+        if MULTIPLAYER_RUNTIME.character in unlocked_player_directory:
+            character_index = unlocked_player_directory.index(MULTIPLAYER_RUNTIME.character)
+        else:
+            character_index = 0
+        self.player_selection.selected_player_info_dir = unlocked_player_directory[character_index]
+        base = unlocked_player_base_stats[character_index].copy()
+        self.player_configuration = PlayerConfiguration(
+            input_manager=self.input_manager,
+            base_stats=base,
+            remaining_points=0,
+            game=self,
+        )
+        self.player_configuration.final_stats = base.copy()
+        self.in_start_menu = False
+        self.in_player_selection = False
+        self.in_level_selection = False
+        self.start_level(6)
+
+        # Apply the per-player spawn offset to the ACTUAL local player, not just
+        # the position we report. Every client bootstraps to the same fixed
+        # spawn, so without this two clients overlap; offsetting only the
+        # reported position (an earlier bug) baked in a constant error between
+        # where a player really is and where remotes saw them. Offset is <1 tile
+        # (TILESIZE=150), so it stays on the open spawn area.
+        player = self.level.player
+        if MULTIPLAYER_RUNTIME.spawn_x or MULTIPLAYER_RUNTIME.spawn_y:
+            player.rect.centerx += int(MULTIPLAYER_RUNTIME.spawn_x)
+            player.rect.centery += int(MULTIPLAYER_RUNTIME.spawn_y)
+            player.hitbox.center = player.rect.center
+
+        join_x, join_y = player.rect.centerx, player.rect.centery
+        self.level.mp_client = MultiplayerClient(
+            MULTIPLAYER_RUNTIME.host, MULTIPLAYER_RUNTIME.port, MULTIPLAYER_RUNTIME.player_id
+        )
+        self.level.mp_client.send_join(self.player_selection.selected_player_info_dir, join_x, join_y)
+        print(
+            f"[multiplayer] connected to {MULTIPLAYER_RUNTIME.host}:{MULTIPLAYER_RUNTIME.port} "
+            f"as {MULTIPLAYER_RUNTIME.player_id} ({self.player_selection.selected_player_info_dir}) "
+            f"at ({join_x}, {join_y})"
+        )
+
+    def _close_multiplayer(self):
+        # Send a clean `leave` + shut the socket down before exiting. No-op for
+        # singleplayer (mp_client only exists if the multiplayer bootstrap ran).
+        level = getattr(self, "level", None)
+        client = getattr(level, "mp_client", None) if level is not None else None
+        if client is not None:
+            client.close()
+            level.mp_client = None
 
     def _handle_global_shortcuts(self, events):
         for event in events:
@@ -262,6 +319,7 @@ class Game:
             self.level_selection.selected_level = None
             self.set_state("start_menu")
         elif action == "exit":
+            self._close_multiplayer()
             pygame.quit()
             sys.exit()
 
@@ -291,6 +349,7 @@ class Game:
                     exit_code = 0
                     if RTS_VALIDATION_RUNTIME.shutdown_requested:
                         exit_code = RTS_VALIDATION_RUNTIME.shutdown_exit_code
+                    self._close_multiplayer()
                     pygame.quit()
                     sys.exit(exit_code)
 

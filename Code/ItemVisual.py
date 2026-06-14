@@ -60,5 +60,6 @@ def scale_image_to_tile(image, tile_size):
         new_width = int(tile_size * aspect_ratio)
 
     # Scale the image to the new dimensions
-    scaled_image = pygame.transform.scale(image, (new_width, new_height))
+    #scaled_image = pygame.transform.scale(image, (new_width, new_height))
+    scaled_image = image # ( just simplified here for now working with assets wherever possiblenot in game scaling.)
     return scaled_image

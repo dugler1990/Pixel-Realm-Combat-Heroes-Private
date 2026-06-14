@@ -543,7 +543,7 @@ class CombatUnit(Entity):
         if self.frozen:
             #print("FROZEN")
             self.image = self.frozen_image
-            self.rect = self._grounded_rect(self.image, self.mask)
+            self.rect = self.image.get_rect(center = self.hitbox.center)
         else:
         
             if self.animations_left_right_indicator:
@@ -575,7 +575,7 @@ class CombatUnit(Entity):
     
             self.image = animation[int(self.frame_index)]
             self.mask = masks[int(self.frame_index)]
-            self.rect = self._grounded_rect(self.image, self.mask)
+            self.rect = self.image.get_rect(center = self.hitbox.center)
     
             if not self.vulnerable:
                 alpha = self.wave_value()

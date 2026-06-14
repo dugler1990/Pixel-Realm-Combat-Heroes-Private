@@ -22,7 +22,8 @@ GRASS_VIEWPORT_PERCENT = 100
 # - "shared_patch" — one shared sway angle for all visible grass (whole patch in sync); slightly faster, smoother.
 GRASS_WIND_MODE = "shared_patch"
 # Wind rotation quantization in degrees (GrassManager cache buckets). Lower = smoother motion, more unique tile variants.
-GRASS_ROTATION_BUCKET_DEGREES = 6
+# 1 degree with the current int(sin(...)*15) wind driver yields ~31 sway states (-15..15) for a high-but-safe smoothness test.
+GRASS_ROTATION_BUCKET_DEGREES = 1
 # Grass GPU renderer (Phase A proof). When True and RENDER_BACKEND == "gpu", grass blades
 # render via the per-blade instanced shader path (rotation in the vertex shader) instead of
 # the CPU bitmap tile-cache path. Toggle here to A/B the two; no effect in CPU backend.
