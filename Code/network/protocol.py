@@ -20,9 +20,15 @@ Message shapes (see the multiplayer plan's "Wire protocol" section):
      "x": 1234.0, "y": 5678.0,
      "move_x": -1.0, "move_y": 0.0, "attacking": False}
 
-    # client -> server, on connect / disconnect
+    # client -> server, on connect / disconnect. Stage B optionally adds the
+    # player's collision-rect size (hitbox_w/h) and a one-time upload of the
+    # map's obstacle rects + dimensions (the client already has them) so the
+    # server can build a quadtree and validate positions against walls. All
+    # optional -- omitting them yields the plain v0 relay (no server collision).
     {"type": "join", "player_id": "...", "character": "../Graphics/Orange_Wizard/",
-     "x": ..., "y": ...}
+     "x": ..., "y": ...,
+     "hitbox_w": .., "hitbox_h": ..,
+     "obstacles": [[x, y, w, h], ...], "map_width": .., "map_height": ..}
     {"type": "leave", "player_id": "..."}
 
     # server -> client, broadcast at tick rate (includes the receiver's own entry)

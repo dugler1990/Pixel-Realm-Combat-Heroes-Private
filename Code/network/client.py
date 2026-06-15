@@ -46,14 +46,28 @@ class MultiplayerClient:
                 break
             self.inbox.put(message)
 
-    def send_join(self, character: str, x: float, y: float) -> None:
-        self._send({
+    def send_join(self, character: str, x: float, y: float,
+                  hitbox_w: float = 0.0, hitbox_h: float = 0.0,
+                  obstacles=None, map_width: float = 0.0, map_height: float = 0.0) -> None:
+        """Announce this player. Stage B optionally uploads the map's obstacle
+        rects + dimensions (the client already has them) + this player's hitbox
+        size, so the server can build a quadtree and validate positions against
+        walls. All default off, so a client that omits them just gets the v0
+        relay (no server collision)."""
+        message = {
             "type": MSG_JOIN,
             "player_id": self.player_id,
             "character": character,
             "x": x,
             "y": y,
-        })
+            "hitbox_w": hitbox_w,
+            "hitbox_h": hitbox_h,
+        }
+        if obstacles:
+            message["obstacles"] = obstacles
+            message["map_width"] = map_width
+            message["map_height"] = map_height
+        self._send(message)
 
     def send_state(self, x: float, y: float, move_x: float, move_y: float, attacking: bool) -> None:
         """Report the local player's actual position + movement inputs.

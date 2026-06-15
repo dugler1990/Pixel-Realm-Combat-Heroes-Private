@@ -3,6 +3,7 @@ import logging
 import pygame
 import os
 import math
+import collision_core
 from hashRect import HashableRect
 from game_logging import get_collision_mask_logger
 from Support import print_mask
@@ -418,37 +419,24 @@ class Entity(pygame.sprite.Sprite):
                     mask_log.debug("  Skipping mask check - using rect collision")
 
             if do_collision:
-                penetration_x = max(
-                    0, self_rect.right - obstacle_rect.left, obstacle_rect.right - self_rect.left
-                )
-                penetration_y = max(
-                    0, self_rect.bottom - obstacle_rect.top, obstacle_rect.bottom - self_rect.top
-                )
-                penetration_depth = math.sqrt(penetration_x ** 2 + penetration_y ** 2) ** 1.5
-
+                # Push-out math lives in collision_core so the headless server
+                # runs the IDENTICAL rect resolution (multiplayer plan, Stage B2).
+                penetration_depth = collision_core.rect_penetration(self_rect, obstacle_rect)
                 if normal:
                     total_displacement_x += normal[0]
                     total_displacement_y += normal[1]
                 else:
-                    collision_normal = math.atan2(
-                        obstacle_rect.centery - self_centery,
-                        obstacle_rect.centerx - self_centerx,
-                    )
-                    rebound_angle = collision_normal + math.pi
-                    total_displacement_x += math.cos(rebound_angle)
-                    total_displacement_y += math.sin(rebound_angle)
+                    rebound_dx, rebound_dy = collision_core.rect_rebound_dir(self_rect, obstacle_rect)
+                    total_displacement_x += rebound_dx
+                    total_displacement_y += rebound_dy
                 max_penetration_depth = max(max_penetration_depth, penetration_depth)
 
-        displacement_magnitude = math.sqrt(
-            total_displacement_x ** 2 + total_displacement_y ** 2
+        scaled_x, scaled_y = collision_core.finalize_pushout(
+            total_displacement_x, total_displacement_y, max_penetration_depth,
+            speed, displacement_obstacles,
         )
-        if displacement_magnitude > 0:
-            total_displacement_x /= displacement_magnitude
-            total_displacement_y /= displacement_magnitude
-
-        scaled_displacement = min(displacement_obstacles + max_penetration_depth, speed)
-        self_hitbox.left += scaled_displacement * total_displacement_x
-        self_hitbox.top += scaled_displacement * total_displacement_y
+        self_hitbox.left += scaled_x
+        self_hitbox.top += scaled_y
 
     def _resolve_entity_collision_legacy(
         self,

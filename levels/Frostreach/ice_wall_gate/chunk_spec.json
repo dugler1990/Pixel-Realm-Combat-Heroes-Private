@@ -1,0 +1,24 @@
+{
+  "chunk_id": "frostreach_ice_wall_gate",
+  "source_concept": "frostreach_chunk_ice_wall_gate_base_layer.png",
+  "map_size_tiles": [
+    30,
+    20
+  ],
+  "tile_size_source_px": 550,
+  "edge_contract": {
+    "north": "Ice Wall blocker with central cave/gate pass",
+    "south": "Two packed-snow exits to central snowfields/outpost valley",
+    "west": "Frozen coast / ice lake transition",
+    "east": "Glacial stream and ridge toward eastern fjords"
+  },
+  "generated_layers": [
+    "Tile Layer 1",
+    "can_build_layer",
+    "Object Layer 1",
+    "grass1",
+    "Slippery Effect Layer",
+    "spawner"
+  ],
+  "prototype_notes": "Procedural proof of pipeline only; art tiles are placeholder and should be replaced by final Frostreach tileset/Wang terrain."
+}

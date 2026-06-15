@@ -69,17 +69,17 @@
   </object>
   <object id="521" gid="499" x="15245" y="7909" width="550" height="550">
    <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;spirit&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:2,&quot;spawn_number&quot;:20,&quot;spawn_limit&quot;:1000,&quot;spawn_team_id&quot;:&quot;neutral_chaotic&quot;}"/>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;spirit&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:4,&quot;spawn_number&quot;:20,&quot;spawn_limit&quot;:100,&quot;spawn_team_id&quot;:&quot;neutral_chaotic&quot;}"/>
    </properties>
   </object>
   <object id="523" gid="499" x="13845" y="8157" width="1102" height="982">
    <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;tribey_snake&quot;:5,&quot;raccoon&quot;:1,&quot;spirit&quot;:1,&quot;bamboo&quot;:1,&quot;tribey_spear&quot;:1,&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1,&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:2,&quot;spawn_number&quot;:30,&quot;spawn_limit&quot;:1000}"/>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;tribey_snake&quot;:5,&quot;raccoon&quot;:1,&quot;spirit&quot;:1,&quot;bamboo&quot;:1,&quot;tribey_spear&quot;:1,&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1,&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:4,&quot;spawn_number&quot;:30,&quot;spawn_limit&quot;:100}"/>
    </properties>
   </object>
   <object id="524" gid="499" x="12233" y="6397" width="2118" height="1670">
    <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1, &quot;ice_ghost&quot;:5},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:2,&quot;spawn_number&quot;:20,&quot;spawn_limit&quot;:1000,&quot;spawn_team_id&quot;:&quot;enemy_3&quot;}"/>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;demon_dog&quot;:1,&quot;venom_plant&quot;:1, &quot;ice_ghost&quot;:5},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:4,&quot;spawn_number&quot;:20,&quot;spawn_limit&quot;:100,&quot;spawn_team_id&quot;:&quot;enemy_3&quot;}"/>
    </properties>
   </object>
   <object id="525" gid="499" x="2085" y="5085" width="550" height="550">

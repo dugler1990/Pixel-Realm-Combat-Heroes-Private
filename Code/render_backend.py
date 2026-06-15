@@ -230,6 +230,15 @@ class GPUBackend(RenderBackend):
         self._batch_count = 0
         self._batch_texture = None
 
+        # Per-frame blit batching diagnostics. A blit only batches (no draw call of its own)
+        # when it hits the atlas; the other two paths each force a flush. Split lets us tell a
+        # timing-miss (had a cache_key but loaded after build_atlas -> prewarm fixes it) from
+        # expected scratch (no stable id: UI/debug/recolored frames). Reset each present().
+        self._blit_atlas = 0          # atlas hit -> batched
+        self._blit_flush_keyed = 0    # had cache_key but missed atlas (large-cache / atlas-miss)
+        self._blit_flush_nokey = 0    # no usable cache_key -> re-uploaded scratch every frame
+        self.last_blit_stats = (0, 0, 0)
+
         self._init_grass_pipeline()
         self._init_light_pipeline()
 
@@ -641,9 +650,11 @@ class GPUBackend(RenderBackend):
                     if (cache_key is not None and area is None) else None)
 
         if atlas_uv is not None:
+            self._blit_atlas += 1
             texture = self._atlas_texture
             tex_rect = atlas_uv
         elif cache_key is not None and area is None:
+            self._blit_flush_keyed += 1
             # Persistent cache for large surfaces (ground, weather frames, etc.) that
             # have stable ids but exceed the atlas size cap. Upload once, reuse every frame.
             gl_tex = self._large_cache.get(cache_key)
@@ -662,6 +673,7 @@ class GPUBackend(RenderBackend):
         else:
             # True scratch — no cache_key or area= (health bars, debug rects, etc.)
             # convert_alpha() normalizes both opaque and SRCALPHA surfaces to RGBA layout.
+            self._blit_flush_nokey += 1
             texture = self._texture
             tex_rect = (0.0, 0.0, 1.0, 1.0)
             pixels = pygame.image.tostring(src.convert_alpha(), "RGBA", False)
@@ -725,6 +737,9 @@ class GPUBackend(RenderBackend):
     def present(self):
         self._flush_batch()
         pygame.display.flip()
+        # snapshot per-frame batching stats for the debug overlay, then reset
+        self.last_blit_stats = (self._blit_atlas, self._blit_flush_keyed, self._blit_flush_nokey)
+        self._blit_atlas = self._blit_flush_keyed = self._blit_flush_nokey = 0
 
     @property
     def raw_surface(self):

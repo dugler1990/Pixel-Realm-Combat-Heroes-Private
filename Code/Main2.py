@@ -88,7 +88,8 @@ class Game:
         self.debug_memory_usage = 0
         self.debug_cpu_usage = 0
         self.debug_sprite_count = 0
-        self.debug_event_queue_length = 0        
+        self.debug_event_queue_length = 0
+        self.debug_blit_stats = None
 
         if RTS_VALIDATION_RUNTIME.enabled:
             self._bootstrap_rts_validation_run()
@@ -176,13 +177,33 @@ class Game:
             player.hitbox.center = player.rect.center
 
         join_x, join_y = player.rect.centerx, player.rect.centery
+
+        # Stage B: hand the server this player's collision-rect size and the
+        # map's obstacle rects + dimensions (the client already built them) so the
+        # server can build a quadtree and keep the broadcast position out of
+        # walls. Pure geometry the client already has -- no extra computation, no
+        # change to local collision.
+        lm = self.level.layout_manager
+        hitbox_w, hitbox_h = player.hitbox.size
+        obstacles = [
+            (s.rect.x, s.rect.y, s.rect.width, s.rect.height)
+            for s in lm.obstacle_sprites
+        ]
+        map_w = getattr(lm, "csv_layout_width", 0)
+        map_h = getattr(lm, "csv_layout_height", 0)
+
         self.level.mp_client = MultiplayerClient(
             MULTIPLAYER_RUNTIME.host, MULTIPLAYER_RUNTIME.port, player_id
         )
-        self.level.mp_client.send_join(character_dir, join_x, join_y)
+        self.level.mp_client.send_join(
+            character_dir, join_x, join_y,
+            hitbox_w=hitbox_w, hitbox_h=hitbox_h, obstacles=obstacles,
+            map_width=map_w, map_height=map_h,
+        )
         print(
             f"[multiplayer] connected to {MULTIPLAYER_RUNTIME.host}:{MULTIPLAYER_RUNTIME.port} "
-            f"as {player_id} ({character_dir}) at ({join_x}, {join_y})"
+            f"as {player_id} ({character_dir}) at ({join_x}, {join_y}); "
+            f"uploaded {len(obstacles)} obstacle rects, hitbox=({hitbox_w}x{hitbox_h})"
         )
 
     def _close_multiplayer(self):
@@ -424,6 +445,16 @@ class Game:
             if self.level:
                 self.debug_sprite_count = len(self.level.layout_manager.visible_sprites)
             self.debug_event_queue_length = len(pygame.event.get())
+            # GPU batching: atlas-hit blits batch; the other two each force a draw call.
+            self.debug_blit_stats = getattr(self.backend, "last_blit_stats", None)
+            if self.debug_blit_stats is not None:
+                atlas, keyed, nokey = self.debug_blit_stats
+                total = atlas + keyed + nokey
+                hit_pct = (100 * atlas // total) if total else 0
+                # Tagged so it can be grepped out of a captured run log.
+                print(f"[BLIT] last-frame atlas-hit={atlas} ({hit_pct}%) "
+                      f"flush_keyed_miss={keyed} flush_nokey={nokey} total={total}",
+                      flush=True)
 
 
     def display_debug_info(self):
@@ -441,6 +472,15 @@ class Game:
             ("Visible Sprites", f"Visible Sprites: {self.debug_sprite_count}"),
             ("Event Queue", f"Event Queue: {self.debug_event_queue_length}")
         ]
+
+        # GPU batching diagnostic (last frame): atlas-batched vs flush-forcing blits.
+        if self.debug_blit_stats is not None:
+            atlas, keyed, nokey = self.debug_blit_stats
+            flushes = keyed + nokey
+            total = atlas + flushes
+            hit_pct = (100 * atlas // total) if total else 0
+            debug_info.append(("Blit Atlas", f"Blit atlas-hit: {atlas} ({hit_pct}%)"))
+            debug_info.append(("Blit Flush", f"Blit flush: {flushes} (keyed-miss {keyed} / nokey {nokey})"))
 
         for key, value in debug_info:
             # Check if the surface needs to be updated

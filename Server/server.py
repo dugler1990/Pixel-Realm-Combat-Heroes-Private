@@ -83,10 +83,26 @@ class GameServer:
                         character=message["character"],
                         x=float(message["x"]),
                         y=float(message["y"]),
+                        hitbox_w=float(message.get("hitbox_w", 0.0)),
+                        hitbox_h=float(message.get("hitbox_h", 0.0)),
                     )
                     with self.game_state.lock:
                         self.game_state.players[player_id] = player
                         self.client_sockets[player_id] = client_socket
+                        # Stage B2: first non-empty geometry upload wins; build
+                        # the real obstacle QuadTree from it (all clients share
+                        # the same map on localhost/LAN).
+                        obstacles = message.get("obstacles")
+                        if obstacles and self.game_state.obstacle_quad_tree is None:
+                            rects = [
+                                (float(o[0]), float(o[1]), float(o[2]), float(o[3])) for o in obstacles
+                            ]
+                            self.game_state.build_obstacle_index(
+                                rects,
+                                float(message.get("map_width", 0.0)),
+                                float(message.get("map_height", 0.0)),
+                            )
+                            print(f"[server] built obstacle quadtree from {len(rects)} rects ({player_id})")
                         self.game_state.pending_events.append({
                             "type": MSG_PLAYER_JOINED,
                             "player_id": player_id,
@@ -102,12 +118,15 @@ class GameServer:
                         if player is not None:
                             # v0 position relay: trust the client's reported (x, y),
                             # use move_x/move_y/attacking only to derive status.
+                            # Stage B2: apply_update then validates against the
+                            # obstacle quadtree (None until geometry is uploaded).
                             player.apply_update(
                                 float(message.get("x", player.x)),
                                 float(message.get("y", player.y)),
                                 float(message.get("move_x", 0.0)),
                                 float(message.get("move_y", 0.0)),
                                 bool(message.get("attacking", False)),
+                                self.game_state.obstacle_quad_tree,
                             )
 
                 elif msg_type == MSG_LEAVE:
