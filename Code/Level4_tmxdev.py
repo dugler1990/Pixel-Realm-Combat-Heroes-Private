@@ -60,8 +60,9 @@ from rts import RtsSession, RtsWorldSim
 from rts.world_adapter import RtsWorldAdapter
 from Support import resolve_env_interactable_path
 # Multiplayer (additive; inert unless a multiplayer bootstrap set self.mp_client).
-from network import MSG_PLAYER_JOINED, MSG_PLAYER_LEFT, MSG_STATE_UPDATE
+from network import MSG_HIT_ENEMY, MSG_PLAYER_JOINED, MSG_PLAYER_LEFT, MSG_STATE_UPDATE
 from RemotePlayer import RemotePlayer
+from EnemyPuppet import EnemyPuppet
 #with open('triggers.json',r) as file
 #triggers = json.loads(file.read())
 
@@ -239,6 +240,7 @@ LAYOUT_TO_LEVEL = {
     '../levels/tmx': 6,
     '../levels/Map7': 7,
     '../levels/Map8': 8,
+    '../levels/Frostreach/ice_wall_gate': 9,
 }
 
 
@@ -1846,6 +1848,12 @@ class Level4:
     def _process_multiplayer_inbox(self):
         if not hasattr(self, "remote_players"):
             self.remote_players = {}
+        if not hasattr(self, "enemy_puppets"):
+            self.enemy_puppets = {}   # host_enemy_id -> EnemyPuppet (joiner only)
+        if not hasattr(self, "_mp_role"):
+            self._mp_role = None      # None until host_id arrives; "host" | "joiner"
+        if not hasattr(self, "_outbound_enemy_hits"):
+            self._outbound_enemy_hits = []  # joiner -> host damage events (C2)
         my_id = self.mp_client.player_id
 
         _msgs = self.mp_client.poll()
@@ -1868,6 +1876,26 @@ class Level4:
                     _net_log.debug("%s: player_left %s", my_id, pid)
 
             elif mtype == MSG_STATE_UPDATE:
+                # Co-op (Stage C): learn our role from host_id (host == first to
+                # join). The host runs the real enemy sim + relays it; the joiner
+                # suppresses its own spawner and renders the host's enemies as
+                # puppets. Until host_id is known, _mp_role stays None and the
+                # spawner stays suppressed (so neither side double-spawns).
+                host_id = message.get("host_id")
+                if host_id is not None:
+                    new_role = "host" if host_id == my_id else "joiner"
+                    if new_role != self._mp_role:
+                        _net_log.info("%s: role=%s (host_id=%s)", my_id, new_role, host_id)
+                    if new_role == "joiner" and self._mp_role != "joiner":
+                        # First time we learn we're the joiner: drop any enemies
+                        # spawned locally during level load (before mp_client/role
+                        # existed). From here the spawner is suppressed and the
+                        # host's enemies arrive as puppets.
+                        self._clear_local_enemies()
+                    self._mp_role = new_role
+                if self._mp_role == "joiner":
+                    self._reconcile_enemy_puppets(message.get("enemies") or [])
+
                 for pid, snap in message["players"].items():
                     if pid == my_id:
                         continue  # the server echoes our own entry; never apply it locally
@@ -1898,6 +1926,14 @@ class Level4:
                                        my_id, me_c, pid, rp_c,
                                        rp_c[0] - me_c[0], rp_c[1] - me_c[1])
 
+            elif mtype == MSG_HIT_ENEMY:
+                # Co-op (C2): a joiner's attack hit a shared enemy. Only the HOST
+                # receives these (the server forwards them to the host only); the
+                # host applies the relayed damage to its real enemy.
+                self._apply_relayed_enemy_hit(message.get("enemy_id"),
+                                              message.get("amount"),
+                                              message.get("attack_type"))
+
     def _spawn_remote_player(self, player_id, character, x, y):
         remote = RemotePlayer(
             player_id=player_id,
@@ -1913,6 +1949,114 @@ class Level4:
         )
         self.remote_players[player_id] = remote
         return remote
+
+    # -- Co-op shared enemies (Stage C, C1): host relays its enemy sim; joiner
+    #    renders the relayed enemies as render-only puppets (see EnemyPuppet). --
+
+    def _reconcile_enemy_puppets(self, enemies):
+        """Joiner: create/update/remove `EnemyPuppet`s to match the host's list.
+
+        `enemies` is the host's relayed render state. New ids spawn a puppet;
+        known ids get apply_snapshot; ids no longer present (dead/despawned on
+        the host) are killed. Main thread only.
+        """
+        seen = set()
+        for e in enemies:
+            eid = e.get("id")
+            if eid is None:
+                continue
+            seen.add(eid)
+            puppet = self.enemy_puppets.get(eid)
+            if puppet is None:
+                puppet = self._spawn_enemy_puppet(eid, e.get("type"), e.get("x"), e.get("y"))
+                if puppet is None:
+                    continue
+            puppet.apply_snapshot(e.get("x"), e.get("y"), e.get("status", "idle"),
+                                  e.get("dir", "right"), e.get("health"))
+        for eid in list(self.enemy_puppets):
+            if eid not in seen:
+                self.enemy_puppets.pop(eid).kill()  # removes from every sprite group
+
+    def _spawn_enemy_puppet(self, enemy_id, monster_name, x, y):
+        if not monster_name or x is None or y is None:
+            return None
+        try:
+            puppet = EnemyPuppet(
+                enemy_id=enemy_id,
+                monster_name=monster_name,
+                center=(x, y),
+                # C2: also in attackable_sprites so the joiner's existing
+                # player_attack_logic spritecollide detects hits on it.
+                groups=[self.layout_manager.visible_sprites, self.attackable_sprites],
+                obstacle_sprites=self.layout_manager.obstacle_sprites,
+                level=self,
+            )
+        except Exception:  # unknown type / missing assets on this client
+            _net_log.warning("could not build enemy puppet type=%r", monster_name, exc_info=True)
+            return None
+        self.enemy_puppets[enemy_id] = puppet
+        _net_log.debug("spawned enemy puppet id=%s type=%s at (%s,%s)", enemy_id, monster_name, x, y)
+        return puppet
+
+    def _clear_local_enemies(self):
+        """Joiner: remove locally-spawned enemies (kill() drops them from
+        visible_sprites/attackable_sprites; the list is plain so clear it too)."""
+        for enemy in list(self.spawner.enemies):
+            enemy.kill()
+        self.spawner.enemies.clear()
+        _net_log.debug("joiner cleared local enemies; rendering host's instead")
+
+    def _queue_enemy_hit(self, enemy_id, amount, attack_type):
+        """Joiner: queue a damage event for an enemy puppet our attack hit (C2).
+        Flushed to the host by the send hook each frame."""
+        if not hasattr(self, "_outbound_enemy_hits"):
+            self._outbound_enemy_hits = []
+        self._outbound_enemy_hits.append({
+            "enemy_id": enemy_id, "amount": amount, "attack_type": attack_type,
+        })
+        _net_log.info("[joiner] queued hit enemy=%s amt=%s type=%s", enemy_id, amount, attack_type)
+
+    def _apply_relayed_enemy_hit(self, enemy_id, amount, attack_type):
+        """Host: apply a joiner's relayed hit to the REAL enemy (C2). Routed
+        through the resolver so the enemy's i-frames + retaliation behave exactly
+        as for the host's own hits; the resulting health/death rides the C1 relay
+        back to both clients."""
+        if enemy_id is None or amount is None:
+            return
+        enemy = next((e for e in self.spawner.enemies if e.id == enemy_id), None)
+        _net_log.info("[host] apply hit enemy=%s found=%s amt=%s hp=%s",
+                      enemy_id, enemy is not None, amount,
+                      getattr(enemy, "health", None))
+        if enemy is None:
+            return  # already dead/despawned on the host
+        ctx = InteractionContext(
+            kind="damage",
+            source_kind="player_attack",
+            source=None,               # joiner's stats already resolved into amount
+            source_team="player",
+            target=enemy,
+            amount=amount,
+            attack_type=attack_type,
+        )
+        self.interaction_resolver.apply(ctx)
+
+    def _gather_enemy_relay(self):
+        """Host: snapshot each live enemy's render state for the wire (C1)."""
+        out = []
+        for e in self.spawner.enemies:
+            monster_name = getattr(e, "monster_name", None)
+            if monster_name is None:
+                continue
+            out.append({
+                "id": e.id,
+                "type": monster_name,
+                "x": e.rect.centerx,
+                "y": e.rect.centery,
+                "status": getattr(e, "status", "idle"),
+                "dir": e.get_direction_as_string() if hasattr(e, "get_direction_as_string") else "right",
+                "health": getattr(e, "health", 0),
+            })
+        return out
 
     #@profile
     def run(self,dt):
@@ -2173,13 +2317,26 @@ class Level4:
         # we send the player's ACTUAL rect.center (from Entity.move) so remotes
         # render exactly where we are, not a server re-simulation that drifts.
         if getattr(self, "mp_client", None) is not None:
+            # Co-op (Stage C): the HOST also relays its live enemy render state;
+            # the server stores + rebroadcasts it to the joiner. Non-host clients
+            # send no enemies (the joiner renders the host's).
+            enemy_relay = self._gather_enemy_relay() if getattr(self, "_mp_role", None) == "host" else None
             self.mp_client.send_state(
                 self.player.rect.centerx,
                 self.player.rect.centery,
                 self.player.direction.x,
                 self.player.direction.y,
                 self.player.attacking,
+                enemies=enemy_relay,
             )
+            # C2: flush this frame's enemy-damage events (joiner: our attacks on
+            # the shared enemies). The server forwards them to the host.
+            outbound_hits = getattr(self, "_outbound_enemy_hits", None)
+            if outbound_hits:
+                _net_log.info("[joiner] sending %d enemy hits to host", len(outbound_hits))
+                for hit in outbound_hits:
+                    self.mp_client.send_hit_enemy(hit["enemy_id"], hit["amount"], hit["attack_type"])
+                outbound_hits.clear()
 
         # Grass  !
 

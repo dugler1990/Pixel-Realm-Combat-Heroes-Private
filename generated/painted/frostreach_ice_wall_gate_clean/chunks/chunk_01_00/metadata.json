@@ -1,0 +1,32 @@
+{
+  "chunk_id": "chunk_01_00",
+  "grid": [
+    1,
+    0
+  ],
+  "world_rect": [
+    5500,
+    0,
+    5500,
+    5500
+  ],
+  "source_rect_with_overlap": [
+    5500,
+    0,
+    5500,
+    5500
+  ],
+  "source_image_size": [
+    1536,
+    1536
+  ],
+  "generation_max_size": 1536,
+  "overlap": 0,
+  "source_image": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/source.png",
+  "painted_image": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/painted.png",
+  "neighbors": {
+    "south": "chunk_01_01",
+    "west": "chunk_00_00",
+    "east": "chunk_02_00"
+  }
+}

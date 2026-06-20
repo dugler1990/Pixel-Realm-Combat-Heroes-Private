@@ -17,6 +17,7 @@ import socket
 import threading
 
 from .protocol import (
+    MSG_HIT_ENEMY,
     MSG_INPUT,
     MSG_JOIN,
     MSG_LEAVE,
@@ -69,16 +70,21 @@ class MultiplayerClient:
             message["map_height"] = map_height
         self._send(message)
 
-    def send_state(self, x: float, y: float, move_x: float, move_y: float, attacking: bool) -> None:
+    def send_state(self, x: float, y: float, move_x: float, move_y: float, attacking: bool,
+                   enemies=None) -> None:
         """Report the local player's actual position + movement inputs.
 
         v0 / Stage A is a position relay: the server trusts (x, y) and uses
         move_x/move_y/attacking only to derive the animation status. The inputs
         ride along so a later (Stage B/C) server can switch to simulating from
         them and validating position -- a server-only change, no client edit.
+
+        Stage C co-op: the HOST also passes `enemies` (its live enemy render
+        state); the server stores + rebroadcasts that list. Non-host clients
+        pass nothing (default) -- the field is simply absent for them.
         """
         self._seq += 1
-        self._send({
+        message = {
             "type": MSG_INPUT,
             "player_id": self.player_id,
             "seq": self._seq,
@@ -87,6 +93,23 @@ class MultiplayerClient:
             "move_x": move_x,
             "move_y": move_y,
             "attacking": attacking,
+        }
+        if enemies is not None:
+            message["enemies"] = enemies
+        self._send(message)
+
+    def send_hit_enemy(self, enemy_id, amount: float, attack_type) -> None:
+        """Co-op (Stage C, C2): report that THIS client's attack hit a shared
+        enemy. `enemy_id` is the host's id for that enemy; `amount` is resolved
+        from this client's player stats. The server forwards it to the host,
+        which applies it to the real enemy. Sent by the joiner; the host damages
+        its own enemies locally and never calls this."""
+        self._send({
+            "type": MSG_HIT_ENEMY,
+            "player_id": self.player_id,
+            "enemy_id": enemy_id,
+            "amount": amount,
+            "attack_type": attack_type,
         })
 
     def send_leave(self) -> None:

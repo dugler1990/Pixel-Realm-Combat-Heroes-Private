@@ -1,0 +1,31 @@
+{
+  "tmx_path": "../../levels/Frostreach/ice_wall_gate/siple_map_outlin.tmx",
+  "output_dir": "../../generated/painted/frostreach_ice_wall_gate_clean",
+  "painted_tmx_path": "../../levels/Frostreach/ice_wall_gate/map.tmx",
+  "region_name": "Frostreach Expanse - Ice Wall Gate",
+  "world_reference": "/home/fresh/.cursor/projects/home-fresh-projects-Pixel-Realm-Combat-Heroes-public/assets/realm_scroll_map_tectonic_continent_icewall.png",
+  "region_reference": "/home/fresh/.cursor/projects/home-fresh-projects-Pixel-Realm-Combat-Heroes-public/assets/frostreach_chunk_ice_wall_gate_base_layer.png",
+  "asset_reference_paths": [
+    "../../Graphics/Monsters/ice_ghost",
+    "../../Graphics/Monsters/ice_mage",
+    "../../Graphics/Grass",
+    "../../Graphics/rts_placeholders",
+    "../../Graphics/PlayerSelectionDict.json"
+  ],
+  "layers_to_render": [
+    "Tile Layer 1",
+    "Object Layer 1"
+  ],
+  "world_chunk_size": [
+    5500,
+    5500
+  ],
+  "generation_max_size": 1536,
+  "build_local_neighborhood": false,
+  "overlap": 0,
+  "image_generation": {
+    "provider": "copy",
+    "preserve_existing": true
+  },
+  "style_prompt": "Polish this rough Frostreach TMX chunk into a coherent top-down / slightly 2.5D pixel RPG painted ground background. Treat source.png as the exact production layout, not a loose concept sketch. Preserve roads, exits, water, ice shelves, cliffs, broad empty snow fields, and major obstacle silhouettes exactly. Do not invent new cliffs, trees, buildings, canyons, giant props, characters, labels, UI, text, grid lines, or collision-breaking objects. Keep the camera flatter than isometric, keep player-scale readability, improve snow/ice/cliff/path texture, and maintain edge continuity with neighboring chunks."
+}

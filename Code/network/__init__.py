@@ -1,5 +1,6 @@
 from .client import MultiplayerClient
 from .protocol import (
+    MSG_HIT_ENEMY,
     MSG_INPUT,
     MSG_JOIN,
     MSG_LEAVE,
@@ -13,6 +14,7 @@ from .protocol import (
 )
 
 __all__ = [
+    "MSG_HIT_ENEMY",
     "MSG_INPUT",
     "MSG_JOIN",
     "MSG_LEAVE",

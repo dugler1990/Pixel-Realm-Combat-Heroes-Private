@@ -1,0 +1,47 @@
+{
+  "level_slug": "frostreach_ice_wall_gate",
+  "region_name": "Frostreach Expanse - Ice Wall Gate",
+  "world_reference": {
+    "description": "Broader realm/continent map used to place Frostreach in the northern ice region.",
+    "path": "/home/fresh/.cursor/projects/home-fresh-projects-Pixel-Realm-Combat-Heroes-public/assets/realm_scroll_map_tectonic_continent_icewall.png",
+    "status": "external_cursor_asset_reference"
+  },
+  "region_reference": {
+    "description": "Initial Frostreach/Ice Wall Gate regional concept image.",
+    "path": "/home/fresh/.cursor/projects/home-fresh-projects-Pixel-Realm-Combat-Heroes-public/assets/frostreach_chunk_ice_wall_gate_base_layer.png",
+    "status": "external_cursor_asset_reference"
+  },
+  "source_outline_tmx": "levels/Frostreach/ice_wall_gate/siple_map_outlin.tmx",
+  "final_playable_tmx": "levels/Frostreach/ice_wall_gate/map.tmx",
+  "debug_painted_tmx": "levels/Frostreach/ice_wall_gate/map_painted.tmx",
+  "painted_tileset": "levels/Frostreach/ice_wall_gate/painted_chunks.tsx",
+  "active_generated_output": "generated/painted/frostreach_ice_wall_gate_clean",
+  "assembled_preview": "generated/painted/frostreach_ice_wall_gate_clean/assembled_preview.png",
+  "chunk_grid": [
+    3,
+    2
+  ],
+  "chunk_world_size_px": [
+    5500,
+    5500
+  ],
+  "final_map_size_px": [
+    16500,
+    11000
+  ],
+  "intermediate_output_policy": {
+    "keep_attempt_folders": true,
+    "canonical_output_for_current_run": "generated/painted/frostreach_ice_wall_gate_clean",
+    "seam_pass_root": "generated/painted/frostreach_ice_wall_gate_clean/seam_passes",
+    "superseded_output_folders": [
+      "generated/painted/frostreach_ice_wall_gate"
+    ]
+  },
+  "workflow_notes": [
+    "The simple outline TMX is the gameplay/layout source of truth.",
+    "The final playable level should be map.tmx.",
+    "PaintedGround is visual only; collisions/effects/spawners remain authored by normal TMX layers.",
+    "A second polish pass can reuse the same chunk grid and write a new generated/painted output folder before replacing map.tmx.",
+    "Seam repair passes live under the seam_pass_root and keep backups before updating canonical painted chunks and map.tmx."
+  ]
+}

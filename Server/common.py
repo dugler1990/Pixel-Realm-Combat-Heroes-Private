@@ -25,9 +25,13 @@ import pygame  # noqa: E402
 from QuadTree import QuadTree, QuadTreeManager  # noqa: E402
 from hashRect import HashableRect  # noqa: E402
 import collision_core  # noqa: E402
+from obstacle_mask import rect_hits_mask, unpack_mask  # noqa: E402
 from network.protocol import derive_status  # noqa: E402
 
-# Obstacle rect = (x, y, w, h). Uploaded by the client at join (Stage B).
+# Obstacle upload entry (client -> server at join). Always (x, y, w, h); an
+# IRREGULAR obstacle (tree/decor) additionally carries a 5th element -- the
+# packed pixel mask (Stage B2.5), so the server gates on the same silhouette the
+# client collides against instead of the bounding rect.
 ObstacleRect = Tuple[float, float, float, float]
 
 # Server obstacle-collision tuning (Stage B2). The server iterates the SHARED
@@ -110,20 +114,37 @@ class ServerPlayerState:
         fully escape in `_MAX_PASSES`; the server still reduces penetration.
         Honest clients never produce that (their own collision keeps them at the
         wall surface).
+
+        Irregular obstacles (Stage B2.5): if an obstacle carries a pixel mask
+        (tree/decor, stored as a numpy silhouette grid), require the player to
+        actually overlap the silhouette -- not just its bounding rect -- before
+        pushing, mirroring the client's mask gate
+        ([Entity._resolve_obstacle_collisions](../Code/Entity.py)). Otherwise a
+        position the client legitimately allowed in the obstacle's transparent
+        area would be falsely corrected (a pop on the other client). The player
+        is approximated by its (fully solid) hitbox rect -- the per-frame player
+        animation mask is deliberately not mirrored server-side; the hitbox is
+        smaller than the sprite, so this only ever skips a push, never adds a
+        false one.
         """
         hw = self.hitbox_w / 2.0
         hh = self.hitbox_h / 2.0
+        pw = max(1, round(self.hitbox_w))
+        ph = max(1, round(self.hitbox_h))
         for _ in range(_MAX_PASSES):
-            player_rect = pygame.Rect(
-                round(self.x - hw), round(self.y - hh),
-                round(self.hitbox_w), round(self.hitbox_h),
-            )
+            player_rect = pygame.Rect(round(self.x - hw), round(self.y - hh), pw, ph)
             query = HashableRect(player_rect, _id=_QUERY_ID)
             overlapping = []
             for item in obstacle_index.hit(query):
                 ox, oy = _overlap_amounts(player_rect, item.rect)
-                if ox > _OVERLAP_TOLERANCE and oy > _OVERLAP_TOLERANCE:
-                    overlapping.append(item.rect)
+                if ox <= _OVERLAP_TOLERANCE or oy <= _OVERLAP_TOLERANCE:
+                    continue
+                grid = getattr(item, "mask", None)
+                if grid is not None and not rect_hits_mask(
+                    grid, item.rect.x, item.rect.y, player_rect
+                ):
+                    continue  # in the bounding rect but not the solid silhouette
+                overlapping.append(item.rect)
             if not overlapping:
                 break
             dx, dy = collision_core.obstacle_pushout(player_rect, overlapping, _PUSH_CAP)
@@ -155,10 +176,26 @@ class GameState:
     # non-empty upload wins -- all clients share the same map on localhost/LAN.
     # The quadtree is the real game `QuadTree`, built from the uploaded rects.
     obstacle_quad_tree: Optional[QuadTree] = None
+    # Co-op (Stage C): the host is the first client to join. It runs the real
+    # enemy sim and relays each enemy's render state; the server stores that
+    # list verbatim and rebroadcasts it (it does NOT simulate enemies). A client
+    # is the host iff its id == host_player_id.
+    host_player_id: Optional[str] = None
+    enemies: List[dict] = field(default_factory=list)
+    # Co-op (Stage C, C2): damage events from joiners (their attacks hitting a
+    # shared enemy), queued by receiver threads and delivered ONLY to the host
+    # by the broadcast loop (the sole socket writer), which then applies them to
+    # the real enemy. Same threading discipline as pending_events.
+    pending_enemy_hits: List[dict] = field(default_factory=list)
 
     def build_obstacle_index(self, obstacles: List[ObstacleRect],
                              map_w: float, map_h: float) -> None:
-        """Build the real obstacle `QuadTree` from uploaded (x,y,w,h) rects.
+        """Build the real obstacle `QuadTree` from uploaded obstacle entries.
+
+        Each entry is `(x, y, w, h)` or, for an IRREGULAR obstacle (Stage B2.5),
+        `(x, y, w, h, packed_mask_bits)` -- the 5th element is unpacked into the
+        obstacle's pixel mask and carried on the `HashableRect` so
+        `resolve_obstacle_collision` can gate on the silhouette.
 
         Same class/broadphase the client uses (Code/QuadTree.py); pygame.Rect is
         pure geometry (no display). Idempotent-ish: first non-empty upload wins
@@ -166,10 +203,12 @@ class GameState:
         """
         if not obstacles:
             return
-        items = [
-            HashableRect(pygame.Rect(int(x), int(y), int(w), int(h)), _id=i)
-            for i, (x, y, w, h) in enumerate(obstacles)
-        ]
+        items = []
+        for i, entry in enumerate(obstacles):
+            x, y, w, h = entry[0], entry[1], entry[2], entry[3]
+            rect = pygame.Rect(int(x), int(y), int(w), int(h))
+            mask = unpack_mask(int(w), int(h), entry[4]) if len(entry) >= 5 and entry[4] else None
+            items.append(HashableRect(rect, _id=i, mask=mask))
         bounding = pygame.Rect(0, 0, max(1, int(map_w)), max(1, int(map_h)))
         self.obstacle_quad_tree = QuadTree(
             items=items, depth=8, bounding_rect=bounding, manager=QuadTreeManager(),

@@ -23,17 +23,20 @@ from benchmark_runtime import BENCHMARK_RUNTIME
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
 from multiplayer_runtime import MULTIPLAYER_RUNTIME
 from network import MultiplayerClient
+from obstacle_mask import is_irregular, pack_mask
 from render_backend import create_backend
 import psutil
 
 level_8_layout_path = '../levels/Map8'
 level_7_layout_path = '../levels/Map7'
 level_6_layout_path = '../levels/tmx'
+level_9_layout_path = '../levels/Frostreach/ice_wall_gate'
 
 LAYOUT_TO_LEVEL = {
     level_6_layout_path: 6,
     level_7_layout_path: 7,
     level_8_layout_path: 8,
+    level_9_layout_path: 9,
 }
 
 DEV_STATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.dev_reload_state.json')
@@ -185,10 +188,21 @@ class Game:
         # change to local collision.
         lm = self.level.layout_manager
         hitbox_w, hitbox_h = player.hitbox.size
-        obstacles = [
-            (s.rect.x, s.rect.y, s.rect.width, s.rect.height)
-            for s in lm.obstacle_sprites
-        ]
+        # Each obstacle is (x, y, w, h); an IRREGULAR one (tree/decor with a
+        # pixel mask smaller than its rect) also ships its packed mask (Stage
+        # B2.5) so the server gates on the same silhouette the client collides
+        # against -- not the bounding rect -- and never false-corrects a position
+        # the client legitimately allowed in the transparent area.
+        obstacles = []
+        masked_count = 0
+        for s in lm.obstacle_sprites:
+            r = s.rect
+            mask = getattr(s, "mask", None)
+            if is_irregular(mask, r.width, r.height):
+                obstacles.append((r.x, r.y, r.width, r.height, pack_mask(mask)))
+                masked_count += 1
+            else:
+                obstacles.append((r.x, r.y, r.width, r.height))
         map_w = getattr(lm, "csv_layout_width", 0)
         map_h = getattr(lm, "csv_layout_height", 0)
 
@@ -203,7 +217,8 @@ class Game:
         print(
             f"[multiplayer] connected to {MULTIPLAYER_RUNTIME.host}:{MULTIPLAYER_RUNTIME.port} "
             f"as {player_id} ({character_dir}) at ({join_x}, {join_y}); "
-            f"uploaded {len(obstacles)} obstacle rects, hitbox=({hitbox_w}x{hitbox_h})"
+            f"uploaded {len(obstacles)} obstacle rects ({masked_count} masked), "
+            f"hitbox=({hitbox_w}x{hitbox_h})"
         )
 
     def _close_multiplayer(self):
@@ -254,7 +269,8 @@ class Game:
                 layouts_dir = BENCHMARK_RUNTIME.layout_dir
             else:
                 layouts_dir = (level_6_layout_path if level_number == 6 else
-                              level_7_layout_path if level_number == 7 else level_8_layout_path)
+                              level_7_layout_path if level_number == 7 else
+                              level_8_layout_path if level_number == 8 else level_9_layout_path)
             player_position = None
 
         if player_info_dir is not None:

@@ -843,6 +843,36 @@ class LayoutManager:
             )
             self._place_grass_cells_in_rect(x_pos, y_pos, gw, gh, resolved)
 
+    def create_painted_ground_layer(self, tmx_object_layer):
+        """
+        Visual-only painted background chunks.
+
+        Image objects on this layer are composited into the ground surface but are
+        intentionally not registered as obstacles. Collision/effects stay authored
+        by the normal TMX gameplay layers.
+        """
+        tiled_tile_width = self.tmxdata.tilewidth
+        tiled_tile_height = self.tmxdata.tileheight
+        width_scaling_factor = TILESIZE / tiled_tile_width
+        height_scaling_factor = TILESIZE / tiled_tile_height
+
+        for object_ in tmx_object_layer:
+            image = getattr(object_, "image", None)
+            if image is None:
+                continue
+
+            scaled_w = max(1, int(round(object_.width * width_scaling_factor)))
+            scaled_h = max(1, int(round(object_.height * height_scaling_factor)))
+            x_pos = (object_.x * TILESIZE) / tiled_tile_width
+            y_pos = (object_.y * TILESIZE) / tiled_tile_height
+            image = pygame.transform.scale(image, (scaled_w, scaled_h))
+            Tile(
+                (x_pos, y_pos),
+                [self.ground_sprites],
+                "ground",
+                surface=image,
+            )
+
     def _try_spawn_animated_env_object(self, object_, props, x_pos, y_pos, width_scaling_factor, height_scaling_factor):
         """
         If env_anim_type is tree or torch, spawn using ENV_ANIM_SPRITE_CONFIG_BY_TYPE.
@@ -1697,7 +1727,9 @@ class LayoutManager:
             has_shape_objects = any(getattr(obj, "image", None) is None for obj in layout)
             has_image_objects = any(getattr(obj, "image", None) is not None for obj in layout)
             
-            if has_spawner_name:
+            if layer_name_lower == "paintedground":
+                self.create_painted_ground_layer(layout)
+            elif has_spawner_name:
                 # Process spawner layer
                 if hasattr(self, 'spawner'):
                     self.create_spawner_layer(layout)

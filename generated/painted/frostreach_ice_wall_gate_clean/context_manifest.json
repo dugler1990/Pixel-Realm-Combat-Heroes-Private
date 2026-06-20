@@ -1,0 +1,184 @@
+{
+  "packs": [
+    {
+      "chunk_id": "chunk_00_00",
+      "context_dir": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_00/context",
+      "prompt_path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_00/context/prompt.txt",
+      "references": {
+        "source": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_00/context/source.png",
+        "world_map_reference": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_00/context/world_map_reference.png",
+        "region_reference": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_00/context/region_reference.png",
+        "asset_contact_sheet": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_00/context/asset_contact_sheet.png",
+        "chunk_locator": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_00/context/chunk_locator.png",
+        "local_neighborhood": null,
+        "neighbors": {
+          "east": {
+            "chunk_id": "chunk_01_00",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_00/context/neighbor_east_source.png",
+            "filename": "neighbor_east_source.png"
+          },
+          "south": {
+            "chunk_id": "chunk_00_01",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_00/context/neighbor_south_source.png",
+            "filename": "neighbor_south_source.png"
+          }
+        }
+      },
+      "painted_image": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_00/painted.png"
+    },
+    {
+      "chunk_id": "chunk_01_00",
+      "context_dir": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/context",
+      "prompt_path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/context/prompt.txt",
+      "references": {
+        "source": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/context/source.png",
+        "world_map_reference": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/context/world_map_reference.png",
+        "region_reference": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/context/region_reference.png",
+        "asset_contact_sheet": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/context/asset_contact_sheet.png",
+        "chunk_locator": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/context/chunk_locator.png",
+        "local_neighborhood": null,
+        "neighbors": {
+          "east": {
+            "chunk_id": "chunk_02_00",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/context/neighbor_east_source.png",
+            "filename": "neighbor_east_source.png"
+          },
+          "south": {
+            "chunk_id": "chunk_01_01",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/context/neighbor_south_source.png",
+            "filename": "neighbor_south_source.png"
+          },
+          "west": {
+            "chunk_id": "chunk_00_00",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/context/neighbor_west_source.png",
+            "filename": "neighbor_west_source.png"
+          }
+        }
+      },
+      "painted_image": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_00/painted.png"
+    },
+    {
+      "chunk_id": "chunk_02_00",
+      "context_dir": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_00/context",
+      "prompt_path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_00/context/prompt.txt",
+      "references": {
+        "source": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_00/context/source.png",
+        "world_map_reference": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_00/context/world_map_reference.png",
+        "region_reference": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_00/context/region_reference.png",
+        "asset_contact_sheet": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_00/context/asset_contact_sheet.png",
+        "chunk_locator": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_00/context/chunk_locator.png",
+        "local_neighborhood": null,
+        "neighbors": {
+          "south": {
+            "chunk_id": "chunk_02_01",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_00/context/neighbor_south_source.png",
+            "filename": "neighbor_south_source.png"
+          },
+          "west": {
+            "chunk_id": "chunk_01_00",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_00/context/neighbor_west_source.png",
+            "filename": "neighbor_west_source.png"
+          }
+        }
+      },
+      "painted_image": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_00/painted.png"
+    },
+    {
+      "chunk_id": "chunk_00_01",
+      "context_dir": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_01/context",
+      "prompt_path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_01/context/prompt.txt",
+      "references": {
+        "source": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_01/context/source.png",
+        "world_map_reference": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_01/context/world_map_reference.png",
+        "region_reference": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_01/context/region_reference.png",
+        "asset_contact_sheet": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_01/context/asset_contact_sheet.png",
+        "chunk_locator": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_01/context/chunk_locator.png",
+        "local_neighborhood": null,
+        "neighbors": {
+          "east": {
+            "chunk_id": "chunk_01_01",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_01/context/neighbor_east_source.png",
+            "filename": "neighbor_east_source.png"
+          },
+          "north": {
+            "chunk_id": "chunk_00_00",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_01/context/neighbor_north_source.png",
+            "filename": "neighbor_north_source.png"
+          }
+        }
+      },
+      "painted_image": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_00_01/painted.png"
+    },
+    {
+      "chunk_id": "chunk_01_01",
+      "context_dir": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_01/context",
+      "prompt_path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_01/context/prompt.txt",
+      "references": {
+        "source": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_01/context/source.png",
+        "world_map_reference": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_01/context/world_map_reference.png",
+        "region_reference": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_01/context/region_reference.png",
+        "asset_contact_sheet": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_01/context/asset_contact_sheet.png",
+        "chunk_locator": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_01/context/chunk_locator.png",
+        "local_neighborhood": null,
+        "neighbors": {
+          "east": {
+            "chunk_id": "chunk_02_01",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_01/context/neighbor_east_source.png",
+            "filename": "neighbor_east_source.png"
+          },
+          "north": {
+            "chunk_id": "chunk_01_00",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_01/context/neighbor_north_source.png",
+            "filename": "neighbor_north_source.png"
+          },
+          "west": {
+            "chunk_id": "chunk_00_01",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_01/context/neighbor_west_source.png",
+            "filename": "neighbor_west_source.png"
+          }
+        }
+      },
+      "painted_image": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_01_01/painted.png"
+    },
+    {
+      "chunk_id": "chunk_02_01",
+      "context_dir": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_01/context",
+      "prompt_path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_01/context/prompt.txt",
+      "references": {
+        "source": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_01/context/source.png",
+        "world_map_reference": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_01/context/world_map_reference.png",
+        "region_reference": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_01/context/region_reference.png",
+        "asset_contact_sheet": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_01/context/asset_contact_sheet.png",
+        "chunk_locator": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_01/context/chunk_locator.png",
+        "local_neighborhood": null,
+        "neighbors": {
+          "north": {
+            "chunk_id": "chunk_02_00",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_01/context/neighbor_north_source.png",
+            "filename": "neighbor_north_source.png"
+          },
+          "west": {
+            "chunk_id": "chunk_01_01",
+            "status": "source",
+            "path": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_01/context/neighbor_west_source.png",
+            "filename": "neighbor_west_source.png"
+          }
+        }
+      },
+      "painted_image": "generated/painted/frostreach_ice_wall_gate_clean/chunks/chunk_02_01/painted.png"
+    }
+  ]
+}

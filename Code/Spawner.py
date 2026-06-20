@@ -597,7 +597,19 @@ class Spawner:
             team_id=team_id,
         )
 
+    def _mp_local_enemies_suppressed(self):
+        """Co-op (Stage C): the JOINER must spawn NO local enemies -- it renders
+        the host's relayed enemies as puppets instead. True when multiplayer is
+        active and this client is not the host (role unknown counts as joiner, so
+        nothing spawns until roles are settled). Always False in singleplayer
+        (no mp_client), so the normal game is untouched."""
+        level = self.level
+        return (getattr(level, "mp_client", None) is not None
+                and getattr(level, "_mp_role", None) != "host")
+
     def spawn_enemy(self, config, pos=None):
+        if self._mp_local_enemies_suppressed():
+            return None
 
         #print( f"enemy spawn attempt {config}, {pos}" )
         if not pos:  # If no position is provided, use the one from the config
@@ -750,6 +762,8 @@ class Spawner:
     
     def restore_enemy(self, enemy_state):
         """Restore a persistent combat unit from saved layout state (pixel position)."""
+        if self._mp_local_enemies_suppressed():
+            return None
         monster_type = enemy_state.get("type") or enemy_state.get("monster_name")
         if not monster_type:
             return None

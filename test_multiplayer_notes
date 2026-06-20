@@ -1,0 +1,18 @@
+Terminal 1 — server (start this first)
+
+cd /home/fresh/projects/Pixel-Realm-Combat-Heroes-public/Server
+python3 server.py
+Terminal 2 — client "alice" (Orange Wizard)
+
+cd /home/fresh/projects/Pixel-Realm-Combat-Heroes-public/Code
+PRCH_MULTIPLAYER_ENABLED=1 \
+PRCH_MULTIPLAYER_PLAYER_ID=alice \
+PRCH_MULTIPLAYER_CHARACTER="../Graphics/Orange_Wizard/" \
+python3 Main2.py
+Terminal 3 — client "bob" (barb)
+
+cd /home/fresh/projects/Pixel-Realm-Combat-Heroes-public/Code
+PRCH_MULTIPLAYER_ENABLED=1 \
+PRCH_MULTIPLAYER_PLAYER_ID=bob \
+PRCH_MULTIPLAYER_CHARACTER="../Graphics/barb/" \
+python3 Main2.py

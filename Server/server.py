@@ -18,11 +18,17 @@ import sys
 import threading
 import time
 
+# Headless: the server builds obstacle pixel masks (Stage B2.5) via Surface +
+# surfarray, which work without a real display under the dummy SDL driver.
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+
 _CODE_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Code"))
 if _CODE_DIR not in sys.path:
     sys.path.insert(0, _CODE_DIR)
 
 from network.protocol import (  # noqa: E402
+    MSG_HIT_ENEMY,
     MSG_INPUT,
     MSG_JOIN,
     MSG_LEAVE,
@@ -89,20 +95,28 @@ class GameServer:
                     with self.game_state.lock:
                         self.game_state.players[player_id] = player
                         self.client_sockets[player_id] = client_socket
+                        # Co-op (Stage C): first client to join is the host (runs
+                        # the real enemy sim + relays it). Each client learns its
+                        # role from host_id in state_update.
+                        if self.game_state.host_player_id is None:
+                            self.game_state.host_player_id = player_id
+                            print(f"[server] {player_id} is the host (enemy authority)")
                         # Stage B2: first non-empty geometry upload wins; build
                         # the real obstacle QuadTree from it (all clients share
                         # the same map on localhost/LAN).
                         obstacles = message.get("obstacles")
                         if obstacles and self.game_state.obstacle_quad_tree is None:
-                            rects = [
-                                (float(o[0]), float(o[1]), float(o[2]), float(o[3])) for o in obstacles
-                            ]
+                            # Entries are (x,y,w,h) or, for irregular obstacles,
+                            # (x,y,w,h,packed_mask) -- pass through verbatim so
+                            # build_obstacle_index can rebuild the pixel masks.
                             self.game_state.build_obstacle_index(
-                                rects,
+                                obstacles,
                                 float(message.get("map_width", 0.0)),
                                 float(message.get("map_height", 0.0)),
                             )
-                            print(f"[server] built obstacle quadtree from {len(rects)} rects ({player_id})")
+                            masked = sum(1 for o in obstacles if len(o) >= 5 and o[4])
+                            print(f"[server] built obstacle quadtree from {len(obstacles)} rects "
+                                  f"({masked} masked) ({player_id})")
                         self.game_state.pending_events.append({
                             "type": MSG_PLAYER_JOINED,
                             "player_id": player_id,
@@ -115,6 +129,11 @@ class GameServer:
                 elif msg_type == MSG_INPUT:
                     with self.game_state.lock:
                         player = self.game_state.players.get(player_id)
+                        # Co-op (Stage C): only the host's enemy list is trusted/
+                        # relayed (it owns the enemy sim). Stored verbatim, never
+                        # simulated server-side.
+                        if "enemies" in message and player_id == self.game_state.host_player_id:
+                            self.game_state.enemies = message["enemies"]
                         if player is not None:
                             # v0 position relay: trust the client's reported (x, y),
                             # use move_x/move_y/attacking only to derive status.
@@ -128,6 +147,21 @@ class GameServer:
                                 bool(message.get("attacking", False)),
                                 self.game_state.obstacle_quad_tree,
                             )
+
+                elif msg_type == MSG_HIT_ENEMY:
+                    # Co-op (C2): a joiner's attack hit a shared enemy. Queue it
+                    # for delivery to the host (which owns that enemy). The host
+                    # never sends this (it damages its own enemies locally), so
+                    # ignore any self-addressed hit.
+                    if player_id != self.game_state.host_player_id:
+                        with self.game_state.lock:
+                            self.game_state.pending_enemy_hits.append({
+                                "type": MSG_HIT_ENEMY,
+                                "player_id": player_id,
+                                "enemy_id": message.get("enemy_id"),
+                                "amount": message.get("amount"),
+                                "attack_type": message.get("attack_type"),
+                            })
 
                 elif msg_type == MSG_LEAVE:
                     break
@@ -144,6 +178,13 @@ class GameServer:
                 self.client_sockets.pop(player_id, None)
                 if removed is not None:
                     self.game_state.pending_events.append({"type": MSG_PLAYER_LEFT, "player_id": player_id})
+                # Co-op: if the host left, hand authority to a remaining player
+                # (its enemy sim takes over) and drop the stale enemy list.
+                if player_id == self.game_state.host_player_id:
+                    self.game_state.enemies = []
+                    self.game_state.host_player_id = next(iter(self.game_state.players), None)
+                    if self.game_state.host_player_id is not None:
+                        print(f"[server] host left; {self.game_state.host_player_id} is the new host")
             print(f"[server] {player_id} left")
         try:
             client_socket.close()
@@ -179,13 +220,27 @@ class GameServer:
                 "type": MSG_STATE_UPDATE,
                 "tick": self.tick,
                 "server_time_ms": time.monotonic() * 1000.0,
+                "host_id": self.game_state.host_player_id,
                 "players": {pid: p.to_snapshot() for pid, p in self.game_state.players.items()},
+                "enemies": self.game_state.enemies,
             }
             sockets = dict(self.client_sockets)
+            host_id = self.game_state.host_player_id
+            enemy_hits = list(self.game_state.pending_enemy_hits)
+            self.game_state.pending_enemy_hits.clear()
 
         for event in events:
             self._send_to_all(sockets, event)
         self._send_to_all(sockets, state_message)
+        # Co-op (C2): forward queued enemy-damage events to the HOST only -- it
+        # owns the enemy sim and applies them to the real enemies.
+        host_sock = sockets.get(host_id)
+        if host_sock is not None:
+            for hit in enemy_hits:
+                try:
+                    host_sock.sendall(pack_message(hit))
+                except OSError:
+                    pass
 
     def _send_to_all(self, sockets, message):
         payload = pack_message(message)

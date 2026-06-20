@@ -84,7 +84,7 @@
     "console": true
   },
   "network": {
-    "enabled": false,
+    "enabled": true,
     "level": "DEBUG",
     "file": "logs/network.log",
     "console": true

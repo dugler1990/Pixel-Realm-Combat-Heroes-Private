@@ -14,6 +14,7 @@ import threading
 import time
 from pathlib import Path
 
+import numpy
 import pytest
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -29,7 +30,8 @@ import pygame  # noqa: E402
 import collision_core  # noqa: E402
 from QuadTree import QuadTree, QuadTreeManager  # noqa: E402
 from hashRect import HashableRect  # noqa: E402
-from common import ServerPlayerState, _OVERLAP_TOLERANCE  # noqa: E402
+from common import GameState, ServerPlayerState, _OVERLAP_TOLERANCE  # noqa: E402
+from obstacle_mask import is_irregular, pack_mask, unpack_mask  # noqa: E402
 from network import MultiplayerClient, MSG_PLAYER_JOINED, MSG_STATE_UPDATE  # noqa: E402
 from server import GameServer  # noqa: E402
 
@@ -239,4 +241,111 @@ def test_clear_position_passes_through_unchanged(server):
         time.sleep(0.01)
 
     assert seen is not None and (seen["x"], seen["y"]) == (700.0, 700.0)
+    alice.close()
+
+
+# -- Stage B2.5: irregular obstacles ship a pixel mask; the server gates on the
+#    silhouette so a position the client legitimately allowed in the obstacle's
+#    transparent area is NOT falsely corrected (which the other client sees pop) --
+
+def _left_half_mask(w=40, h=40, solid_cols=20):
+    """A pygame mask whose left `solid_cols` columns are solid, rest transparent
+    (an irregular obstacle, e.g. a tree trunk)."""
+    mask = pygame.mask.Mask((w, h))
+    for x in range(solid_cols):
+        for y in range(h):
+            mask.set_at((x, y), 1)
+    return mask
+
+
+def _left_half_grid(w=40, h=40, solid_cols=20):
+    """The same silhouette as a numpy grid -- what the server stores after
+    unpacking (so tests build server obstacles the way build_obstacle_index does)."""
+    grid = numpy.zeros((h, w), dtype=bool)
+    grid[:, :solid_cols] = True
+    return grid
+
+
+def _index_one(rect, grid=None, w=4000, h=4000):
+    item = HashableRect(pygame.Rect(*rect), _id=0, mask=grid)
+    return QuadTree(items=[item], depth=8, bounding_rect=pygame.Rect(0, 0, w, h),
+                    manager=QuadTreeManager())
+
+
+def test_obstacle_mask_round_trips_exactly():
+    src = _left_half_mask(37, 53, solid_cols=11)
+    grid = unpack_mask(37, 53, pack_mask(src))           # (h, w) numpy bool grid
+    assert grid.shape == (53, 37)
+    assert int(grid.sum()) == src.count()
+    assert all(bool(grid[y, x]) == bool(src.get_at((x, y)))
+               for y in range(53) for x in range(37))
+
+
+def test_is_irregular_only_for_holed_same_size_masks():
+    assert is_irregular(_left_half_mask(40, 40), 40, 40) is True
+    assert is_irregular(pygame.mask.Mask((40, 40), fill=True), 40, 40) is False  # solid tile
+    assert is_irregular(None, 40, 40) is False                                   # no mask
+    assert is_irregular(_left_half_mask(40, 40), 30, 30) is False                # size mismatch
+
+
+def test_resolve_skips_transparent_area_of_masked_obstacle():
+    # Obstacle rect 100-140; only its LEFT half (x:100-120) is solid. A player
+    # whose hitbox overlaps the bounding rect but only the transparent RIGHT half
+    # must NOT be pushed -- the client allowed it there, so the server must agree.
+    idx = _index_one((100, 100, 40, 40), grid=_left_half_grid())
+    p = _player(150, 120)                     # rect x:130-170 -> overlaps only x>=120 (transparent)
+    p.resolve_obstacle_collision(idx)
+    assert (p.x, p.y) == (150, 120)
+
+
+def test_rect_only_obstacle_would_have_false_corrected_same_spot():
+    # The same geometry WITHOUT a mask DOES move the player -- proving the mask
+    # gate (not a lucky no-overlap) is what prevents the false correction above.
+    idx = _index_one((100, 100, 40, 40), grid=None)
+    p = _player(150, 120)
+    p.resolve_obstacle_collision(idx)
+    assert (p.x, p.y) != (150, 120)
+
+
+def test_resolve_pushes_out_of_solid_part_of_masked_obstacle():
+    idx = _index_one((100, 100, 40, 40), grid=_left_half_grid())
+    p = _player(110, 120)                     # rect x:90-130 -> overlaps solid x:100-120
+    p.resolve_obstacle_collision(idx)
+    # cleared of the SOLID half (x < 120); player hitbox right edge now <= ~120
+    assert p.x + p.hitbox_w / 2 <= 120 + _OVERLAP_TOLERANCE + 1.0
+
+
+def test_build_obstacle_index_unpacks_a_masked_entry():
+    gs = GameState()
+    packed = pack_mask(_left_half_mask(40, 40))
+    gs.build_obstacle_index([(100, 100, 40, 40, packed), (200, 200, 40, 40)], 1000, 1000)
+    items = list(gs.obstacle_quad_tree.hit(HashableRect(pygame.Rect(0, 0, 4000, 4000), _id=-1)))
+    grids = {item.rect.topleft: item.mask for item in items}
+    assert grids[(100, 100)] is not None and int(grids[(100, 100)].sum()) == 20 * 40
+    assert grids[(200, 200)] is None         # plain rect entry -> no mask
+
+
+def test_masked_obstacle_e2e_transparent_passes_through(server):
+    srv, port = server
+    alice = MultiplayerClient("127.0.0.1", port, "alice")
+    packed = pack_mask(_left_half_mask(40, 40))
+    alice.send_join("../Graphics/Orange_Wizard/", 0.0, 0.0,
+                    hitbox_w=40.0, hitbox_h=40.0,
+                    obstacles=[[100, 100, 40, 40, packed]],
+                    map_width=1000, map_height=1000)
+    _wait_for(alice, MSG_PLAYER_JOINED)
+
+    alice.send_state(150.0, 120.0, 1.0, 0.0, False)  # in the transparent half
+
+    deadline = time.monotonic() + 5.0
+    seen = None
+    while time.monotonic() < deadline and seen is None:
+        for m in alice.poll():
+            if m["type"] == MSG_STATE_UPDATE and m["players"].get("alice", {}).get("x") == 150.0:
+                seen = m["players"]["alice"]
+                break
+        time.sleep(0.01)
+
+    assert seen is not None and (seen["x"], seen["y"]) == (150.0, 120.0), \
+        "server false-corrected a position in the obstacle's transparent area"
     alice.close()

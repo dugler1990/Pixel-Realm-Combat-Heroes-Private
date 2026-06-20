@@ -1,0 +1,235 @@
+<?xml version='1.0' encoding='utf-8'?>
+<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="8" nextobjectid="206">
+ <tileset firstgid="1" source="frostreach_prototype_tiles.tsx" />
+ <tileset firstgid="11" source="../../tmx/can_build_tiles.tsx" />
+ <tileset firstgid="13" source="painted_chunks.tsx" />
+ <layer id="1" name="Tile Layer 1" width="30" height="20">
+  <data encoding="csv">
+4,4,1,1,1,1,1,1,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1,3,3,3,1,1,1,1,
+4,4,1,1,1,1,1,1,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1,1,1,3,3,1,1,1,
+4,4,4,1,1,1,1,1,1,1,1,1,1,1,6,6,1,1,1,1,1,1,1,1,1,3,3,3,1,1,
+4,4,4,3,3,3,1,1,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1,1,1,3,3,3,1,1,
+4,4,3,3,3,3,3,1,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1,1,3,3,3,1,1,1,
+4,3,3,3,3,3,3,3,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1,3,3,1,1,1,1,1,
+4,4,3,3,3,3,3,1,1,1,1,1,1,1,2,2,1,1,1,1,1,1,3,2,2,2,2,2,2,1,
+4,4,1,3,2,2,2,2,2,2,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,
+2,2,2,2,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,6,6,3,1,1,1,1,1,1,
+2,4,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,3,3,1,1,1,1,1,
+4,4,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,3,3,1,1,1,1,
+4,4,1,1,1,1,1,1,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,3,3,1,1,1,
+4,4,1,1,1,1,1,3,1,1,1,1,2,2,2,2,2,1,1,1,1,1,1,1,1,3,3,3,1,1,
+4,4,1,1,1,3,3,3,3,3,1,1,2,2,2,2,2,1,1,1,1,1,1,1,1,3,3,1,1,1,
+4,4,4,1,1,3,3,3,3,3,1,2,2,1,2,2,2,2,1,1,1,1,1,1,3,3,1,1,1,1,
+4,4,4,1,1,3,3,3,3,3,6,6,1,1,2,2,1,2,2,1,1,1,1,3,3,1,1,1,1,1,
+4,4,4,1,1,3,3,3,3,3,2,2,1,1,2,2,1,2,2,1,1,1,3,3,1,1,1,1,1,1,
+4,4,4,1,1,1,1,3,1,2,2,1,1,2,2,1,1,1,2,2,1,3,3,3,1,1,1,1,1,1,
+3,3,1,1,1,1,1,1,2,2,1,1,1,2,2,1,1,1,1,2,2,1,3,3,1,1,1,1,1,1,
+3,3,1,1,1,1,1,1,2,2,1,1,1,2,2,1,1,1,1,2,2,1,1,3,3,1,1,1,1,1
+</data>
+ </layer>
+ <layer id="2" name="can_build_layer" width="30" height="20">
+  <data encoding="csv">
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,12,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,
+0,0,0,0,12,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,12,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+</data>
+ </layer>
+ <objectgroup id="7" name="PaintedGround">
+  <object id="200" gid="13" x="0" y="5500" width="5500" height="5500" />
+  <object id="201" gid="14" x="5500" y="5500" width="5500" height="5500" />
+  <object id="202" gid="15" x="11000" y="5500" width="5500" height="5500" />
+  <object id="203" gid="16" x="0" y="11000" width="5500" height="5500" />
+  <object id="204" gid="17" x="5500" y="11000" width="5500" height="5500" />
+  <object id="205" gid="18" x="11000" y="11000" width="5500" height="5500" />
+ </objectgroup>
+ <objectgroup id="3" name="Object Layer 1">
+  <object id="1" gid="5" x="0" y="0" width="550" height="550">
+  </object>
+  <object id="2" gid="5" x="550" y="0" width="550" height="550">
+  </object>
+  <object id="3" gid="5" x="1100" y="0" width="550" height="550">
+  </object>
+  <object id="4" gid="5" x="1650" y="0" width="550" height="550">
+  </object>
+  <object id="5" gid="5" x="2200" y="0" width="550" height="550">
+  </object>
+  <object id="6" gid="5" x="2750" y="0" width="550" height="550">
+  </object>
+  <object id="7" gid="5" x="3300" y="0" width="550" height="550">
+  </object>
+  <object id="8" gid="5" x="3850" y="0" width="550" height="550">
+  </object>
+  <object id="9" gid="5" x="4400" y="0" width="550" height="550">
+  </object>
+  <object id="10" gid="5" x="4950" y="0" width="550" height="550">
+  </object>
+  <object id="11" gid="5" x="5500" y="0" width="550" height="550">
+  </object>
+  <object id="12" gid="5" x="6050" y="0" width="550" height="550">
+  </object>
+  <object id="13" gid="5" x="6600" y="0" width="550" height="550">
+  </object>
+  <object id="14" gid="5" x="7150" y="0" width="550" height="550">
+  </object>
+  <object id="15" gid="5" x="8800" y="0" width="550" height="550">
+  </object>
+  <object id="16" gid="5" x="9350" y="0" width="550" height="550">
+  </object>
+  <object id="17" gid="5" x="9900" y="0" width="550" height="550">
+  </object>
+  <object id="18" gid="5" x="10450" y="0" width="550" height="550">
+  </object>
+  <object id="19" gid="5" x="11000" y="0" width="550" height="550">
+  </object>
+  <object id="20" gid="5" x="11550" y="0" width="550" height="550">
+  </object>
+  <object id="21" gid="5" x="12100" y="0" width="550" height="550">
+  </object>
+  <object id="22" gid="5" x="12650" y="0" width="550" height="550">
+  </object>
+  <object id="23" gid="5" x="13200" y="0" width="550" height="550">
+  </object>
+  <object id="24" gid="5" x="13750" y="0" width="550" height="550">
+  </object>
+  <object id="25" gid="5" x="14300" y="0" width="550" height="550">
+  </object>
+  <object id="26" gid="5" x="14850" y="0" width="550" height="550">
+  </object>
+  <object id="27" gid="5" x="15400" y="0" width="550" height="550">
+  </object>
+  <object id="28" gid="5" x="15950" y="0" width="550" height="550">
+  </object>
+  <object id="29" gid="9" x="7700" y="0" width="1100" height="1100">
+  </object>
+  <object id="30" gid="5" x="11550" y="3850" width="550" height="550">
+  </object>
+  <object id="31" gid="5" x="12100" y="3850" width="550" height="550">
+  </object>
+  <object id="32" gid="5" x="12650" y="3850" width="550" height="550">
+  </object>
+  <object id="33" gid="5" x="13200" y="3850" width="550" height="550">
+  </object>
+  <object id="34" gid="5" x="11550" y="4950" width="550" height="550">
+  </object>
+  <object id="35" gid="5" x="12100" y="4950" width="550" height="550">
+  </object>
+  <object id="36" gid="5" x="4950" y="7700" width="550" height="550">
+  </object>
+  <object id="37" gid="5" x="5500" y="7700" width="550" height="550">
+  </object>
+  <object id="38" gid="5" x="6050" y="7700" width="550" height="550">
+  </object>
+  <object id="39" gid="5" x="3300" y="2750" width="550" height="550">
+  </object>
+  <object id="40" gid="5" x="3850" y="2750" width="550" height="550">
+  </object>
+  <object id="41" gid="5" x="4400" y="2750" width="550" height="550">
+  </object>
+  <object id="42" gid="7" x="3850" y="3300" width="550" height="550">
+  </object>
+  <object id="43" gid="7" x="6050" y="4950" width="550" height="550">
+  </object>
+  <object id="44" gid="7" x="9350" y="3300" width="550" height="550">
+  </object>
+  <object id="45" gid="7" x="11000" y="6600" width="550" height="550">
+  </object>
+  <object id="46" gid="7" x="14300" y="8250" width="550" height="550">
+  </object>
+  <object id="47" gid="8" x="4400" y="7150" width="550" height="550">
+  </object>
+  <object id="48" gid="8" x="9900" y="7700" width="550" height="550">
+  </object>
+  <object id="49" gid="7" x="3300" y="8800" width="550" height="550">
+  </object>
+  <object id="50" gid="8" x="12100" y="2750" width="550" height="550">
+  </object>
+  <object id="51" gid="8" x="5500" y="2200" width="550" height="550">
+  </object>
+  <object id="52" gid="8" x="13750" y="5500" width="550" height="550">
+  </object>
+  <object id="53" gid="10" x="13200" y="6050" width="550" height="550">
+  </object>
+  <object id="54" gid="10" x="13750" y="6600" width="550" height="550">
+  </object>
+ </objectgroup>
+ <objectgroup id="4" name="grass1">
+  <object id="1" x="2200" y="5500" width="2750" height="1650">
+   <properties>
+    <property name="grass_profile" value="snow_tufts" />
+   </properties>
+  </object>
+  <object id="2" x="8800" y="2200" width="2750" height="1100">
+   <properties>
+    <property name="grass_profile" value="snow_tufts" />
+   </properties>
+  </object>
+  <object id="3" x="9900" y="6600" width="2200" height="1650">
+   <properties>
+    <property name="grass_profile" value="snow_tufts" />
+   </properties>
+  </object>
+  <object id="4" x="2750" y="8800" width="3300" height="1100">
+   <properties>
+    <property name="grass_profile" value="snow_tufts" />
+   </properties>
+  </object>
+  <object id="5" x="11550" y="8250" width="2750" height="1100">
+   <properties>
+    <property name="grass_profile" value="snow_tufts" />
+   </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="5" name="Slippery Effect Layer">
+  <object id="1" x="1100" y="1650" width="2750" height="2200">
+   <ellipse />
+   <properties>
+    <property name="slippery_factor" type="float" value="15.0" />
+   </properties>
+  </object>
+  <object id="2" x="2200" y="7150" width="3300" height="2200">
+   <ellipse />
+   <properties>
+    <property name="slippery_factor" type="float" value="20.0" />
+   </properties>
+  </object>
+  <object id="3" x="12650" y="0" width="2200" height="11000">
+   <properties>
+    <property name="slippery_factor" type="float" value="10.0" />
+   </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="6" name="spawner">
+  <object id="1" x="1650" y="2200" width="2200" height="2200">
+   <properties>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;ice_ghost&quot;:2,&quot;raccoon&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:8,&quot;spawn_number&quot;:2,&quot;spawn_limit&quot;:12,&quot;spawn_team_id&quot;:&quot;enemy_frostreach_west&quot;}" />
+   </properties>
+  </object>
+  <object id="2" x="12100" y="4950" width="2750" height="2750">
+   <properties>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;ice_ghost&quot;:3,&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:10,&quot;spawn_number&quot;:1,&quot;spawn_limit&quot;:8,&quot;spawn_team_id&quot;:&quot;enemy_frostreach_east&quot;}" />
+   </properties>
+  </object>
+  <object id="3" x="6600" y="1100" width="2750" height="1650">
+   <properties>
+    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:14,&quot;spawn_number&quot;:1,&quot;spawn_limit&quot;:4,&quot;spawn_team_id&quot;:&quot;enemy_wall_gate&quot;}" />
+   </properties>
+  </object>
+ </objectgroup>
+</map>

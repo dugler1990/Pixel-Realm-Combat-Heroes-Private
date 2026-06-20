@@ -21,6 +21,24 @@ from game_logging import get_debug_logger
 
 _grass_log = get_debug_logger("grass")
 
+_FEET_ROW_CACHE = {}  # id(image) -> (size, lowest_opaque_row); size guards id reuse
+
+
+def _feet_row(image):
+    """Lowest opaque row of `image` (the feet within the frame). Used to anchor the
+    directional shadow at the feet, not the image's bottom edge — so a frame whose feet
+    don't reach the bottom (e.g. an attack/step pose) doesn't detach from its shadow.
+    Cached by id(image), validated by size. Falls back to image height if fully empty."""
+    key = id(image)
+    size = image.get_size()
+    entry = _FEET_ROW_CACHE.get(key)
+    if entry is None or entry[0] != size:
+        rects = pygame.mask.from_surface(image).get_bounding_rects()
+        row = max((r.bottom for r in rects), default=size[1])
+        entry = (size, row)
+        _FEET_ROW_CACHE[key] = entry
+    return entry[1]
+
 _KNOWN_FACTION_OUTLINE_COLORS = {
     "player": (72, 220, 120),
     "enemy": (255, 72, 72),
@@ -308,8 +326,10 @@ class YSortCameraGroup(pygame.sprite.Group):
                 img = sprite.image
                 iw, ih = img.get_size()
                 x0 = sprite.rect.left - self.offset.x
-                # Shadow base sits at the sprite's bottom edge (feet, once art is cropped).
-                yb = sprite.rect.bottom - self.offset.y
+                # Anchor the shadow base at the frame's actual feet (lowest opaque row),
+                # not the image's bottom edge — frames whose feet sit above the edge (a
+                # lifted-foot/attack pose) would otherwise detach from their shadow.
+                yb = sprite.rect.top - self.offset.y + _feet_row(img)
                 reach = ih * slen
                 if x0 > W + reach or x0 + iw < -reach or yb > H + reach or yb - ih < -reach:
                     continue  # off-screen

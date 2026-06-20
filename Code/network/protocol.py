@@ -16,29 +16,59 @@ Message shapes (see the multiplayer plan's "Wire protocol" section):
     # (We deliberately do NOT re-integrate position server-side in v0 -- that
     # caused large drift vs the client's real Entity.move physics. Server-side
     # authoritative position is Stage B+.)
+    # Stage C (co-op) adds an OPTIONAL `enemies` field, sent ONLY by the HOST
+    # (the first client to join). The host runs the real enemy simulation and
+    # relays each live enemy's render state; the server stores the host's list
+    # and rebroadcasts it (see state_update). Co-op is host-authoritative for
+    # enemies -- the server does NOT simulate them (same relay philosophy as
+    # position). Each enemy: {id, type, x, y, status, dir, health, max_health}.
     {"type": "input", "player_id": "...", "seq": 142,
      "x": 1234.0, "y": 5678.0,
-     "move_x": -1.0, "move_y": 0.0, "attacking": False}
+     "move_x": -1.0, "move_y": 0.0, "attacking": False,
+     "enemies": [{"id": 7, "type": "skeleton", "x": .., "y": ..,
+                  "status": "move", "dir": "left", "health": .., "max_health": ..}]}
 
     # client -> server, on connect / disconnect. Stage B optionally adds the
     # player's collision-rect size (hitbox_w/h) and a one-time upload of the
     # map's obstacle rects + dimensions (the client already has them) so the
     # server can build a quadtree and validate positions against walls. All
     # optional -- omitting them yields the plain v0 relay (no server collision).
+    # Each obstacle is [x, y, w, h]; an IRREGULAR obstacle (tree/decor whose
+    # pixel mask is smaller than its rect) adds a 5th element -- the packed mask
+    # bytes (Stage B2.5, see Code/obstacle_mask.py) -- so the server gates on the
+    # silhouette, not the bounding rect.
     {"type": "join", "player_id": "...", "character": "../Graphics/Orange_Wizard/",
      "x": ..., "y": ...,
      "hitbox_w": .., "hitbox_h": ..,
-     "obstacles": [[x, y, w, h], ...], "map_width": .., "map_height": ..}
+     "obstacles": [[x, y, w, h], [x, y, w, h, b"<packed mask>"], ...],
+     "map_width": .., "map_height": ..}
     {"type": "leave", "player_id": "..."}
 
-    # server -> client, broadcast at tick rate (includes the receiver's own entry)
+    # server -> client, broadcast at tick rate (includes the receiver's own entry).
+    # `host_id` is the id of the host client (first to join); a client is the
+    # host iff host_id == its own player_id -- this is how each client learns its
+    # role (Stage C co-op). `enemies` is the host's relayed enemy list (empty
+    # until a host has uploaded one); the host ignores its own echo, the joiner
+    # renders them as puppets.
     {"type": "state_update", "tick": 4821, "server_time_ms": 1234567.8,
+     "host_id": "<id or null>",
      "players": {"<id>": {"character": "...", "x": .., "y": ..,
-                           "direction_x": .., "direction_y": .., "status": "left"}}}
+                           "direction_x": .., "direction_y": .., "status": "left"}},
+     "enemies": [{"id": 7, "type": "skeleton", "x": .., "y": ..,
+                  "status": "move", "dir": "left", "health": .., "max_health": ..}]}
 
     # server -> client, lifecycle notices
     {"type": "player_joined", "player_id": "...", "character": "...", "x": .., "y": ..}
     {"type": "player_left", "player_id": "..."}
+
+    # client -> server -> HOST, co-op damage relay (Stage C, C2). The JOINER
+    # detects its own attack hitting an enemy puppet (the existing
+    # player_attack_logic), resolves the damage amount from ITS player's stats
+    # (the host doesn't have them), and relays it. The server forwards it ONLY to
+    # the host, which applies it to the real enemy (id = the host's Entity.id for
+    # that enemy). Resulting health/death rides the C1 enemy relay back to both.
+    {"type": "hit_enemy", "player_id": "...", "enemy_id": 7,
+     "amount": 12.5, "attack_type": "weapon"}
 """
 
 import struct
@@ -51,6 +81,7 @@ MSG_INPUT = "input"
 MSG_STATE_UPDATE = "state_update"
 MSG_PLAYER_JOINED = "player_joined"
 MSG_PLAYER_LEFT = "player_left"
+MSG_HIT_ENEMY = "hit_enemy"
 
 _LENGTH_PREFIX = struct.Struct(">I")
 
