@@ -79,13 +79,18 @@ def ensure_headless_display(size=_DEFAULT_SIZE):
             # but that's an environment problem, not something to paper over.
 
 
-def build_headless_level(character_dir=None, level_number=6, size=_DEFAULT_SIZE):
+def build_headless_level(character_dir=None, level_number=6, size=_DEFAULT_SIZE,
+                         is_server=True):
     """Construct and return the REAL Level4 at `level_number`, headless.
 
     Mirrors Main2._start_multiplayer_session / start_level but with a no-op
     StubBackend and no menus: pick a character's base stats, load the level. The
-    returned level has is_server=True (inert for now), a real player, spawner,
-    layout_manager, quad trees, and combat context -- ready to tick.
+    returned level has a real player, spawner, layout_manager, quad trees, and
+    combat context -- ready to tick.
+
+    `is_server` (default True) drives Level4.run()'s render guards: True skips
+    every draw-only call (the server path); False runs the full client loop
+    headless (used by tests to compare the two paths' simulation).
     """
     ensure_headless_display(size)
 
@@ -104,6 +109,6 @@ def build_headless_level(character_dir=None, level_number=6, size=_DEFAULT_SIZE)
         level_number=level_number,
         game_settings=GameSettings(),
         backend=StubBackend(*size),
-        is_server=True,
+        is_server=is_server,
     )
     return level

@@ -2125,7 +2125,15 @@ class Level4:
         dt = dt / FPS
         dt = dt_real
         self.wind_timer += dt
-        self.backend.fill((0, 0, 0)) 
+        # Server-authoritative: the headless server runs this exact loop but
+        # RENDERS NOTHING -- every draw-only call below is guarded by
+        # `not self.is_server`. The guards preserve the original interleaved
+        # sim/draw order (in the daytime branch custom_draw deliberately draws
+        # BEFORE update_parallel advances positions, so a clean simulate()/render()
+        # split would change the client's render-by-one-frame behavior). For the
+        # client (is_server=False) every guard is `if not False` -> byte-identical.
+        if not self.is_server:
+            self.backend.fill((0, 0, 0))
         #print(FPS)
         #print(self.player.rect.center)
          
@@ -2198,24 +2206,26 @@ class Level4:
             if self.layout_manager.daytime_layout:
                 if self.game_settings:
                     self.weather.time_speed_multiplier = self.game_settings.environment_speed
-                shadow = (self.layout_manager.lighting.sun_shadow(self.weather.current_time)
-                          if self.layout_manager.lighting else None)
-                self.layout_manager.visible_sprites.custom_draw(
-                    self.player,
-                    dt,
-                    self.weather.weather_intensity,
-                    self.weather.light_level,
-                    camera_focus=camera_focus,
-                    shadow=shadow,
-                )
+                if not self.is_server:
+                    shadow = (self.layout_manager.lighting.sun_shadow(self.weather.current_time)
+                              if self.layout_manager.lighting else None)
+                    self.layout_manager.visible_sprites.custom_draw(
+                        self.player,
+                        dt,
+                        self.weather.weather_intensity,
+                        self.weather.light_level,
+                        camera_focus=camera_focus,
+                        shadow=shadow,
+                    )
                 self.weather.update(dt)
-                self.weather_overlay.set_weather(self.weather.weather_type,
-                                                 self.weather.weather_intensity,
-                                                 self.weather.wind_direction)
-                if self.weather.weather_type != 'clear':
-                    self.weather_overlay.update(dt)
-                    self.weather_overlay.draw()
-                
+                if not self.is_server:
+                    self.weather_overlay.set_weather(self.weather.weather_type,
+                                                     self.weather.weather_intensity,
+                                                     self.weather.wind_direction)
+                    if self.weather.weather_type != 'clear':
+                        self.weather_overlay.update(dt)
+                        self.weather_overlay.draw()
+
                 wind_force = self.weather.calculate_wind_force()
 
                 # GPU day/night lighting (Phase L): ambient darkness floor by time-of-day
@@ -2223,7 +2233,7 @@ class Level4:
                 # composited as a multiply light-map. Runs after the world + rain overlay
                 # and before the HUD, so the world is lit but the UI stays full-bright.
                 lighting = self.layout_manager.lighting
-                if lighting is not None:
+                if lighting is not None and not self.is_server:
                     W, H = self.backend.get_size()
                     offset = self.layout_manager.visible_sprites.offset
                     torches = [s for s in self.layout_manager.visible_sprites.sprites()
@@ -2265,9 +2275,10 @@ class Level4:
                     )
                     else 0
                 )
-                self.layout_manager.visible_sprites.custom_draw(
-                    self.player, dt, _grass_sway, 0.5, camera_focus=camera_focus
-                )
+                if not self.is_server:
+                    self.layout_manager.visible_sprites.custom_draw(
+                        self.player, dt, _grass_sway, 0.5, camera_focus=camera_focus
+                    )
             #self.layout_manager.update_weather(self.weather)
             
             # CS-fix: in multiplayer the SERVER owns enemy spawning (it runs the
@@ -2276,9 +2287,10 @@ class Level4:
             if getattr(self, "mp_client", None) is None:
                 self.layout_manager.spawner.handle_spawn_areas(self.player, dt_real)
             # Check for and update enemy sprites specifically
-            self.ui.display(self.player)
-            self._draw_benchmark_overlay()
-            self._draw_rts_validation_overlay()
+            if not self.is_server:
+                self.ui.display(self.player)
+                self._draw_benchmark_overlay()
+                self._draw_rts_validation_overlay()
 
             self._frame_number += 1
             entity_id_map = {
@@ -2360,24 +2372,25 @@ class Level4:
                         pygame.event.post(pygame.event.Event(pygame.QUIT))
 
         self.save_enemy_states(self.current_layout)  # mkght be a big inefficiency
-        self.layout_manager.display_time(self.backend)
-        self._draw_gold_pickup_popup()
-        rts_active = (
-            getattr(self, "rts_session", None) is not None
-            and self.rts_session.is_active()
-        )
-        if not self.inventory_open:
-            draw_belt_hud(self.backend, self.player, self.player.inventory)
-            if getattr(self.player, "_charge_runtime", None) is not None:
-                draw_charge_bar(
-                    self.backend,
-                    self.player,
-                    self.player.action_controller.get_charge_ratio(self.player),
-                )
-            if rts_active:
-                self.rts_session.draw()
-            else:
-                self._draw_interact_prompt()
+        if not self.is_server:
+            self.layout_manager.display_time(self.backend)
+            self._draw_gold_pickup_popup()
+            rts_active = (
+                getattr(self, "rts_session", None) is not None
+                and self.rts_session.is_active()
+            )
+            if not self.inventory_open:
+                draw_belt_hud(self.backend, self.player, self.player.inventory)
+                if getattr(self.player, "_charge_runtime", None) is not None:
+                    draw_charge_bar(
+                        self.backend,
+                        self.player,
+                        self.player.action_controller.get_charge_ratio(self.player),
+                    )
+                if rts_active:
+                    self.rts_session.draw()
+                else:
+                    self._draw_interact_prompt()
         self.player_dead = getattr(self.player, "is_dead", False)
 
         # Multiplayer (additive, inert unless PRCH_MULTIPLAYER_ENABLED=1 -- see

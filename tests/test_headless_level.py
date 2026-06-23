@@ -128,3 +128,64 @@ def test_headless_run_spawns_and_moves_real_enemies():
     assert getattr(level.player, "health", 0) > 0
     for e in spawner.enemies:
         assert math.isfinite(e.rect.centerx) and math.isfinite(e.rect.centery)
+
+
+def test_server_run_skips_render_but_simulates_identically(monkeypatch):
+    """Slice 2: Level4.run()'s draw-only calls are guarded by `not is_server`.
+
+    Proves both halves of the guard contract:
+      * the server path (is_server=True) makes ZERO custom_draw calls, the
+        client path (is_server=False) draws every frame; and
+      * skipping rendering does NOT change the simulation -- given the same seed
+        and a deterministic clock, the two paths produce a bit-identical world
+        (enemy positions/health + player health) after a long run with spawns,
+        movement, and combat.
+
+    The deterministic clock matters because enemy attack cadence is wall-clock
+    gated (pygame.time.get_ticks); pinning it to a frame counter makes both runs
+    comparable.
+    """
+    frame = {"n": 0}
+    monkeypatch.setattr(pygame.time, "get_ticks", lambda: frame["n"] * 16)
+
+    def run_one(is_server):
+        frame["n"] = 0
+        random.seed(20260623)
+        level = build_headless_level(level_number=6, is_server=is_server)
+        spawner = level.layout_manager.spawner
+        _a, center, freq = _first_enemy_area(level)
+        level.player.rect.center = center
+        level.player.hitbox.center = center
+
+        draw_calls = {"n": 0}
+        vs = level.layout_manager.visible_sprites
+        real_custom_draw = vs.custom_draw
+
+        def counting_custom_draw(*args, **kwargs):
+            draw_calls["n"] += 1
+            return real_custom_draw(*args, **kwargs)
+
+        vs.custom_draw = counting_custom_draw
+
+        frames = int(freq * 60) + 60  # one spawn cycle + combat frames
+        for _ in range(frames):
+            level.run(1.0 / 60.0)
+            frame["n"] += 1
+
+        digest = sorted(
+            (round(e.rect.centerx), round(e.rect.centery), round(getattr(e, "health", 0)))
+            for e in spawner.enemies
+        )
+        return draw_calls["n"], digest, round(level.player.health, 3), frames
+
+    client_calls, client_digest, client_hp, frames = run_one(False)
+    server_calls, server_digest, server_hp, _ = run_one(True)
+
+    # The guard actually gates rendering.
+    assert client_calls == frames  # client draws every frame
+    assert server_calls == 0  # server renders nothing
+
+    # ...and skipping render leaves the simulation bit-identical.
+    assert server_digest == client_digest
+    assert server_hp == client_hp
+    assert len(server_digest) > 0  # the run genuinely simulated enemies + combat
