@@ -263,6 +263,12 @@ class Level4:
         # use it to drive the sim-only path and multi-player world semantics.
         # Default False keeps singleplayer/client byte-identical.
         self.is_server = bool(is_server)
+        # Server-authoritative co-op: the networked players, as in-world
+        # server-mode RemotePlayers (player_id -> RemotePlayer). They live in
+        # visible_sprites + the entity quad tree so the server's enemies aggro
+        # and damage them; the real self.player stays a parked sentinel (combat
+        # context default_target). Empty + unused unless is_server.
+        self.server_players = {}
         self.benchmark_runtime = BENCHMARK_RUNTIME
         self._benchmark_summary_written = False
         self._benchmark_player_anchor = None
@@ -1978,6 +1984,81 @@ class Level4:
         self.remote_players[player_id] = remote
         return remote
 
+    # -- Server-authoritative co-op: networked players as in-world targets ----
+    #    The HEADLESS SERVER runs this real Level4; each connected client is a
+    #    server-mode RemotePlayer in visible_sprites + the entity quad tree, so
+    #    the real enemy sim aggros + damages it. Health/death stay client-owned;
+    #    the server only records hits to relay (drain_player_hits). These methods
+    #    are only ever called when is_server (the GameServer drives them).
+
+    def add_server_player(self, player_id, character, x, y, health=None):
+        """Add a networked player to the server's world as a server-mode
+        RemotePlayer. Returns the existing one if already present."""
+        existing = self.server_players.get(player_id)
+        if existing is not None:
+            return existing
+        remote = RemotePlayer(
+            player_id=player_id,
+            character_assets=character,
+            center=(int(x), int(y)),
+            groups=[self.layout_manager.visible_sprites],
+            obstacle_sprites=self.layout_manager,
+            initial_stats=self.player_base_stats,
+            level=self,
+            input_manager=self.input_manager,
+            QuadTree=self.layout_manager.obstacle_quad_tree,
+            entity_quad_tree=self.layout_manager.entity_quad_tree,
+            server_mode=True,
+        )
+        if health is not None:
+            remote.health = health
+        self.server_players[player_id] = remote
+        return remote
+
+    def remove_server_player(self, player_id):
+        """Drop a departed player: kill the sprite (removes it from every group)
+        and clear its entity-tree entry so enemies disengage."""
+        remote = self.server_players.pop(player_id, None)
+        if remote is None:
+            return
+        try:
+            self.layout_manager.entity_quad_tree.remove(remote.id)
+        except Exception:
+            pass
+        remote.kill()
+
+    def set_server_player_state(self, player_id, x, y, health=None):
+        """Apply a client's latest report to its server-side RemotePlayer (its
+        position drives enemy aggro; health gates it -- dead -> ignored)."""
+        remote = self.server_players.get(player_id)
+        if remote is not None:
+            remote.set_network_state(x, y, health)
+        return remote
+
+    def drain_player_hits(self):
+        """Collect + clear the enemy->player hits the sim recorded on every
+        server player this tick, as MSG_HIT_PLAYER broadcast events. The victim's
+        client applies each to its REAL player (its own i-frames/death)."""
+        events = []
+        for player_id, remote in self.server_players.items():
+            for amount, attack_type in remote.drain_incoming_hits():
+                events.append({
+                    "type": MSG_HIT_PLAYER,
+                    "target_player_id": player_id,
+                    "amount": amount,
+                    "attack_type": attack_type,
+                })
+        return events
+
+    def _spawn_area_reference(self):
+        """Proximity reference for handle_spawn_areas. Singleplayer: the local
+        player (byte-identical). Server: a networked player (co-op players are
+        usually together; per-area nearest is a later refinement) so spawn areas
+        fire where the players actually are, not at the parked sentinel."""
+        if self.is_server and self.server_players:
+            return next(iter(self.server_players.values()))
+        return self.player
+
     # -- Co-op shared enemies (Stage C, C1): host relays its enemy sim; joiner
     #    renders the relayed enemies as render-only puppets (see EnemyPuppet). --
 
@@ -2285,7 +2366,7 @@ class Level4:
             # map's spawn areas), so the client does NOT -- this also stops the
             # per-client (unsynced) neutral spawns. Singleplayer is unchanged.
             if getattr(self, "mp_client", None) is None:
-                self.layout_manager.spawner.handle_spawn_areas(self.player, dt_real)
+                self.layout_manager.spawner.handle_spawn_areas(self._spawn_area_reference(), dt_real)
             # Check for and update enemy sprites specifically
             if not self.is_server:
                 self.ui.display(self.player)

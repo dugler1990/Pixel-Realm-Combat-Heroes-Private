@@ -20,6 +20,7 @@ import pygame
 
 from Settings import HITBOX_OFFSET
 from Player import BasePlayer
+from hashRect import HashableRect
 
 
 class RemotePlayer(BasePlayer):
@@ -37,7 +38,8 @@ class RemotePlayer(BasePlayer):
                  level,
                  input_manager,
                  QuadTree,
-                 entity_quad_tree):
+                 entity_quad_tree,
+                 server_mode=False):
         # No-op combat callbacks: RemotePlayer never attacks/casts/evades in v0
         # (input() is overridden; the combat methods are inherited-but-unused),
         # so we intentionally do NOT wire the level's real create_attack/etc.
@@ -88,6 +90,19 @@ class RemotePlayer(BasePlayer):
         # idle frame coherently even before its first update() tick.
         self.status = self._net_status
 
+        # --- Server-authoritative mode -------------------------------------
+        # On the HEADLESS SERVER a RemotePlayer is the in-world stand-in for a
+        # networked player: it lives in the entity quad tree so the server's
+        # enemies aggro + attack it, but the server does NOT own its health (the
+        # owning client does -- its own i-frames/death). So a server-mode
+        # RemotePlayer RECORDS incoming damage for relay (drain_incoming_hits ->
+        # MSG_HIT_PLAYER) instead of applying it locally, and its position/health
+        # come from the client's reports (set_network_state). The CLIENT-side
+        # RemotePlayer (server_mode=False) is unchanged: a render-only puppet.
+        self._server_mode = bool(server_mode)
+        # [(amount, attack_type), ...] drained each tick by the server.
+        self.incoming_hits = []
+
     def apply_snapshot(self, x, y, direction_x, direction_y, status):
         """Store the latest authoritative network values + reposition NOW.
 
@@ -123,9 +138,58 @@ class RemotePlayer(BasePlayer):
         #
         # Signature matches what YSortCameraGroup._update_single_sprite passes
         # to every Entity: update(dt=..., QuadTree=..., entity_quad_tree=...).
+        if self._server_mode:
+            # Server: keep this player current in the entity quad tree so enemies
+            # aggro it at its reported position (dead -> not re-inserted, so they
+            # disengage). No animate (nothing is rendered); position/health come
+            # from set_network_state, called before the tick.
+            if entity_quad_tree is not None:
+                entity_quad_tree.insert(
+                    HashableRect(self.hitbox, self.id),
+                    alive=(self.health > 0),
+                    remove_existing=True,
+                )
+            return
         self.input()
         self.animate()
         self._sync_position_from_snapshot()
+
+    def set_network_state(self, x, y, health=None):
+        """Server: set this player's authoritative position (from the client's
+        report) and, if given, its last-reported health (which gates aggro -- a
+        downed player drops out of the entity tree). No-op'ish for client mode."""
+        self._net_x, self._net_y = x, y
+        self.hitbox.center = (int(x), int(y))
+        self.rect.center = self.hitbox.center
+        if health is not None:
+            self.health = health
+
+    def drain_incoming_hits(self):
+        """Server: return + clear the enemy hits recorded this tick (each becomes
+        an MSG_HIT_PLAYER the owning client applies to its REAL player)."""
+        hits = self.incoming_hits
+        self.incoming_hits = []
+        return hits
+
+    def receive_interaction(self, ctx):
+        # Server mode: RECORD the damage for relay; do NOT touch local health (the
+        # owning client is authoritative -- its own i-frames/death). Mirrors the
+        # amount-resolution in BasePlayer.receive_interaction. Client mode: defer
+        # to the inherited behavior (unused on a render-only puppet, but correct).
+        if not self._server_mode:
+            return super().receive_interaction(ctx)
+        if getattr(ctx, "kind", None) != "damage":
+            return
+        amount = ctx.amount
+        if amount is None:
+            src = ctx.source
+            if src is not None and hasattr(src, "get_full_weapon_damage") and hasattr(src, "get_full_magic_damage"):
+                amount = (src.get_full_weapon_damage()
+                          if ctx.attack_type == "weapon"
+                          else src.get_full_magic_damage())
+        if amount is None:
+            return
+        self.incoming_hits.append((amount, ctx.attack_type))
 
     def _sync_position_from_snapshot(self):
         # v0 "snap" (no interpolation): teleport to each authoritative position.
