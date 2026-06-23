@@ -21,6 +21,8 @@ class InteractionContext:
     phase: Optional[str] = None
     effect_key: Optional[str] = None
     effect_area_id: Optional[Any] = None
+    impulse_x: Optional[float] = None
+    impulse_y: Optional[float] = None
     tags: Set[str] = field(default_factory=set)
 
 

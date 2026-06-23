@@ -19,7 +19,8 @@ class _BuildSpawnAdapter(FakeWorldAdapter):
         self.env = []
 
         class _LM:
-            pass
+            def register_obstacle_sprite(self, sprite, live=True):
+                pass
 
         lm = _LM()
         lm.environment_interactables = self.env

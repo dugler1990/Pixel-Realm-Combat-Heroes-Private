@@ -6,6 +6,7 @@ from Spawner import Spawner
 from ItemSpawner import ItemSpawner
 from Item import Item
 from Inventory import draw_belt_hud
+from abilities.charge_hud import draw_charge_bar
 from ItemVisual import ItemVisual
 import pygame
 from Settings import *
@@ -60,7 +61,15 @@ from rts import RtsSession, RtsWorldSim
 from rts.world_adapter import RtsWorldAdapter
 from Support import resolve_env_interactable_path
 # Multiplayer (additive; inert unless a multiplayer bootstrap set self.mp_client).
-from network import MSG_HIT_ENEMY, MSG_PLAYER_JOINED, MSG_PLAYER_LEFT, MSG_STATE_UPDATE
+from network import (
+    MSG_ENEMY_DIED,
+    MSG_HIT_PLAYER,
+    MSG_ITEM_DROPPED,
+    MSG_ITEM_REMOVED,
+    MSG_PLAYER_JOINED,
+    MSG_PLAYER_LEFT,
+    MSG_STATE_UPDATE,
+)
 from RemotePlayer import RemotePlayer
 from EnemyPuppet import EnemyPuppet
 #with open('triggers.json',r) as file
@@ -241,6 +250,7 @@ LAYOUT_TO_LEVEL = {
     '../levels/Map7': 7,
     '../levels/Map8': 8,
     '../levels/Frostreach/ice_wall_gate': 9,
+    '../levels/Frostreach/expanse': 10,
 }
 
 
@@ -393,7 +403,7 @@ class Level4:
                 self.create_attack,
                 self.destroy_attack,
                 self.create_magic,
-                self.create_evasion,
+                self.create_trap,
                 self.player_base_stats,
                 self,
                 self.input_manager,
@@ -1216,15 +1226,36 @@ class Level4:
 
 
     def handle_item_collection(self):
-        """Check for collisions between the player and items to handle item collection."""
+        """Check for collisions between the player and items to handle item collection.
+
+        CS5b (server-authoritative co-op): shared items (tagged with `_drop_id`)
+        are SERVER-arbitrated. EVERY multiplayer client treats them the same --
+        it does NOT pick up locally; it claims the item from the server
+        (send_pickup_item) and the award arrives via item_removed (only the
+        awarded `to` player banks it; first claim wins). Untagged items
+        (singleplayer) are picked up locally, unchanged.
+        """
+        is_mp = getattr(self, "mp_client", None) is not None
         for visual_item in [sprite for sprite in self.layout_manager.visible_sprites if isinstance(sprite, ItemVisual)]:
-            if self.player.rect.colliderect(visual_item.rect):
-                ok = self.player.pickup_item(visual_item.item)
-                if ok:
-                    self.item_spawner.remove_item(visual_item.item)
-                    visual_item.kill()
-                else:
+            if not self.player.rect.colliderect(visual_item.rect):
+                continue
+            drop_id = getattr(visual_item, "_drop_id", None)
+            if is_mp and drop_id is not None:
+                # Pre-check room so the server never awards us an item we can't
+                # hold (else it'd be removed for everyone and lost). Gold always fits.
+                if not self.player.can_pickup(visual_item.item):
                     visual_item.start_reject_shake()
+                    continue
+                if drop_id not in self._requested_pickups:
+                    self._requested_pickups.add(drop_id)
+                    self.mp_client.send_pickup_item(drop_id)
+                continue  # the server owns the award; don't pick up locally
+            ok = self.player.pickup_item(visual_item.item)
+            if ok:
+                self.item_spawner.remove_item(visual_item.item)
+                visual_item.kill()
+            else:
+                visual_item.start_reject_shake()
 
     def check_enemy_deaths(self):
         dead_enemies = [enemy for enemy in self.spawner.enemies if enemy.is_dead()]
@@ -1232,25 +1263,16 @@ class Level4:
         #print("dead_enemies")
         #print(len(dead_enemies))
         
-        processed_enemies = [] 
-        #print(f"DEAD ENEMIES : {dead_enemies}")
+        # CS2+: in multiplayer the SERVER owns the enemy sim, so this client's
+        # `spawner.enemies` is empty (enemies render as puppets) and this loop is a
+        # no-op -- enemy death FX/XP/loot are all server-emitted (enemy_died /
+        # item_dropped). This path is the SINGLEPLAYER drop logic, unchanged.
+        processed_enemies = []
         for enemy in dead_enemies:
             dropped_items = self.item_spawner.drop_from_enemy(enemy)
-            #print(dropped_item_info)
             if dropped_items:
-                # Convert the item drop position to map coordinates if necessary
-                drop_position = (enemy.rect.x, enemy.rect.y)
-                #self.layout_manager.place_items_on_map([dropped_item_info]) # Place items on map not used
-     
-                #print(f"ITEMS OUTPUTTED BY SPAWNER - DROPPED  ITEMS: {dropped_items}")
-                pos_offset_counter = 0
-                
                 for item in dropped_items:
-                    #item.pos[0][0] = drop_position[0] + pos_offset_counter*random.randint(12,40)
-                    #item.pos[0][1] = drop_position[1] + pos_offset_counter*random.randint(12,40)
                     self.layout_manager.add_item_visual(item)
-                    pos_offset_counter += 1
-
             processed_enemies.append(enemy)
         # Remove processed enemies from the list of enemies managed by the spawner
         #print("processed enemies")
@@ -1380,21 +1402,6 @@ class Level4:
                     
                 
      
-    def create_evasion(self, style, direction):
-        # Callback to handle particle creation on each movement step
-        # def handle_slide_particles(player):
-        #     current_tile_center = (
-        #         (player.rect.centerx // TILESIZE) * TILESIZE + TILESIZE // 2,
-        #         (player.rect.centery // TILESIZE) * TILESIZE + TILESIZE // 2
-        #     )
-        #     self.animation_player.create_particles("slide_effect", current_tile_center, self.player.groups())
-            
-        # Initiate the slide with the particle handling callback
-        if style == 'slide':
-            self.evasion_player.slide(self.player, direction)#, handle_slide_particles)
-        if style == 'create_ice_clone':
-            self.evasion_player.create_ice_clone( self.player, effect_type='freeze' , radius = 5)# TODO radiu should be a player attribute right ? player.evasion attribute 
-
     def destroy_attack(self):
         if self.current_attack:
             self.current_attack.kill()
@@ -1409,7 +1416,6 @@ class Level4:
         #print(self.attack_sprites)
         if self.attack_sprites:
 
-            
             for attack_sprite in self.attack_sprites:
                 #print("attack sprite position")
                 #print( attack_sprite.rect.left )
@@ -1854,6 +1860,10 @@ class Level4:
             self._mp_role = None      # None until host_id arrives; "host" | "joiner"
         if not hasattr(self, "_outbound_enemy_hits"):
             self._outbound_enemy_hits = []  # joiner -> host damage events (C2)
+        if not hasattr(self, "_shared_items"):
+            self._shared_items = {}         # drop_id -> ItemVisual (C2.5c, both sides)
+            self._requested_pickups = set() # drop_ids this joiner asked the host for
+            self._next_drop_id = 0          # host-side drop_id counter
         my_id = self.mp_client.player_id
 
         _msgs = self.mp_client.poll()
@@ -1876,25 +1886,24 @@ class Level4:
                     _net_log.debug("%s: player_left %s", my_id, pid)
 
             elif mtype == MSG_STATE_UPDATE:
-                # Co-op (Stage C): learn our role from host_id (host == first to
-                # join). The host runs the real enemy sim + relays it; the joiner
-                # suppresses its own spawner and renders the host's enemies as
-                # puppets. Until host_id is known, _mp_role stays None and the
-                # spawner stays suppressed (so neither side double-spawns).
+                # CS2 (server-authoritative enemies): the SERVER owns the enemy
+                # sim, so EVERY client renders the server's enemies as render-only
+                # puppets -- there is no host/joiner split for enemies. host_id is
+                # still tracked for legacy C2/C2.5 routing (repointed to the server
+                # in CS3-CS5) but no longer decides who simulates.
                 host_id = message.get("host_id")
                 if host_id is not None:
                     new_role = "host" if host_id == my_id else "joiner"
                     if new_role != self._mp_role:
                         _net_log.info("%s: role=%s (host_id=%s)", my_id, new_role, host_id)
-                    if new_role == "joiner" and self._mp_role != "joiner":
-                        # First time we learn we're the joiner: drop any enemies
-                        # spawned locally during level load (before mp_client/role
-                        # existed). From here the spawner is suppressed and the
-                        # host's enemies arrive as puppets.
-                        self._clear_local_enemies()
                     self._mp_role = new_role
-                if self._mp_role == "joiner":
-                    self._reconcile_enemy_puppets(message.get("enemies") or [])
+                # Drop any enemies this client spawned locally during level load
+                # (before mp_client was set) -- the spawner is now suppressed for
+                # ALL multiplayer clients and the server's enemies arrive as puppets.
+                if not getattr(self, "_mp_local_enemies_cleared", False):
+                    self._clear_local_enemies()
+                    self._mp_local_enemies_cleared = True
+                self._reconcile_enemy_puppets(message.get("enemies") or [])
 
                 for pid, snap in message["players"].items():
                     if pid == my_id:
@@ -1926,13 +1935,27 @@ class Level4:
                                        my_id, me_c, pid, rp_c,
                                        rp_c[0] - me_c[0], rp_c[1] - me_c[1])
 
-            elif mtype == MSG_HIT_ENEMY:
-                # Co-op (C2): a joiner's attack hit a shared enemy. Only the HOST
-                # receives these (the server forwards them to the host only); the
-                # host applies the relayed damage to its real enemy.
-                self._apply_relayed_enemy_hit(message.get("enemy_id"),
-                                              message.get("amount"),
-                                              message.get("attack_type"))
+            elif mtype == MSG_HIT_PLAYER:
+                # CS4: a server-owned enemy hit a player. Apply to MY real player
+                # only (each client filters by target_player_id); the local player's
+                # own get_damage handles i-frames + death.
+                if message.get("target_player_id") == my_id:
+                    self._apply_relayed_player_hit(message.get("amount"),
+                                                   message.get("attack_type"))
+
+            elif mtype == MSG_ENEMY_DIED:
+                # CS5a: a server-owned enemy died -> EVERY client plays the death
+                # FX/sound, removes the puppet, and gains the (full, co-op) XP.
+                self._handle_enemy_died(message)
+
+            elif mtype == MSG_ITEM_DROPPED:
+                # CS5b: the server dropped a shared item -> EVERY client shows it.
+                self._handle_item_dropped(message)
+
+            elif mtype == MSG_ITEM_REMOVED:
+                # CS5b: a shared item left the world (server-arbitrated pickup) ->
+                # everyone clears the visual; only the awarded player (`to`) banks it.
+                self._handle_item_removed(message.get("drop_id"), message.get("to"))
 
     def _spawn_remote_player(self, player_id, character, x, y):
         remote = RemotePlayer(
@@ -1999,12 +2022,16 @@ class Level4:
         return puppet
 
     def _clear_local_enemies(self):
-        """Joiner: remove locally-spawned enemies (kill() drops them from
-        visible_sprites/attackable_sprites; the list is plain so clear it too)."""
+        """CS2: drop locally-spawned enemies (kill() removes them from
+        visible_sprites/attackable_sprites; the list is plain so clear it too).
+        In multiplayer the SERVER owns the enemy sim and every client renders its
+        enemies as puppets, so no client keeps local enemies. Sets a flag so the
+        Main2 connect-time call and the inbox fallback don't double-clear."""
         for enemy in list(self.spawner.enemies):
             enemy.kill()
         self.spawner.enemies.clear()
-        _net_log.debug("joiner cleared local enemies; rendering host's instead")
+        self._mp_local_enemies_cleared = True
+        _net_log.debug("cleared local enemies; rendering the server's instead")
 
     def _queue_enemy_hit(self, enemy_id, amount, attack_type):
         """Joiner: queue a damage event for an enemy puppet our attack hit (C2).
@@ -2014,49 +2041,77 @@ class Level4:
         self._outbound_enemy_hits.append({
             "enemy_id": enemy_id, "amount": amount, "attack_type": attack_type,
         })
-        _net_log.info("[joiner] queued hit enemy=%s amt=%s type=%s", enemy_id, amount, attack_type)
+        _net_log.debug("[joiner] hit puppet enemy=%s amt=%s type=%s", enemy_id, amount, attack_type)
 
-    def _apply_relayed_enemy_hit(self, enemy_id, amount, attack_type):
-        """Host: apply a joiner's relayed hit to the REAL enemy (C2). Routed
-        through the resolver so the enemy's i-frames + retaliation behave exactly
-        as for the host's own hits; the resulting health/death rides the C1 relay
-        back to both clients."""
-        if enemy_id is None or amount is None:
+    # (CS5: _mp_is_host/_mp_is_joiner were removed -- the server is authoritative,
+    #  so no client behaviour depends on a host/joiner role anymore. `_mp_role`
+    #  (derived from the broadcast host_id) is kept only as informational
+    #  bookkeeping -- a hook for a future lobby/host-migration display.)
+
+    # -- C2.5c: shared loot (host-authoritative items) --
+
+    def _handle_item_dropped(self, message):
+        """CS5b: show a shared item the SERVER dropped, tagged with its drop_id.
+        For gold the server relays the rolled `gold` amount, so we override the
+        base config's effect to keep the amount exact on every client."""
+        cfg = self.item_spawner.item_mapping.get(message.get("item_id"))
+        if cfg is None:
             return
-        enemy = next((e for e in self.spawner.enemies if e.id == enemy_id), None)
-        _net_log.info("[host] apply hit enemy=%s found=%s amt=%s hp=%s",
-                      enemy_id, enemy is not None, amount,
-                      getattr(enemy, "health", None))
-        if enemy is None:
-            return  # already dead/despawned on the host
-        ctx = InteractionContext(
-            kind="damage",
-            source_kind="player_attack",
-            source=None,               # joiner's stats already resolved into amount
-            source_team="player",
-            target=enemy,
-            amount=amount,
-            attack_type=attack_type,
-        )
-        self.interaction_resolver.apply(ctx)
+        cfg = copy.deepcopy(cfg)  # don't mutate the shared item_mapping
+        gold = message.get("gold")
+        if gold is not None:
+            cfg["effect"] = {"gold": int(gold)}
+        item = self.item_spawner.create_item(cfg, [message.get("x"), message.get("y")])
+        visual = self.layout_manager.add_item_visual(item)
+        visual._drop_id = message.get("drop_id")
+        self._shared_items[message.get("drop_id")] = visual
 
-    def _gather_enemy_relay(self):
-        """Host: snapshot each live enemy's render state for the wire (C1)."""
-        out = []
-        for e in self.spawner.enemies:
-            monster_name = getattr(e, "monster_name", None)
-            if monster_name is None:
-                continue
-            out.append({
-                "id": e.id,
-                "type": monster_name,
-                "x": e.rect.centerx,
-                "y": e.rect.centery,
-                "status": getattr(e, "status", "idle"),
-                "dir": e.get_direction_as_string() if hasattr(e, "get_direction_as_string") else "right",
-                "health": getattr(e, "health", 0),
-            })
-        return out
+    def _handle_item_removed(self, drop_id, to=None):
+        """All: a shared item left the world. Only the AWARDED player (`to`) adds
+        it to their inventory -- this prevents a double-grant when the host and a
+        joiner reach the same item. Everyone clears the visual."""
+        self._requested_pickups.discard(drop_id)
+        visual = self._shared_items.pop(drop_id, None)
+        if visual is None:
+            return
+        if to is not None and to == self.mp_client.player_id:
+            self.player.pickup_item(visual.item)
+        self.item_spawner.remove_item(visual.item)
+        visual.kill()
+
+    # (CS5b: _apply_relayed_pickup was removed -- the SERVER arbitrates shared-loot
+    #  pickups now (ServerLevel.arbitrate_pickup), not a host client.)
+
+    def _handle_enemy_died(self, message):
+        """Joiner (C2.5b): a host enemy died -> play its death particles + sound,
+        award the SAME XP to our player (co-op = both get full), and remove the
+        puppet with FX (instead of the silent C1 reconcile-kill)."""
+        x, y = message.get("x"), message.get("y")
+        if x is not None and y is not None:
+            self.trigger_death_particles((x, y), message.get("monster", ""))
+        puppet = self.enemy_puppets.pop(message.get("id"), None)
+        if puppet is not None:
+            try:
+                puppet.death_sound.play()
+            except Exception:
+                pass
+            puppet.kill()
+        self.add_exp(message.get("exp", 0))
+
+    # (CS2/CS3: the host-side _gather_enemy_relay + _apply_relayed_enemy_hit were
+    #  removed -- the SERVER now owns the enemy sim. It gathers enemy render-state
+    #  and applies relayed player->enemy hits in Server/server_level.py
+    #  (ServerLevel.gather_enemy_relay / apply_enemy_hit).)
+
+    def _apply_relayed_player_hit(self, amount, attack_type):
+        """CS4: a server-owned enemy hit MY player. Apply the relayed damage to
+        the real local player via the existing get_damage, so its i-frames,
+        hurt-flash, and death all behave exactly as in singleplayer. The server
+        resolved the amount and gates nothing -- the local player's own
+        `vulnerable` window is authoritative for its own health."""
+        if amount is None:
+            return
+        self.player.get_damage(amount, attack_type)
 
     #@profile
     def run(self,dt):
@@ -2210,7 +2265,11 @@ class Level4:
                 )
             #self.layout_manager.update_weather(self.weather)
             
-            self.layout_manager.spawner.handle_spawn_areas( self.player,dt_real )        
+            # CS-fix: in multiplayer the SERVER owns enemy spawning (it runs the
+            # map's spawn areas), so the client does NOT -- this also stops the
+            # per-client (unsynced) neutral spawns. Singleplayer is unchanged.
+            if getattr(self, "mp_client", None) is None:
+                self.layout_manager.spawner.handle_spawn_areas(self.player, dt_real)
             # Check for and update enemy sprites specifically
             self.ui.display(self.player)
             self._draw_benchmark_overlay()
@@ -2304,6 +2363,12 @@ class Level4:
         )
         if not self.inventory_open:
             draw_belt_hud(self.backend, self.player, self.player.inventory)
+            if getattr(self.player, "_charge_runtime", None) is not None:
+                draw_charge_bar(
+                    self.backend,
+                    self.player,
+                    self.player.action_controller.get_charge_ratio(self.player),
+                )
             if rts_active:
                 self.rts_session.draw()
             else:
@@ -2317,23 +2382,23 @@ class Level4:
         # we send the player's ACTUAL rect.center (from Entity.move) so remotes
         # render exactly where we are, not a server re-simulation that drifts.
         if getattr(self, "mp_client", None) is not None:
-            # Co-op (Stage C): the HOST also relays its live enemy render state;
-            # the server stores + rebroadcasts it to the joiner. Non-host clients
-            # send no enemies (the joiner renders the host's).
-            enemy_relay = self._gather_enemy_relay() if getattr(self, "_mp_role", None) == "host" else None
+            # CS2: the SERVER owns the enemy sim now, so clients no longer relay
+            # enemy state -- every client just reports its own player and renders
+            # the server's enemies as puppets.
+            # CS4: also relay health so the server's enemy aggro drops a downed player.
             self.mp_client.send_state(
                 self.player.rect.centerx,
                 self.player.rect.centery,
                 self.player.direction.x,
                 self.player.direction.y,
                 self.player.attacking,
-                enemies=enemy_relay,
+                health=getattr(self.player, "health", None),
             )
             # C2: flush this frame's enemy-damage events (joiner: our attacks on
             # the shared enemies). The server forwards them to the host.
             outbound_hits = getattr(self, "_outbound_enemy_hits", None)
             if outbound_hits:
-                _net_log.info("[joiner] sending %d enemy hits to host", len(outbound_hits))
+                _net_log.debug("[joiner] sending %d enemy hits to host", len(outbound_hits))
                 for hit in outbound_hits:
                     self.mp_client.send_hit_enemy(hit["enemy_id"], hit["amount"], hit["attack_type"])
                 outbound_hits.clear()

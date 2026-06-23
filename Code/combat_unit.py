@@ -507,7 +507,12 @@ class CombatUnit(Entity):
     
     
     
+    def is_dash_active(self) -> bool:
+        return getattr(self, "_dash_runtime", None) is not None
+
     def actions(self, player, quadtree=None):
+        if self.is_dash_active():
+            return
         if self.status != "Summoning":  # TODO: Only perform actions if not summoning - should be if casting, need logic here 
             self.combat_strategy.decide_action(self, player)
             self.combat_strategy.move(self, player)
@@ -609,6 +614,12 @@ class CombatUnit(Entity):
     def can_receive_interaction(self, ctx: InteractionContext):
         if ctx.kind == "effect_state":
             return True
+        if ctx.kind == "impulse":
+            if "friendly_fire_impulse" in ctx.tags:
+                return True
+            if ctx.source_team == self.team_id:
+                return False
+            return True
         if ctx.kind != "damage":
             return False
         if ctx.source_team == self.team_id:
@@ -616,6 +627,13 @@ class CombatUnit(Entity):
         return True
 
     def receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "impulse":
+            force = pygame.math.Vector2(ctx.impulse_x or 0, ctx.impulse_y or 0)
+            follow_through = 0.5
+            if ctx.source is not None:
+                follow_through = float(getattr(ctx.source, "impulse_follow_through", 0.5))
+            self.apply_impulse(force, follow_through=follow_through)
+            return
         if ctx.kind == "effect_state":
             super().receive_interaction(ctx)
             return
@@ -674,7 +692,20 @@ class CombatUnit(Entity):
         current_time = pygame.time.get_ticks()
         if self.frozen and current_time - self.freeze_time > self.freeze_duration:
             self.thaw()
-        if not self.frozen and self.status == 'move':
+        runtime = getattr(self, "_dash_runtime", None)
+        if runtime is not None:
+            ability = runtime.get("_ability")
+            if ability is not None:
+                from abilities.protocol import CombatAbilityContext
+
+                ability.tick(
+                    self,
+                    CombatAbilityContext.from_enemy(self),
+                    dt,
+                    QuadTree,
+                    entity_quad_tree,
+                )
+        elif not self.frozen and self.status == 'move':
             self.move(speed = self.speed,
                       QuadTree = QuadTree ,
                       entity_quad_tree = entity_quad_tree)

@@ -279,9 +279,11 @@ class LayoutManager:
         self.item_spawner = item_spawner
 
     def add_item_visual(self, item):
-        """Wrap Item in ItemVisual and add to visible_sprites."""
+        """Wrap Item in ItemVisual and add to visible_sprites. Returns the visual
+        (co-op tags it with a drop_id for shared-loot sync)."""
         item_visual = ItemVisual(item=item, groups=[self.visible_sprites])
         self.visible_sprites.add(item_visual)
+        return item_visual
 
     def _load_grass_profiles(self, tmx_path):
         """Load grass_profiles.json from layout folder first, else shared levels/tmx/."""
@@ -1579,6 +1581,8 @@ class LayoutManager:
                 getattr(tmx_object_layer, "name", ""),
             )
             return
+        if not hasattr(self, "placed_enemy_spawns"):
+            self.placed_enemy_spawns = []
         tiled_tile_width = self.tmxdata.tilewidth
         tiled_tile_height = self.tmxdata.tileheight
 
@@ -1595,6 +1599,12 @@ class LayoutManager:
             spawn_cfg["pos"] = pos
 
             if spawn_cfg["kind"] == "enemy":
+                # CS2 (server-authoritative co-op): record every placed-enemy
+                # spawn config so a multiplayer client can upload the map's enemy
+                # spec to the server, which owns the enemy sim. Collected
+                # regardless of spawning (the spawner is suppressed in MP, so
+                # spawn_enemy is a no-op there -- but the spec is still needed).
+                self.placed_enemy_spawns.append(spawn_cfg)
                 self.spawner.spawn_enemy(spawn_cfg)
             else:
                 self.spawner.spawn_neutral(spawn_cfg)
@@ -1659,6 +1669,9 @@ class LayoutManager:
         
         if hasattr(self, 'spawner'):
             self.spawner.spawn_areas = [] # each layout start fresh spawn areas if any.ofc.
+        # CS2: collected fresh each layout load -- the placed-enemy spawn spec a
+        # multiplayer client uploads so the server can own the enemy sim.
+        self.placed_enemy_spawns = []
         #print(f"starting layout : {layout_path}")        
         # Clear existing sprites from groups
         self.ground_sprites.empty()

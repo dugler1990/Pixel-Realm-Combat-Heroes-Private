@@ -1,0 +1,21 @@
+You are generating a flat 2D top-down RPG navigation / collision map for a game engine.
+
+Input: a painted Frostreach snow/ice terrain chunk (top-down pixel RPG, player-scale).
+
+Output ONLY a flat color segmentation map:
+- NO painted texture, NO shading, NO gradients, NO labels, NO grid lines, NO checkerboard
+- Smooth, continuous regions — walkable zones should have organic smooth edges, NOT blocky squares or jagged pixel stairs
+- Same camera angle, layout, and terrain silhouettes as the input
+
+Use these exact flat colors:
+- Pure black #000000 = outside the playable map (void / padding) — keep all black padding black
+- Bright green #00FF00 = walkable ground (snow paths, open fields, crossable ice)
+- Pure white #FFFFFF = solid obstacles (cliffs, rock faces, boulders, impassable water, tree trunks)
+- Pure blue #0000FF = canopy / walk-behind (tree tops, overhangs — player walks under)
+
+Game design rules:
+- Identify where a player character would actually walk in this map
+- Walkable paths should be generously connected and smooth, following visible trails and open snow
+- Block impassable cliffs, rocks, walls, and steep terrain with smooth obstacle outlines
+- Do not invent new terrain; match the input layout exactly
+- This is production collision data, not concept art

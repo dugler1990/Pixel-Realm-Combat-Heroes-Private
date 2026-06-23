@@ -63,11 +63,18 @@ def _make_stub_level(my_id="me"):
             obstacle_quad_tree=None,
             entity_quad_tree=None,
         ),
+        # CS2: every state_update now runs the (server-owned) enemy puppet
+        # reconcile + a one-time local-enemy clear. With no enemies these are
+        # no-ops, but the methods/attrs must resolve on the stub.
+        attackable_sprites=pygame.sprite.Group(),
+        spawner=SimpleNamespace(enemies=[]),
     )
     # Bind the real Level4 methods to the stub so self._spawn_remote_player etc.
     # resolve, without constructing a full (un-drawable) headless Level4.
     stub._spawn_remote_player = types.MethodType(Level4._spawn_remote_player, stub)
     stub._process_multiplayer_inbox = types.MethodType(Level4._process_multiplayer_inbox, stub)
+    stub._reconcile_enemy_puppets = types.MethodType(Level4._reconcile_enemy_puppets, stub)
+    stub._clear_local_enemies = types.MethodType(Level4._clear_local_enemies, stub)
     return stub
 
 

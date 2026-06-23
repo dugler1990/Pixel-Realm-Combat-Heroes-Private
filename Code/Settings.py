@@ -14,7 +14,7 @@ WINDOW_HEIGHT_RATIO = 0.6
 FPS = 30
 RENDER_BACKEND = os.environ.get("RENDER_BACKEND", "gpu")  # "cpu" | "gpu" — override via env for profiling
 DISPLAY_FLAGS = pygame.SRCALPHA
-TILESIZE = 150
+TILESIZE =150#150
 # Fraction of window width and height (1–100) used for the grass subsurface; centered on the display.
 GRASS_VIEWPORT_PERCENT = 100
 # Grass wind mode (see YSortCameraGroup.custom_draw):
@@ -130,6 +130,65 @@ magic_data = {
     "ice_ball":{ "strength":10, "cost":1,"graphic":"../Graphics/Particles/Ice_Ball_Down/ice_ball.png" }
 	}
 
+# Evasions / player abilities (type-dispatched via abilities.registry.build_ability)
+DEFAULT_EVASION_LOADOUT = ["slide", "create_ice_clone"]
+
+ability_data = {
+    "slide": {
+        "type": "dash",
+        "cost": 20,
+        "speed_mult": 3,
+        "duration_ms": 300,
+        "collision_mode": "pass_through",
+        "presentation": {
+            "status_template": "slide_{dir}",
+            "particle_template": "slide_{dir}",
+        },
+    },
+    "create_ice_clone": {
+        "type": "instant",
+        "cost": 2,
+        "effect_type": "freeze",
+        "radius": 5,
+    },
+    "leap_slam": {
+        "type": "charged_leap_slam",
+        "cost": 8,
+        "min_hold_ms": 80,
+        "max_hold_ms": 1500,
+        "min_charge_ratio": 0.25,
+        "max_horizontal_range": 1100,
+        "min_arc_height": 64,
+        "max_arc_height": 320,
+        "arc_height": 64,
+        "air_duration_min_ms": 280,
+        "air_duration_max_ms": 650,
+        "air_duration_ms": 650,
+        "travel_ease_power": 2.0,
+        "arc_rise_ratio": 0.55,
+        "arc_hang_ratio": 0.18,
+        "launch_snap_px": 16,
+        "air_control_speed": 2.5,
+        "air_control_max_ratio": 0.12,
+        "min_impact_radius": 40,
+        "max_impact_radius": 120,
+        "base_damage": 25,
+        "base_knockback": 14,
+        "velocity_follow_through": 0.5,
+        "damage_attack_type": "weapon",
+        "air_collision_mode": "pass_through",
+        "presentation": {
+            "charge_status": "leap_windup_{dir}",
+            "air_status": "jump_{dir}",
+            "land_status": "land_{dir}",
+            "end_status": "{dir}_idle",
+            "particle_template": "leap_impact",
+        },
+    },
+}
+
+evasion_data = ability_data
+
 # Enemies
 monster_data = {
 	"squid": {"health": 100,
@@ -181,7 +240,18 @@ monster_data = {
              "melee_attacks": [{"damage": 80, "cooldown": 1500}],
              "melee_attack_radius": 120, 
              "notice_radius": 1000,
-             
+             "special_attacks": [
+                 {"name": "Dash",
+                  "chance": 0.3,
+                  "cooldown": 5000,
+                  "cooldown_variability": 2000,
+                  "speed_mult": 2.5,
+                  "duration_ms": 350,
+                  "collision_mode": "resolve",
+                  "cost": 0,
+                  "trigger_conditions": [{"name": "in_range_of_player",
+                                          "parameters": {"radius": 200}}]},
+             ],
                 'combat_context':{
                     'damage_player': True,
                     'trigger_death_particles': True,

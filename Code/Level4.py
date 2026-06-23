@@ -1088,7 +1088,7 @@ class Level4:
                 self.create_attack,
                 self.destroy_attack,
                 self.create_magic,
-                self.create_evasion,
+                self.create_trap,
                 self.player_base_stats,
                 self,
                 self.input_manager,
@@ -1416,21 +1416,6 @@ class Level4:
                     
                 
      
-    def create_evasion(self, style, direction):
-        # Callback to handle particle creation on each movement step
-        # def handle_slide_particles(player):
-        #     current_tile_center = (
-        #         (player.rect.centerx // TILESIZE) * TILESIZE + TILESIZE // 2,
-        #         (player.rect.centery // TILESIZE) * TILESIZE + TILESIZE // 2
-        #     )
-        #     self.animation_player.create_particles("slide_effect", current_tile_center, self.player.groups())
-            
-        # Initiate the slide with the particle handling callback
-        if style == 'slide':
-            self.evasion_player.slide(self.player, direction)#, handle_slide_particles)
-        if style == 'create_ice_clone':
-            self.evasion_player.create_ice_clone( self.player, effect_type='freeze' , radius = 5)# TODO radiu should be a player attribute right ? player.evasion attribute 
-
     def destroy_attack(self):
         if self.current_attack:
             self.current_attack.kill()

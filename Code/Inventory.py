@@ -497,6 +497,18 @@ class Inventory:
             self.hand_item = None
             self.hand_qty = 0
 
+    def has_room_for(self, item):
+        """Non-mutating: would add_item() succeed? (room in an existing stack or
+        an empty backpack slot). Used by co-op to pre-check before requesting a
+        shared pickup, so the host doesn't award an item we can't hold."""
+        backpack = self.slots[self.backpack_start_index : self.belt_start_index]
+        if _item_is_stackable(item):
+            for slot in backpack:
+                if (slot.item is not None and slot.item.item_id == item.item_id
+                        and slot.quantity < MAX_STACK_PER_ITEM):
+                    return True
+        return any(slot.item is None for slot in backpack)
+
     def add_item(self, item):
         backpack = self.slots[self.backpack_start_index : self.belt_start_index]
 

@@ -1,0 +1,22 @@
+You are refining a draft collision map for a top-down pixel RPG game level.
+
+The input image shows the painted terrain chunk WITH a semi-transparent colored overlay (or a side panel) representing an automatic draft:
+- green overlay = draft walkable
+- white/red overlay = draft solid obstacles
+- blue overlay = draft canopy / walk-behind
+- black = out-of-map void
+
+Your job: output ONLY a clean flat color segmentation map (no painted art, no texture, no shading).
+
+Use these exact flat colors:
+- Pure black #000000 = void / outside playable map
+- Bright green #00FF00 = walkable ground
+- Pure white #FFFFFF = solid obstacles (cliffs, rocks, walls, blocked water)
+- Pure blue #0000FF = canopy / walk-behind (tree tops, overhangs)
+
+Fix mistakes in the draft overlay using the visible painted terrain underneath:
+- Keep real walkable snow paths and openings green.
+- Block all cliffs, rock masses, and impassable terrain white.
+- Mark obvious tree canopies blue where the player should walk behind.
+- Keep black padding black.
+- Do not invent new features. Same layout and camera as input.

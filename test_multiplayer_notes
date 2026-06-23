@@ -2,17 +2,45 @@ Terminal 1 — server (start this first)
 
 cd /home/fresh/projects/Pixel-Realm-Combat-Heroes-public/Server
 python3 server.py
+
+
+
+
+
+
+
+
 Terminal 2 — client "alice" (Orange Wizard)
+
 
 cd /home/fresh/projects/Pixel-Realm-Combat-Heroes-public/Code
 PRCH_MULTIPLAYER_ENABLED=1 \
 PRCH_MULTIPLAYER_PLAYER_ID=alice \
 PRCH_MULTIPLAYER_CHARACTER="../Graphics/Orange_Wizard/" \
 python3 Main2.py
+
+
+
+
+
+
+
+
 Terminal 3 — client "bob" (barb)
+
 
 cd /home/fresh/projects/Pixel-Realm-Combat-Heroes-public/Code
 PRCH_MULTIPLAYER_ENABLED=1 \
 PRCH_MULTIPLAYER_PLAYER_ID=bob \
 PRCH_MULTIPLAYER_CHARACTER="../Graphics/barb/" \
 python3 Main2.py
+
+Barb charged leap slam (evasion slot C, hold/release):
+- Asset folders under Graphics/barb/: leap_windup_{dir}/, jump_{dir}/, land_{dir}/
+- Impact particle: Graphics/Particles/leap_impact/
+- Tap C: small hop, small impact ring, modest knockback
+- Full hold + release at bar max: max range, large ring, strong knockback
+- Wizard slide unchanged (evasion_loadout slide + create_ice_clone)
+- Leap into wall: lands/AOE on far side (pass_through air v1)
+- Co-op: barb slam does not fling ally player (hostile-only impulse)
+

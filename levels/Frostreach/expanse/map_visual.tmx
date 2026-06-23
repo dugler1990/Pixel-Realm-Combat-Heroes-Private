@@ -1,0 +1,107 @@
+<?xml version='1.0' encoding='utf-8'?>
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="65" height="44" tilewidth="550" tileheight="550" infinite="0" nextlayerid="3" nextobjectid="99">
+ <tileset firstgid="1" source="painted_chunks.tsx" />
+ <tileset firstgid="50" source="collision_chunks.tsx" />
+ <objectgroup id="1" name="PaintedGround">
+  <object id="1" gid="1" x="77" y="3470" width="5056" height="3392" />
+  <object id="2" gid="2" x="5133" y="3470" width="5056" height="3392" />
+  <object id="3" gid="3" x="10189" y="3470" width="5056" height="3392" />
+  <object id="4" gid="4" x="15245" y="3470" width="5056" height="3392" />
+  <object id="5" gid="5" x="20301" y="3470" width="5056" height="3392" />
+  <object id="6" gid="6" x="25357" y="3470" width="5056" height="3392" />
+  <object id="7" gid="7" x="30413" y="3470" width="5056" height="3392" />
+  <object id="8" gid="8" x="77" y="6862" width="5056" height="3392" />
+  <object id="9" gid="9" x="5133" y="6862" width="5056" height="3392" />
+  <object id="10" gid="10" x="10189" y="6862" width="5056" height="3392" />
+  <object id="11" gid="11" x="15245" y="6862" width="5056" height="3392" />
+  <object id="12" gid="12" x="20301" y="6862" width="5056" height="3392" />
+  <object id="13" gid="13" x="25357" y="6862" width="5056" height="3392" />
+  <object id="14" gid="14" x="30413" y="6862" width="5056" height="3392" />
+  <object id="15" gid="15" x="77" y="10254" width="5056" height="3392" />
+  <object id="16" gid="16" x="5133" y="10254" width="5056" height="3392" />
+  <object id="17" gid="17" x="10189" y="10254" width="5056" height="3392" />
+  <object id="18" gid="18" x="15245" y="10254" width="5056" height="3392" />
+  <object id="19" gid="19" x="20301" y="10254" width="5056" height="3392" />
+  <object id="20" gid="20" x="25357" y="10254" width="5056" height="3392" />
+  <object id="21" gid="21" x="30413" y="10254" width="5056" height="3392" />
+  <object id="22" gid="22" x="77" y="13646" width="5056" height="3392" />
+  <object id="23" gid="23" x="5133" y="13646" width="5056" height="3392" />
+  <object id="24" gid="24" x="10189" y="13646" width="5056" height="3392" />
+  <object id="25" gid="25" x="15245" y="13646" width="5056" height="3392" />
+  <object id="26" gid="26" x="20301" y="13646" width="5056" height="3392" />
+  <object id="27" gid="27" x="25357" y="13646" width="5056" height="3392" />
+  <object id="28" gid="28" x="30413" y="13646" width="5056" height="3392" />
+  <object id="29" gid="29" x="77" y="17038" width="5056" height="3392" />
+  <object id="30" gid="30" x="5133" y="17038" width="5056" height="3392" />
+  <object id="31" gid="31" x="10189" y="17038" width="5056" height="3392" />
+  <object id="32" gid="32" x="15245" y="17038" width="5056" height="3392" />
+  <object id="33" gid="33" x="20301" y="17038" width="5056" height="3392" />
+  <object id="34" gid="34" x="25357" y="17038" width="5056" height="3392" />
+  <object id="35" gid="35" x="30413" y="17038" width="5056" height="3392" />
+  <object id="36" gid="36" x="77" y="20430" width="5056" height="3392" />
+  <object id="37" gid="37" x="5133" y="20430" width="5056" height="3392" />
+  <object id="38" gid="38" x="10189" y="20430" width="5056" height="3392" />
+  <object id="39" gid="39" x="15245" y="20430" width="5056" height="3392" />
+  <object id="40" gid="40" x="20301" y="20430" width="5056" height="3392" />
+  <object id="41" gid="41" x="25357" y="20430" width="5056" height="3392" />
+  <object id="42" gid="42" x="30413" y="20430" width="5056" height="3392" />
+  <object id="43" gid="43" x="77" y="23822" width="5056" height="3392" />
+  <object id="44" gid="44" x="5133" y="23822" width="5056" height="3392" />
+  <object id="45" gid="45" x="10189" y="23822" width="5056" height="3392" />
+  <object id="46" gid="46" x="15245" y="23822" width="5056" height="3392" />
+  <object id="47" gid="47" x="20301" y="23822" width="5056" height="3392" />
+  <object id="48" gid="48" x="25357" y="23822" width="5056" height="3392" />
+  <object id="49" gid="49" x="30413" y="23822" width="5056" height="3392" />
+ </objectgroup>
+ <objectgroup id="2" name="PaintedCollision">
+  <object id="50" gid="50" x="77" y="3470" width="5056" height="3392" />
+  <object id="51" gid="51" x="5133" y="3470" width="5056" height="3392" />
+  <object id="52" gid="52" x="10189" y="3470" width="5056" height="3392" />
+  <object id="53" gid="53" x="15245" y="3470" width="5056" height="3392" />
+  <object id="54" gid="54" x="20301" y="3470" width="5056" height="3392" />
+  <object id="55" gid="55" x="25357" y="3470" width="5056" height="3392" />
+  <object id="56" gid="56" x="30413" y="3470" width="5056" height="3392" />
+  <object id="57" gid="57" x="77" y="6862" width="5056" height="3392" />
+  <object id="58" gid="58" x="5133" y="6862" width="5056" height="3392" />
+  <object id="59" gid="59" x="10189" y="6862" width="5056" height="3392" />
+  <object id="60" gid="60" x="15245" y="6862" width="5056" height="3392" />
+  <object id="61" gid="61" x="20301" y="6862" width="5056" height="3392" />
+  <object id="62" gid="62" x="25357" y="6862" width="5056" height="3392" />
+  <object id="63" gid="63" x="30413" y="6862" width="5056" height="3392" />
+  <object id="64" gid="64" x="77" y="10254" width="5056" height="3392" />
+  <object id="65" gid="65" x="5133" y="10254" width="5056" height="3392" />
+  <object id="66" gid="66" x="10189" y="10254" width="5056" height="3392" />
+  <object id="67" gid="67" x="15245" y="10254" width="5056" height="3392" />
+  <object id="68" gid="68" x="20301" y="10254" width="5056" height="3392" />
+  <object id="69" gid="69" x="25357" y="10254" width="5056" height="3392" />
+  <object id="70" gid="70" x="30413" y="10254" width="5056" height="3392" />
+  <object id="71" gid="71" x="77" y="13646" width="5056" height="3392" />
+  <object id="72" gid="72" x="5133" y="13646" width="5056" height="3392" />
+  <object id="73" gid="73" x="10189" y="13646" width="5056" height="3392" />
+  <object id="74" gid="74" x="15245" y="13646" width="5056" height="3392" />
+  <object id="75" gid="75" x="20301" y="13646" width="5056" height="3392" />
+  <object id="76" gid="76" x="25357" y="13646" width="5056" height="3392" />
+  <object id="77" gid="77" x="30413" y="13646" width="5056" height="3392" />
+  <object id="78" gid="78" x="77" y="17038" width="5056" height="3392" />
+  <object id="79" gid="79" x="5133" y="17038" width="5056" height="3392" />
+  <object id="80" gid="80" x="10189" y="17038" width="5056" height="3392" />
+  <object id="81" gid="81" x="15245" y="17038" width="5056" height="3392" />
+  <object id="82" gid="82" x="20301" y="17038" width="5056" height="3392" />
+  <object id="83" gid="83" x="25357" y="17038" width="5056" height="3392" />
+  <object id="84" gid="84" x="30413" y="17038" width="5056" height="3392" />
+  <object id="85" gid="85" x="77" y="20430" width="5056" height="3392" />
+  <object id="86" gid="86" x="5133" y="20430" width="5056" height="3392" />
+  <object id="87" gid="87" x="10189" y="20430" width="5056" height="3392" />
+  <object id="88" gid="88" x="15245" y="20430" width="5056" height="3392" />
+  <object id="89" gid="89" x="20301" y="20430" width="5056" height="3392" />
+  <object id="90" gid="90" x="25357" y="20430" width="5056" height="3392" />
+  <object id="91" gid="91" x="30413" y="20430" width="5056" height="3392" />
+  <object id="92" gid="92" x="77" y="23822" width="5056" height="3392" />
+  <object id="93" gid="93" x="5133" y="23822" width="5056" height="3392" />
+  <object id="94" gid="94" x="10189" y="23822" width="5056" height="3392" />
+  <object id="95" gid="95" x="15245" y="23822" width="5056" height="3392" />
+  <object id="96" gid="96" x="20301" y="23822" width="5056" height="3392" />
+  <object id="97" gid="97" x="25357" y="23822" width="5056" height="3392" />
+  <object id="98" gid="98" x="30413" y="23822" width="5056" height="3392" />
+ </objectgroup>
+</map>

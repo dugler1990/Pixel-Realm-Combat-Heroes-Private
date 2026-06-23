@@ -1157,9 +1157,51 @@ class Entity(pygame.sprite.Sprite):
         pass
 
     def can_receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "effect_state":
+            return True
+        if ctx.kind == "impulse":
+            if "friendly_fire_impulse" in ctx.tags:
+                return True
+            if ctx.source_team is not None and ctx.source_team == getattr(self, "team_id", None):
+                return False
+            return True
         return True
 
+    def cancel_displacement_abilities(self) -> None:
+        for attr in ("_dash_runtime", "_leap_runtime"):
+            runtime = getattr(self, attr, None)
+            if runtime is None:
+                continue
+            ability = runtime.get("_ability")
+            if ability is not None and hasattr(ability, "_end"):
+                ability._end(self, runtime)
+            else:
+                setattr(self, attr, None)
+
+    def apply_impulse(self, force, follow_through=0.5) -> None:
+        self.cancel_displacement_abilities()
+        if force is None:
+            return
+        if not hasattr(self, "velocity"):
+            self.velocity = pygame.math.Vector2(0, 0)
+        dx = float(force[0]) if hasattr(force, "__getitem__") else float(force.x)
+        dy = float(force[1]) if hasattr(force, "__getitem__") else float(force.y)
+        if hasattr(self, "hitbox"):
+            self.hitbox.x += int(dx)
+            self.hitbox.y += int(dy)
+        if hasattr(self, "rect") and hasattr(self, "hitbox"):
+            self.rect.center = self.hitbox.center
+        self.velocity.x += dx * follow_through
+        self.velocity.y += dy * follow_through
+
     def receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "impulse":
+            force = pygame.math.Vector2(ctx.impulse_x or 0, ctx.impulse_y or 0)
+            follow_through = 0.5
+            if ctx.source is not None:
+                follow_through = float(getattr(ctx.source, "impulse_follow_through", 0.5))
+            self.apply_impulse(force, follow_through=follow_through)
+            return
         if ctx.kind == "effect_state":
             effect_key = ctx.effect_key
             if not effect_key:

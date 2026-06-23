@@ -58,7 +58,7 @@ class RemotePlayer(BasePlayer):
             _noop,             # create_attack
             _noop,             # destroy_attack
             _noop,             # create_magic
-            _noop,             # create_evasion
+            _noop,             # create_trap
             initial_stats,
             level,
             input_manager,

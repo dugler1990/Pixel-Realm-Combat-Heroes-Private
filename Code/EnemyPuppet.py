@@ -49,6 +49,9 @@ class EnemyPuppet(CombatUnit):
         self._net_x, self._net_y = center
         self._net_status = "idle"
         self._net_dir = "right"
+        # C2.5a: brief local hit-flash window (ms tick) so the JOINER sees its
+        # hits land -- the real enemy's hit reaction/sound happen on the host.
+        self._hit_flash_until = 0
 
         # CombatUnit.__init__ anchored rect by topleft=pos; the wire relays
         # CENTERS (like players), so re-anchor on both rect and hitbox.
@@ -85,6 +88,10 @@ class EnemyPuppet(CombatUnit):
         # owns position/death. animate() rebuilds the frame + re-centers rect.
         self._sync_from_snapshot()
         self.animate()
+        # C2.5a: blink while recently hit so the joiner sees the hit land.
+        # animate() rebuilt self.image this frame, so set_alpha is safe.
+        if pygame.time.get_ticks() < self._hit_flash_until:
+            self.image.set_alpha(110 if (pygame.time.get_ticks() // 40) % 2 else 255)
 
     def enemy_update(self, *args, **kwargs):
         # Render-only: NO AI/target-selection/attacks (Level4's per-frame
@@ -115,3 +122,10 @@ class EnemyPuppet(CombatUnit):
         if amount is None:
             return
         self.level._queue_enemy_hit(self.enemy_id, amount, ctx.attack_type)
+        # C2.5a: immediate local feedback so the joiner knows the hit landed
+        # (the host plays the real hit reaction/sound; the joiner gets none).
+        self._hit_flash_until = pygame.time.get_ticks() + 150
+        try:
+            self.hit_sound.play()
+        except Exception:
+            pass

@@ -64,9 +64,13 @@ class ServerPlayerState:
     # Collision-rect size, sent at join (Stage B). 0 => obstacle resolution off.
     hitbox_w: float = 0.0
     hitbox_h: float = 0.0
+    # CS4: the client relays its real player's health each frame so the server's
+    # enemy aggro can drop a downed player. Defaults alive until first reported.
+    health: float = 100.0
 
     def apply_update(self, x: float, y: float, move_x: float, move_y: float,
-                     attacking: bool, obstacle_index: "QuadTree" = None) -> None:
+                     attacking: bool, obstacle_index: "QuadTree" = None,
+                     health: float = None) -> None:
         """Relay the client's authoritative position + re-derive `status`, then
         (Stage B) validate the position against map obstacles.
 
@@ -90,6 +94,8 @@ class ServerPlayerState:
         self.direction_y = move_y
         self.attacking = attacking
         self.status = derive_status(self.status, move_x, move_y, attacking)
+        if health is not None:
+            self.health = health
         if obstacle_index is not None and self.hitbox_w > 0 and self.hitbox_h > 0:
             self.resolve_obstacle_collision(obstacle_index)
 
@@ -182,11 +188,32 @@ class GameState:
     # is the host iff its id == host_player_id.
     host_player_id: Optional[str] = None
     enemies: List[dict] = field(default_factory=list)
-    # Co-op (Stage C, C2): damage events from joiners (their attacks hitting a
-    # shared enemy), queued by receiver threads and delivered ONLY to the host
-    # by the broadcast loop (the sole socket writer), which then applies them to
-    # the real enemy. Same threading discipline as pending_events.
+    # CS2 (server-authoritative enemies): the server now OWNS the enemy sim
+    # (Server/server_level.ServerLevel) instead of relaying the host's. The first
+    # client uploads the map's enemy spawn spec ({type,pos,...} from its TMX
+    # placed-entity layer) + map dims at join; the sim loop lazily builds a
+    # ServerLevel from them, ticks it, and writes the result back into `enemies`.
+    # `host_player_id` is kept only for legacy C2/C2.5 routing (repointed to the
+    # server in CS3-CS5); it is no longer the enemy authority.
+    pending_enemy_spawns: Optional[List[dict]] = None
+    # CS-fix: the map's enemy SPAWN AREAS (proximity/timed spawners), uploaded by
+    # the first client. Most levels (incl. the MP level) spawn enemies via these,
+    # not placed entities -- the server runs handle_spawn_areas over them.
+    pending_spawn_areas: Optional[List[dict]] = None
+    map_width: float = 0.0
+    map_height: float = 0.0
+    # CS3: player->enemy hits (MSG_HIT_ENEMY) from ANY client, queued by receiver
+    # threads and drained by the sim loop, which applies each to the authoritative
+    # ServerLevel enemy. (Replaces the C2 "forward to host" routing -- there is no
+    # host enemy sim anymore.) Same threading discipline as pending_events.
     pending_enemy_hits: List[dict] = field(default_factory=list)
+    # CS5b: shared-loot pickup requests (MSG_PICKUP_ITEM) from clients, queued by
+    # receiver threads and drained by the sim loop, which arbitrates them against
+    # the server's drop registry (first claim wins) -> item_removed broadcast.
+    pending_pickups: List[dict] = field(default_factory=list)
+    # (CS3/CS5b: the old `pending_to_host` queue -- joiner->host enemy hits + loot
+    #  pickups -- was removed. The server is authoritative now: hits go to
+    #  pending_enemy_hits, pickups to pending_pickups, both applied in the sim loop.)
 
     def build_obstacle_index(self, obstacles: List[ObstacleRect],
                              map_w: float, map_h: float) -> None:

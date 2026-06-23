@@ -14,6 +14,7 @@ from AttackSelection import AttackSelection
 from Settings import *
 from Support import frames_to_masks
 from Interaction import InteractionContext
+from abilities.registry import build_action_controller, load_evasion_loadout
 
 class BasePlayer(Entity):
     def __init__(self,
@@ -23,7 +24,7 @@ class BasePlayer(Entity):
                  create_attack,
                  destroy_attack,
                  create_magic,
-                 create_evasion,
+                 create_trap,
                  initial_stats,
                  level,
                  input_manager,
@@ -82,17 +83,16 @@ class BasePlayer(Entity):
         self.post_seat_status = "down_idle"
 
 
-        # Evasions
-        self.evasion_types = ['slide', 'create_ice_clone']  # SHOULD GO IN Setting.py like magic etc.
-        self.create_evasion = create_evasion
-        self.slide_end_time = None
-        self.slide_duration = 300
-        self.current_evasion_index = 0  # Start with the first evasion type
+        # Evasions / player action dispatch
+        self.evasion_types = load_evasion_loadout(character_assets)
+        self.create_trap = create_trap
+        self._dash_runtime = None
+        self._charge_runtime = None
+        self._leap_runtime = None
+        self.character_assets = character_assets
         self.can_switch_evasion = True
         self.evasion_switch_time = None
         self.switch_evasion_cooldown = 200
-        
-        
         # Stats    BAS ARE IN /Graphics/PlayerSelectionDict.json
         # self.base_stats = {"health": 1000,
         #                     "energy": 60,
@@ -146,6 +146,17 @@ class BasePlayer(Entity):
         self.weapon_attack_sound = pygame.mixer.Sound("../Audio/Sword.wav")
         self.weapon_attack_sound.set_volume(0.2)
 
+        self.action_controller = build_action_controller(
+            self,
+            create_attack,
+            destroy_attack,
+            create_magic,
+            create_trap,
+            self.weapon_attack_sound,
+            evasion_loadout=load_evasion_loadout(character_assets),
+        )
+        self.current_evasion_index = 0
+
         self.scale_animation()
         self.team_id = "player"
         
@@ -171,6 +182,12 @@ class BasePlayer(Entity):
     def can_receive_interaction(self, ctx: InteractionContext):
         if ctx.kind == "effect_state":
             return True
+        if ctx.kind == "impulse":
+            if "friendly_fire_impulse" in ctx.tags:
+                return True
+            if ctx.source_team == self.team_id:
+                return False
+            return True
         if ctx.kind != "damage":
             return False
         if ctx.source_team == self.team_id:
@@ -178,6 +195,13 @@ class BasePlayer(Entity):
         return True
 
     def receive_interaction(self, ctx: InteractionContext):
+        if ctx.kind == "impulse":
+            force = pygame.math.Vector2(ctx.impulse_x or 0, ctx.impulse_y or 0)
+            follow_through = 0.5
+            if ctx.source is not None:
+                follow_through = float(getattr(ctx.source, "impulse_follow_through", 0.5))
+            self.apply_impulse(force, follow_through=follow_through)
+            return
         if ctx.kind == "effect_state":
             super().receive_interaction(ctx)
             return
@@ -247,6 +271,12 @@ class BasePlayer(Entity):
             "right_idle": [], "left_idle": [], "up_idle": [], "down_idle": [],
             "right_attack": [], "left_attack": [], "up_attack": [], "down_attack": [],
             "slide_right":[],"slide_left":[],
+            "leap_windup_right": [], "leap_windup_left": [],
+            "leap_windup_up": [], "leap_windup_down": [],
+            "jump_right": [], "jump_left": [],
+            "jump_up": [], "jump_down": [],
+            "land_right": [], "land_left": [],
+            "land_up": [], "land_down": [],
             "sit_down": [], "sit_idle": [], "sit_up": []
         }
 
@@ -301,12 +331,72 @@ class BasePlayer(Entity):
             return True
         return self.inventory.add_item(item)
 
-    def input(self):
-        current_time = pygame.time.get_ticks()
-        
-        if 'slide' in self.status:  # Input blocking for both evasions and attacks should be unified
-            return 
+    def can_pickup(self, item):
+        """Non-mutating: would pickup_item() succeed? Gold always fits; other
+        items need inventory room. Used by co-op to pre-check a shared pickup."""
+        if getattr(item, "effect_type", None) == "gold":
+            return True
+        return self.inventory.has_room_for(item)
 
+    def _apply_air_steering_input(self):
+        if self.input_manager.is_key_pressed(pygame.K_LEFT):
+            self.direction.x = -1
+        elif self.input_manager.is_key_pressed(pygame.K_RIGHT):
+            self.direction.x = 1
+        else:
+            self.direction.x = 0
+
+        if self.input_manager.is_key_pressed(pygame.K_UP):
+            self.direction.y = -1
+        elif self.input_manager.is_key_pressed(pygame.K_DOWN):
+            self.direction.y = 1
+        else:
+            self.direction.y = 0
+
+    def _apply_movement_input(self):
+        if self.action_controller.allows_air_steering(self):
+            self._apply_air_steering_input()
+            return
+        if self.action_controller.is_movement_locked(self):
+            return
+        released_keys = [
+            key
+            for key in self.input_manager.previous_key_states
+            if self.input_manager.previous_key_states[key]
+            and not self.input_manager.current_key_states[key]
+        ]
+        for key in released_keys:
+            if key == pygame.K_UP:
+                self.direction.y = 0
+            elif key == pygame.K_DOWN:
+                self.direction.y = 0
+            elif key == pygame.K_LEFT:
+                self.direction.x = 0
+            elif key == pygame.K_RIGHT:
+                self.direction.x = 0
+
+        if self.attacking:
+            return
+
+        if self.input_manager.is_key_pressed(pygame.K_UP):
+            self.direction.y = -1
+            self.status = "up"
+        elif self.input_manager.is_key_pressed(pygame.K_DOWN):
+            self.direction.y = 1
+            self.status = "down"
+        else:
+            self.direction.y = 0
+
+        if self.input_manager.is_key_pressed(pygame.K_RIGHT):
+            self.direction.x = 1
+            self.status = "right"
+        elif self.input_manager.is_key_pressed(pygame.K_LEFT):
+            self.direction.x = -1
+            self.status = "left"
+        else:
+            self.direction.x = 0
+
+    def input(self):
         interact_fn = getattr(self.level, "try_interact_nearby_environment", None)
         if interact_fn is None:
             interact_fn = getattr(self.level, "try_open_nearby_chest", None)
@@ -317,151 +407,69 @@ class BasePlayer(Entity):
             self.direction.x = 0
             self.direction.y = 0
             return
-        
-        # Handle key releases
-        released_keys = [key for key in self.input_manager.previous_key_states if self.input_manager.previous_key_states[key] and not self.input_manager.current_key_states[key]]
-        for key in released_keys:
-            if key == pygame.K_UP:
-                self.direction.y = 0
-            elif key == pygame.K_DOWN:
-                self.direction.y = 0
-            elif key == pygame.K_LEFT:
-                self.direction.x = 0
-            elif key == pygame.K_RIGHT:
-                self.direction.x = 0
-    
-        # Handle key presses
-        if not self.attacking:
-            if not self.inventory.visible and self.has_belt and self.belt_capacity > 0:
-                belt_keys = (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4)
-                for i, key in enumerate(belt_keys):
-                    if self.input_manager.is_key_just_pressed(key) and i < self.belt_capacity:
-                        self.use_belt_slot(i)
 
-            if self.input_manager.is_key_just_pressed(pygame.K_i):
-                if current_time - self.last_i_press_time > 500:
-                    self.level.toggle_inventory()
-                    self.last_i_press_time = current_time
-    
-            if self.input_manager.is_key_pressed(pygame.K_LALT) or self.input_manager.is_key_pressed(pygame.K_RALT):
-                if self.input_manager.is_key_just_pressed(pygame.K_q):
-                    if current_time - self.last_q_press_time > 500:
-                        self.level.toggle_attack_selection()
-                        self.last_q_press_time = current_time        
-    
-            if self.input_manager.is_key_pressed(pygame.K_UP):
-                self.direction.y = -1
-                self.status = "up"
-            elif self.input_manager.is_key_pressed(pygame.K_DOWN):
-                self.direction.y = 1
-                self.status = "down"
-            else:
-                self.direction.y = 0
-    
-            if self.input_manager.is_key_pressed(pygame.K_RIGHT):
-                self.direction.x = 1
-                self.status = "right"
-            elif self.input_manager.is_key_pressed(pygame.K_LEFT):
-                self.direction.x = -1
-                self.status = "left"
-            else:
-                self.direction.x = 0
-    
-            if self.input_manager.is_key_pressed(pygame.K_SPACE):
-                self.attacking = True
-                self.attack_time = pygame.time.get_ticks()
-                self.create_attack()
-                self.weapon_attack_sound.play()
-    
-            if self.input_manager.is_key_pressed(pygame.K_LCTRL):
-                self.attacking = True
-                self.attack_time = pygame.time.get_ticks()
-                style = list(magic_data.keys())[self.magic_index]
-                strength = list(magic_data.values())[self.magic_index]["strength"] + self.stats["magic"]
-                cost = list(magic_data.values())[self.magic_index]["cost"]
-                self.create_magic(style, strength, cost)
-    
-            if self.input_manager.is_key_pressed(pygame.K_q) and self.can_switch_weapon:
-                self.can_switch_weapon = False
-                self.weapon_switch_time = pygame.time.get_ticks()
-                if self.weapon_index < len(list(weapon_data.keys())) - 1:
-                    self.weapon_index += 1
-                else:
-                    self.weapon_index = 0
-                self.weapon = list(weapon_data.keys())[self.weapon_index]
-    
-            if self.input_manager.is_key_pressed(pygame.K_e) and self.can_switch_magic:
-                self.can_switch_magic = False
-                self.magic_switch_time = pygame.time.get_ticks()
-                if self.magic_index < len(list(magic_data.keys())) - 1:
-                    self.magic_index += 1
-                else:
-                    self.magic_index = 0
-                self.magic = list(magic_data.keys())[self.magic_index]
-                
-            if self.input_manager.is_key_just_pressed(pygame.K_r) and self.can_switch_evasion:
-                self.can_switch_evasion = False
-                self.evasion_switch_time = current_time
-                self.current_evasion_index = (self.current_evasion_index + 1) % len(self.evasion_types)
-    
-            if self.input_manager.is_key_just_pressed(pygame.K_c):
-                direction = self.get_direction_as_string()
-                evasion_type = self.evasion_types[self.current_evasion_index]
-                self.create_evasion(evasion_type, direction)
-                
-            if self.input_manager.is_key_just_pressed(pygame.K_p):
-                if current_time - self.last_p_press_time > 500:
-                    self.level.toggle_menu()
-                    self.last_p_press_time = current_time
+        self._apply_movement_input()
+        self.action_controller.handle_input(self, self.input_manager)
 
     def get_direction_as_string(self):
-        return "right" if self.direction.x >= 0 else "left"
+        if getattr(self, "_charge_runtime", None) is not None:
+            charge_dir = self._charge_runtime.get("direction")
+            if charge_dir in ("left", "right", "up", "down"):
+                return charge_dir
+
+        dx = self.direction.x
+        dy = self.direction.y
+        if abs(dy) > abs(dx):
+            if dy < 0:
+                return "up"
+            if dy > 0:
+                return "down"
+        if dx < 0:
+            return "left"
+        if dx > 0:
+            return "right"
+
+        base = self.status.split("_")[0]
+        if base in ("up", "down", "left", "right"):
+            return base
+        return "right"
 
 
     def get_status(self):
-        #print(f"in get_status first status : {self.status}")
-        #print(f"IS SLIDE IN self.status :{'slide' in self.status}")
         if self.status.startswith("sit_"):
             self.attacking = False
             self.direction.x = 0
             self.direction.y = 0
             return
-        if 'slide' in self.status:
-            self.maintain_slide_status()
-        else:
-            if self.direction.x == 0 and self.direction.y == 0:
-                if not "idle" in self.status and not "attack" in self.status:
-                    self.status += "_idle"
-            else:
-                if self.attacking:
-                    self.direction.x = 0
-                    self.direction.y = 0
-                    if not "attack" in self.status:
-                        if "idle" in self.status:
-                            self.status = self.status.replace("_idle", "_attack")
-                        else:
-                            self.status = self.status + "_attack"
-                else:
-                    if "attack" in self.status:
-                        self.status = self.status.replace("_attack", "")
-
-    def maintain_slide_status(self):
-       #print(f"first in maintain_slide_status : {self.status}")
-       #print( hasattr(self, 'pending_status_reset') )
-        # Continue sliding motion, and block other interactions
-        if hasattr(self, 'pending_status_reset') and self.pending_status_reset:
-            # The slide is about to end; prepare to reset status
-           #print(f"has attribute : {self.status} attribute:{self.pending_status_reset}")
-            self.status = self.pending_status_reset
-           #print(f"status after being reset : {self.status}")
-            delattr(self, 'pending_status_reset')
-        else:
-           #print(f"attribute to reset does not exist and now we in here , first status : {self.status}")
-            # Block inputs that could change status
+        if getattr(self, "_dash_runtime", None) is not None:
             self.attacking = False
             self.direction.x = 0
             self.direction.y = 0
-           #print(f"attribute to reset does not exist and now we in here , last status : {self.status}")
+            return
+        if getattr(self, "_charge_runtime", None) is not None:
+            self.attacking = False
+            return
+        if getattr(self, "_leap_runtime", None) is not None:
+            self.attacking = False
+            if self._leap_runtime.get("phase") != "airborne":
+                self.direction.x = 0
+                self.direction.y = 0
+            return
+        if self.direction.x == 0 and self.direction.y == 0:
+            if not "idle" in self.status and not "attack" in self.status:
+                self.status += "_idle"
+        else:
+            if self.attacking:
+                self.direction.x = 0
+                self.direction.y = 0
+                if not "attack" in self.status:
+                    if "idle" in self.status:
+                        self.status = self.status.replace("_idle", "_attack")
+                    else:
+                        self.status = self.status + "_attack"
+            else:
+                if "attack" in self.status:
+                    self.status = self.status.replace("_attack", "")
 
     def cooldowns(self):
         current_time = pygame.time.get_ticks()
@@ -493,13 +501,20 @@ class BasePlayer(Entity):
         animation = self.animations.get(self.status) or []
         masks = self.masks.get(self.status) or []
         if not animation or not masks:
-            fallback_status = "down_idle"
-            animation = self.animations.get(fallback_status, [])
-            masks = self.masks.get(fallback_status, [])
-            self.status = fallback_status
-            self.frame_index = 0
-            if not animation or not masks:
-                return
+            if getattr(self, "_dash_runtime", None) is not None or getattr(self, "_charge_runtime", None) is not None or getattr(self, "_leap_runtime", None) is not None:
+                fallback_status = "down_idle"
+                animation = self.animations.get(fallback_status, [])
+                masks = self.masks.get(fallback_status, [])
+                if not animation or not masks:
+                    return
+            else:
+                fallback_status = "down_idle"
+                animation = self.animations.get(fallback_status, [])
+                masks = self.masks.get(fallback_status, [])
+                self.status = fallback_status
+                self.frame_index = 0
+                if not animation or not masks:
+                    return
         self.frame_index += self.animation_speed
         if self.frame_index >= len(animation):
             if self.status == "sit_down":
@@ -574,72 +589,16 @@ class BasePlayer(Entity):
         if self.is_dead:
             return
 
-        #print(f"player attributes:{self.stats}")
-    
-        #print(self.rect.center[0]/TILESIZE)
-        #print(self.rect.center[1]/TILESIZE)
-        current_time = pygame.time.get_ticks()
-        if self.slide_end_time and current_time >= self.slide_end_time:
-            ### THIS SHOULD BE A SLIDE END METHOD, CLEARLY
-            self.status = self.status.replace("slide_", "") + "_idle"
-            self.set_speed_multiplier(1)
-            self.rect.y -= 20
-            self.hitbox.center = self.rect.center
-            self.slide_end_time = None  # Reset the timer
-            
-       #print(f"status pre input{self.status} {self.rect.x}")
-       
-        #if not layout_switch:
-             
         self.input()
-       #print(f"status pre cooldowns{self.status} {self.rect.x}")
         self.cooldowns()
-       #print(f"status pre getstatus{self.status}  {self.rect.x}")
         self.get_status()
-       #print(f"status pre animate{self.status}  {self.rect.x}")
         self.animate()
-       #print(f"status pre move{self.status}  {self.rect.x}")
-        
-        if'slide' in self.status:
-            self.move_slide()   
-            
-        else:
-            #print("SPEEDS")
-            #print(self.stats['speed'])
-            #print(self.speed_multiplier)
-            #print()
-            
-            self.move(self.stats["speed"],QuadTree,entity_quad_tree)  # Regular movement
-            self.collision(QuadTree, entity_quad_tree)
-        #print(self.stats["speed"])
-       #print(f"status pre erecov{self.status} {self.rect.x}")
+        self.action_controller.tick(self, dt, QuadTree, entity_quad_tree)
+        if not self.action_controller.suppresses_locomotion(self):
+            self.move(self.stats["speed"], QuadTree, entity_quad_tree)
         self.energy_recovery()
         self.health_recovery()
-       #print(f"status pre Player death{self.status} {self.rect.x}")
         self.player_death()
-        # Check if there's a pending status reset after an evasion and reset status
-       #print(f"pending_status condition _{hasattr(self, 'pending_status_reset') } ")
-        if hasattr(self, 'pending_status_reset') and self.pending_status_reset:
-           #print(f"status pre inside resetting loop {self.status} {self.rect.x}")
-            self.status = self.pending_status_reset  # Reset status to idle or other appropriate status
-           #print(f"status pre inside resetting loop POST{self.status} {self.rect.x}")
-            self.set_speed_multiplier(1)  # Reset speed to normal
-            delattr(self, 'pending_status_reset')  # Remove the attribute to prevent repeated resets
-
-    def move_slide(self):
-        # Move the player in the slide direction with increased speed
-        
-        slide_direction = self.status.split('_')[1]
-        self.create_evasion( "slide", slide_direction )
-       #print(f"IN MOVE SLIDE - {slide_direction} ")
-       #print(f"self.rect pre {self.rect.x}")
-        if slide_direction == "right":
-            self.rect.x += self.stats["speed"] * self.speed_multiplier
-        elif slide_direction == "left":
-            self.rect.x -= self.stats["speed"] * self.speed_multiplier
-       #print(f"self.rect post {self.rect.x}")
-        # Update hitbox to match the new rect
-        self.hitbox.center = self.rect.center
 
     def _resolve_post_seat_status(self):
         if "left" in self.status:
@@ -723,7 +682,7 @@ class SpecificPlayer(BasePlayer):
                  create_attack,
                  destroy_attack,
                  create_magic,
-                 create_evasion,
+                 create_trap,
                  initial_stats,
                  level,
                  input_manager,
@@ -738,7 +697,7 @@ class SpecificPlayer(BasePlayer):
                          create_attack,
                          destroy_attack,
                          create_magic,
-                         create_evasion,
+                         create_trap,
                          initial_stats,
                          level,
                          input_manager,

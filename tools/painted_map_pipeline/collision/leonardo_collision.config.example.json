@@ -1,0 +1,21 @@
+{
+  "provider": "leonardo",
+  "api_key_env": "LEONARDO_API_KEY",
+  "api_version": "v2",
+  "base_url": "https://cloud.leonardo.ai/api/rest/v2",
+  "upload_base_url": "https://cloud.leonardo.ai/api/rest/v1",
+  "model": "nano-banana-2",
+  "width": 5056,
+  "height": 3392,
+  "reference_strength": "MID",
+  "prompt_enhance": "OFF",
+  "style_ids": [],
+  "preserve_native_resolution": true,
+  "max_upload_bytes": 10485760,
+  "reference_jpeg_quality": 90,
+  "poll_interval_seconds": 5,
+  "poll_timeout_seconds": 600,
+  "preserve_existing": true,
+  "segmentation_tolerance": 48,
+  "mask_smooth_radius": 1
+}

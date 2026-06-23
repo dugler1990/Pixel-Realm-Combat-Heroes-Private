@@ -1,0 +1,17 @@
+{
+  "level_slug": "expanse",
+  "source_png": "/home/fresh/.cursor/projects/home-fresh-projects-Pixel-Realm-Combat-Heroes-public/assets/frostreach_expanse_large_background_concept-a10b374f-f194-4a78-bd33-4df9807e70bc.png",
+  "background_png": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/expanse/background.png",
+  "world_size_px": [
+    16500,
+    11000
+  ],
+  "shell_tmx": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/expanse/shell_outline.tmx",
+  "map_tmx": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/expanse/map.tmx",
+  "insert": {
+    "output_tmx": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/expanse/map.tmx",
+    "inserted_chunks": [
+      "chunk_00_00"
+    ]
+  }
+}

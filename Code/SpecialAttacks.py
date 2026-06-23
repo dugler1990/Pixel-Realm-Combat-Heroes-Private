@@ -5,6 +5,8 @@ from functools import partial
 import math
 from Settings import TILESIZE
 from game_logging import get_debug_logger
+from abilities.dash import DashAbility
+from abilities.protocol import CombatAbilityContext
 
 _combat_log = get_debug_logger("combat")
 
@@ -62,6 +64,8 @@ def create_special_attack(attack_config):
                                cast_time,
                                damage_threshold,
                                chance)
+    elif name == 'Dash':
+        return DashAttack(cooldown, cooldown_variability, trigger_conditions, attack_config, chance)
     else:
         raise ValueError(f"Unknown special attack name: {name}")
 
@@ -89,6 +93,41 @@ class SpecialAttack:
 
     def can_trigger(self, enemy, player):
         return all(cond(enemy, player) for cond in self.trigger_conditions)
+
+def dash_direction_toward_player(enemy, player):
+    if player.rect.centerx >= enemy.rect.centerx:
+        return "right"
+    return "left"
+
+
+class DashAttack(SpecialAttack):
+    def __init__(self, cooldown, cooldown_variability, trigger_conditions, attack_config, chance):
+        super().__init__("Dash", cooldown, cooldown_variability, trigger_conditions)
+        self.chance = chance
+        dash_config = {
+            "cost": attack_config.get("cost", 0),
+            "speed_mult": attack_config.get("speed_mult", 2),
+            "duration_ms": attack_config.get("duration_ms", 350),
+            "collision_mode": attack_config.get("collision_mode", "pass_through"),
+            "stop_on_wall": attack_config.get("stop_on_wall", False),
+            "damage": attack_config.get("damage"),
+            "attack_type": attack_config.get("attack_type", "melee"),
+            "hit_once_per_target": attack_config.get("hit_once_per_target", True),
+            "presentation": attack_config.get(
+                "presentation",
+                {"status_template": "move", "end_status": "idle"},
+            ),
+        }
+        self.dash_ability = DashAbility("dash", dash_config)
+
+    def execute(self, enemy, player, context):
+        if random.random() >= self.chance:
+            return
+        direction = dash_direction_toward_player(enemy, player)
+        ability_context = CombatAbilityContext(combat_context=context)
+        if self.dash_ability.try_start(enemy, ability_context, direction=direction):
+            self.last_used_time = pygame.time.get_ticks()
+
 
 class TeleportAttack(SpecialAttack):
     def __init__(self, cooldown, cooldown_variability, trigger_condition, max_distance, chance):

@@ -17,6 +17,7 @@ class AnimationPlayer:
             # Evasion particles
             "slide_right": import_folder("../Graphics/Particles/slide_right"),
             "slide_left": import_folder("../Graphics/Particles/slide_left"),
+            "leap_impact": import_folder("../Graphics/Particles/leap_impact"),
             
             # Trap Particles
             "freeze":import_folder("../Graphics/Traps/freeze/activate"),
@@ -135,7 +136,9 @@ class AnimationPlayer:
                          amount=None,
                          interaction_tags=None):
         
-        animation_frames = self.frames[animation_type]
+        animation_frames = self.frames.get(animation_type)
+        if not animation_frames:
+            return None
         
         #print( f'PARTICLE EFFECT PARAMS  : direction:{direction}, is_moving={is_moving}, movement : {movement if is_moving else None}' )
         particle = ParticleEffect(pos=pos,

@@ -31,12 +31,14 @@ level_8_layout_path = '../levels/Map8'
 level_7_layout_path = '../levels/Map7'
 level_6_layout_path = '../levels/tmx'
 level_9_layout_path = '../levels/Frostreach/ice_wall_gate'
+level_10_layout_path = '../levels/Frostreach/expanse'
 
 LAYOUT_TO_LEVEL = {
     level_6_layout_path: 6,
     level_7_layout_path: 7,
     level_8_layout_path: 8,
     level_9_layout_path: 9,
+    level_10_layout_path: 10,
 }
 
 DEV_STATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.dev_reload_state.json')
@@ -206,18 +208,37 @@ class Game:
         map_w = getattr(lm, "csv_layout_width", 0)
         map_h = getattr(lm, "csv_layout_height", 0)
 
+        # CS2 (server-authoritative co-op): hand the server the map's enemy spawn
+        # sources so the SERVER builds + owns the enemy sim. (1) placed-enemy
+        # configs the client collected during layout load, and (2) the map's
+        # enemy SPAWN AREAS (proximity/timed spawners) -- the MP level spawns its
+        # enemies via these, not placed entities. Upload the areas' static parts
+        # (matrix/config/object_info); the server re-inits their timers. First
+        # client's upload wins; every client renders the server's enemies as puppets.
+        enemy_spawns = list(getattr(lm, "placed_enemy_spawns", []))
+        spawn_areas = [
+            {"matrix": a.get("matrix"), "config": a.get("config"),
+             "object_info": a.get("object_info")}
+            for a in getattr(lm.spawner, "spawn_areas", [])
+        ]
+
         self.level.mp_client = MultiplayerClient(
             MULTIPLAYER_RUNTIME.host, MULTIPLAYER_RUNTIME.port, player_id
         )
         self.level.mp_client.send_join(
             character_dir, join_x, join_y,
             hitbox_w=hitbox_w, hitbox_h=hitbox_h, obstacles=obstacles,
-            map_width=map_w, map_height=map_h,
+            map_width=map_w, map_height=map_h, enemy_spawns=enemy_spawns,
+            spawn_areas=spawn_areas,
         )
+        # The server owns enemies now -> drop any this client spawned during level
+        # load before mp_client was set (the spawner is suppressed from here on).
+        self.level._clear_local_enemies()
         print(
             f"[multiplayer] connected to {MULTIPLAYER_RUNTIME.host}:{MULTIPLAYER_RUNTIME.port} "
             f"as {player_id} ({character_dir}) at ({join_x}, {join_y}); "
             f"uploaded {len(obstacles)} obstacle rects ({masked_count} masked), "
+            f"{len(enemy_spawns)} placed enemies + {len(spawn_areas)} spawn areas, "
             f"hitbox=({hitbox_w}x{hitbox_h})"
         )
 
@@ -270,7 +291,8 @@ class Game:
             else:
                 layouts_dir = (level_6_layout_path if level_number == 6 else
                               level_7_layout_path if level_number == 7 else
-                              level_8_layout_path if level_number == 8 else level_9_layout_path)
+                              level_8_layout_path if level_number == 8 else
+                              level_9_layout_path if level_number == 9 else level_10_layout_path)
             player_position = None
 
         if player_info_dir is not None:

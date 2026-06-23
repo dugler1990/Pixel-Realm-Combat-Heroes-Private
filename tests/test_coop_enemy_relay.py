@@ -1,10 +1,11 @@
-"""Co-op (Stage C, C1) transport: host role + enemy state relay.
+"""Co-op (Stage C) transport: enemy broadcast + host-directed hit routing.
 
-The server assigns `host` to the first joiner and broadcasts `host_id` so every
-client learns its role. The host relays its live enemy render state in the
-per-frame message; the server stores ONLY the host's list and rebroadcasts it in
-state_update (it never simulates enemies). Covers role assignment, the host->
-joiner enemy relay, and that a non-host's enemy list is ignored.
+CS2 (server-authoritative pivot): the SERVER owns the enemy sim. The first
+client uploads the map's enemy spawn spec at join; the server builds a
+ServerLevel from it and broadcasts the live enemy render-state to EVERY client
+in state_update -- no client relays enemies, and a client-injected enemy list is
+ignored. `host_id` is still assigned/broadcast (legacy C2/C2.5 routing) but no
+longer decides who simulates.
 """
 
 import os
@@ -25,7 +26,7 @@ for path in (REPO_ROOT / "Server", REPO_ROOT / "Code"):
 
 from network import (  # noqa: E402
     MultiplayerClient,
-    MSG_HIT_ENEMY,
+    MSG_INPUT,
     MSG_PLAYER_JOINED,
     MSG_STATE_UPDATE,
 )
@@ -69,78 +70,129 @@ def test_first_joiner_is_host(server):
     alice.close()
 
 
-def test_host_enemies_relayed_to_joiner(server):
+def test_server_owns_and_broadcasts_enemies_to_all(server):
     _srv, port = server
-    alice = MultiplayerClient("127.0.0.1", port, "alice")  # host
-    alice.send_join("../Graphics/Orange_Wizard/", 0.0, 0.0)
+    # The first client uploads the map's enemy spawn spec; the SERVER builds and
+    # owns the enemy sim from it (no host relay).
+    alice = MultiplayerClient("127.0.0.1", port, "alice")
+    alice.send_join("../Graphics/Orange_Wizard/", 0.0, 0.0,
+                    enemy_spawns=[{"kind": "enemy", "type": "squid", "pos": [10, 10]}],
+                    map_width=20000, map_height=20000)
     _wait_state(alice, lambda m: m.get("host_id") == "alice")
 
-    bob = MultiplayerClient("127.0.0.1", port, "bob")      # joiner
+    bob = MultiplayerClient("127.0.0.1", port, "bob")
     bob.send_join("../Graphics/barb/", 50.0, 50.0)
     _wait(bob, MSG_PLAYER_JOINED)
 
-    enemies = [{"id": 7, "type": "squid", "x": 120, "y": 80,
-                "status": "move", "dir": "left", "health": 30}]
-    alice.send_state(0.0, 0.0, 0.0, 0.0, False, enemies=enemies)
-
-    m = _wait_state(bob, lambda msg: msg.get("enemies"))
-    assert m["host_id"] == "alice"
-    e = m["enemies"][0]
-    assert e["id"] == 7 and e["type"] == "squid"
-    assert (e["x"], e["y"]) == (120, 80)
-    assert e["status"] == "move" and e["dir"] == "left"
+    # BOTH clients receive the server-owned enemy in state_update.
+    for client in (alice, bob):
+        m = _wait_state(client, lambda msg: msg.get("enemies"))
+        e = m["enemies"][0]
+        assert e["type"] == "squid"
+        assert set(e) >= {"id", "type", "x", "y", "status", "dir", "health"}
+        assert e["health"] > 0
     alice.close()
     bob.close()
 
 
-def test_non_host_enemy_list_is_ignored(server):
+def test_server_spawns_from_uploaded_spawn_area(server):
+    # The real MP level has NO placed enemies -- it spawns via proximity spawn
+    # areas. This is the end-to-end fix: a client uploads its spawn areas, joins
+    # near one, and the SERVER runs it + broadcasts the spawned enemies.
     _srv, port = server
-    alice = MultiplayerClient("127.0.0.1", port, "alice")  # host (sends no enemies)
+    area = {
+        "matrix": [[1]],
+        "config": {"enemy_spawn_weights": {"squid": 1}, "frequency": 0,
+                   "spawn_number": 2, "spawn_limit": 50},
+        "object_info": {"anchor_tx": 10, "anchor_ty": 10, "x_pos": 10, "y_pos": 10,
+                        "rect_x_px": 1500, "rect_y_px": 1500, "rect_w_px": 150,
+                        "rect_h_px": 150, "object_id": 1},
+    }
+    alice = MultiplayerClient("127.0.0.1", port, "alice")
+    alice.send_join("../Graphics/Orange_Wizard/", 1520.0, 1520.0,  # near the area
+                    spawn_areas=[area], map_width=20000, map_height=20000)
+
+    m = _wait_state(alice, lambda msg: msg.get("enemies"))
+    assert any(e["type"] == "squid" for e in m["enemies"])
+    alice.close()
+
+
+def test_client_injected_enemy_list_is_ignored(server):
+    # Server-authoritative: no client may inject enemies. The client API no longer
+    # exposes an `enemies` field, so we hand-craft a raw input carrying one
+    # (a hacked client) and assert the server never broadcasts it.
+    _srv, port = server
+    alice = MultiplayerClient("127.0.0.1", port, "alice")
     alice.send_join("../Graphics/Orange_Wizard/", 0.0, 0.0)
     _wait_state(alice, lambda m: m.get("host_id") == "alice")
 
-    bob = MultiplayerClient("127.0.0.1", port, "bob")      # joiner
+    bob = MultiplayerClient("127.0.0.1", port, "bob")
     bob.send_join("../Graphics/barb/", 0.0, 0.0)
     _wait(bob, MSG_PLAYER_JOINED)
 
-    # A non-host that (wrongly) sends enemies must NOT have them relayed.
-    bob.send_state(0.0, 0.0, 0.0, 0.0, False,
-                   enemies=[{"id": 99, "type": "squid", "x": 1, "y": 1,
-                             "status": "idle", "dir": "right"}])
+    bob._send({"type": MSG_INPUT, "player_id": "bob", "x": 0.0, "y": 0.0,
+               "move_x": 0.0, "move_y": 0.0, "attacking": False,
+               "enemies": [{"id": 99, "type": "squid", "x": 1, "y": 1,
+                            "status": "idle", "dir": "right"}]})
 
     deadline = time.monotonic() + 2.0
     while time.monotonic() < deadline:
         for m in bob.poll():
             if m["type"] == MSG_STATE_UPDATE:
                 assert all(e["id"] != 99 for e in m.get("enemies", [])), \
-                    "server relayed a non-host client's enemy list"
+                    "server broadcast a client-injected enemy list"
         time.sleep(0.01)
     alice.close()
     bob.close()
 
 
-def test_joiner_hit_relayed_to_host_only(server):
+def test_client_hit_damages_server_enemy(server):
+    # CS3: a client's relayed hit_enemy is applied by the SERVER to its
+    # authoritative enemy; the reduced health rides the broadcast back to all.
     _srv, port = server
-    alice = MultiplayerClient("127.0.0.1", port, "alice")  # host
-    alice.send_join("../Graphics/Orange_Wizard/", 0.0, 0.0)
-    _wait_state(alice, lambda m: m.get("host_id") == "alice")
+    # Spawn alice FAR from the enemy so the squid never aggros/moves -- isolates
+    # the health change to our hit.
+    alice = MultiplayerClient("127.0.0.1", port, "alice")
+    alice.send_join("../Graphics/Orange_Wizard/", 5000.0, 5000.0,
+                    enemy_spawns=[{"kind": "enemy", "type": "squid", "pos": [10, 10]}],
+                    map_width=20000, map_height=20000)
 
-    bob = MultiplayerClient("127.0.0.1", port, "bob")      # joiner
-    bob.send_join("../Graphics/barb/", 0.0, 0.0)
-    _wait(bob, MSG_PLAYER_JOINED)
+    m = _wait_state(alice, lambda msg: msg.get("enemies"))
+    enemy = m["enemies"][0]
+    eid, hp0 = enemy["id"], enemy["health"]
 
-    bob.send_hit_enemy(7, 15.0, "weapon")
+    alice.send_hit_enemy(eid, 30.0, "weapon")
 
-    # The host receives the damage event...
-    m = _wait(alice, MSG_HIT_ENEMY)
-    assert m["enemy_id"] == 7 and m["amount"] == 15.0 and m["attack_type"] == "weapon"
-    assert m["player_id"] == "bob"
+    def hp_dropped(msg):
+        return any(e["id"] == eid and e["health"] <= hp0 - 30 for e in msg.get("enemies", []))
 
-    # ...and the joiner does NOT (it's forwarded to the host only).
-    deadline = time.monotonic() + 1.0
-    while time.monotonic() < deadline:
-        for mm in bob.poll():
-            assert mm["type"] != MSG_HIT_ENEMY, "joiner received the hit it sent"
-        time.sleep(0.01)
+    _wait_state(alice, hp_dropped)  # the server applied the damage
     alice.close()
-    bob.close()
+
+
+def test_lethal_hits_kill_server_enemy_and_remove_it(server):
+    # Enough damage drops the enemy below 0 -> the server's check_death removes
+    # it -> it disappears from the broadcast (clients then kill the puppet).
+    _srv, port = server
+    alice = MultiplayerClient("127.0.0.1", port, "alice")
+    alice.send_join("../Graphics/Orange_Wizard/", 5000.0, 5000.0,
+                    enemy_spawns=[{"kind": "enemy", "type": "squid", "pos": [10, 10]}],
+                    map_width=20000, map_height=20000)
+
+    m = _wait_state(alice, lambda msg: msg.get("enemies"))
+    eid = m["enemies"][0]["id"]
+    hp = m["enemies"][0]["health"]
+
+    # Squid i-frames gate one hit per ~vulnerability window; send several spaced
+    # out so the cumulative damage is lethal.
+    deadline = time.monotonic() + 5.0
+    killed = False
+    while time.monotonic() < deadline and not killed:
+        alice.send_hit_enemy(eid, hp, "weapon")  # overkill each time
+        for msg in alice.poll():
+            if msg["type"] == MSG_STATE_UPDATE and all(e["id"] != eid for e in msg.get("enemies", [])):
+                killed = True
+                break
+        time.sleep(0.05)
+    assert killed, "server enemy was never removed after lethal damage"
+    alice.close()

@@ -1,0 +1,23 @@
+{
+  "provider": "leonardo",
+  "api_version": "v2",
+  "model": "nano-banana-2",
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/expanse/export/painted_4k_leonardo/chunk_02_04.png",
+  "generation_id": "1f16df60-3b4d-60c0-96b9-4ee5a86462ae",
+  "init_image_id": "ed8a8fff-0003-4698-84ca-5b988779813f",
+  "source_url": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f16df60-3b4d-60c0-96b9-4ee5a86462ae/nano-banana-2_concept_design_sheet_1.4_concept_art_Polish_this_Frostreach_map_chunk_into_a_coh-0.jpg",
+  "width": 5056,
+  "height": 3392,
+  "generation_size": [
+    5056,
+    3392
+  ],
+  "chunk_id": "chunk_02_04",
+  "source_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/expanse/export/painted_4k/chunk_02_04.png",
+  "output_pixel_rect": [
+    0,
+    0,
+    5056,
+    3392
+  ]
+}

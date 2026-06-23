@@ -598,14 +598,12 @@ class Spawner:
         )
 
     def _mp_local_enemies_suppressed(self):
-        """Co-op (Stage C): the JOINER must spawn NO local enemies -- it renders
-        the host's relayed enemies as puppets instead. True when multiplayer is
-        active and this client is not the host (role unknown counts as joiner, so
-        nothing spawns until roles are settled). Always False in singleplayer
-        (no mp_client), so the normal game is untouched."""
-        level = self.level
-        return (getattr(level, "mp_client", None) is not None
-                and getattr(level, "_mp_role", None) != "host")
+        """CS2 (server-authoritative enemies): in multiplayer, NO client spawns
+        local enemies -- the server owns the enemy sim and every client renders
+        its enemies as puppets. True whenever multiplayer is active (mp_client
+        set). Always False in singleplayer (no mp_client), so the normal game is
+        untouched."""
+        return getattr(self.level, "mp_client", None) is not None
 
     def spawn_enemy(self, config, pos=None):
         if self._mp_local_enemies_suppressed():

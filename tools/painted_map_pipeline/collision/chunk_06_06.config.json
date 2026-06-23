@@ -1,0 +1,19 @@
+{
+  "derive": {
+    "void_rgb_max": 25,
+    "walkable_luminance_min": 92.0,
+    "obstacle_luminance_max": 72.0,
+    "edge_gradient_min": 28.0,
+    "snow_saturation_max": 58.0,
+    "rock_saturation_min": 32.0,
+    "collision_cell_px": 64,
+    "morphology_radius": 1,
+    "min_obstacle_cell_ratio": 0.35,
+    "canopy_luminance_min": 45.0,
+    "canopy_luminance_max": 88.0,
+    "canopy_saturation_min": 18.0,
+    "restrict_to_content_bbox": true,
+    "content_bbox_margin_px": 8
+  },
+  "notes": "64px cells only for optional local mechanical preview — not sent to Leonardo."
+}

@@ -69,6 +69,21 @@ Message shapes (see the multiplayer plan's "Wire protocol" section):
     # that enemy). Resulting health/death rides the C1 enemy relay back to both.
     {"type": "hit_enemy", "player_id": "...", "enemy_id": 7,
      "amount": 12.5, "attack_type": "weapon"}
+
+    # HOST -> server -> ALL, co-op kill rewards/FX + loot (Stage C, C2.5). The
+    # host owns enemy deaths + loot; it broadcasts these one-shot events and the
+    # server rebroadcasts them to everyone (only the host's are accepted). The
+    # joiner reacts: plays death particles + adds XP; shows/removes loot visuals.
+    {"type": "enemy_died", "player_id": "<host>", "id": 7,
+     "x": .., "y": .., "monster": "skeleton", "exp": 5}
+    {"type": "item_dropped", "player_id": "<host>", "drop_id": 31,
+     "item_id": "gold_coin", "x": .., "y": ..}
+    {"type": "item_removed", "player_id": "<host>", "drop_id": 31, "to": "<awarded player_id or null>"}
+
+    # JOINER -> server -> HOST, co-op loot pickup request (Stage C, C2.5c). The
+    # joiner walking over a shared item asks the host (item authority) to award
+    # it; the host confirms by emitting item_removed. Same direction as hit_enemy.
+    {"type": "pickup_item", "player_id": "...", "drop_id": 31}
 """
 
 import struct
@@ -82,6 +97,18 @@ MSG_STATE_UPDATE = "state_update"
 MSG_PLAYER_JOINED = "player_joined"
 MSG_PLAYER_LEFT = "player_left"
 MSG_HIT_ENEMY = "hit_enemy"
+MSG_ENEMY_DIED = "enemy_died"
+MSG_ITEM_DROPPED = "item_dropped"
+MSG_ITEM_REMOVED = "item_removed"
+MSG_PICKUP_ITEM = "pickup_item"
+# CS4: server -> all (broadcast); a server-owned enemy hit a player. Each client
+# applies it only if `target_player_id` is its own (mirrors item_removed's `to`).
+# Shape: {type, target_player_id, amount, attack_type}.
+MSG_HIT_PLAYER = "hit_player"
+
+# (CS5: the old HOST_BROADCAST_EVENTS grouping -- reward events a host CLIENT was
+#  allowed to broadcast -- was removed. enemy_died/item_dropped/item_removed are
+#  SERVER-emitted now; the server never accepts them from a client.)
 
 _LENGTH_PREFIX = struct.Struct(">I")
 
