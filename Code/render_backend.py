@@ -780,6 +780,74 @@ class GPUBackend(RenderBackend):
             pass
 
 
+class StubBackend(RenderBackend):
+    """A no-op render backend for the headless authoritative server.
+
+    The server runs the REAL Level4 simulation but renders NOTHING, so every
+    draw call here is a no-op and nothing ever opens a window or an OpenGL
+    context (unlike CPUBackend/GPUBackend, which both call
+    pygame.display.set_mode()). A small offscreen software surface backs
+    raw_surface/compose so any code that reads a surface still gets a valid
+    (never-presented) target instead of crashing.
+
+    It implements the union of the RenderBackend + GPUBackend draw surface the
+    game's draw half touches (lighting passes, grass instancing, shadows) so the
+    full Level4.run() draw path can execute headless without a GPU. The server
+    proper will call a sim-only path and never these, but keeping StubBackend
+    fully draw-safe lets the characterization tests run real run() headless.
+    """
+
+    def __init__(self, width: int, height: int):
+        self._size = (int(width), int(height))
+        self._surface = pygame.Surface(self._size)
+
+    def get_size(self) -> tuple[int, int]:
+        return self._size
+
+    def begin_frame(self, clear_color=(0, 0, 0)):
+        pass
+
+    def blit(self, surface, dest, *, flags=0, area=None, cache_key=None):
+        pass
+
+    def fill(self, color, rect=None, flags=0):
+        pass
+
+    def present(self):
+        pass
+
+    @property
+    def raw_surface(self) -> pygame.Surface:
+        return self._surface
+
+    # --- GPU-only draw helpers some draw paths call directly (all no-ops) ---
+    def draw_shadow(self, *args, **kwargs):
+        pass
+
+    def draw_light(self, *args, **kwargs):
+        pass
+
+    def draw_grass_instances(self, *args, **kwargs):
+        pass
+
+    def build_grass_atlas(self, *args, **kwargs):
+        pass
+
+    @property
+    def grass_atlas_ready(self) -> bool:
+        # Report "ready" so the draw path skips build_grass_atlas entirely.
+        return True
+
+    def begin_light_pass(self, *args, **kwargs):
+        pass
+
+    def end_light_pass(self, *args, **kwargs):
+        pass
+
+    def composite_lights(self, *args, **kwargs):
+        pass
+
+
 def create_backend(width: int, height: int) -> RenderBackend:
     if RENDER_BACKEND == "cpu":
         surface = pygame.display.set_mode((width, height), DISPLAY_FLAGS)

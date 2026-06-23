@@ -255,9 +255,14 @@ LAYOUT_TO_LEVEL = {
 
 
 class Level4:
-    def __init__(self, input_manager, selected_player_info_dir, layouts_dir, player_stats, level_number=None, game_settings=None, backend=None):
+    def __init__(self, input_manager, selected_player_info_dir, layouts_dir, player_stats, level_number=None, game_settings=None, backend=None, is_server=False):
         self.level_number = level_number
         self.game_settings = game_settings
+        # Server-authoritative pivot: True only when the headless server runs this
+        # Level4 (it simulates but never renders). Inert for now -- later slices
+        # use it to drive the sim-only path and multi-player world semantics.
+        # Default False keeps singleplayer/client byte-identical.
+        self.is_server = bool(is_server)
         self.benchmark_runtime = BENCHMARK_RUNTIME
         self._benchmark_summary_written = False
         self._benchmark_player_anchor = None
