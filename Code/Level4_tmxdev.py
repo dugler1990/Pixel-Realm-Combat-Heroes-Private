@@ -269,6 +269,14 @@ class Level4:
         # and damage them; the real self.player stays a parked sentinel (combat
         # context default_target). Empty + unused unless is_server.
         self.server_players = {}
+        # Server-authoritative death/loot capture: instead of applying XP +
+        # spawning local ItemVisuals (singleplayer), the server records events
+        # the GameServer broadcasts (enemy_died / item_dropped) and arbitrates
+        # shared pickups against this registry. Unused unless is_server.
+        self._server_deaths = []
+        self._server_item_drops = []
+        self._server_dropped_items = {}  # drop_id -> drop (for pickup arbitration)
+        self._server_next_drop_id = 0
         self.benchmark_runtime = BENCHMARK_RUNTIME
         self._benchmark_summary_written = False
         self._benchmark_player_anchor = None
@@ -1270,10 +1278,27 @@ class Level4:
 
     def check_enemy_deaths(self):
         dead_enemies = [enemy for enemy in self.spawner.enemies if enemy.is_dead()]
-        
+
+        # Server-authoritative: capture each death as an enemy_died event (FX/XP
+        # ride it to every client, awarded there) + roll loot WITHOUT building
+        # local ItemVisuals (the server renders nothing; clients recreate the
+        # visual from item_dropped). Then drop the enemy from the sim.
+        if self.is_server:
+            for enemy in dead_enemies:
+                self._server_deaths.append({
+                    "id": enemy.id,
+                    "x": enemy.rect.centerx,
+                    "y": enemy.rect.centery,
+                    "monster": getattr(enemy, "monster_name", ""),
+                    "exp": getattr(enemy, "exp", 0),
+                })
+                self._server_roll_and_register_drops(enemy)
+                self.spawner.enemies.remove(enemy)
+            return
+
         #print("dead_enemies")
         #print(len(dead_enemies))
-        
+
         # CS2+: in multiplayer the SERVER owns the enemy sim, so this client's
         # `spawner.enemies` is empty (enemies render as puppets) and this loop is a
         # no-op -- enemy death FX/XP/loot are all server-emitted (enemy_died /
@@ -1714,10 +1739,18 @@ class Level4:
                     self.animation_player.create_particles(attack_type, self.player.rect.center, [self.layout_manager.visible_sprites])
 
     def trigger_death_particles(self, pos, particle_type):
+        # Server: the death FX ride the enemy_died event (each client plays them);
+        # nothing is rendered here.
+        if self.is_server:
+            return
         # Particle effect logic here
         self.animation_player.create_particles(particle_type, pos, [self.layout_manager.visible_sprites])
 
     def add_exp(self, amount):
+        # Server: XP rides the enemy_died event (each client awards it, co-op =
+        # both full) -- the parked sentinel never accrues it.
+        if self.is_server:
+            return
         self.player.exp += amount
         self.check_level_up()
 
@@ -2123,6 +2156,59 @@ class Level4:
         )
         self.interaction_resolver.apply(ctx)
         return True
+
+    def _server_roll_and_register_drops(self, enemy):
+        """Server: roll an enemy's loot (item_ids + gold) WITHOUT building
+        display-coupled Item objects -- only item_id + position (+ exact gold
+        amount) are needed for the item_dropped event; each client recreates the
+        visual. Each drop gets a stable drop_id + is registered for pickup
+        arbitration. Mirrors ItemSpawner.drop_from_enemy's roll."""
+        drop_info = getattr(enemy, "item_drop_info", None)
+        if not drop_info:
+            return
+        x, y = enemy.rect.bottomright
+        rolled = [{"item_id": item_id, "x": x, "y": y}
+                  for item_id, _qty in resolve_loot_table(drop_info)]
+        gold = resolve_gold_drop(drop_info, random)
+        if gold and gold > 0:
+            rolled.append({"item_id": "gold_coin", "x": x, "y": y, "gold": int(gold)})
+        for drop in rolled:
+            self._server_next_drop_id += 1
+            drop_id = self._server_next_drop_id
+            self._server_dropped_items[drop_id] = drop
+            event = {"type": MSG_ITEM_DROPPED, "drop_id": drop_id,
+                     "item_id": drop["item_id"], "x": drop["x"], "y": drop["y"]}
+            if "gold" in drop:
+                event["gold"] = drop["gold"]  # keep the rolled gold amount exact
+            self._server_item_drops.append(event)
+
+    def drain_deaths(self):
+        """Server: collect + clear the enemies that died this tick as enemy_died
+        broadcast events (each client plays the FX/sound, removes the puppet, and
+        awards the full co-op XP via the existing _handle_enemy_died)."""
+        events = [
+            {"type": MSG_ENEMY_DIED, "id": d["id"], "x": d["x"], "y": d["y"],
+             "monster": d["monster"], "exp": d["exp"]}
+            for d in self._server_deaths
+        ]
+        self._server_deaths = []
+        return events
+
+    def drain_item_drops(self):
+        """Server: collect + clear this tick's item_dropped events (server -> all)."""
+        events = self._server_item_drops
+        self._server_item_drops = []
+        return events
+
+    def arbitrate_pickup(self, drop_id, player_id):
+        """Server: the first client to claim a shared drop wins. Remove it from
+        the registry and return an item_removed event awarding it to the
+        requester; None if it's already gone (a losing double-claim banks
+        nothing)."""
+        if drop_id not in self._server_dropped_items:
+            return None
+        del self._server_dropped_items[drop_id]
+        return {"type": MSG_ITEM_REMOVED, "drop_id": drop_id, "to": player_id}
 
     # -- Co-op shared enemies (Stage C, C1): host relays its enemy sim; joiner
     #    renders the relayed enemies as render-only puppets (see EnemyPuppet). --

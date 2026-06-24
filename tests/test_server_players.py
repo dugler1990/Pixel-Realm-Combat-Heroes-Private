@@ -32,7 +32,7 @@ pygame.init()
 pygame.display.set_mode((1280, 720))
 
 from headless_level import build_headless_level  # noqa: E402
-from network import MSG_HIT_PLAYER  # noqa: E402
+from network import MSG_HIT_PLAYER, MSG_ENEMY_DIED, MSG_ITEM_REMOVED  # noqa: E402
 from Settings import TILESIZE  # noqa: E402
 
 
@@ -163,3 +163,50 @@ def test_server_gather_relay_and_apply_enemy_hit():
     level.run(1.0 / 60.0)
     assert all(en.id != enemy.id for en in spawner.enemies)
     assert all(r["id"] != enemy.id for r in level.gather_enemy_relay())
+
+
+def test_server_enemy_death_emits_event_without_local_xp():
+    """Slice 4b: a server-side death becomes an enemy_died event (FX/XP ride it
+    to clients); the parked sentinel never accrues XP and no local ItemVisual is
+    spawned."""
+    random.seed(5)
+    level, _alice, center = _server_level_with_player()
+    spawner = level.layout_manager.spawner
+    spawner.spawn_enemy({"type": "raccoon"}, pos=(center[0] / TILESIZE, center[1] / TILESIZE))
+    enemy = spawner.enemies[0]
+    exp_before = level.player.exp
+
+    # Kill it, then tick once so check_enemy_deaths captures it (server mode).
+    level.apply_enemy_hit(enemy.id, enemy.health + 100, "weapon")
+    level.set_server_player_state("alice", center[0], center[1], health=1000)
+    level.run(1.0 / 60.0)
+
+    deaths = level.drain_deaths()
+    assert len(deaths) == 1
+    d = deaths[0]
+    assert d["type"] == MSG_ENEMY_DIED
+    assert d["id"] == enemy.id
+    assert d["monster"] == "raccoon"
+    assert "exp" in d and "x" in d and "y" in d
+    assert level.drain_deaths() == []  # drained
+
+    # The server applied NO XP locally (it rides the event, awarded on clients).
+    assert level.player.exp == exp_before
+    # No local item visuals were spawned on the (render-less) server.
+    from tmx_layout_manager import ItemVisual  # noqa
+    assert not any(isinstance(s, ItemVisual)
+                   for s in level.layout_manager.visible_sprites.sprites())
+
+
+def test_server_pickup_arbitration_first_claim_wins():
+    """Slice 4b: a shared drop is awarded to the first claimer; a later claim of
+    the same drop gets nothing (no dupes)."""
+    random.seed(6)
+    level, _alice, _center = _server_level_with_player()
+    level._server_dropped_items[42] = {"item_id": "gold_coin", "x": 1, "y": 2}
+
+    awarded = level.arbitrate_pickup(42, "alice")
+    assert awarded == {"type": MSG_ITEM_REMOVED, "drop_id": 42, "to": "alice"}
+    # The drop is gone -> a second (losing) claim banks nothing.
+    assert level.arbitrate_pickup(42, "bob") is None
+    assert level.arbitrate_pickup(999, "alice") is None  # unknown drop
