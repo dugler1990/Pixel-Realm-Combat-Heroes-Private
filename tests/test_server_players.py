@@ -33,6 +33,7 @@ pygame.display.set_mode((1280, 720))
 
 from headless_level import build_headless_level  # noqa: E402
 from network import MSG_HIT_PLAYER  # noqa: E402
+from Settings import TILESIZE  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -126,3 +127,39 @@ def test_server_enemies_spawn_near_player_then_damage_and_disengage_on_death():
         level.run(dt)
         hits_while_dead += len(level.drain_player_hits())
     assert hits_while_dead == 0, "a downed player was still being hit -- not dropped from aggro"
+
+
+def test_server_gather_relay_and_apply_enemy_hit():
+    """Slice 4a: the server's enemy-relay snapshot (-> client puppets) and the
+    apply path for a client's relayed hit (-> the authoritative enemy)."""
+    random.seed(2)
+    level, _alice, center = _server_level_with_player()
+    spawner = level.layout_manager.spawner
+    # Spawn one real enemy directly (no need to wait for the proximity area).
+    spawner.spawn_enemy({"type": "raccoon"}, pos=(center[0] / TILESIZE, center[1] / TILESIZE))
+    assert len(spawner.enemies) == 1
+    enemy = spawner.enemies[0]
+
+    relay = level.gather_enemy_relay()
+    assert len(relay) == 1
+    e = relay[0]
+    assert e["id"] == enemy.id
+    assert e["type"] == "raccoon"
+    assert set(e) >= {"id", "type", "x", "y", "status", "dir", "health"}
+    assert e["health"] > 0
+
+    # A client's relayed hit is applied to the authoritative enemy (i-frames make
+    # the first hit land on a freshly spawned, vulnerable enemy).
+    hp0 = enemy.health
+    assert level.apply_enemy_hit(enemy.id, 25.0, "weapon") is True
+    assert enemy.health <= hp0 - 25
+
+    # An unknown enemy id is a no-op (already dead/despawned).
+    assert level.apply_enemy_hit(999999, 25.0, "weapon") is False
+
+    # A lethal hit + one sim tick removes it from the world and the relay.
+    level.apply_enemy_hit(enemy.id, enemy.health + 100, "weapon")
+    level.set_server_player_state("alice", center[0], center[1], health=1000)
+    level.run(1.0 / 60.0)
+    assert all(en.id != enemy.id for en in spawner.enemies)
+    assert all(r["id"] != enemy.id for r in level.gather_enemy_relay())

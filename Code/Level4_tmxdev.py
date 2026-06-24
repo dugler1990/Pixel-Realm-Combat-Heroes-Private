@@ -2059,6 +2059,71 @@ class Level4:
             return next(iter(self.server_players.values()))
         return self.player
 
+    def sync_players(self, players):
+        """Reconcile the server's networked players to `players` (an iterable of
+        {player_id, character, x, y[, health]}): add joiners, apply each one's
+        latest report, drop the departed. The GameServer calls this each tick
+        before run()."""
+        seen = set()
+        for p in players:
+            pid = p["player_id"]
+            seen.add(pid)
+            if pid in self.server_players:
+                self.set_server_player_state(pid, p["x"], p["y"], p.get("health"))
+            else:
+                self.add_server_player(pid, p.get("character", ""), p["x"], p["y"],
+                                       health=p.get("health"))
+        for pid in list(self.server_players):
+            if pid not in seen:
+                self.remove_server_player(pid)
+
+    def gather_enemy_relay(self):
+        """Server: snapshot each live enemy's render state for the wire. SAME
+        shape the clients' _reconcile_enemy_puppets already consumes:
+        {id, type, x, y, status, dir, health}."""
+        out = []
+        for e in self.layout_manager.spawner.enemies:
+            if getattr(e, "health", 0) <= 0 or not e.alive():
+                continue
+            monster_name = getattr(e, "monster_name", None)
+            if monster_name is None:
+                continue
+            out.append({
+                "id": e.id,
+                "type": monster_name,
+                "x": e.rect.centerx,
+                "y": e.rect.centery,
+                "status": getattr(e, "status", "idle"),
+                "dir": e.get_direction_as_string() if hasattr(e, "get_direction_as_string") else "right",
+                "health": getattr(e, "health", 0),
+            })
+        return out
+
+    def apply_enemy_hit(self, enemy_id, amount, attack_type):
+        """Server: apply a client's relayed attack to the authoritative enemy.
+
+        The client resolved the amount from ITS player's stats (the server has no
+        player combat stats) and relayed the number; we route it through the REAL
+        InteractionResolver so the enemy's i-frames + retaliation behave exactly
+        as in singleplayer. Health/death then ride the enemy broadcast back to
+        every client. Returns True if an enemy was hit."""
+        if enemy_id is None or amount is None:
+            return False
+        enemy = next((e for e in self.layout_manager.spawner.enemies if e.id == enemy_id), None)
+        if enemy is None:
+            return False  # already dead/despawned
+        ctx = InteractionContext(
+            kind="damage",
+            source_kind="player_attack",
+            source=None,            # the client's stats are already baked into amount
+            source_team="player",
+            target=enemy,
+            amount=amount,
+            attack_type=attack_type,
+        )
+        self.interaction_resolver.apply(ctx)
+        return True
+
     # -- Co-op shared enemies (Stage C, C1): host relays its enemy sim; joiner
     #    renders the relayed enemies as render-only puppets (see EnemyPuppet). --
 
