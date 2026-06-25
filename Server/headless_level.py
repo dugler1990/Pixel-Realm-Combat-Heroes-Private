@@ -7,12 +7,8 @@ under the dummy SDL driver, so the real Spawner / CombatUnit / Interaction sim
 runs centrally with zero divergence from singleplayer.
 
 Slice 1 only stands this up and proves it ticks like singleplayer (the real
-spawner spawns real enemies headless). Later slices split run() into a sim-only
-path the GameServer drives and wire networked players into the world.
-
-NOTE: this deliberately does NOT live in Server/server_level.py -- that module is
-the interim ServerLevel shim being deleted once the GameServer is rewired onto
-this real-Level4 bootstrap.
+spawner spawns real enemies headless). The GameServer (_step_world_sim) drives
+this level's sim-only run() each tick and broadcasts the world to clients.
 """
 
 import os

@@ -2317,7 +2317,7 @@ class Level4:
         visual.kill()
 
     # (CS5b: _apply_relayed_pickup was removed -- the SERVER arbitrates shared-loot
-    #  pickups now (ServerLevel.arbitrate_pickup), not a host client.)
+    #  pickups now (Level4.arbitrate_pickup, run server-side), not a host client.)
 
     def _handle_enemy_died(self, message):
         """Joiner (C2.5b): a host enemy died -> play its death particles + sound,
@@ -2336,9 +2336,9 @@ class Level4:
         self.add_exp(message.get("exp", 0))
 
     # (CS2/CS3: the host-side _gather_enemy_relay + _apply_relayed_enemy_hit were
-    #  removed -- the SERVER now owns the enemy sim. It gathers enemy render-state
-    #  and applies relayed player->enemy hits in Server/server_level.py
-    #  (ServerLevel.gather_enemy_relay / apply_enemy_hit).)
+    #  removed -- the SERVER now owns the enemy sim. It runs THIS Level4 headless
+    #  and gathers enemy render-state + applies relayed player->enemy hits via the
+    #  server-mode methods on this class (gather_enemy_relay / apply_enemy_hit).)
 
     def _apply_relayed_player_hit(self, amount, attack_type):
         """CS4: a server-owned enemy hit MY player. Apply the relayed damage to

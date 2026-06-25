@@ -145,10 +145,9 @@ class GameServer:
                 elif msg_type == MSG_INPUT:
                     with self.game_state.lock:
                         player = self.game_state.players.get(player_id)
-                        # CS2: the SERVER owns the enemy sim now -- it no longer
-                        # trusts a client's uploaded `enemies` (the sim loop writes
-                        # game_state.enemies from ServerLevel each tick). Any
-                        # `enemies` still on an input message is ignored.
+                        # The SERVER owns the enemy sim (it runs the real Level4
+                        # and the sim loop writes game_state.enemies each tick), so
+                        # any `enemies` a client puts on an input message is ignored.
                         if player is not None:
                             # v0 position relay: trust the client's reported (x, y),
                             # use move_x/move_y/attacking only to derive status.

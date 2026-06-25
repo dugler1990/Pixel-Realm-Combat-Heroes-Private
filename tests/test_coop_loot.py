@@ -103,4 +103,5 @@ def test_item_removed_despawn_to_none_clears_visual_only():
 
 
 # (CS5b: pickup arbitration moved off the client to the SERVER --
-#  ServerLevel.arbitrate_pickup, covered in tests/test_server_enemy_authority.py.)
+#  Level4.arbitrate_pickup (run server-side), covered in
+#  tests/test_server_enemy_authority.py + tests/test_server_players.py.)
