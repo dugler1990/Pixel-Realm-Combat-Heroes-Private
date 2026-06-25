@@ -29,7 +29,7 @@ DEADLINE = 5.0
 
 @pytest.fixture
 def server():
-    srv = GameServer(host="127.0.0.1", port=0)
+    srv = GameServer(host="127.0.0.1", port=0, run_world_sim=False)
     port = srv.listen_socket.getsockname()[1]
     threading.Thread(target=srv.run, daemon=True).start()
     yield srv, port

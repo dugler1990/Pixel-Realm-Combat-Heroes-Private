@@ -1,17 +1,17 @@
-"""CS2 (server-authoritative pivot) -- the server OWNS + broadcasts enemies.
+"""Server-authoritative GameServer glue: the server runs the REAL Level4.
 
-Drives GameServer._step_enemy_sim directly (no sockets): once the first client
-has uploaded an enemy spawn spec, the sim loop lazily builds a ServerLevel,
-spawns those enemies, ticks them against the live player positions, and writes
-their render-state into game_state.enemies (the exact shape clients' existing
-_reconcile_enemy_puppets consumes). Proves the server is the enemy authority.
+Drives GameServer._step_world_sim directly (no sockets, no real-time sleeps): it
+lazily builds the real Level4 (which loads its own map + spawn areas), reconciles
+the networked players from game_state, runs one real sim tick, and writes the
+enemy render-state + reward/hit events back into game_state. The detailed sim
+behavior (spawning, aggro, damage, death, loot) is covered in-process against the
+real Level4 in test_server_players.py / test_headless_level.py; this file proves
+the GameServer wires game_state <-> the level correctly.
 """
 
-import math
 import os
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -25,239 +25,114 @@ import pygame  # noqa: E402
 import pytest  # noqa: E402
 
 pygame.init()
-pygame.display.set_mode((64, 64))
+pygame.display.set_mode((1280, 720))
 
-from Settings import TILESIZE  # noqa: E402
 from common import ServerPlayerState  # noqa: E402
+from network import MSG_ENEMY_DIED, MSG_ITEM_REMOVED  # noqa: E402
 import server as server_module  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def _clean_software_display():
-    # See test_server_enemy_sim: a prior OpenGL-display test can segfault the
-    # real CombatUnit surface loads; force a clean software display per test.
     pygame.display.quit()
     pygame.display.init()
-    pygame.display.set_mode((64, 64))
+    pygame.display.set_mode((1280, 720))
     yield
 
 
-def _server_with_spawns(player_xy, squid_tile=(10, 10)):
-    # port=0 -> ephemeral bind; we never run the accept/sim threads, we drive
-    # _step_enemy_sim by hand.
+def _server_with_player(x=0.0, y=0.0):
+    # port=0 -> ephemeral bind; we never start the accept/sim threads, we drive
+    # _step_world_sim by hand (each call advances the sim TICK_DT).
     srv = server_module.GameServer(host="127.0.0.1", port=0)
-    gs = srv.game_state
-    gs.players["alice"] = ServerPlayerState(
-        player_id="alice", character="../Graphics/Orange_Wizard/",
-        x=float(player_xy[0]), y=float(player_xy[1]),
+    srv.game_state.players["alice"] = ServerPlayerState(
+        player_id="alice", character="../Graphics/Orange_Wizard/", x=x, y=y,
     )
-    gs.pending_enemy_spawns = [{"kind": "enemy", "type": "squid", "pos": list(squid_tile)}]
-    gs.map_width = 20000.0
-    gs.map_height = 20000.0
     return srv
 
 
-def _enemy_spawn_area(tile=(10, 10)):
-    ax, ay = tile
-    return {
-        "matrix": [[1]],
-        "config": {"enemy_spawn_weights": {"squid": 1}, "spawn_type": "random_weights",
-                   "frequency": 0, "spawn_number": 2, "spawn_limit": 50},
-        "object_info": {"anchor_tx": ax, "anchor_ty": ay, "x_pos": ax, "y_pos": ay,
-                        "rect_x_px": ax * TILESIZE, "rect_y_px": ay * TILESIZE,
-                        "rect_w_px": TILESIZE, "rect_h_px": TILESIZE, "object_id": 1},
-    }
+def _area0_center(srv):
+    area = srv.server_level.layout_manager.spawner.spawn_areas[0]
+    oi = area["object_info"]
+    return (int(oi["rect_x_px"] + oi["rect_w_px"] / 2),
+            int(oi["rect_y_px"] + oi["rect_h_px"] / 2))
 
 
-def test_server_spawns_enemies_from_spawn_areas():
-    # The MP level has NO placed enemies -- it spawns via proximity spawn areas.
-    # The server must run those areas itself (the whole point of this fix).
-    srv = server_module.GameServer(host="127.0.0.1", port=0)
-    gs = srv.game_state
-    gs.players["alice"] = ServerPlayerState(
-        player_id="alice", character="x", x=10 * TILESIZE + 20, y=10 * TILESIZE + 20)
-    gs.pending_enemy_spawns = []                      # no placed enemies
-    gs.pending_spawn_areas = [_enemy_spawn_area((10, 10))]
-    gs.map_width = gs.map_height = 20000.0
+def _move_player_onto_area0_and_spawn(srv, max_steps=560):
+    """Build the level, park alice on enemy spawn area 0, and step until the real
+    proximity area fires. Returns (cx, cy) once game_state.enemies is non-empty."""
+    srv._step_world_sim()  # builds the real Level4 (alice present)
+    cx, cy = _area0_center(srv)
+    for _ in range(max_steps):
+        srv.game_state.players["alice"].x = float(cx)
+        srv.game_state.players["alice"].y = float(cy)
+        srv._step_world_sim()
+        if srv.game_state.enemies:
+            return cx, cy
+    raise AssertionError("real spawn area never fired at the networked player")
 
-    srv._step_enemy_sim()                            # build + register areas + first tick
+
+def test_server_builds_real_level_and_broadcasts_its_enemies():
+    srv = _server_with_player()
+    _move_player_onto_area0_and_spawn(srv)
+
+    # The server loaded the REAL map (not an upload) and broadcasts its enemies.
     assert srv.server_level is not None
-    assert srv.server_level.spawner.spawn_areas       # the area registered
-    assert len(srv.game_state.enemies) >= 1           # produced enemies near the player
-    assert all(e["type"] == "squid" for e in srv.game_state.enemies)
-
-
-def test_server_spawn_area_gated_by_player_proximity():
-    # No player anywhere near the area -> nothing spawns (proximity gate).
-    srv = server_module.GameServer(host="127.0.0.1", port=0)
-    gs = srv.game_state
-    gs.players["alice"] = ServerPlayerState(
-        player_id="alice", character="x", x=18000.0, y=18000.0)  # far away
-    gs.pending_spawn_areas = [_enemy_spawn_area((10, 10))]
-    gs.map_width = gs.map_height = 20000.0
-    for _ in range(5):
-        srv._step_enemy_sim()
-    assert srv.game_state.enemies == []
-
-
-def test_server_builds_sim_and_broadcasts_enemy_state():
-    srv = _server_with_spawns(player_xy=(10 * TILESIZE + 500, 10 * TILESIZE))
-    srv._step_enemy_sim()
-
-    assert srv.server_level is not None              # lazily built from the spec
-    assert len(srv.game_state.enemies) == 1
-    e = srv.game_state.enemies[0]
-    assert e["type"] == "squid"
-    assert set(e) >= {"id", "type", "x", "y", "status", "dir", "health"}  # puppet shape
+    assert len(srv.server_level.layout_manager.spawner.spawn_areas) > 0
+    enemies = srv.game_state.enemies
+    assert len(enemies) > 0
+    e = enemies[0]
+    assert set(e) >= {"id", "type", "x", "y", "status", "dir", "health"}
     assert e["health"] > 0
 
 
-def test_server_enemy_aggros_player_over_ticks():
-    srv = _server_with_spawns(player_xy=(10 * TILESIZE + 500, 10 * TILESIZE))
-
-    def enemy_dist():
-        e = srv.game_state.enemies[0]
-        return math.hypot((10 * TILESIZE + 500) - e["x"], (10 * TILESIZE) - e["y"])
-
-    srv._step_enemy_sim()
-    d_start = enemy_dist()
-    for _ in range(120):
-        srv._step_enemy_sim()
-    d_end = enemy_dist()
-    assert d_end < d_start - 50  # server-owned enemy moved toward the player
-
-
-def test_server_sim_idle_until_spawn_spec_uploaded():
+def test_server_idle_until_a_player_joins():
+    # No players -> the server doesn't build/tick the level at all.
     srv = server_module.GameServer(host="127.0.0.1", port=0)
-    srv.game_state.players["alice"] = ServerPlayerState(
-        player_id="alice", character="x", x=0.0, y=0.0,
-    )
-    srv._step_enemy_sim()  # no pending_enemy_spawns yet
+    srv._step_world_sim()
     assert srv.server_level is None
     assert srv.game_state.enemies == []
 
 
-def test_server_drops_enemies_for_departed_players_targeting():
-    # Spawn, let it aggro, then remove the player -> target list empties; the sim
-    # keeps running (enemy still broadcast) but has no one to chase.
-    srv = _server_with_spawns(player_xy=(10 * TILESIZE + 300, 10 * TILESIZE))
-    srv._step_enemy_sim()
-    assert srv.server_level.player_targets  # alice is a target
-    srv.game_state.players.clear()
-    srv._step_enemy_sim()
-    assert srv.server_level.player_targets == {}     # target reconciled away
-    assert len(srv.game_state.enemies) == 1          # enemy still owned/broadcast
+def test_pending_hit_damages_a_server_enemy():
+    srv = _server_with_player()
+    _move_player_onto_area0_and_spawn(srv)
+    enemy = srv.game_state.enemies[0]
+    eid, hp0 = enemy["id"], enemy["health"]
 
-
-def test_drain_player_hits_emits_hit_player_event_and_clears():
-    # CS4: a recorded enemy->player hit becomes a hit_player broadcast event.
-    srv = _server_with_spawns(player_xy=(10 * TILESIZE + 40, 10 * TILESIZE))
-    srv._step_enemy_sim()  # build + register the target
-    target = srv.server_level.player_targets["alice"]
-    target.incoming_hits.append((8, "melee"))
-    events = srv.server_level.drain_player_hits()
-    assert events == [{"type": "hit_player", "target_player_id": "alice",
-                       "amount": 8, "attack_type": "melee"}]
-    assert target.incoming_hits == []
-
-
-def test_enemy_melee_emits_hit_player_through_the_sim():
-    # Full server path: enemy on the player + zeroed cooldown -> a melee lands ->
-    # _step_enemy_sim queues a hit_player into pending_events (the broadcast queue).
-    srv = _server_with_spawns(player_xy=(10 * TILESIZE + 40, 10 * TILESIZE))
-    srv._step_enemy_sim()
-    enemy = srv.server_level.spawner.enemies[0]
-    enemy.attack_cooldown = 0
-    enemy.last_attack_action_time = 0
-
-    got = False
-    for _ in range(30):
-        srv._step_enemy_sim()
-        if any(e.get("type") == "hit_player" for e in srv.game_state.pending_events):
-            got = True
-            break
-    assert got, "enemy melee never produced a hit_player broadcast event"
-    hp = next(e for e in srv.game_state.pending_events if e.get("type") == "hit_player")
-    assert hp["target_player_id"] == "alice" and hp["amount"] > 0
-
-
-def test_drain_deaths_emits_enemy_died_event_and_clears():
-    srv = _server_with_spawns(player_xy=(10 * TILESIZE + 300, 10 * TILESIZE))
-    srv._step_enemy_sim()  # build
-    srv.server_level.pending_deaths.append(
-        {"id": 5, "x": 1, "y": 2, "monster": "squid", "exp": 3}
-    )
-    events = srv.server_level.drain_deaths()
-    assert events == [{"type": "enemy_died", "id": 5, "x": 1, "y": 2,
-                       "monster": "squid", "exp": 3}]
-    assert srv.server_level.pending_deaths == []
-
-
-def test_lethal_hit_emits_enemy_died_and_removes_enemy():
-    # CS5a: a server-applied lethal hit -> the enemy dies -> _step_enemy_sim emits
-    # an enemy_died broadcast event AND drops the enemy from the relay.
-    srv = _server_with_spawns(player_xy=(10 * TILESIZE + 300, 10 * TILESIZE))
-    srv._step_enemy_sim()
-    enemy = srv.server_level.spawner.enemies[0]
+    # Queue a client's hit (as the receiver thread would) and step: the glue
+    # drains pending_enemy_hits and applies it to the authoritative enemy.
     srv.game_state.pending_enemy_hits.append(
-        {"type": "hit_enemy", "player_id": "alice", "enemy_id": enemy.id,
-         "amount": enemy.health + 50, "attack_type": "weapon"}
-    )
-    srv._step_enemy_sim()
+        {"enemy_id": eid, "amount": 40.0, "attack_type": "weapon"})
+    srv._step_world_sim()
 
-    died = [e for e in srv.game_state.pending_events if e.get("type") == "enemy_died"]
-    assert len(died) == 1
-    assert died[0]["id"] == enemy.id and died[0]["monster"] == "squid"
-    assert "exp" in died[0]
-    assert all(e["id"] != enemy.id for e in srv.game_state.enemies)  # removed from relay
+    after = next((e for e in srv.game_state.enemies if e["id"] == eid), None)
+    assert after is None or after["health"] <= hp0 - 40  # damaged (or already dead)
 
 
-def test_roll_and_register_drops_emits_item_dropped_with_exact_gold():
-    # CS5b: the server rolls loot headlessly (no Item objects), registers each
-    # drop with a stable drop_id, and queues item_dropped events -- gold carries
-    # the exact rolled amount.
-    srv = _server_with_spawns(player_xy=(10 * TILESIZE + 300, 10 * TILESIZE))
-    srv._step_enemy_sim()
-    level = srv.server_level
-    enemy = SimpleNamespace(
-        rect=pygame.Rect(100, 200, 10, 10),
-        item_drop_info={
-            "guaranteed_drops": [{"item_id": "health_potion", "quantity": 1}],
-            "gold_drop": {"chance": 1.0, "min": 5, "max": 5},
-        },
-    )
-    level._roll_and_register_drops(enemy)
-    events = level.drain_item_drops()
+def test_lethal_hit_removes_enemy_and_emits_enemy_died():
+    srv = _server_with_player()
+    _move_player_onto_area0_and_spawn(srv)
+    enemy = srv.game_state.enemies[0]
+    eid = enemy["id"]
 
-    ids = {e["item_id"] for e in events}
-    assert "health_potion" in ids and "gold_coin" in ids
-    gold_ev = next(e for e in events if e["item_id"] == "gold_coin")
-    assert gold_ev["gold"] == 5
-    assert all(e["type"] == "item_dropped" and "drop_id" in e for e in events)
-    assert len(level.dropped_items) == 2          # registered for pickup
-    assert level.drain_item_drops() == []          # drained
+    srv.game_state.pending_enemy_hits.append(
+        {"enemy_id": eid, "amount": enemy["health"] + 1000, "attack_type": "weapon"})
+    srv._step_world_sim()
+
+    assert all(e["id"] != eid for e in srv.game_state.enemies)  # dropped from broadcast
+    died = [ev for ev in srv.game_state.pending_events
+            if ev.get("type") == MSG_ENEMY_DIED and ev.get("id") == eid]
+    assert died, "no enemy_died event emitted for the lethal hit"
 
 
-def test_arbitrate_pickup_first_claim_wins():
-    srv = _server_with_spawns(player_xy=(10 * TILESIZE + 300, 10 * TILESIZE))
-    srv._step_enemy_sim()
-    level = srv.server_level
-    level.dropped_items[42] = {"item_id": "health_potion", "x": 1, "y": 2}
+def test_pickup_claim_is_arbitrated_into_an_item_removed_event():
+    srv = _server_with_player()
+    srv._step_world_sim()  # build the level
+    # Register a shared drop, then queue a client's claim (as the receiver would).
+    srv.server_level._server_dropped_items[7] = {"item_id": "gold_coin", "x": 1, "y": 2}
+    srv.game_state.pending_pickups.append({"drop_id": 7, "player_id": "alice"})
+    srv._step_world_sim()
 
-    ev = level.arbitrate_pickup(42, "bob")
-    assert ev == {"type": "item_removed", "drop_id": 42, "to": "bob"}
-    assert 42 not in level.dropped_items
-    assert level.arbitrate_pickup(42, "alice") is None   # already claimed -> no double-grant
-
-
-def test_player_reported_dead_is_dropped_from_server_aggro():
-    # CS4 health relay: a player whose relayed health is 0 must be ignored by the
-    # server's enemy aggro (target removed from the entity tree).
-    srv = _server_with_spawns(player_xy=(10 * TILESIZE + 300, 10 * TILESIZE))
-    srv.game_state.players["alice"].health = 0.0
-    srv._step_enemy_sim()
-    # target exists but health 0 -> enemy can't validly aggro it
-    enemy = srv.server_level.spawner.enemies[0]
-    target = srv.server_level.player_targets["alice"]
-    assert target.health == 0
-    assert not enemy._is_valid_aggro_target(target)
+    removed = [ev for ev in srv.game_state.pending_events
+               if ev.get("type") == MSG_ITEM_REMOVED and ev.get("drop_id") == 7]
+    assert removed and removed[0]["to"] == "alice"

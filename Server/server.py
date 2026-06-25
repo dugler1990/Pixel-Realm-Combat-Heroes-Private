@@ -49,11 +49,19 @@ from common import GameState, ServerPlayerState  # noqa: E402
 TICK_RATE_HZ = 60
 TICK_DT = 1.0 / TICK_RATE_HZ
 
+# The co-op level the server loads. MP is level 6 only for now.
+MP_LEVEL_NUMBER = 6
+
 
 class GameServer:
-    def __init__(self, host="0.0.0.0", port=12345):
+    def __init__(self, host="0.0.0.0", port=12345, run_world_sim=True):
         self.host = host
         self.port = port
+        # The real server runs the authoritative world sim (loads + ticks the
+        # real Level4). Set False for a pure relay (the Stage A/B transport +
+        # obstacle-collision layer, which is independent of the world sim) -- used
+        # by the movement/collision tests so they don't build the heavy level.
+        self.run_world_sim = run_world_sim
         self.listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.listen_socket.bind((host, port))
@@ -231,56 +239,59 @@ class GameServer:
             last = now
             while accumulator >= TICK_DT:
                 self.tick += 1
-                self._step_enemy_sim()
+                self._step_world_sim()
                 self._broadcast_tick()
                 accumulator -= TICK_DT
             time.sleep(0.001)
 
-    # -- CS2: advance the server-authoritative enemy simulation one tick --
-    # Owned solely by this loop thread, so all pygame/sim work stays single-
-    # threaded. We only touch the shared GameState (players in, enemies out)
-    # briefly under the lock; the (potentially slow) tick runs outside it.
-    def _step_enemy_sim(self):
+    # -- advance the server-authoritative world simulation one tick --
+    # The server runs the REAL Level4 (it loads its own map + enemies). Owned
+    # solely by this loop thread, so all pygame/sim work stays single-threaded.
+    # We only touch the shared GameState (players in, enemies/events out) briefly
+    # under the lock; the (potentially slow) run() tick runs outside it.
+    def _step_world_sim(self):
+        if not self.run_world_sim:
+            return  # pure-relay mode: no world sim, no level build
         gs = self.game_state
         if self.server_level is None:
             with gs.lock:
-                spec = gs.pending_enemy_spawns
-                areas = gs.pending_spawn_areas
-                obstacle_tree = gs.obstacle_quad_tree
-                map_w, map_h = gs.map_width, gs.map_height
-            if not spec and not areas:
-                return  # wait until the first client uploads enemies/spawn areas
-            # obstacle_tree may be None (map with no obstacles) -> open ground.
-            self._build_server_level(spec or [], areas or [], obstacle_tree, map_w, map_h)
+                have_players = bool(gs.players)
+            if not have_players:
+                return  # nothing to simulate until a client joins
+            self._build_server_level()
 
         with gs.lock:
-            players = [{"player_id": pid, "x": p.x, "y": p.y, "health": p.health}
+            players = [{"player_id": pid, "character": p.character,
+                        "x": p.x, "y": p.y, "health": p.health}
                        for pid, p in gs.players.items()]
             hits = gs.pending_enemy_hits
             gs.pending_enemy_hits = []
             pickups = gs.pending_pickups
             gs.pending_pickups = []
-        # CS3: apply queued player->enemy hits BEFORE ticking, so a lethal hit is
-        # caught by this tick's check_death and the enemy drops from the broadcast.
+        level = self.server_level
+        # Apply queued player->enemy hits BEFORE the tick, so a lethal hit is
+        # caught by this tick's check_enemy_deaths and the enemy drops from the
+        # broadcast (clients then kill the puppet).
         for hit in hits:
-            self.server_level.apply_enemy_hit(
+            level.apply_enemy_hit(
                 hit.get("enemy_id"), hit.get("amount"), hit.get("attack_type"),
             )
-        self.server_level.sync_player_targets(players)
-        self.server_level.tick(TICK_DT)
-        enemies = self.server_level.gather_enemy_relay()
-        # CS4: drain enemy->player hits the sim recorded on each target this tick
-        # and broadcast them as hit_player; the victim's client applies the damage
-        # to its real player (its own i-frames/death).
-        player_hits = self.server_level.drain_player_hits()
-        # CS5a: drain enemy deaths -> enemy_died broadcast (FX + XP on each client).
-        deaths = self.server_level.drain_deaths()
-        # CS5b: drain this tick's loot drops, and arbitrate any pickup claims
-        # against the drop registry (first claim wins) -> item_removed awards.
-        item_drops = self.server_level.drain_item_drops()
+        # Reconcile networked players (add joiners / apply reports / drop leavers),
+        # then run ONE real sim tick (render-skipped via is_server).
+        level.sync_players(players)
+        level.run(TICK_DT)
+
+        enemies = level.gather_enemy_relay()
+        # enemy->player hits recorded this tick -> hit_player (victim's client
+        # applies the damage to its real player: its own i-frames/death).
+        player_hits = level.drain_player_hits()
+        # enemy deaths -> enemy_died (FX + XP awarded on each client).
+        deaths = level.drain_deaths()
+        # this tick's loot drops + arbitrate any pickup claims (first wins).
+        item_drops = level.drain_item_drops()
         item_removes = []
         for pk in pickups:
-            event = self.server_level.arbitrate_pickup(pk.get("drop_id"), pk.get("player_id"))
+            event = level.arbitrate_pickup(pk.get("drop_id"), pk.get("player_id"))
             if event is not None:
                 item_removes.append(event)
         with gs.lock:
@@ -290,25 +301,24 @@ class GameServer:
             gs.pending_events.extend(item_drops)
             gs.pending_events.extend(item_removes)
 
-    def _build_server_level(self, spec, areas, obstacle_tree, map_w, map_h):
-        # Lazy import: only the running server needs the heavy sim module.
-        from server_level import ServerLevel
-        self.server_level = ServerLevel(
-            world_w=map_w or 20000, world_h=map_h or 20000, obstacle_quad_tree=obstacle_tree,
-        )
-        for cfg in spec:
-            try:
-                self.server_level.spawn_enemy(dict(cfg))
-            except Exception as exc:  # one bad config shouldn't sink the sim
-                print(f"[server] enemy spawn failed for {cfg!r}: {exc}")
-        # Register the map's enemy spawn areas -- the sim ticks them each frame
-        # (proximity/timed), which is how most levels actually populate enemies.
-        try:
-            self.server_level.register_spawn_areas(areas)
-        except Exception as exc:
-            print(f"[server] spawn-area registration failed: {exc}")
-        print(f"[server] enemy sim online: {len(self.server_level.spawner.enemies)} "
-              f"placed enemies + {len(self.server_level.spawner.spawn_areas)} spawn areas")
+    # Where the parked sentinel self.player sits: far off-map so no enemy ever
+    # reaches it (it stays as combat_context default_target, only ever used when
+    # there's no resolver -- which never happens). The networked players are the
+    # real in-world targets.
+    _SENTINEL_PARK = (-100000, -100000)
+
+    def _build_server_level(self):
+        # Build + run the REAL Level4 headless (the server-authoritative pivot):
+        # it loads its OWN map (obstacles, spawn areas, enemies) -- no client
+        # upload needed. Heavy import + load; runs on the sim-loop thread so all
+        # pygame/sim work stays single-threaded.
+        from headless_level import build_headless_level
+        self.server_level = build_headless_level(level_number=MP_LEVEL_NUMBER)
+        # Park the sentinel off-map; networked players are added each tick.
+        self.server_level.player.rect.center = self._SENTINEL_PARK
+        self.server_level.player.hitbox.center = self._SENTINEL_PARK
+        print(f"[server] world sim online (real Level4, level {MP_LEVEL_NUMBER}): "
+              f"{len(self.server_level.layout_manager.spawner.spawn_areas)} spawn areas")
 
     # -- snapshot-then-release: copy state out, send outside the lock (sole writer) --
 
