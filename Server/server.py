@@ -130,20 +130,9 @@ class GameServer:
                             masked = sum(1 for o in obstacles if len(o) >= 5 and o[4])
                             print(f"[server] built obstacle quadtree from {len(obstacles)} rects "
                                   f"({masked} masked) ({player_id})")
-                        # CS2: the first client also uploads the map's enemy spawn
-                        # spec (its TMX placed-entity enemy configs) + map dims; the
-                        # sim loop builds the authoritative ServerLevel from these.
-                        # First non-empty upload wins (all share the same map).
-                        enemy_spawns = message.get("enemy_spawns")
-                        spawn_areas = message.get("spawn_areas")
-                        if (enemy_spawns or spawn_areas) and self.game_state.pending_enemy_spawns is None \
-                                and self.game_state.pending_spawn_areas is None:
-                            self.game_state.pending_enemy_spawns = list(enemy_spawns or [])
-                            self.game_state.pending_spawn_areas = list(spawn_areas or [])
-                            self.game_state.map_width = float(message.get("map_width", 0.0))
-                            self.game_state.map_height = float(message.get("map_height", 0.0))
-                            print(f"[server] received {len(enemy_spawns or [])} placed enemies + "
-                                  f"{len(spawn_areas or [])} spawn areas ({player_id})")
+                        # Server-authoritative pivot: the server LOADS ITS OWN map
+                        # and runs the real Level4 -- it no longer accepts an enemy
+                        # spawn spec from clients.
                         self.game_state.pending_events.append({
                             "type": MSG_PLAYER_JOINED,
                             "player_id": player_id,

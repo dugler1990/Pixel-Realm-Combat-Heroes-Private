@@ -50,15 +50,13 @@ class MultiplayerClient:
 
     def send_join(self, character: str, x: float, y: float,
                   hitbox_w: float = 0.0, hitbox_h: float = 0.0,
-                  obstacles=None, map_width: float = 0.0, map_height: float = 0.0,
-                  enemy_spawns=None, spawn_areas=None) -> None:
+                  obstacles=None, map_width: float = 0.0, map_height: float = 0.0) -> None:
         """Announce this player. Stage B optionally uploads the map's obstacle
         rects + dimensions (the client already has them) + this player's hitbox
-        size, so the server can build a quadtree and validate positions against
-        walls. CS2 (server-authoritative co-op) optionally uploads the map's
-        enemy spawn spec (the TMX placed-enemy configs) so the server can build
-        and own the enemy sim. All default off, so a client that omits them just
-        gets the v0 relay (no server collision/enemies)."""
+        size, so the server can validate positions against walls. Enemies are NOT
+        uploaded -- the server loads its OWN map and runs the real Level4 (the
+        server-authoritative pivot). All optional, so a client that omits them
+        gets the v0 position relay (no server collision)."""
         message = {
             "type": MSG_JOIN,
             "player_id": self.player_id,
@@ -70,14 +68,6 @@ class MultiplayerClient:
         }
         if obstacles:
             message["obstacles"] = obstacles
-            message["map_width"] = map_width
-            message["map_height"] = map_height
-        if enemy_spawns:
-            message["enemy_spawns"] = enemy_spawns
-        if spawn_areas:
-            message["spawn_areas"] = spawn_areas
-        if enemy_spawns or spawn_areas:
-            # map dims feed the server's sim world even if obstacles were omitted.
             message["map_width"] = map_width
             message["map_height"] = map_height
         self._send(message)

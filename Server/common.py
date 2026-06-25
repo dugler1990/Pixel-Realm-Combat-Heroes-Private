@@ -182,30 +182,21 @@ class GameState:
     # non-empty upload wins -- all clients share the same map on localhost/LAN.
     # The quadtree is the real game `QuadTree`, built from the uploaded rects.
     obstacle_quad_tree: Optional[QuadTree] = None
-    # Co-op (Stage C): the host is the first client to join. It runs the real
-    # enemy sim and relays each enemy's render state; the server stores that
-    # list verbatim and rebroadcasts it (it does NOT simulate enemies). A client
-    # is the host iff its id == host_player_id.
+    # First client to join is flagged the host (legacy field, broadcast in
+    # state_update). The server-authoritative pivot made it vestigial -- the
+    # SERVER owns the enemy sim (it runs the real Level4); host_id no longer
+    # decides who simulates. Kept until the clients stop reading it.
     host_player_id: Optional[str] = None
+    # The live enemy render-state the sim loop writes each tick from the real
+    # Level4 (gather_enemy_relay) and the broadcast loop ships to every client.
     enemies: List[dict] = field(default_factory=list)
-    # CS2 (server-authoritative enemies): the server now OWNS the enemy sim
-    # (Server/server_level.ServerLevel) instead of relaying the host's. The first
-    # client uploads the map's enemy spawn spec ({type,pos,...} from its TMX
-    # placed-entity layer) + map dims at join; the sim loop lazily builds a
-    # ServerLevel from them, ticks it, and writes the result back into `enemies`.
-    # `host_player_id` is kept only for legacy C2/C2.5 routing (repointed to the
-    # server in CS3-CS5); it is no longer the enemy authority.
-    pending_enemy_spawns: Optional[List[dict]] = None
-    # CS-fix: the map's enemy SPAWN AREAS (proximity/timed spawners), uploaded by
-    # the first client. Most levels (incl. the MP level) spawn enemies via these,
-    # not placed entities -- the server runs handle_spawn_areas over them.
-    pending_spawn_areas: Optional[List[dict]] = None
+    # Map dimensions for the obstacle QuadTree's bounding rect (from the obstacle
+    # upload). Enemies are NOT uploaded -- the server loads its own map.
     map_width: float = 0.0
     map_height: float = 0.0
-    # CS3: player->enemy hits (MSG_HIT_ENEMY) from ANY client, queued by receiver
+    # player->enemy hits (MSG_HIT_ENEMY) from ANY client, queued by receiver
     # threads and drained by the sim loop, which applies each to the authoritative
-    # ServerLevel enemy. (Replaces the C2 "forward to host" routing -- there is no
-    # host enemy sim anymore.) Same threading discipline as pending_events.
+    # Level4 enemy. Same threading discipline as pending_events.
     pending_enemy_hits: List[dict] = field(default_factory=list)
     # CS5b: shared-loot pickup requests (MSG_PICKUP_ITEM) from clients, queued by
     # receiver threads and drained by the sim loop, which arbitrates them against

@@ -208,28 +208,17 @@ class Game:
         map_w = getattr(lm, "csv_layout_width", 0)
         map_h = getattr(lm, "csv_layout_height", 0)
 
-        # CS2 (server-authoritative co-op): hand the server the map's enemy spawn
-        # sources so the SERVER builds + owns the enemy sim. (1) placed-enemy
-        # configs the client collected during layout load, and (2) the map's
-        # enemy SPAWN AREAS (proximity/timed spawners) -- the MP level spawns its
-        # enemies via these, not placed entities. Upload the areas' static parts
-        # (matrix/config/object_info); the server re-inits their timers. First
-        # client's upload wins; every client renders the server's enemies as puppets.
-        enemy_spawns = list(getattr(lm, "placed_enemy_spawns", []))
-        spawn_areas = [
-            {"matrix": a.get("matrix"), "config": a.get("config"),
-             "object_info": a.get("object_info")}
-            for a in getattr(lm.spawner, "spawn_areas", [])
-        ]
-
+        # Server-authoritative pivot: the SERVER loads its own map + runs the real
+        # Level4, so the client no longer uploads enemy spawns -- it just reports
+        # its own player and renders the server's enemies as puppets. (Obstacles
+        # are still uploaded for Stage B server-side player-position validation.)
         self.level.mp_client = MultiplayerClient(
             MULTIPLAYER_RUNTIME.host, MULTIPLAYER_RUNTIME.port, player_id
         )
         self.level.mp_client.send_join(
             character_dir, join_x, join_y,
             hitbox_w=hitbox_w, hitbox_h=hitbox_h, obstacles=obstacles,
-            map_width=map_w, map_height=map_h, enemy_spawns=enemy_spawns,
-            spawn_areas=spawn_areas,
+            map_width=map_w, map_height=map_h,
         )
         # The server owns enemies now -> drop any this client spawned during level
         # load before mp_client was set (the spawner is suppressed from here on).
@@ -238,7 +227,6 @@ class Game:
             f"[multiplayer] connected to {MULTIPLAYER_RUNTIME.host}:{MULTIPLAYER_RUNTIME.port} "
             f"as {player_id} ({character_dir}) at ({join_x}, {join_y}); "
             f"uploaded {len(obstacles)} obstacle rects ({masked_count} masked), "
-            f"{len(enemy_spawns)} placed enemies + {len(spawn_areas)} spawn areas, "
             f"hitbox=({hitbox_w}x{hitbox_h})"
         )
 
