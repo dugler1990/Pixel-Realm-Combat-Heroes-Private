@@ -11,6 +11,7 @@ from pathlib import Path
 from ..insert_chunks import insert_painted_chunks
 from .merge_collision_grid import merge_collision_grid
 from .verify_map_jigsaw import verify_map_jigsaw
+from .variant_paths import DEFAULT_LEONARDO_VARIANT
 
 
 def write_empty_shell(map_path: Path, *, world_w: int, world_h: int, tile_size: int = 550) -> None:
@@ -43,6 +44,7 @@ def build_clean_expanse_map(
     insert_manifest_path: Path,
     collision_trial_root: Path,
     tile_size: int = 550,
+    variant_subdir: str = DEFAULT_LEONARDO_VARIANT,
 ) -> dict:
     manifest = json.loads(Path(insert_manifest_path).read_text(encoding="utf-8"))
     grid_world = manifest.get("grid_world_size") or [35392, 23744]
@@ -58,12 +60,14 @@ def build_clean_expanse_map(
         map_path=map_path,
         manifest_path=insert_manifest_path,
         collision_trial_root=collision_trial_root,
+        variant_subdir=variant_subdir,
         require_all=True,
     )
     verify = verify_map_jigsaw(
         map_path=map_path,
         manifest_path=insert_manifest_path,
         collision_trial_root=collision_trial_root,
+        variant_subdir=variant_subdir,
     )
     if not verify["ok"]:
         raise RuntimeError(
@@ -89,12 +93,18 @@ def main(argv: list[str] | None = None) -> int:
         "--collision-trial",
         default="levels/Frostreach/expanse/export/collision_trial",
     )
+    parser.add_argument(
+        "--variant-subdir",
+        default=DEFAULT_LEONARDO_VARIANT,
+        help=f"Trial subfolder per chunk (default: {DEFAULT_LEONARDO_VARIANT})",
+    )
     args = parser.parse_args(argv)
 
     result = build_clean_expanse_map(
         map_path=(repo / args.map).resolve(),
         insert_manifest_path=(repo / args.manifest).resolve(),
         collision_trial_root=(repo / args.collision_trial).resolve(),
+        variant_subdir=args.variant_subdir,
     )
     print(json.dumps(result, indent=2))
     return 0

@@ -10,6 +10,7 @@ from PIL import Image
 
 from .emit import load_manifest, tmx_placement_for_chunk
 from .leonardo_collision import finish_from_raw, run_leonardo_collision
+from .variant_paths import DEFAULT_LEONARDO_VARIANT, chunk_variant_dir, variant_batch_summary_path
 
 
 def _repo_root() -> Path:
@@ -59,7 +60,7 @@ def run_grid(args: argparse.Namespace) -> Path:
             print(f"[{index}/{total}] SKIP {chunk_id}: missing source", flush=True)
             continue
 
-        output_dir = output_root / chunk_id / "leonardo_direct"
+        output_dir = chunk_variant_dir(output_root, chunk_id, args.variant)
         placement = tmx_placement_for_chunk(chunk, manifest, reference_tmx=reference_tmx)
 
         with Image.open(painted_path) as painted:
@@ -80,6 +81,7 @@ def run_grid(args: argparse.Namespace) -> Path:
                     placement=placement,
                     leonardo_config=leonardo_config,
                     preview_map=args.preview_map,
+                    variant=args.variant,
                 )
                 status = "reparsed"
             else:
@@ -92,6 +94,7 @@ def run_grid(args: argparse.Namespace) -> Path:
                     mode="direct",
                     preview_map=args.preview_map,
                     prompt_path=prompt_path,
+                    variant=args.variant,
                 )
                 status = "ok"
             results.append({"chunk_id": chunk_id, "status": status, "output_dir": str(output_dir)})
@@ -103,12 +106,13 @@ def run_grid(args: argparse.Namespace) -> Path:
     summary = {
         "manifest": str(manifest_path),
         "output_root": str(output_root),
+        "variant": args.variant,
         "total_chunks": total,
         "results": results,
         "ok": sum(1 for r in results if r.get("status") in {"ok", "preserved", "reparsed"}),
         "failed": sum(1 for r in results if r.get("status") == "error"),
     }
-    summary_path = output_root / "leonardo_direct_batch_summary.json"
+    summary_path = variant_batch_summary_path(output_root, args.variant)
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(f"\nBatch complete: {summary['ok']} ok, {summary['failed']} failed -> {summary_path}", flush=True)
     return summary_path
@@ -122,6 +126,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--reference-tmx", default="levels/Frostreach/expanse/map.tmx")
     parser.add_argument("--output-dir", default="levels/Frostreach/expanse/export/collision_trial")
+    parser.add_argument(
+        "--variant",
+        default=DEFAULT_LEONARDO_VARIANT,
+        help=f"Subfolder under each chunk (default: {DEFAULT_LEONARDO_VARIANT})",
+    )
     parser.add_argument(
         "--leonardo-config",
         default="tools/painted_map_pipeline/collision/leonardo_collision.config.example.json",

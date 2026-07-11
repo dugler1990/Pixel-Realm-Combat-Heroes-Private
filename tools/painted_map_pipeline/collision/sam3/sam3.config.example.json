@@ -1,0 +1,9 @@
+{
+  "api_key_env": "ROBOFLOW_API_KEY",
+  "api_url": "https://serverless.roboflow.com",
+  "workspace_name": "douglass-workspace-y1brz",
+  "workflow_id": "custom-workflow",
+  "input_name": "image",
+  "use_cache": false,
+  "output_dir": "levels/Frostreach/expanse/export/sam3_obstacle"
+}

@@ -1,2 +1,5 @@
 # Runtime debug log output (see Code/debug_logging.schema.md)
 Code/logs/*.log
+
+# py-spy multiplayer profiling output (tools/profile_mp.sh)
+profiles/

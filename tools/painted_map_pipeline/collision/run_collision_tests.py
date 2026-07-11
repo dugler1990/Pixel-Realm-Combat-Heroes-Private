@@ -13,6 +13,7 @@ from .derive import DeriveConfig, derive_collision_masks
 from .emit import chunk_entry, load_manifest, tmx_placement_for_chunk
 from .leonardo_collision import run_leonardo_collision
 from .package import build_compare_sheet, masks_from_derive_result, write_collision_package
+from .variant_paths import DEFAULT_LEONARDO_VARIANT, chunk_variant_dir
 
 
 def _repo_root() -> Path:
@@ -126,7 +127,7 @@ def run(args: argparse.Namespace) -> Path:
             print("WARNING: No leonardo config; skipping Leonardo variants.")
         else:
             if args.leonardo_direct:
-                direct_dir = chunk_root / "leonardo_direct"
+                direct_dir = chunk_variant_dir(chunk_root, args.chunk, args.variant)
                 try:
                     run_leonardo_collision(
                         chunk_id=args.chunk,
@@ -138,12 +139,13 @@ def run(args: argparse.Namespace) -> Path:
                         layer_name=args.layer_name,
                         preview_map=args.preview_map,
                         prompt_path=Path(args.direct_prompt) if args.direct_prompt else None,
+                        variant=args.variant,
                     )
-                    variants_run.append(("leonardo_direct", direct_dir))
-                    summary["variants"]["leonardo_direct"] = str(direct_dir)
+                    variants_run.append((args.variant, direct_dir))
+                    summary["variants"][args.variant] = str(direct_dir)
                 except Exception as exc:
-                    summary["variants"]["leonardo_direct"] = {"error": str(exc)}
-                    print(f"leonardo_direct failed: {exc}")
+                    summary["variants"][args.variant] = {"error": str(exc)}
+                    print(f"{args.variant} failed: {exc}")
 
             if args.leonardo_hint:
                 hint_dir = chunk_root / "leonardo_hint"
@@ -188,6 +190,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--reference-tmx", default="levels/Frostreach/expanse/map.tmx")
     parser.add_argument("--output-dir", default="levels/Frostreach/expanse/export/collision_trial")
+    parser.add_argument(
+        "--variant",
+        default=DEFAULT_LEONARDO_VARIANT,
+        help=f"Leonardo direct output subfolder (default: {DEFAULT_LEONARDO_VARIANT})",
+    )
     parser.add_argument(
         "--derive-config",
         default="tools/painted_map_pipeline/collision/chunk_06_06.config.json",

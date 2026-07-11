@@ -34,6 +34,22 @@
                             "agility":4,
                             "charisma":3}
             
+        },
+        {
+            "selection_position": {"x":2,"y":0},
+            "name":"barb_small",
+            "player_info_dir":"../Graphics/barb_small/",
+            "evasion_loadout": ["slide", "leap_slam"],
+            "base_stats":{"health": 2000,
+                            "energy": 20,
+                            "attack": 10,
+                            "magic": 1,
+                            "speed": 7,
+                            "strength": 20,
+                            "vitality":20,
+                            "magic":7,
+                            "agility":4,
+                            "charisma":3}
         }
     ]
 }

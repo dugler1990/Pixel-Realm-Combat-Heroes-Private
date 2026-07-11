@@ -13,6 +13,7 @@ from pathlib import Path
 from PIL import Image
 
 from .emit import load_manifest, tmx_placement_for_chunk
+from .variant_paths import DEFAULT_LEONARDO_VARIANT
 
 
 def _relative_to(path: Path, base_file: Path) -> str:
@@ -121,7 +122,7 @@ def merge_collision_grid(
     collision_trial_root: Path,
     collision_export_dir: Path | None = None,
     layer_name: str = "PaintedCollision",
-    variant_subdir: str = "leonardo_direct",
+    variant_subdir: str = DEFAULT_LEONARDO_VARIANT,
     require_all: bool = False,
 ) -> dict:
     map_path = Path(map_path).resolve()
@@ -216,6 +217,7 @@ def merge_collision_grid(
         "map": str(map_path),
         "collision_tsx": str(tsx_path),
         "collision_export_dir": str(export_dir),
+        "variant_subdir": variant_subdir,
         "inserted_chunks": inserted,
         "inserted_count": len(inserted),
         "missing_chunks": missing,
@@ -238,6 +240,11 @@ def main(argv: list[str] | None = None) -> int:
         "--collision-trial",
         default="levels/Frostreach/expanse/export/collision_trial",
     )
+    parser.add_argument(
+        "--variant-subdir",
+        default=DEFAULT_LEONARDO_VARIANT,
+        help=f"Trial subfolder per chunk (default: {DEFAULT_LEONARDO_VARIANT})",
+    )
     parser.add_argument("--require-all", action="store_true", help="Fail if any chunk is missing collision")
     args = parser.parse_args(argv)
 
@@ -245,6 +252,7 @@ def main(argv: list[str] | None = None) -> int:
         map_path=(repo / args.map).resolve(),
         manifest_path=(repo / args.manifest).resolve(),
         collision_trial_root=(repo / args.collision_trial).resolve(),
+        variant_subdir=args.variant_subdir,
         require_all=args.require_all,
     )
     print(f"Merged {summary['inserted_count']} chunks into {summary['map']}")

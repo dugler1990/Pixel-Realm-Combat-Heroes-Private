@@ -1,0 +1,22 @@
+root: list len=1
+root[0]: dict keys=['sam_3_output', 'output_image']
+root[0].sam_3_output: dict keys=['image', 'predictions']
+root[0].sam_3_output.image: dict keys=['width', 'height']
+root[0].sam_3_output.image.width: int
+root[0].sam_3_output.image.height: int
+root[0].sam_3_output.predictions: list len=485
+root[0].sam_3_output.predictions[0]: dict keys=['width', 'height', 'x', 'y', 'confidence', 'class_id', 'points', 'class', 'detection_id', 'parent_id']
+root[0].sam_3_output.predictions[0].width: float
+root[0].sam_3_output.predictions[0].height: float
+root[0].sam_3_output.predictions[0].x: float
+root[0].sam_3_output.predictions[0].y: float
+root[0].sam_3_output.predictions[0].confidence: float
+root[0].sam_3_output.predictions[0].class_id: int
+root[0].sam_3_output.predictions[0].points: list len=305
+root[0].sam_3_output.predictions[0].points[0]: dict keys=['x', 'y']
+root[0].sam_3_output.predictions[0].points[0].x: …
+root[0].sam_3_output.predictions[0].points[0].y: …
+root[0].sam_3_output.predictions[0].class: str len=4 preview='rock'
+root[0].sam_3_output.predictions[0].detection_id: str len=36 preview='a2b3d46b-1651-4027-9989-4e7aa9d54ca1'
+root[0].sam_3_output.predictions[0].parent_id: str len=5 preview='image'
+root[0].output_image: str len=6033412 preview='/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAIBAQEBAQIBAQECAgICAgQDAgICAgUEBAMEBgUGBgYFBgYG…'

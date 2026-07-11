@@ -52,11 +52,16 @@ from navigation.walk_grid_cache import WalkGridCache
 from rts.entities import DropoffBuilding, ResourceNode, RtsWorker
 from rts.registry import RtsWorldRegistry
 from rts.tmx_config import dropoff_config, resource_node_config
-from rts.tmx_spawn import (
-    spawn_chiefs_layer,
-    spawn_dropoff_buildings_layer,
-    spawn_resource_nodes_layer,
+from tmx_layer_roles import LAYER_ROLES, dispatch_object_layer, resolve_layer_role
+from sam3_obstacle_runtime import (
+    CANOPY_OVERHEAD_RGBA,
+    collision_mode_for_props,
+    normalize_sam3_class,
+    obstacle_surface_for_shape,
+    split_trunk_canopy_masks,
+    tint_rgba_for_class,
 )
+from Settings import DEBUG_DRAW_OBSTACLE_TINT
 
 _tmx_layout_log = get_tmx_layout_logger()
 
@@ -1077,24 +1082,147 @@ class LayoutManager:
             image = object_.image
 
             if image is not None:
-                # SCALE
                 scaled_w = max(1, int(round(object_.width * width_scaling_factor)))
                 scaled_h = max(1, int(round(object_.height * height_scaling_factor)))
                 image = pygame.transform.scale(image, (scaled_w, scaled_h))
                 mask = pygame.mask.from_surface(image)
-            else:
-                # Non-image objects (shapes) should be handled as effect layers, skip drawing
+                Tile(
+                    (x_pos, y_pos),
+                    [self.obstacle_sprites, self.ground_sprites],
+                    "ground",
+                    mask=mask,
+                    surface=image,
+                )
                 continue
 
-            new_tile = Tile((x_pos, y_pos),
-                            [self.obstacle_sprites,self.ground_sprites], 
-                            'ground',
-                            mask = mask,
-                            surface = image)
+            shape_rect, shape_mask, draw_pts = self._mask_and_rect_for_tmx_shape(object_)
+            if shape_mask is None:
+                continue
+
+            sam3_class = normalize_sam3_class(props.get("sam3_class"))
+            collision_mode = collision_mode_for_props(props)
+            if collision_mode == "canopy":
+                self._spawn_canopy_shape_obstacle(
+                    shape_rect, shape_mask, draw_pts, props, sam3_class
+                )
+            else:
+                self._spawn_solid_shape_obstacle(
+                    shape_rect, shape_mask, draw_pts, props, sam3_class
+                )
+
+
+    def _attach_sam3_metadata(self, tile, props):
+        for key in ("sam3_class", "sam3_confidence", "chunk_id", "collision_mode"):
+            if key in props:
+                setattr(tile, key, props[key])
+
+    def _spawn_solid_shape_obstacle(self, shape_rect, shape_mask, draw_pts, props, sam3_class):
+        surface = obstacle_surface_for_shape(
+            width=shape_rect.width,
+            height=shape_rect.height,
+            draw_pts=draw_pts,
+            sam3_class=sam3_class,
+            collision_mode="solid",
+        )
+        groups = [self.obstacle_sprites]
+        if DEBUG_DRAW_OBSTACLE_TINT:
+            groups.append(self.ground_sprites)
+        shape_tile = Tile(
+            (shape_rect.x, shape_rect.y),
+            groups,
+            "ground",
+            mask=shape_mask,
+            surface=surface,
+        )
+        self._attach_sam3_metadata(shape_tile, props)
+
+    def _spawn_canopy_shape_obstacle(self, shape_rect, shape_mask, draw_pts, props, sam3_class):
+        surf_w, surf_h = shape_rect.width, shape_rect.height
+        trunk_mask, canopy_mask = split_trunk_canopy_masks(shape_mask, surf_w, surf_h)
+        if trunk_mask.count():
+            if DEBUG_DRAW_OBSTACLE_TINT:
+                rgba = tint_rgba_for_class(sam3_class)
+                rgba = (rgba[0], rgba[1], rgba[2], min(255, rgba[3] + 18))
+                trunk_surface = trunk_mask.to_surface(
+                    setcolor=rgba,
+                    unsetcolor=(0, 0, 0, 0),
+                )
+            else:
+                trunk_surface = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
+            groups = [self.obstacle_sprites]
+            if DEBUG_DRAW_OBSTACLE_TINT:
+                groups.append(self.ground_sprites)
+            trunk_tile = Tile(
+                (shape_rect.x, shape_rect.y),
+                groups,
+                "ground",
+                mask=trunk_mask,
+                surface=trunk_surface,
+            )
+            self._attach_sam3_metadata(trunk_tile, props)
+
+        if canopy_mask.count():
+            canopy_surface = canopy_mask.to_surface(
+                setcolor=CANOPY_OVERHEAD_RGBA,
+                unsetcolor=(0, 0, 0, 0),
+            )
+            self.overhead_areas.append((shape_rect.copy(), canopy_surface))
+            if DEBUG_DRAW_OBSTACLE_TINT:
+                debug_rgba = tint_rgba_for_class(sam3_class)
+                debug_canopy = canopy_mask.to_surface(
+                    setcolor=(debug_rgba[0], debug_rgba[1], debug_rgba[2], max(24, debug_rgba[3] - 24)),
+                    unsetcolor=(0, 0, 0, 0),
+                )
+                Tile(
+                    (shape_rect.x, shape_rect.y),
+                    [self.ground_sprites],
+                    "ground",
+                    mask=None,
+                    surface=debug_canopy,
+                )
     
     
     
     
+    def _mask_and_rect_for_tmx_shape(self, obj):
+        """Build a collision/effect mask from a pytmx rect, ellipse, or polygon object."""
+        tw = self.tmxdata.tilewidth
+        th = self.tmxdata.tileheight
+        sx = self.TILESIZE / tw
+        sy = self.TILESIZE / th
+
+        x_game = obj.x * sx
+        y_game = obj.y * sy
+
+        points = getattr(obj, "points", None)
+        if points:
+            scaled = [(float(px) * sx, float(py) * sy) for px, py in points]
+            min_px = min(p[0] for p in scaled)
+            max_px = max(p[0] for p in scaled)
+            min_py = min(p[1] for p in scaled)
+            max_py = max(p[1] for p in scaled)
+            surf_w = max(1, int(math.ceil(max_px - min_px)))
+            surf_h = max(1, int(math.ceil(max_py - min_py)))
+            draw_pts = [(int(px - min_px), int(py - min_py)) for px, py in scaled]
+            surf = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
+            pygame.draw.polygon(surf, (255, 255, 255, 255), draw_pts)
+            rect = pygame.Rect(int(x_game), int(y_game), surf_w, surf_h)
+            return rect, pygame.mask.from_surface(surf), draw_pts
+
+        w_game = obj.width * sx
+        h_game = obj.height * sy
+        surf_w = max(1, int(round(w_game)))
+        surf_h = max(1, int(round(h_game)))
+        surf = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
+        if getattr(obj, "ellipse", False):
+            pygame.draw.ellipse(surf, (255, 255, 255, 255), (0, 0, surf_w, surf_h))
+            draw_pts = []
+        else:
+            draw_pts = [(0, 0), (surf_w, 0), (surf_w, surf_h), (0, surf_h)]
+            pygame.draw.rect(surf, (255, 255, 255, 255), (0, 0, surf_w, surf_h))
+        rect = pygame.Rect(int(x_game), int(y_game), surf_w, surf_h)
+        return rect, pygame.mask.from_surface(surf), draw_pts
+
     def _make_effect_area_from_tiled_object(self, obj, layer_name, idx):
         """
         Convert a pytmx shape (rect/ellipse/polygon) into an EffectArea.
@@ -1103,39 +1231,15 @@ class LayoutManager:
           • draws the shape ONLY to generate a mask
           • stores rect + mask + properties + original tmx object
         """
-    
-        # --- Tiled → Game space scaling ---
+        rect, mask, _draw_pts = self._mask_and_rect_for_tmx_shape(obj)
+        surf_w, surf_h = rect.width, rect.height
+        x_game, y_game = rect.x, rect.y
         tw = self.tmxdata.tilewidth
         th = self.tmxdata.tileheight
         sx = self.TILESIZE / tw
         sy = self.TILESIZE / th
-    
-        x_game = obj.x * sx
-        y_game = obj.y * sy
         w_game = obj.width * sx
         h_game = obj.height * sy
-    
-        surf_w = max(1, int(round(w_game)))
-        surf_h = max(1, int(round(h_game)))
-    
-        # Local surface just for mask creation
-        surf = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
-    
-        # --- Determine shape + draw to local surface ---
-        if getattr(obj, "points", None):  # polygon
-            pts = [(int(px * sx), int(py * sy)) for px, py in obj.points]
-            pygame.draw.polygon(surf, (255, 255, 255, 255), pts)
-        elif getattr(obj, "ellipse", False):  # ellipse
-            pygame.draw.ellipse(surf, (255, 255, 255, 255), (0, 0, surf_w, surf_h))
-        else:  # rectangle fallback
-            pygame.draw.rect(surf, (255, 255, 255, 255), (0, 0, surf_w, surf_h))
-    
-        # --- Create mask ---
-        mask = pygame.mask.from_surface(surf)
-        
-        # --- Rect in game coords ---
-        # Your engine uses Tiled Y as top-left, so no subtract of height.
-        rect = pygame.Rect(int(x_game), int(y_game), surf_w, surf_h)
     
         _fx_log = get_tmx_effect_placement_logger()
         if _fx_log.isEnabledFor(logging.DEBUG):
@@ -1728,47 +1832,15 @@ class LayoutManager:
         self.visible_sprites.set_grass_grid(self.grass_tile_grid)
 
         for layout in self.tmx_object_layers:
-            # Check if layer name contains "Effect" OR if any object has no image (shape-based effects)
             layer_name = getattr(layout, "name", "")
             layer_name_lower = layer_name.lower()
-            has_effect_name = layer_name.find("Effect") != -1
-            has_spawner_name = layer_name_lower.find("spawner") != -1
-            has_placed_entities_name = "placed_entities" in layer_name_lower
-            has_item_name = "item" in layer_name_lower
-            has_grass_name = "grass" in layer_name_lower
-            has_interactables_name = "interactable" in layer_name_lower
-            has_shape_objects = any(getattr(obj, "image", None) is None for obj in layout)
-            has_image_objects = any(getattr(obj, "image", None) is not None for obj in layout)
-            
-            if layer_name_lower == "paintedground":
-                self.create_painted_ground_layer(layout)
-            elif has_spawner_name:
-                # Process spawner layer
-                if hasattr(self, 'spawner'):
-                    self.create_spawner_layer(layout)
-                else:
-                    _tmx_layout_log.debug(
-                        "Warning: Spawner layer %r found but spawner not set. Skipping spawner processing.",
-                        layer_name,
-                    )
-            elif has_placed_entities_name:
+            if "placed_entities" in layer_name_lower:
                 self.create_placed_entity_layer(layout)
-            elif has_item_name:
+            elif "item" in layer_name_lower and layer_name not in LAYER_ROLES:
                 self.create_item_object_layer(layout)
-            elif has_grass_name:
-                self.create_grass_object_layer(layout)
-            elif has_interactables_name:
-                self.create_object_layer(layout)
-            elif layer_name_lower == "chiefs":
-                spawn_chiefs_layer(self, layout)
-            elif layer_name_lower in ("resource_nodes", "rts_resource_nodes"):
-                spawn_resource_nodes_layer(self, layout)
-            elif layer_name_lower == "dropoff_buildings":
-                spawn_dropoff_buildings_layer(self, layout)
-            elif has_effect_name or (has_shape_objects and not has_image_objects):
-                self.create_effect_layer(layout)
             else:
-                self.create_object_layer(layout)
+                role = resolve_layer_role(layer_name)
+                dispatch_object_layer(self, layout, role)
             
         self.effect_cell_grid = EffectCellGrid.build(
             self.all_effect_areas,

@@ -9,13 +9,19 @@ Output ONLY a flat color segmentation map:
 
 Use these exact flat colors:
 - Pure black #000000 = outside the playable map (void / padding) — keep all black padding black
-- Bright green #00FF00 = walkable ground (snow paths, open fields, crossable ice)
-- Pure white #FFFFFF = solid obstacles (cliffs, rock faces, boulders, impassable water, tree trunks)
-- Pure blue #0000FF = canopy / walk-behind (tree tops, overhangs — player walks under)
+- Bright green #00FF00 = walkable ground (snow paths, open fields, crossable ice, minor rocks and decoration)
+- Pure white #FFFFFF = solid obstacles — ONLY large, clearly impassable blockages
+- Pure blue #0000FF = canopy / walk-behind — ONLY large tree masses or overhangs the player walks under
+
+CONSERVATIVE rules (follow strictly):
+- Mark white ONLY for major blockages: cliff faces, rock walls, building walls, steep impassable slopes, wide blocked water
+- Do NOT mark small rocks, pebbles, stumps, snow piles, bushes, or decorative terrain features as obstacles
+- When in doubt, leave it walkable (green) — err on the side of too little collision, not too much
+- Prefer a few large obstacle shapes over many small white blobs scattered across walkable snow
+- Keep paths and open areas generously connected; do not narrow walkable corridors with white slivers
+- Use blue sparingly — only obvious large canopies, not every small tree
 
 Game design rules:
-- Identify where a player character would actually walk in this map
-- Walkable paths should be generously connected and smooth, following visible trails and open snow
-- Block impassable cliffs, rocks, walls, and steep terrain with smooth obstacle outlines
-- Do not invent new terrain; match the input layout exactly
+- Identify where a player would actually walk; block only what they clearly cannot pass
+- Match the input layout exactly; do not invent new terrain
 - This is production collision data, not concept art

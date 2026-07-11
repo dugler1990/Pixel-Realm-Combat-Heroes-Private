@@ -77,8 +77,10 @@ ENTITY_BROADPHASE_GRID_CELL_SIZE = 450
 # Debug settings
 SHOW_DEBUG_OVERLAY = True  # FPS / memory overlay in Main2 (separate from GameSettings.debug_mode)
 DEBUG_DRAW_MASKS = False  # Draw collision masks for all entities and objects
+DEBUG_DRAW_OBSTACLE_TINT = True  # Semi-transparent class hue on SAM3 / shape obstacle tiles
 DEBUG_DRAW_EFFECT_RECTS = False  # Draw effect collision rects in red
 DEBUG_DRAW_FACTION_OUTLINES = False  # Seeds GameSettings.debug_faction_outlines; toggle also in settings (Ctrl+Shift+S)
+SAM3_TREE_TRUNK_HEIGHT_RATIO = 0.18  # Bottom fraction of tree polygons that block movement (canopy above)
 # When True, entity mask PNGs are written under Graphics/Masks (dev/asset pipeline only).
 EXPORT_ENTITY_MASKS_TO_DISK = False
 HITBOX_OFFSET = {

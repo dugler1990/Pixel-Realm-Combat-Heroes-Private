@@ -10,6 +10,7 @@ from pathlib import Path
 from PIL import Image
 
 from .emit import load_manifest
+from .variant_paths import DEFAULT_LEONARDO_VARIANT
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -56,7 +57,7 @@ def write_jigsaw_preview(
     manifest_path: Path,
     collision_trial_root: Path,
     output_png: Path,
-    variant_subdir: str = "leonardo_direct",
+    variant_subdir: str = DEFAULT_LEONARDO_VARIANT,
     max_width: int = 4096,
     collision_alpha: int = 140,
 ) -> dict:
@@ -121,7 +122,7 @@ def verify_map_jigsaw(
     manifest_path: Path,
     collision_trial_root: Path,
     output_dir: Path | None = None,
-    variant_subdir: str = "leonardo_direct",
+    variant_subdir: str = DEFAULT_LEONARDO_VARIANT,
 ) -> dict:
     map_path = Path(map_path).resolve()
     out = Path(output_dir or map_path.parent / "export" / "jigsaw_verify")
@@ -164,12 +165,18 @@ def main(argv: list[str] | None = None) -> int:
         "--collision-trial",
         default="levels/Frostreach/expanse/export/collision_trial",
     )
+    parser.add_argument(
+        "--variant-subdir",
+        default=DEFAULT_LEONARDO_VARIANT,
+        help=f"Trial subfolder per chunk (default: {DEFAULT_LEONARDO_VARIANT})",
+    )
     args = parser.parse_args(argv)
 
     report = verify_map_jigsaw(
         map_path=(repo / args.map).resolve(),
         manifest_path=(repo / args.manifest).resolve(),
         collision_trial_root=(repo / args.collision_trial).resolve(),
+        variant_subdir=args.variant_subdir,
     )
     print(json.dumps(report, indent=2))
     return 0 if report["ok"] else 1

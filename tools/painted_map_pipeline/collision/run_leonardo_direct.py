@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .emit import chunk_entry, load_manifest, tmx_placement_for_chunk
 from .leonardo_collision import finish_from_raw, run_leonardo_collision
+from .variant_paths import DEFAULT_LEONARDO_VARIANT, chunk_variant_dir
 
 
 def _repo_root() -> Path:
@@ -27,7 +28,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--output-dir",
         default="levels/Frostreach/expanse/export/collision_trial",
-        help="Writes to {output-dir}/{chunk}/leonardo_direct/",
+        help="Root trial dir; writes {output-dir}/{chunk}/{variant}/",
+    )
+    parser.add_argument(
+        "--variant",
+        default=DEFAULT_LEONARDO_VARIANT,
+        help=f"Subfolder under each chunk (default: {DEFAULT_LEONARDO_VARIANT})",
     )
     parser.add_argument(
         "--leonardo-config",
@@ -50,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         painted_path = (repo / painted_path).resolve()
 
     reference_tmx = (repo / args.reference_tmx).resolve()
-    output_dir = (repo / args.output_dir).resolve() / args.chunk / "leonardo_direct"
+    output_dir = chunk_variant_dir((repo / args.output_dir).resolve(), args.chunk, args.variant)
     leonardo_config = json.loads((repo / args.leonardo_config).resolve().read_text(encoding="utf-8"))
     placement = tmx_placement_for_chunk(chunk, manifest, reference_tmx=reference_tmx)
 
@@ -64,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
             placement=placement,
             leonardo_config=leonardo_config,
             preview_map=args.preview_map,
+            variant=args.variant,
         )
     else:
         run_leonardo_collision(
@@ -75,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
             mode="direct",
             preview_map=args.preview_map,
             prompt_path=prompt_path,
+            variant=args.variant,
         )
     print(f"Leonardo direct collision -> {output_dir}")
     print(f"  raw:     {output_dir / 'segmentation_raw.png'}")

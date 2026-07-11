@@ -90,6 +90,7 @@ def finish_from_raw(
     layer_name: str = "PaintedCollision",
     preview_map: bool = True,
     raw_path: Path | None = None,
+    variant: str | None = None,
 ) -> dict:
     """Parse segmentation_native.png or segmentation_raw.png without an API call."""
     output_dir = Path(output_dir)
@@ -112,7 +113,7 @@ def finish_from_raw(
             masks=masks,
             placement=placement,
             layer_name=layer_name,
-            variant="leonardo_direct",
+            variant=variant or output_dir.name,
             extra_meta={"parsed_from": str(raw_path)},
             preview_map=preview_map,
         )
@@ -130,6 +131,7 @@ def run_leonardo_collision(
     prompt_path: Path | None = None,
     layer_name: str = "PaintedCollision",
     preview_map: bool = True,
+    variant: str | None = None,
 ) -> dict[str, Any]:
     """
     mode: 'direct' (painted chunk only) or 'hint' (painted + mechanical overlay).
@@ -220,7 +222,7 @@ def run_leonardo_collision(
             masks=masks,
             placement=placement,
             layer_name=layer_name,
-            variant=f"leonardo_{mode}",
+            variant=variant or output_dir.name,
             extra_meta={
                 "leonardo_mode": mode,
                 "leonardo_input": str(input_path),

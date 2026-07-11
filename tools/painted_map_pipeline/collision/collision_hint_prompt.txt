@@ -16,7 +16,8 @@ Use these exact flat colors:
 
 Fix mistakes in the draft overlay using the visible painted terrain underneath:
 - Keep real walkable snow paths and openings green.
-- Block all cliffs, rock masses, and impassable terrain white.
-- Mark obvious tree canopies blue where the player should walk behind.
+- Block only major cliffs, rock walls, and clearly impassable terrain white — not small rocks or decoration.
+- When unsure, leave walkable (green). Prefer fewer, larger obstacles over many small blobs.
+- Mark only obvious large tree canopies blue where the player should walk behind.
 - Keep black padding black.
 - Do not invent new features. Same layout and camera as input.

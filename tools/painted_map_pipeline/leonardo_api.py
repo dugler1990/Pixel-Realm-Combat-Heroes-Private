@@ -179,12 +179,7 @@ def create_generation(
         ],
     }
     result = _request_json("POST", f"{base}/generations", api_key, payload)
-    generation = result.get("sdGenerationJob") or result
-    generation_id = (
-        generation.get("generationId")
-        or generation.get("id")
-        or (result.get("generations_by_pk") or {}).get("id")
-    )
+    generation_id = _extract_generation_id(result)
     if not generation_id:
         raise LeonardoApiError(f"Unexpected generation response: {result}")
     return str(generation_id)
@@ -238,30 +233,106 @@ def create_v2_generation(
         "public": bool(config.get("public", False)),
     }
     result = _request_json("POST", f"{base}/generations", api_key, payload)
-    generation_id = (
-        (result.get("generate") or {}).get("generationId")
-        or (result.get("generation") or {}).get("generationId")
-        or result.get("generationId")
-        or result.get("id")
-    )
+    generation_id = _extract_generation_id(result)
     if not generation_id:
         raise LeonardoApiError(f"Unexpected v2 generation response: {result}")
     return str(generation_id)
 
 
-def _extract_image_urls(generation: dict) -> list[str]:
+def _first_dict(value) -> dict:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict):
+                return item
+    return {}
+
+
+def _pick_str(obj, *keys: str) -> str | None:
+    if not isinstance(obj, dict):
+        return None
+    for key in keys:
+        raw = obj.get(key)
+        if raw is not None and str(raw).strip():
+            return str(raw)
+    return None
+
+
+def _normalize_response(payload) -> dict:
+    if isinstance(payload, dict):
+        return payload
+    if isinstance(payload, list):
+        for item in payload:
+            if isinstance(item, dict):
+                return item
+    return {}
+
+
+def _extract_generation_id(result) -> str | None:
+    if isinstance(result, list):
+        for entry in result:
+            generation_id = _extract_generation_id(entry)
+            if generation_id:
+                return generation_id
+        return None
+    result = _normalize_response(result)
+    for container in (
+        result,
+        _first_dict(result.get("generate")),
+        _first_dict(result.get("generation")),
+        _first_dict(result.get("sdGenerationJob")),
+        _first_dict(result.get("generations_by_pk")),
+    ):
+        generation_id = _pick_str(container, "generationId", "id")
+        if generation_id:
+            return generation_id
+    return None
+
+
+def _generation_root(generation: dict) -> dict:
+    return _first_dict(generation.get("generations_by_pk")) or _first_dict(generation)
+
+
+def _iter_image_items(images) -> list[dict]:
+    items: list[dict] = []
+    if isinstance(images, dict):
+        images = [images]
+    if not isinstance(images, list):
+        return items
+    for entry in images:
+        if isinstance(entry, dict):
+            items.append(entry)
+        elif isinstance(entry, list):
+            for nested in entry:
+                if isinstance(nested, dict):
+                    items.append(nested)
+    return items
+
+
+def _extract_image_urls(generation) -> list[str]:
     urls: list[str] = []
-    root = generation.get("generations_by_pk") or generation
+    if isinstance(generation, list):
+        for entry in generation:
+            urls.extend(_extract_image_urls(entry))
+        return urls
+    root = _generation_root(_normalize_response(generation))
     images = root.get("generated_images") or root.get("images") or []
-    for item in images:
+    for item in _iter_image_items(images):
         url = item.get("url")
         if url:
             urls.append(url)
     return urls
 
 
-def _generation_status(generation: dict) -> str:
-    root = generation.get("generations_by_pk") or generation
+def _generation_status(generation) -> str:
+    if isinstance(generation, list):
+        for entry in generation:
+            status = _generation_status(entry)
+            if status:
+                return status
+        return ""
+    root = _generation_root(_normalize_response(generation))
     return str(root.get("status") or root.get("generationStatus") or "").upper()
 
 

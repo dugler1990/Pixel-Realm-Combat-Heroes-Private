@@ -1,0 +1,6 @@
+{
+  "_comment": "Per-category SAM3 filter for expanse. 'cliff' is dropped entirely (SAM3 never resolves a real cliff on this art). 'max_area' drops only the genuine whole-tile frame-filler blobs: 8574976 = 50% of a 5056x3392 chunk, removing the ~20 tile-sized mountain/ruins masks while keeping legitimately-large walls/rivers/rocks. (A lower cap removes real large obstacles too, since size alone can't tell junk from a real big wall.) All reversible - edit and re-merge. 'min_confidence' can gate classes by a per-class confidence floor.",
+  "drop_classes": ["cliff"],
+  "min_confidence": {},
+  "max_area": 8574976
+}
