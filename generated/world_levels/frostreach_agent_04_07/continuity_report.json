@@ -1,0 +1,17 @@
+{
+  "valid": true,
+  "checked_at": "2026-07-23T09:51:24.931010+00:00",
+  "errors": [],
+  "accepted_pairs": [
+    {
+      "levels": [
+        "04",
+        "07"
+      ],
+      "overlap_pixels": 160955,
+      "differing_pixels": 0,
+      "first_hash": "484ee8ad97438613ca6f176a89c50a0bb315fd6e47d96d7b3c2d41f5fbea02d7",
+      "second_hash": "73491f7203ae9655a2397c1d491598c25e0945dd75d209ace04be864b5c0a49d"
+    }
+  ]
+}

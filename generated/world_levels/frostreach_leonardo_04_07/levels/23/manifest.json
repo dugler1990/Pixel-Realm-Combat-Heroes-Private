@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "level_id": "23",
+  "name": "North Verdant",
+  "region": "Verdant Isle",
+  "state": "prepared",
+  "crop_box_world": [
+    34,
+    314,
+    317,
+    637
+  ],
+  "core_polygon_world": [
+    [
+      70,
+      360
+    ],
+    [
+      160,
+      330
+    ],
+    [
+      250,
+      370
+    ],
+    [
+      300,
+      470
+    ],
+    [
+      270,
+      560
+    ],
+    [
+      180,
+      620
+    ],
+    [
+      90,
+      570
+    ],
+    [
+      50,
+      470
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      159,
+      314
+    ],
+    [
+      66,
+      344
+    ],
+    [
+      58,
+      349
+    ],
+    [
+      53,
+      360
+    ],
+    [
+      34,
+      474
+    ],
+    [
+      78,
+      581
+    ],
+    [
+      164,
+      630
+    ],
+    [
+      180,
+      636
+    ],
+    [
+      190,
+      633
+    ],
+    [
+      282,
+      571
+    ],
+    [
+      316,
+      474
+    ],
+    [
+      316,
+      466
+    ],
+    [
+      261,
+      358
+    ],
+    [
+      167,
+      315
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "24",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "8",
+    "scaled_crop_origin": [
+      272,
+      2512
+    ],
+    "scaled_crop_size": [
+      2264,
+      2584
+    ],
+    "canvas_offset": [
+      1396,
+      404
+    ],
+    "canvas_size": [
+      5056,
+      3392
+    ]
+  },
+  "canvas_size": [
+    5056,
+    3392
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/23/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/23/source/world_crop.png",
+    "base_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/23/base_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/23/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/23/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/23/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/23/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/23/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/23/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/23/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/23/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "base_template": "407acf01cb5530b494c20a5a1483b838958a5cfb922c9c78a600ee25ac6c9535",
+    "generation_mask": "0c2b34f8f110a2dbb71164778d52822f7ea5f86cfe79584b1acbb4107b006eae"
+  },
+  "context_revision": 0,
+  "locked_sources": [],
+  "attempt_count": 0,
+  "updated_at": "2026-07-25T13:43:58.812327+00:00"
+}

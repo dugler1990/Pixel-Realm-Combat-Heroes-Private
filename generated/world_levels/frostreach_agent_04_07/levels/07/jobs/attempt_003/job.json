@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "level_id": "07",
+  "attempt": 3,
+  "state": "ready",
+  "created_at": "2026-07-25T13:33:00.986002+00:00",
+  "context_revision": 5,
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "input_hash": "4caaf56f8fd7f26a0eb1973724d499d095ceda198299e9cf4bc5e00e4b93ec7c",
+  "generation_mask_hash": "93017d1f80e87c28b7fa3e7a0e538c8d93ca058e5c7ab4d04bde9948311eb80f",
+  "locked_mask_hash": "7753c5acf99f14c1467c8283640c3ceb650c7607022b4ce32dc70271998af19c",
+  "locked_pixels_hash": "5832f48140bf0045463d86d3fafb26cec89c1c18348870537fab1b57a5f3d050",
+  "neighbor_sources": [
+    {
+      "neighbor_id": "04",
+      "global_box": [
+        5420,
+        1420,
+        7081,
+        1731
+      ],
+      "pixel_count": 160955,
+      "accepted_hash": "58d1edb02af13f51f1958f49870d8db5c4e5bdbd496678b877138b4192be8530"
+    }
+  ],
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/jobs/attempt_003/generated.png"
+}

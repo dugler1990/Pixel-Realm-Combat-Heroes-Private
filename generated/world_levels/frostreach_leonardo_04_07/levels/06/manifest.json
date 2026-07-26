@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "level_id": "06",
+  "name": "Central Expanse",
+  "region": "Frostreach",
+  "state": "ready",
+  "crop_box_world": [
+    664,
+    214,
+    1197,
+    437
+  ],
+  "core_polygon_world": [
+    [
+      700,
+      290
+    ],
+    [
+      830,
+      230
+    ],
+    [
+      930,
+      300
+    ],
+    [
+      1070,
+      250
+    ],
+    [
+      1180,
+      330
+    ],
+    [
+      1100,
+      410
+    ],
+    [
+      900,
+      420
+    ],
+    [
+      680,
+      380
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      664,
+      383
+    ],
+    [
+      668,
+      391
+    ],
+    [
+      677,
+      396
+    ],
+    [
+      898,
+      436
+    ],
+    [
+      1100,
+      426
+    ],
+    [
+      1111,
+      422
+    ],
+    [
+      1192,
+      341
+    ],
+    [
+      1196,
+      327
+    ],
+    [
+      1190,
+      317
+    ],
+    [
+      1076,
+      235
+    ],
+    [
+      1063,
+      235
+    ],
+    [
+      932,
+      282
+    ],
+    [
+      840,
+      217
+    ],
+    [
+      829,
+      214
+    ],
+    [
+      688,
+      279
+    ],
+    [
+      682,
+      294
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "02",
+      "kind": "land"
+    },
+    {
+      "level_id": "03",
+      "kind": "land"
+    },
+    {
+      "level_id": "04",
+      "kind": "land"
+    },
+    {
+      "level_id": "05",
+      "kind": "land"
+    },
+    {
+      "level_id": "07",
+      "kind": "land"
+    },
+    {
+      "level_id": "09",
+      "kind": "land"
+    },
+    {
+      "level_id": "10",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "8",
+    "scaled_crop_origin": [
+      5312,
+      1712
+    ],
+    "scaled_crop_size": [
+      4264,
+      1784
+    ],
+    "canvas_offset": [
+      396,
+      804
+    ],
+    "canvas_size": [
+      5056,
+      3392
+    ]
+  },
+  "canvas_size": [
+    5056,
+    3392
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/source/world_crop.png",
+    "base_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/base_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "base_template": "93cc521dc57d87d42733f610458cd9c73c6f63cddaa75b771ae11c5dac800640",
+    "generation_mask": "e52e2b8462019f91368bce95d235d3c3cd50c8dd6ebc64c32c4ef1ca73d7a6b5",
+    "generation_input": "e6d14cf55d026fa7cea0e5c4372af5f0c4b06c568de0eb97b410646cbfba0c76",
+    "locked_pixels": "69a688a4eb2f3832b48e4f83d2c18248b6b9ca40ec11d2d7928b66a24762b663",
+    "locked_mask": "0b10410674d780e656a9593d31a8d7a3321ce698c0b21c8745a10e033134f5b2"
+  },
+  "context_revision": 4,
+  "locked_sources": [
+    {
+      "neighbor_id": "04",
+      "global_box": [
+        8352,
+        1712,
+        9569,
+        2769
+      ],
+      "pixel_count": 335597,
+      "accepted_hash": "92c764beae04f7894cf91a18bd105acb0eaed8292ceb4f066b2e9b617681cc39"
+    }
+  ],
+  "attempt_count": 0,
+  "updated_at": "2026-07-25T16:45:21.759536+00:00"
+}

@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "level_id": "08",
+  "name": "Blackpine Pass",
+  "region": "Stonebreak",
+  "state": "prepared",
+  "crop_box_world": [
+    384,
+    314,
+    667,
+    527
+  ],
+  "core_polygon_world": [
+    [
+      400,
+      330
+    ],
+    [
+      470,
+      370
+    ],
+    [
+      580,
+      410
+    ],
+    [
+      650,
+      400
+    ],
+    [
+      650,
+      470
+    ],
+    [
+      560,
+      510
+    ],
+    [
+      450,
+      470
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      386,
+      322
+    ],
+    [
+      384,
+      334
+    ],
+    [
+      432,
+      469
+    ],
+    [
+      442,
+      484
+    ],
+    [
+      561,
+      526
+    ],
+    [
+      648,
+      489
+    ],
+    [
+      664,
+      478
+    ],
+    [
+      666,
+      397
+    ],
+    [
+      658,
+      386
+    ],
+    [
+      647,
+      384
+    ],
+    [
+      582,
+      394
+    ],
+    [
+      478,
+      356
+    ],
+    [
+      406,
+      315
+    ],
+    [
+      394,
+      315
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "05",
+      "kind": "land"
+    },
+    {
+      "level_id": "09",
+      "kind": "land"
+    },
+    {
+      "level_id": "12",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      1920,
+      1570
+    ],
+    "scaled_crop_size": [
+      1415,
+      1065
+    ],
+    "canvas_offset": [
+      828,
+      619
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/08/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/08/source/world_crop.png",
+    "base_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/08/base_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/08/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/08/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/08/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/08/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/08/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/08/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/08/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/08/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "base_template": "00652b9e0b6db114b36c5505f480df51e65b9ec5ccaaab40b72a68130d2cbae4",
+    "generation_mask": "e0f7acc72508c4df7df4f5364fb3370e0d8a277ab796c4985c753b860a86758b"
+  },
+  "context_revision": 0,
+  "locked_sources": [],
+  "attempt_count": 0,
+  "updated_at": "2026-07-23T09:46:19.769750+00:00"
+}

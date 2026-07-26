@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "level_id": "03",
+  "name": "Pale Uplands",
+  "region": "Frostreach",
+  "state": "ready",
+  "crop_box_world": [
+    804,
+    54,
+    1087,
+    317
+  ],
+  "core_polygon_world": [
+    [
+      820,
+      70
+    ],
+    [
+      1060,
+      80
+    ],
+    [
+      1070,
+      250
+    ],
+    [
+      930,
+      300
+    ],
+    [
+      830,
+      230
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      808,
+      59
+    ],
+    [
+      804,
+      67
+    ],
+    [
+      813,
+      225
+    ],
+    [
+      815,
+      236
+    ],
+    [
+      820,
+      243
+    ],
+    [
+      920,
+      313
+    ],
+    [
+      930,
+      316
+    ],
+    [
+      1069,
+      268
+    ],
+    [
+      1082,
+      261
+    ],
+    [
+      1086,
+      253
+    ],
+    [
+      1077,
+      86
+    ],
+    [
+      1071,
+      68
+    ],
+    [
+      1048,
+      63
+    ],
+    [
+      832,
+      54
+    ],
+    [
+      814,
+      55
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "02",
+      "kind": "land"
+    },
+    {
+      "level_id": "04",
+      "kind": "land"
+    },
+    {
+      "level_id": "06",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "8",
+    "scaled_crop_origin": [
+      6432,
+      432
+    ],
+    "scaled_crop_size": [
+      2264,
+      2104
+    ],
+    "canvas_offset": [
+      1396,
+      644
+    ],
+    "canvas_size": [
+      5056,
+      3392
+    ]
+  },
+  "canvas_size": [
+    5056,
+    3392
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/03/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/03/source/world_crop.png",
+    "base_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/03/base_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/03/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/03/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/03/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/03/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/03/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/03/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/03/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/03/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "base_template": "56114a9607ad55091709eb5e2fdbad80fe0e142534dbf6914bcae8e4eda17de3",
+    "generation_mask": "db65d1b19ad5de82e38d3a98f4f9de6c7901d5ea965f507ff080dc02bd92a26f",
+    "generation_input": "26528cdc42b8e7902f91df87973d2ef3364634a5285d3ab659273007b38eed5a",
+    "locked_pixels": "ea26a166442d2eae2081517eca57fdf10adc9fc222cc9b7a47bfa5e4d0e0944d",
+    "locked_mask": "affee1a493cbe066a642a5bca6bb02ae328e0d771e12779f5438af58c7275e42"
+  },
+  "context_revision": 2,
+  "locked_sources": [
+    {
+      "neighbor_id": "04",
+      "global_box": [
+        8352,
+        512,
+        8689,
+        2529
+      ],
+      "pixel_count": 404591,
+      "accepted_hash": "92c764beae04f7894cf91a18bd105acb0eaed8292ceb4f066b2e9b617681cc39"
+    }
+  ],
+  "attempt_count": 0,
+  "updated_at": "2026-07-25T16:45:16.268334+00:00"
+}

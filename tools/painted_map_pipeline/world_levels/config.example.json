@@ -1,0 +1,29 @@
+{
+  "world_map": "../../../levels/Frostreach/Generated_image the one.png",
+  "level_plan": "../../../levels/Frostreach/proposed_25_level_areas.csv",
+  "review_overlay": "../../../levels/Frostreach/proposed_25_irregular_level_divisions.png",
+  "output_root": "../../../generated/world_levels/frostreach",
+  "canvas": {
+    "mode": "derived",
+    "width": null,
+    "height": null,
+    "placement": "center",
+    "margin": 0
+  },
+  "scale": {
+    "pixels_per_world_pixel": 12
+  },
+  "rendering": {
+    "outside_color": [0, 0, 0, 255],
+    "source_resampling": "lanczos"
+  },
+  "execution": {
+    "approval_mode": "manual",
+    "stop_on_failure": true,
+    "retry_limit": 2
+  },
+  "generation": {
+    "provider": "manifest"
+  },
+  "style_prompt": "Create a detailed top-down fantasy RPG albedo background matching the accepted Frostreach visual language. Preserve monumental geographic scale, open traversal space, and the supplied terrain composition."
+}

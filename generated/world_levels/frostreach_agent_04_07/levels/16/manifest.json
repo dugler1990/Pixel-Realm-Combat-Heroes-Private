@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "level_id": "16",
+  "name": "Serentha East Shore",
+  "region": "Emerald Heartlands",
+  "state": "prepared",
+  "crop_box_world": [
+    834,
+    564,
+    1137,
+    847
+  ],
+  "core_polygon_world": [
+    [
+      900,
+      580
+    ],
+    [
+      900,
+      690
+    ],
+    [
+      1000,
+      730
+    ],
+    [
+      1100,
+      680
+    ],
+    [
+      1120,
+      760
+    ],
+    [
+      1050,
+      830
+    ],
+    [
+      930,
+      820
+    ],
+    [
+      850,
+      750
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      892,
+      566
+    ],
+    [
+      883,
+      579
+    ],
+    [
+      835,
+      742
+    ],
+    [
+      836,
+      758
+    ],
+    [
+      924,
+      835
+    ],
+    [
+      1045,
+      846
+    ],
+    [
+      1058,
+      844
+    ],
+    [
+      1132,
+      771
+    ],
+    [
+      1136,
+      763
+    ],
+    [
+      1114,
+      672
+    ],
+    [
+      1106,
+      665
+    ],
+    [
+      1094,
+      665
+    ],
+    [
+      1001,
+      712
+    ],
+    [
+      916,
+      678
+    ],
+    [
+      916,
+      577
+    ],
+    [
+      912,
+      569
+    ],
+    [
+      906,
+      565
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "14",
+      "kind": "land"
+    },
+    {
+      "level_id": "17",
+      "kind": "land"
+    },
+    {
+      "level_id": "18",
+      "kind": "land"
+    },
+    {
+      "level_id": "22",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      4170,
+      2820
+    ],
+    "scaled_crop_size": [
+      1515,
+      1415
+    ],
+    "canvas_offset": [
+      778,
+      444
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/16/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/16/source/world_crop.png",
+    "base_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/16/base_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/16/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/16/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/16/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/16/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/16/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/16/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/16/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/16/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "base_template": "1cebdc867833291e6d78f552febe89a6214a41c614224f6bfc3e720a90b45222",
+    "generation_mask": "239631392339e3b0d6f950fc83f945704d0b145bba9ebec2edb22ed1542145cc"
+  },
+  "context_revision": 0,
+  "locked_sources": [],
+  "attempt_count": 0,
+  "updated_at": "2026-07-23T09:46:48.601923+00:00"
+}

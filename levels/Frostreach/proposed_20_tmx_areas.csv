@@ -1,0 +1,21 @@
+id,name,region,x_px,y_px,width_px,height_px,overlap_px,connections
+01,Western Wall Approach,Frostreach,360,70,220,230,16,02;06
+02,Central Wall Approach,Frostreach,564,70,220,230,16,01;03;06;07
+03,Eastern Wall Approach,Frostreach,768,70,220,230,16,02;04;07;08
+04,Howling Wall Approach,Frostreach,972,70,220,230,16,03;05;08;09
+05,Bitter Ice Shelf,Frostreach,1176,70,260,230,16,04;09
+06,Western March,Stonebreak,390,284,240,162,16,01;02;07;11;12
+07,Stonebreak Passes,Stonebreak,614,284,240,162,16,02;03;06;08;11;12;13
+08,Central March,Stonebreak,838,284,240,162,16,03;04;07;09;10;12;13
+09,Eastern March,Stonebreak,1062,284,240,162,16,04;05;08;10
+10,Frost-Sun Transition,Stonebreak,1032,430,390,168,16,08;09;13;16
+11,North Greenholt,Emerald Heartlands,390,430,230,186,16,06;07;12;14
+12,Heartland Plains,Emerald Heartlands,604,430,230,220,16,06;07;08;11;13;14;15
+13,Eastern Heartlands,Emerald Heartlands,818,430,230,220,16,07;08;10;12;15;16
+14,South Greenholt,Emerald Heartlands,390,600,230,180,16,11;12;20:boat
+15,Jadevale,Emerald Heartlands,650,634,398,248,16,12;13;16;17
+16,North Sunspine,Sunspine Dunes,1032,582,390,180,16,10;13;15;17
+17,Deep Dunes,Sunspine Dunes,1032,746,390,180,16,15;16;18
+18,Blighted Coast,Sunspine Dunes,1032,910,390,80,16,17
+19,North Verdant,Verdant Isle,45,350,280,250,16,20
+20,South Verdant,Verdant Isle,45,584,280,250,16,19;13:boat

@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "level_id": "19",
+  "name": "North Sunspine",
+  "region": "Sunspine Dunes",
+  "state": "ready",
+  "crop_box_world": [
+    1184,
+    394,
+    1497,
+    577
+  ],
+  "core_polygon_world": [
+    [
+      1200,
+      410
+    ],
+    [
+      1280,
+      440
+    ],
+    [
+      1360,
+      430
+    ],
+    [
+      1480,
+      450
+    ],
+    [
+      1450,
+      540
+    ],
+    [
+      1280,
+      560
+    ],
+    [
+      1220,
+      500
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      1186,
+      402
+    ],
+    [
+      1184,
+      415
+    ],
+    [
+      1206,
+      508
+    ],
+    [
+      1274,
+      575
+    ],
+    [
+      1284,
+      576
+    ],
+    [
+      1458,
+      554
+    ],
+    [
+      1466,
+      544
+    ],
+    [
+      1496,
+      454
+    ],
+    [
+      1494,
+      442
+    ],
+    [
+      1483,
+      434
+    ],
+    [
+      1363,
+      414
+    ],
+    [
+      1283,
+      424
+    ],
+    [
+      1207,
+      395
+    ],
+    [
+      1194,
+      395
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "07",
+      "kind": "land"
+    },
+    {
+      "level_id": "11",
+      "kind": "land"
+    },
+    {
+      "level_id": "20",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      5920,
+      1970
+    ],
+    "scaled_crop_size": [
+      1565,
+      915
+    ],
+    "canvas_offset": [
+      753,
+      694
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/19/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/19/source/world_crop.png",
+    "base_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/19/base_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/19/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/19/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/19/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/19/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/19/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/19/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/19/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/19/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "base_template": "d3912951d83431ec884a7e79c3d9bce499fd4176698a3f1c3a3b28bd19a6d5e2",
+    "generation_mask": "06cef74063e30c5cf522a4044ec937fd5551bbb780d2d163255edac328fbac23",
+    "generation_input": "6a8a15df16ca2ec78d4c8f1c03259c5afccdfd6591cec63ad7771f9a6cf29e51",
+    "locked_pixels": "08158f43c10c66a87a4c0c980bb97b7795b078b49b120316916cdfc15c9211e9",
+    "locked_mask": "885d68dc85b8129bc9b010e3a268e6988af80d01282f6da7f9007258ea2cd0d6"
+  },
+  "context_revision": 1,
+  "locked_sources": [
+    {
+      "neighbor_id": "07",
+      "global_box": [
+        5920,
+        1975,
+        7131,
+        2281
+      ],
+      "pixel_count": 155534,
+      "accepted_hash": "73491f7203ae9655a2397c1d491598c25e0945dd75d209ace04be864b5c0a49d"
+    }
+  ],
+  "attempt_count": 0,
+  "updated_at": "2026-07-23T09:51:13.530542+00:00"
+}

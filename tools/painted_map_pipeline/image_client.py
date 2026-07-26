@@ -124,9 +124,10 @@ class LeonardoImageClient(ImageClient):
     def generate(self, prompt: str, input_images: list[str], output_path: str):
         if not input_images:
             raise ImageClientError("leonardo backend requires at least one input image")
-        src = Path(input_images[0])
-        if not src.exists():
-            raise ImageClientError(f"input image does not exist: {src}")
+        sources = [Path(path) for path in input_images]
+        for src in sources:
+            if not src.exists():
+                raise ImageClientError(f"input image does not exist: {src}")
 
         output = Path(output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -136,29 +137,42 @@ class LeonardoImageClient(ImageClient):
         if target_size and not preserve_native:
             upscale_to = (int(target_size[0]), int(target_size[1]))
 
-        with Image.open(src) as image:
-            image = image.convert("RGBA")
-            gen_w, gen_h = _resolve_generation_size(self.config, image.size)
+        with Image.open(sources[0]) as primary:
+            gen_w, gen_h = _resolve_generation_size(self.config, primary.size)
 
-            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                temp_path = Path(tmp.name)
-            try:
-                if is_v2_config(self.config):
-                    max_upload_bytes = int(self.config.get("max_upload_bytes", 10 * 1024 * 1024))
-                    jpeg_quality = int(self.config.get("reference_jpeg_quality", 90))
-                    payload, extension = prepare_reference_upload(
-                        image,
-                        target_size=(gen_w, gen_h),
-                        max_upload_bytes=max_upload_bytes,
-                        jpeg_quality=jpeg_quality,
-                    )
+        temp_paths: list[Path] = []
+        try:
+            if is_v2_config(self.config):
+                max_upload_bytes = int(self.config.get("max_upload_bytes", 10 * 1024 * 1024))
+                jpeg_quality = int(self.config.get("reference_jpeg_quality", 90))
+                for src in sources:
+                    with Image.open(src) as image:
+                        image = image.convert("RGBA")
+                        payload, extension = prepare_reference_upload(
+                            image,
+                            target_size=(gen_w, gen_h),
+                            max_upload_bytes=max_upload_bytes,
+                            jpeg_quality=jpeg_quality,
+                        )
+                    with tempfile.NamedTemporaryFile(suffix=f".{extension}", delete=False) as tmp:
+                        temp_path = Path(tmp.name)
                     temp_path.write_bytes(payload)
-                    upload_path = temp_path.with_suffix(f".{extension}")
-                    if upload_path != temp_path:
-                        temp_path.rename(upload_path)
-                        temp_path = upload_path
-                    generate_fn = generate_with_image_reference
-                else:
+                    temp_paths.append(temp_path)
+                try:
+                    result = generate_with_image_reference(
+                        prompt=prompt,
+                        input_images=temp_paths,
+                        output_path=output,
+                        width=gen_w,
+                        height=gen_h,
+                        config=self.config,
+                    )
+                except LeonardoApiError as exc:
+                    raise ImageClientError(str(exc)) from exc
+            else:
+                # v1 content reference still uses a single primary image.
+                with Image.open(sources[0]) as image:
+                    image = image.convert("RGBA")
                     if (gen_w, gen_h) != image.size:
                         if gen_w <= image.width and gen_h <= image.height:
                             thumb = image.copy()
@@ -166,14 +180,14 @@ class LeonardoImageClient(ImageClient):
                             image = thumb
                         else:
                             image = image.resize((gen_w, gen_h), _resample_filter())
-                    temp_path = temp_path.with_suffix(".png")
+                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                        temp_path = Path(tmp.name)
                     image.save(temp_path)
-                    generate_fn = generate_with_content_reference
-
+                    temp_paths.append(temp_path)
                 try:
-                    result = generate_fn(
+                    result = generate_with_content_reference(
                         prompt=prompt,
-                        input_image=temp_path,
+                        input_image=temp_paths[0],
                         output_path=output,
                         width=gen_w,
                         height=gen_h,
@@ -182,17 +196,19 @@ class LeonardoImageClient(ImageClient):
                 except LeonardoApiError as exc:
                     raise ImageClientError(str(exc)) from exc
 
-                if upscale_to and upscale_to != (gen_w, gen_h):
-                    if not bool(self.config.get("skip_output_upscale", False)):
-                        with Image.open(output) as generated:
-                            generated.convert("RGBA").resize(upscale_to, _resample_filter()).save(output)
-                        result["upscaled_to"] = list(upscale_to)
-                    else:
-                        result["native_output_path"] = str(output)
-                        result["target_full_size"] = list(upscale_to)
-                result["generation_size"] = [gen_w, gen_h]
-                return result
-            finally:
+            if upscale_to and upscale_to != (gen_w, gen_h):
+                if not bool(self.config.get("skip_output_upscale", False)):
+                    with Image.open(output) as generated:
+                        generated.convert("RGBA").resize(upscale_to, _resample_filter()).save(output)
+                    result["upscaled_to"] = list(upscale_to)
+                else:
+                    result["native_output_path"] = str(output)
+                    result["target_full_size"] = list(upscale_to)
+            result["generation_size"] = [gen_w, gen_h]
+            result["reference_count"] = len(temp_paths)
+            return result
+        finally:
+            for temp_path in temp_paths:
                 temp_path.unlink(missing_ok=True)
 
 

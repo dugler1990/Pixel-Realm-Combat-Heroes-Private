@@ -196,7 +196,7 @@ def create_v2_generation(
     prompt: str,
     width: int,
     height: int,
-    init_image_id: str,
+    init_image_ids: list[str],
     config: dict,
 ) -> str:
     api_key = _api_key(config)
@@ -206,6 +206,8 @@ def create_v2_generation(
     prompt_enhance = str(config.get("prompt_enhance") or "OFF").upper()
     style_ids = list(config.get("style_ids") or [])
     seed = config.get("seed")
+    if not init_image_ids:
+        raise LeonardoApiError("v2 generation requires at least one init image id")
 
     parameters: dict = {
         "width": int(width),
@@ -216,9 +218,10 @@ def create_v2_generation(
         "guidances": {
             "image_reference": [
                 {
-                    "image": {"id": init_image_id, "type": "UPLOADED"},
+                    "image": {"id": image_id, "type": "UPLOADED"},
                     "strength": reference_strength,
                 }
+                for image_id in init_image_ids
             ]
         },
     }
@@ -383,18 +386,20 @@ def download_url(url: str, output_path: Path, timeout: float = 120):
 def generate_with_image_reference(
     *,
     prompt: str,
-    input_image: Path,
+    input_images: list[Path],
     output_path: Path,
     width: int,
     height: int,
     config: dict,
 ) -> dict:
-    init_image_id = upload_init_image(input_image, config)
+    if not input_images:
+        raise LeonardoApiError("v2 image reference requires at least one input image")
+    init_image_ids = [upload_init_image(path, config) for path in input_images]
     generation_id = create_v2_generation(
         prompt=prompt,
         width=width,
         height=height,
-        init_image_id=init_image_id,
+        init_image_ids=init_image_ids,
         config=config,
     )
     result = wait_for_generation(generation_id, config)
@@ -408,7 +413,8 @@ def generate_with_image_reference(
         "model": config.get("model") or DEFAULT_NANO_BANANA_2_MODEL,
         "output_path": str(output_path),
         "generation_id": generation_id,
-        "init_image_id": init_image_id,
+        "init_image_ids": init_image_ids,
+        "init_image_id": init_image_ids[0],
         "source_url": urls[0],
         "width": width,
         "height": height,

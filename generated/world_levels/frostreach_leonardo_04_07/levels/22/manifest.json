@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "level_id": "22",
+  "name": "Ashfall Fringe",
+  "region": "Sunspine Dunes",
+  "state": "prepared",
+  "crop_box_world": [
+    1034,
+    664,
+    1507,
+    907
+  ],
+  "core_polygon_world": [
+    [
+      1100,
+      680
+    ],
+    [
+      1120,
+      680
+    ],
+    [
+      1220,
+      750
+    ],
+    [
+      1400,
+      780
+    ],
+    [
+      1490,
+      820
+    ],
+    [
+      1450,
+      860
+    ],
+    [
+      1380,
+      890
+    ],
+    [
+      1180,
+      860
+    ],
+    [
+      1050,
+      830
+    ],
+    [
+      1120,
+      760
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      1034,
+      833
+    ],
+    [
+      1038,
+      841
+    ],
+    [
+      1047,
+      846
+    ],
+    [
+      1172,
+      875
+    ],
+    [
+      1381,
+      906
+    ],
+    [
+      1461,
+      872
+    ],
+    [
+      1502,
+      831
+    ],
+    [
+      1506,
+      817
+    ],
+    [
+      1498,
+      806
+    ],
+    [
+      1407,
+      765
+    ],
+    [
+      1227,
+      735
+    ],
+    [
+      1130,
+      667
+    ],
+    [
+      1100,
+      664
+    ],
+    [
+      1088,
+      669
+    ],
+    [
+      1084,
+      685
+    ],
+    [
+      1102,
+      755
+    ],
+    [
+      1038,
+      819
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "16",
+      "kind": "land"
+    },
+    {
+      "level_id": "18",
+      "kind": "land"
+    },
+    {
+      "level_id": "21",
+      "kind": "land"
+    },
+    {
+      "level_id": "25",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "8",
+    "scaled_crop_origin": [
+      8272,
+      5312
+    ],
+    "scaled_crop_size": [
+      3784,
+      1944
+    ],
+    "canvas_offset": [
+      636,
+      724
+    ],
+    "canvas_size": [
+      5056,
+      3392
+    ]
+  },
+  "canvas_size": [
+    5056,
+    3392
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/22/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/22/source/world_crop.png",
+    "base_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/22/base_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/22/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/22/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/22/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/22/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/22/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/22/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/22/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/22/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "base_template": "3535b39540f8605d93b78b0223834de647919afdec640ec1ec136537e70ae3f7",
+    "generation_mask": "496872ae909f6f70c19238e6e70fd0c2f17ad17548109d66652059e96790c2f2"
+  },
+  "context_revision": 0,
+  "locked_sources": [],
+  "attempt_count": 0,
+  "updated_at": "2026-07-25T13:43:52.461148+00:00"
+}

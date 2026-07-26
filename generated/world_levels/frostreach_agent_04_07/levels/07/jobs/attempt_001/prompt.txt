@@ -1,0 +1,11 @@
+Render level 07: Bitter Floe Coast (Frostreach).
+Return exactly 3072x2304 pixels.
+Treat input.png as the exact composition, scale, coastline, terrain-placement, and boundary authority.
+Continue the detailed top-down fantasy albedo artwork only inside the supplied generation area.
+Pixels already rendered in the neighbor-padding portions of input.png must remain visually unchanged.
+Preserve the exact terrain structures and proportions shown by the source control image.
+Keep lighting diffuse and shadow-neutral: local form shading is allowed, directional cast shadows are not.
+Do not add labels, UI, borders, map symbols, characters, or a visible grid.
+Leave the blank exterior blank.
+Accepted neighbor context embedded in the input: 04.
+Create a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows.

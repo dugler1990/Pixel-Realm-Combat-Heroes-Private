@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "level_id": "07",
+  "name": "Bitter Floe Coast",
+  "region": "Frostreach",
+  "state": "ready",
+  "crop_box_world": [
+    1084,
+    284,
+    1427,
+    457
+  ],
+  "core_polygon_world": [
+    [
+      1180,
+      330
+    ],
+    [
+      1350,
+      300
+    ],
+    [
+      1410,
+      350
+    ],
+    [
+      1360,
+      430
+    ],
+    [
+      1280,
+      440
+    ],
+    [
+      1200,
+      410
+    ],
+    [
+      1100,
+      410
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      1426,
+      347
+    ],
+    [
+      1418,
+      335
+    ],
+    [
+      1364,
+      290
+    ],
+    [
+      1350,
+      284
+    ],
+    [
+      1177,
+      314
+    ],
+    [
+      1169,
+      318
+    ],
+    [
+      1088,
+      399
+    ],
+    [
+      1084,
+      413
+    ],
+    [
+      1089,
+      422
+    ],
+    [
+      1100,
+      426
+    ],
+    [
+      1198,
+      426
+    ],
+    [
+      1279,
+      456
+    ],
+    [
+      1362,
+      446
+    ],
+    [
+      1371,
+      442
+    ],
+    [
+      1422,
+      362
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "04",
+      "kind": "land"
+    },
+    {
+      "level_id": "06",
+      "kind": "land"
+    },
+    {
+      "level_id": "11",
+      "kind": "land"
+    },
+    {
+      "level_id": "19",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      5420,
+      1420
+    ],
+    "scaled_crop_size": [
+      1715,
+      865
+    ],
+    "canvas_offset": [
+      678,
+      719
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/source/world_crop.png",
+    "base_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/base_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "base_template": "3ae75d657e6bfa73e46f37f30308984ec6e5d4e87a9cfdfa4aec79de63c9b094",
+    "generation_mask": "93017d1f80e87c28b7fa3e7a0e538c8d93ca058e5c7ab4d04bde9948311eb80f",
+    "generation_input": "4caaf56f8fd7f26a0eb1973724d499d095ceda198299e9cf4bc5e00e4b93ec7c",
+    "locked_pixels": "5832f48140bf0045463d86d3fafb26cec89c1c18348870537fab1b57a5f3d050",
+    "locked_mask": "7753c5acf99f14c1467c8283640c3ceb650c7607022b4ce32dc70271998af19c"
+  },
+  "context_revision": 5,
+  "locked_sources": [
+    {
+      "neighbor_id": "04",
+      "global_box": [
+        5420,
+        1420,
+        7081,
+        1731
+      ],
+      "pixel_count": 160955,
+      "accepted_hash": "58d1edb02af13f51f1958f49870d8db5c4e5bdbd496678b877138b4192be8530"
+    }
+  ],
+  "attempt_count": 3,
+  "updated_at": "2026-07-25T13:33:00.998448+00:00",
+  "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/jobs/attempt_003/job.json",
+  "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/attempts/attempt_001/normalized.png",
+  "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/accepted/image.png",
+  "accepted_hash": "73491f7203ae9655a2397c1d491598c25e0945dd75d209ace04be864b5c0a49d",
+  "accepted_attempt": 1,
+  "acceptance_index": 2
+}

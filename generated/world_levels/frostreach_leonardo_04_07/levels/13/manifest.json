@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "level_id": "13",
+  "name": "Heartland Plains",
+  "region": "Emerald Heartlands",
+  "state": "prepared",
+  "crop_box_world": [
+    624,
+    454,
+    917,
+    667
+  ],
+  "core_polygon_world": [
+    [
+      650,
+      470
+    ],
+    [
+      760,
+      530
+    ],
+    [
+      880,
+      500
+    ],
+    [
+      900,
+      580
+    ],
+    [
+      820,
+      640
+    ],
+    [
+      700,
+      650
+    ],
+    [
+      640,
+      580
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      635,
+      464
+    ],
+    [
+      624,
+      583
+    ],
+    [
+      631,
+      595
+    ],
+    [
+      685,
+      658
+    ],
+    [
+      694,
+      665
+    ],
+    [
+      826,
+      655
+    ],
+    [
+      909,
+      594
+    ],
+    [
+      915,
+      586
+    ],
+    [
+      916,
+      575
+    ],
+    [
+      897,
+      499
+    ],
+    [
+      892,
+      489
+    ],
+    [
+      886,
+      485
+    ],
+    [
+      873,
+      485
+    ],
+    [
+      762,
+      513
+    ],
+    [
+      656,
+      455
+    ],
+    [
+      644,
+      455
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "09",
+      "kind": "land"
+    },
+    {
+      "level_id": "10",
+      "kind": "land"
+    },
+    {
+      "level_id": "12",
+      "kind": "land"
+    },
+    {
+      "level_id": "14",
+      "kind": "land"
+    },
+    {
+      "level_id": "15",
+      "kind": "land"
+    },
+    {
+      "level_id": "17",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "8",
+    "scaled_crop_origin": [
+      4992,
+      3632
+    ],
+    "scaled_crop_size": [
+      2344,
+      1704
+    ],
+    "canvas_offset": [
+      1356,
+      844
+    ],
+    "canvas_size": [
+      5056,
+      3392
+    ]
+  },
+  "canvas_size": [
+    5056,
+    3392
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/13/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/13/source/world_crop.png",
+    "base_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/13/base_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/13/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/13/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/13/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/13/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/13/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/13/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/13/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/13/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "base_template": "7098bdc944e993af9dae527f4500b879ac7ad43ea697be8c427fe6449e698c65",
+    "generation_mask": "f9d188cbedb4757cdedd2bb23b191b3b441b2fcd81a7f1d1deada1aa9dd52bb1"
+  },
+  "context_revision": 0,
+  "locked_sources": [],
+  "attempt_count": 0,
+  "updated_at": "2026-07-25T13:42:55.694909+00:00"
+}

@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "level_id": "07",
+  "name": "Bitter Floe Coast",
+  "region": "Frostreach",
+  "state": "ready",
+  "crop_box_world": [
+    1084,
+    284,
+    1427,
+    457
+  ],
+  "core_polygon_world": [
+    [
+      1180,
+      330
+    ],
+    [
+      1350,
+      300
+    ],
+    [
+      1410,
+      350
+    ],
+    [
+      1360,
+      430
+    ],
+    [
+      1280,
+      440
+    ],
+    [
+      1200,
+      410
+    ],
+    [
+      1100,
+      410
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      1426,
+      347
+    ],
+    [
+      1418,
+      335
+    ],
+    [
+      1364,
+      290
+    ],
+    [
+      1350,
+      284
+    ],
+    [
+      1177,
+      314
+    ],
+    [
+      1169,
+      318
+    ],
+    [
+      1088,
+      399
+    ],
+    [
+      1084,
+      413
+    ],
+    [
+      1089,
+      422
+    ],
+    [
+      1100,
+      426
+    ],
+    [
+      1198,
+      426
+    ],
+    [
+      1279,
+      456
+    ],
+    [
+      1362,
+      446
+    ],
+    [
+      1371,
+      442
+    ],
+    [
+      1422,
+      362
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "04",
+      "kind": "land"
+    },
+    {
+      "level_id": "06",
+      "kind": "land"
+    },
+    {
+      "level_id": "11",
+      "kind": "land"
+    },
+    {
+      "level_id": "19",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "8",
+    "scaled_crop_origin": [
+      8672,
+      2272
+    ],
+    "scaled_crop_size": [
+      2744,
+      1384
+    ],
+    "canvas_offset": [
+      1156,
+      1004
+    ],
+    "canvas_size": [
+      5056,
+      3392
+    ]
+  },
+  "canvas_size": [
+    5056,
+    3392
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/source/world_crop.png",
+    "base_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/base_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "base_template": "94db77f6323ab0bfd43fd2105387291e609fdf18d98e1042163da4f0ffce9334",
+    "generation_mask": "6b3bbe4c9bdd6986352bdeb40644de72830826f6f5a4c281c1ebdf67774d14ca",
+    "generation_input": "8ae54487a076d6b5b955a0df0223633ac10f0295d19ad44f52d27b512cadb635",
+    "locked_pixels": "99b241557c587b2d7ba61dc8913fd621c4e0a98474e8f1e2100bb1fdd06040c6",
+    "locked_mask": "df8124e022a00ad516b0f904d6c16986c23385f82d3bf92c69363e77142bd1c7"
+  },
+  "context_revision": 4,
+  "locked_sources": [
+    {
+      "neighbor_id": "04",
+      "global_box": [
+        8672,
+        2272,
+        11329,
+        2769
+      ],
+      "pixel_count": 411751,
+      "accepted_hash": "92c764beae04f7894cf91a18bd105acb0eaed8292ceb4f066b2e9b617681cc39"
+    }
+  ],
+  "attempt_count": 2,
+  "updated_at": "2026-07-25T16:45:25.834171+00:00",
+  "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/jobs/attempt_002/job.json"
+}

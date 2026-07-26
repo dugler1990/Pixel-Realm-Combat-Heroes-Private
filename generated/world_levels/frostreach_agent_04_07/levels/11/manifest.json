@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "level_id": "11",
+  "name": "Eastern Rainshadow",
+  "region": "Stonebreak",
+  "state": "ready",
+  "crop_box_world": [
+    984,
+    394,
+    1237,
+    587
+  ],
+  "core_polygon_world": [
+    [
+      1100,
+      410
+    ],
+    [
+      1200,
+      410
+    ],
+    [
+      1220,
+      500
+    ],
+    [
+      1180,
+      560
+    ],
+    [
+      1120,
+      570
+    ],
+    [
+      1000,
+      540
+    ],
+    [
+      1120,
+      500
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      984,
+      537
+    ],
+    [
+      986,
+      548
+    ],
+    [
+      994,
+      555
+    ],
+    [
+      1123,
+      586
+    ],
+    [
+      1188,
+      574
+    ],
+    [
+      1236,
+      503
+    ],
+    [
+      1214,
+      402
+    ],
+    [
+      1208,
+      396
+    ],
+    [
+      1200,
+      394
+    ],
+    [
+      1092,
+      396
+    ],
+    [
+      1085,
+      404
+    ],
+    [
+      1084,
+      415
+    ],
+    [
+      1101,
+      489
+    ],
+    [
+      996,
+      524
+    ],
+    [
+      988,
+      529
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "07",
+      "kind": "land"
+    },
+    {
+      "level_id": "10",
+      "kind": "land"
+    },
+    {
+      "level_id": "14",
+      "kind": "land"
+    },
+    {
+      "level_id": "19",
+      "kind": "land"
+    },
+    {
+      "level_id": "20",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      4920,
+      1970
+    ],
+    "scaled_crop_size": [
+      1265,
+      965
+    ],
+    "canvas_offset": [
+      903,
+      669
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/11/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/11/source/world_crop.png",
+    "base_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/11/base_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/11/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/11/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/11/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/11/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/11/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/11/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/11/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/11/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "base_template": "c193e38993026cea27b864c4c8016862264a9a6425cedf2708a744edf6804ccd",
+    "generation_mask": "aaa8aae5951e1f6c2cd44634c90bddbebbc699a3448b9ffad8bf554fa8b68977",
+    "generation_input": "8d74a76094c32ef30e12ddc5c05f54251da1e5874973ca38ebd166dacc75965d",
+    "locked_pixels": "7636d64cefab36e985a5ee657c26ef36a85b10f6cbb286cf713ea3deffa8262e",
+    "locked_mask": "5e2f4690b8038178e2a4df56ce18a7fd5377d427e79157fc95b04d832902666a"
+  },
+  "context_revision": 1,
+  "locked_sources": [
+    {
+      "neighbor_id": "07",
+      "global_box": [
+        5420,
+        1970,
+        6181,
+        2281
+      ],
+      "pixel_count": 101374,
+      "accepted_hash": "73491f7203ae9655a2397c1d491598c25e0945dd75d209ace04be864b5c0a49d"
+    }
+  ],
+  "attempt_count": 0,
+  "updated_at": "2026-07-23T09:51:11.674376+00:00"
+}

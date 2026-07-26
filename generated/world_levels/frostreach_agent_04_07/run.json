@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "config_hash": "ecc11cedc56021aa2f48c72b136ffd077936d70930687d34a6156dfead656fae",
+  "config_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/config.resolved.json",
+  "world_size": [
+    1536,
+    1024
+  ],
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "scale": "5",
+  "acceptance_counter": 5,
+  "levels": {
+    "01": {
+      "name": "Western Wallfoot",
+      "region": "Frostreach",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/01/manifest.json",
+      "updated_at": "2026-07-23T09:45:52.319590+00:00"
+    },
+    "02": {
+      "name": "Glacial Basin",
+      "region": "Frostreach",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/02/manifest.json",
+      "updated_at": "2026-07-23T09:45:56.020902+00:00"
+    },
+    "03": {
+      "name": "Pale Uplands",
+      "region": "Frostreach",
+      "state": "ready",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/manifest.json",
+      "updated_at": "2026-07-25T13:14:19.605941+00:00",
+      "context_revision": 4
+    },
+    "04": {
+      "name": "Howling Waste",
+      "region": "Frostreach",
+      "state": "accepted",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/04/manifest.json",
+      "updated_at": "2026-07-25T13:14:17.359849+00:00",
+      "context_revision": 1,
+      "attempt_count": 1,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/04/jobs/attempt_001/job.json",
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/04/attempts/attempt_001/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/04/accepted/image.png",
+      "accepted_hash": "58d1edb02af13f51f1958f49870d8db5c4e5bdbd496678b877138b4192be8530",
+      "accepted_attempt": 1,
+      "acceptance_index": 5
+    },
+    "05": {
+      "name": "Western Expanse",
+      "region": "Frostreach",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/05/manifest.json",
+      "updated_at": "2026-07-23T09:46:08.183425+00:00"
+    },
+    "06": {
+      "name": "Central Expanse",
+      "region": "Frostreach",
+      "state": "ready",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/manifest.json",
+      "updated_at": "2026-07-25T13:14:21.965032+00:00",
+      "context_revision": 5
+    },
+    "07": {
+      "name": "Bitter Floe Coast",
+      "region": "Frostreach",
+      "state": "generating",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/manifest.json",
+      "updated_at": "2026-07-25T13:33:01.006681+00:00",
+      "context_revision": 5,
+      "attempt_count": 3,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/jobs/attempt_003/job.json",
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/attempts/attempt_001/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/accepted/image.png",
+      "accepted_hash": "73491f7203ae9655a2397c1d491598c25e0945dd75d209ace04be864b5c0a49d",
+      "accepted_attempt": 1,
+      "acceptance_index": 2,
+      "attempt": 3,
+      "error": "Unexpected v2 generation response: [{'extensions': {'code': 'HttpException', 'details': 'An error occurred processing your request.'}, 'locations': [{'column': 73, 'line': 1}], 'message': 'Insufficient tokens', 'path': ['generate']}]"
+    },
+    "08": {
+      "name": "Blackpine Pass",
+      "region": "Stonebreak",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/08/manifest.json",
+      "updated_at": "2026-07-23T09:46:19.792985+00:00"
+    },
+    "09": {
+      "name": "Stonebreak Spine",
+      "region": "Stonebreak",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/09/manifest.json",
+      "updated_at": "2026-07-23T09:46:23.214884+00:00"
+    },
+    "10": {
+      "name": "Frostgate Passes",
+      "region": "Stonebreak",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/10/manifest.json",
+      "updated_at": "2026-07-23T09:46:26.428110+00:00"
+    },
+    "11": {
+      "name": "Eastern Rainshadow",
+      "region": "Stonebreak",
+      "state": "ready",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/11/manifest.json",
+      "updated_at": "2026-07-23T09:51:11.684285+00:00",
+      "context_revision": 1
+    },
+    "12": {
+      "name": "Greenholt Forest",
+      "region": "Emerald Heartlands",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/12/manifest.json",
+      "updated_at": "2026-07-23T09:46:33.477421+00:00"
+    },
+    "13": {
+      "name": "Heartland Plains",
+      "region": "Emerald Heartlands",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/13/manifest.json",
+      "updated_at": "2026-07-23T09:46:36.986373+00:00"
+    },
+    "14": {
+      "name": "Riverward Heartlands",
+      "region": "Emerald Heartlands",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/14/manifest.json",
+      "updated_at": "2026-07-23T09:46:40.886951+00:00"
+    },
+    "15": {
+      "name": "Serentha West Shore",
+      "region": "Emerald Heartlands",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/15/manifest.json",
+      "updated_at": "2026-07-23T09:46:44.923662+00:00"
+    },
+    "16": {
+      "name": "Serentha East Shore",
+      "region": "Emerald Heartlands",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/16/manifest.json",
+      "updated_at": "2026-07-23T09:46:48.627178+00:00"
+    },
+    "17": {
+      "name": "Jadevale Highlands",
+      "region": "Emerald Heartlands",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/17/manifest.json",
+      "updated_at": "2026-07-23T09:46:52.419932+00:00"
+    },
+    "18": {
+      "name": "Jadevale Coast",
+      "region": "Emerald Heartlands",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/18/manifest.json",
+      "updated_at": "2026-07-23T09:46:56.343235+00:00"
+    },
+    "19": {
+      "name": "North Sunspine",
+      "region": "Sunspine Dunes",
+      "state": "ready",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/19/manifest.json",
+      "updated_at": "2026-07-23T09:51:13.537633+00:00",
+      "context_revision": 1
+    },
+    "20": {
+      "name": "Glass Mesa",
+      "region": "Sunspine Dunes",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/20/manifest.json",
+      "updated_at": "2026-07-23T09:47:03.573290+00:00"
+    },
+    "21": {
+      "name": "Deep Dunes",
+      "region": "Sunspine Dunes",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/21/manifest.json",
+      "updated_at": "2026-07-23T09:47:07.651768+00:00"
+    },
+    "22": {
+      "name": "Ashfall Fringe",
+      "region": "Sunspine Dunes",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/22/manifest.json",
+      "updated_at": "2026-07-23T09:47:11.957006+00:00"
+    },
+    "23": {
+      "name": "North Verdant",
+      "region": "Verdant Isle",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/23/manifest.json",
+      "updated_at": "2026-07-23T09:47:16.127302+00:00"
+    },
+    "24": {
+      "name": "South Verdant",
+      "region": "Verdant Isle",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/24/manifest.json",
+      "updated_at": "2026-07-23T09:47:20.457918+00:00"
+    },
+    "25": {
+      "name": "Hellscar Tidal Cape",
+      "region": "Ashen Hellscar",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/25/manifest.json",
+      "updated_at": "2026-07-23T09:47:23.500126+00:00"
+    }
+  },
+  "updated_at": "2026-07-23T09:47:23.500233+00:00"
+}
