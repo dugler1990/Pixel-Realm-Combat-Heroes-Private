@@ -1,0 +1,43 @@
+{
+  "world_map": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/Generated_image the one.png",
+  "level_plan": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/plan.csv",
+  "review_overlay": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/proposed_25_irregular_level_divisions.png",
+  "output_root": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04",
+  "canvas": {
+    "mode": "explicit",
+    "width": 3072,
+    "height": 2304,
+    "placement": "center",
+    "margin": 0
+  },
+  "scale": {
+    "pixels_per_world_pixel": "5"
+  },
+  "rendering": {
+    "outside_color": [
+      0,
+      0,
+      0,
+      255
+    ],
+    "source_resampling": "lanczos"
+  },
+  "execution": {
+    "approval_mode": "manual",
+    "stop_on_failure": true,
+    "retry_limit": 2,
+    "rescale_below_iou": 0.9
+  },
+  "generation": {
+    "provider": "openai",
+    "api_key_env": "OPENAI_API_KEY",
+    "model": "gpt-image-2",
+    "width": 3072,
+    "height": 2304,
+    "quality": "high",
+    "timeout_seconds": 900,
+    "config_source": "frostreach.agent-test.json",
+    "renderer": "frame"
+  },
+  "style_prompt": "Create a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows."
+}

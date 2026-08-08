@@ -7,12 +7,16 @@ from typing import Any
 from PIL import Image
 
 from .config import load_config
-from .land_fit import fit_generated_to_mask
+from .frames import Frame
+from .job_builder import canvas_asset
 from .models import LevelState
 from .package_builder import level_paths
+from .renderers import FootprintRejected, PlaceContext, get_renderer, load_image
 from .state_store import append_event, atomic_write_json, read_json, sha256_file, utc_now
 
 Image.MAX_IMAGE_PIXELS = None
+
+__all__ = ["FootprintRejected", "accept_result", "ingest_result"]
 
 
 def _job_for_attempt(paths: dict[str, Path], attempt: int | None) -> tuple[Path, dict[str, Any]]:
@@ -56,23 +60,48 @@ def ingest_result(
         raise FileNotFoundError(f"generated image does not exist: {source_path}")
     with Image.open(source_path) as opened:
         generated = opened.convert("RGBA")
-    expected_size = tuple(int(value) for value in job["canvas_size"])
-    if generated.size != expected_size:
-        raise ValueError(f"generated image is {generated.size}, expected {expected_size}")
 
-    with Image.open(job_path.parent / "generation_mask.png") as opened:
-        generation_mask = opened.convert("L")
-    with Image.open(job_path.parent / "locked_overlap_mask.png") as opened:
-        locked_mask = opened.convert("L")
-    with Image.open(job_path.parent / "locked_overlap.png") as opened:
-        locked_pixels = opened.convert("RGBA")
+    generation_mask = load_image(canvas_asset(job_path.parent, "generation_mask"), "L")
+    locked_mask = load_image(canvas_asset(job_path.parent, "locked_mask"), "L")
+    locked_pixels = load_image(canvas_asset(job_path.parent, "locked_pixels"))
 
-    # Warp generated land outline onto the template land silhouette.
-    normalized = fit_generated_to_mask(
-        generated,
-        generation_mask,
+    generation_result = job_path.parent / "generation_result.json"
+    if generation_result.is_file():
+        job["generation_result"] = read_json(generation_result)
+
+    # The renderer recorded on the job, not the one in the live config: re-ingesting an old
+    # attempt must normalize it under the rules it was generated for.
+    renderer = get_renderer(job.get("renderer", "warp"))
+    place_context = PlaceContext(
+        level_id=level_id,
+        canvas_size=tuple(int(value) for value in job["canvas_size"]),
+        frame=Frame.from_dict(job["frame"]),
         outside_color=config.outside_color,
+        generation_mask=generation_mask,
+        locked_mask=locked_mask,
+        sent_input=load_image(job_path.parent / "input.png"),
+        rescale_below_iou=config.execution.rescale_below_iou,
     )
+    try:
+        normalized, info = renderer.place(generated, place_context)
+    except FootprintRejected as exc:
+        job["footprint_iou_raw"] = round(exc.footprint_iou, 4)
+        job["footprint_iou"] = round(exc.footprint_iou, 4)
+        job["state"] = LevelState.FAILED.value
+        atomic_write_json(job_path, job)
+        append_event(
+            root_path,
+            "result_rejected",
+            level_id=level_id,
+            attempt=int(job["attempt"]),
+            footprint_iou=job["footprint_iou"],
+            reason=exc.reason,
+        )
+        raise
+    job.update(info)
+
+    # The one guarantee both renderers share, and the reason levels tile at all: the padding
+    # comes back byte-identical from this job's own snapshot, whatever the model did to it.
     normalized.paste(locked_pixels, (0, 0), locked_mask)
     attempt_number = int(job["attempt"])
     attempt_dir = paths["root"] / "attempts" / f"attempt_{attempt_number:03d}"
@@ -116,6 +145,9 @@ def ingest_result(
         level_id=level_id,
         attempt=attempt_number,
         normalized_hash=job["normalized_hash"],
+        footprint_iou=job["footprint_iou"],
+        footprint_iou_raw=job["footprint_iou_raw"],
+        rescale_applied=job["rescale_applied"],
     )
     should_accept = config.execution.approval_mode == "automatic" if auto_accept is None else auto_accept
     if should_accept:
@@ -145,12 +177,14 @@ def accept_result(
     candidate = Path(job["normalized_path"])
     accepted_path = paths["root"] / "accepted" / "image.png"
     accepted_path.parent.mkdir(parents=True, exist_ok=True)
-    if accepted_path.exists():
+    if accepted_path.exists() and not job.get("refine"):
         accepted_hash = sha256_file(accepted_path)
         candidate_hash = sha256_file(candidate)
         if accepted_hash != candidate_hash:
             raise ValueError("accepted image already exists with different content")
     else:
+        # A refine attempt is a deliberate second pass over finished art, so it replaces
+        # what is there rather than colliding with it.
         shutil.copy2(candidate, accepted_path)
 
     run["acceptance_counter"] = int(run.get("acceptance_counter", 0)) + 1

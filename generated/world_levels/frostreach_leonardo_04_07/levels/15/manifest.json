@@ -3,7 +3,7 @@
   "level_id": "15",
   "name": "Serentha West Shore",
   "region": "Emerald Heartlands",
-  "state": "prepared",
+  "state": "ready",
   "crop_box_world": [
     354,
     534,
@@ -172,10 +172,25 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "59243bb3f57074b8622dc96a7d242bf5f89c2c689df4b11d98ce2dd04ca7fc33",
-    "generation_mask": "b1a22f25cf335ad963f805481621065f7b6226759acfcac5ac13b120585657c0"
+    "generation_mask": "b1a22f25cf335ad963f805481621065f7b6226759acfcac5ac13b120585657c0",
+    "generation_input": "918dcf3e5f7e9f07903ade93d0f5fe07e154f55c06cdd4a484fd002789f1dae1",
+    "locked_pixels": "f45d7a24eb112c0541c7ea8f7b32de9489b0abf5c550b56490adae339e1b27fb",
+    "locked_mask": "7d1d37acb6ee33218e7e600394624aaa582ad5c72ca8a054550e1a602817e45e"
   },
-  "context_revision": 0,
-  "locked_sources": [],
+  "context_revision": 1,
+  "locked_sources": [
+    {
+      "neighbor_id": "12",
+      "global_box": [
+        2832,
+        4272,
+        5329,
+        5321
+      ],
+      "pixel_count": 727146,
+      "accepted_hash": "61bea9968d6605141c54a172dee601ba4574c0635756f82789814d772170d4f0"
+    }
+  ],
   "attempt_count": 0,
-  "updated_at": "2026-07-25T13:43:08.871818+00:00"
+  "updated_at": "2026-07-31T16:37:18.654642+00:00"
 }

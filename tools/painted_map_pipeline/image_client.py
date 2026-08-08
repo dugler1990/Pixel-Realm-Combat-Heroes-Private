@@ -6,6 +6,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 from .leonardo_api import (
@@ -14,6 +15,8 @@ from .leonardo_api import (
     generate_with_image_reference,
     is_v2_config,
 )
+from .openai_api import OpenAIApiError
+from .openai_api import edit_image as openai_edit_image
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -23,7 +26,19 @@ class ImageClientError(RuntimeError):
 
 
 class ImageClient:
-    def generate(self, prompt: str, input_images: list[str], output_path: str):
+    def generate(
+        self,
+        prompt: str,
+        input_images: list[str],
+        output_path: str,
+        mask: str | None = None,
+    ):
+        """Generate or edit an image.
+
+        ``mask`` is a path to the canonical ``pending_mask.png`` -- white means repaint.
+        Each client converts to whatever its provider expects; the pipeline never does.
+        Providers without a mask concept accept the argument and ignore it.
+        """
         raise NotImplementedError
 
 
@@ -33,7 +48,7 @@ class CopyImageClient(ImageClient):
     This proves the filesystem/TMX loop without requiring an image API key.
     """
 
-    def generate(self, prompt: str, input_images: list[str], output_path: str):
+    def generate(self, prompt: str, input_images: list[str], output_path: str, mask: str | None = None):
         if not input_images:
             raise ImageClientError("copy backend requires at least one input image")
         src = Path(input_images[0])
@@ -48,12 +63,17 @@ class CopyImageClient(ImageClient):
 class ManifestOnlyImageClient(ImageClient):
     """Dry-run backend: writes request JSON and does not produce images."""
 
-    def generate(self, prompt: str, input_images: list[str], output_path: str):
+    def generate(self, prompt: str, input_images: list[str], output_path: str, mask: str | None = None):
         request_path = Path(output_path).with_suffix(".request.json")
         request_path.parent.mkdir(parents=True, exist_ok=True)
         request_path.write_text(
             json.dumps(
-                {"prompt": prompt, "input_images": input_images, "output_path": output_path},
+                {
+                    "prompt": prompt,
+                    "input_images": input_images,
+                    "mask": mask,
+                    "output_path": output_path,
+                },
                 indent=2,
             ),
             encoding="utf-8",
@@ -121,7 +141,8 @@ class LeonardoImageClient(ImageClient):
     def __init__(self, config: dict):
         self.config = dict(config)
 
-    def generate(self, prompt: str, input_images: list[str], output_path: str):
+    def generate(self, prompt: str, input_images: list[str], output_path: str, mask: str | None = None):
+        # Leonardo v2 image_reference has no mask concept; accepted and ignored.
         if not input_images:
             raise ImageClientError("leonardo backend requires at least one input image")
         sources = [Path(path) for path in input_images]
@@ -212,6 +233,74 @@ class LeonardoImageClient(ImageClient):
                 temp_path.unlink(missing_ok=True)
 
 
+class OpenAIImageClient(ImageClient):
+    """OpenAI Images edits (gpt-image-2): image plus mask, repaint where transparent."""
+
+    def __init__(self, config: dict):
+        self.config = dict(config)
+
+    def generate(self, prompt: str, input_images: list[str], output_path: str, mask: str | None = None):
+        if not input_images:
+            raise ImageClientError("openai backend requires at least one input image")
+        sources = [Path(path) for path in input_images]
+        for src in sources:
+            if not src.exists():
+                raise ImageClientError(f"input image does not exist: {src}")
+
+        output = Path(output_path)
+        with Image.open(sources[0]) as primary:
+            width, height = primary.size
+        gen_w = int(self.config.get("width") or width)
+        gen_h = int(self.config.get("height") or height)
+        if (gen_w, gen_h) != (width, height):
+            raise ImageClientError(
+                f"configured size {gen_w}x{gen_h} does not match input {width}x{height}; "
+                "the edits endpoint returns the input's dimensions, so these must agree"
+            )
+
+        temp_paths: list[Path] = []
+        try:
+            mask_path = None
+            if mask:
+                mask_path = self._alpha_mask(Path(mask), (width, height))
+                temp_paths.append(mask_path)
+            try:
+                return openai_edit_image(
+                    prompt=prompt,
+                    input_images=sources,
+                    mask=mask_path,
+                    output_path=output,
+                    width=gen_w,
+                    height=gen_h,
+                    config=self.config,
+                )
+            except OpenAIApiError as exc:
+                raise ImageClientError(str(exc)) from exc
+        finally:
+            for path in temp_paths:
+                path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _alpha_mask(pending_mask: Path, size: tuple[int, int]) -> Path:
+        """Canonical white-means-repaint -> OpenAI's transparent-means-edit."""
+        with Image.open(pending_mask) as opened:
+            editable = np.asarray(opened.convert("L")) > 0
+        if (editable.shape[1], editable.shape[0]) != size:
+            raise ImageClientError(
+                f"mask {editable.shape[1]}x{editable.shape[0]} does not match image "
+                f"{size[0]}x{size[1]}"
+            )
+        if not editable.any():
+            raise ImageClientError(f"mask {pending_mask} has no editable area")
+        rgba = np.zeros((*editable.shape, 4), dtype=np.uint8)
+        rgba[..., :3] = 255
+        rgba[..., 3] = np.where(editable, 0, 255).astype(np.uint8)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            path = Path(tmp.name)
+        Image.fromarray(rgba, mode="RGBA").save(path)
+        return path
+
+
 def make_image_client(config: dict):
     provider = str(config.get("provider") or "copy").strip().lower()
     if provider == "copy":
@@ -220,8 +309,10 @@ def make_image_client(config: dict):
         return ManifestOnlyImageClient()
     if provider == "leonardo":
         return LeonardoImageClient(config)
+    if provider == "openai":
+        return OpenAIImageClient(config)
     raise ImageClientError(
-        f"Unknown image provider {provider!r}. Supported providers: copy, manifest, leonardo."
+        f"Unknown image provider {provider!r}. Supported providers: copy, manifest, leonardo, openai."
     )
 
 

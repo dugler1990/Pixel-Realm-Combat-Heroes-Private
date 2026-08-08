@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+from .geometry import validate_simple_polygon
 from .models import Connection, LevelSpec, Point
 
 
@@ -29,51 +30,11 @@ def _parse_connections(value: str) -> tuple[Connection, ...]:
     return tuple(connections)
 
 
-def _orientation(a: Point, b: Point, c: Point) -> int:
-    value = (b[1] - a[1]) * (c[0] - b[0]) - (b[0] - a[0]) * (c[1] - b[1])
-    return 0 if value == 0 else (1 if value > 0 else -1)
-
-
-def _on_segment(a: Point, b: Point, c: Point) -> bool:
-    return min(a[0], c[0]) <= b[0] <= max(a[0], c[0]) and min(a[1], c[1]) <= b[1] <= max(a[1], c[1])
-
-
-def _segments_intersect(a: Point, b: Point, c: Point, d: Point) -> bool:
-    o1, o2, o3, o4 = _orientation(a, b, c), _orientation(a, b, d), _orientation(c, d, a), _orientation(c, d, b)
-    if o1 != o2 and o3 != o4:
-        return True
-    return (
-        (o1 == 0 and _on_segment(a, c, b))
-        or (o2 == 0 and _on_segment(a, d, b))
-        or (o3 == 0 and _on_segment(c, a, d))
-        or (o4 == 0 and _on_segment(c, b, d))
-    )
-
-
-def _validate_simple_polygon(points: tuple[Point, ...], field: str, level_id: str) -> None:
-    count = len(points)
-    area2 = sum(
-        points[index][0] * points[(index + 1) % count][1]
-        - points[(index + 1) % count][0] * points[index][1]
-        for index in range(count)
-    )
-    if area2 == 0:
-        raise ValueError(f"level {level_id}: {field} has zero area")
-    for first in range(count):
-        a, b = points[first], points[(first + 1) % count]
-        for second in range(first + 1, count):
-            if second in {first, (first + 1) % count} or (second + 1) % count == first:
-                continue
-            c, d = points[second], points[(second + 1) % count]
-            if _segments_intersect(a, b, c, d):
-                raise ValueError(f"level {level_id}: {field} self-intersects")
-
-
 def _validate_spec(spec: LevelSpec, world_size: tuple[int, int] | None) -> None:
     if spec.crop_width <= 0 or spec.crop_height <= 0:
         raise ValueError(f"level {spec.level_id}: crop dimensions must be positive")
-    _validate_simple_polygon(spec.core_polygon, "core polygon", spec.level_id)
-    _validate_simple_polygon(spec.generation_polygon, "generation polygon", spec.level_id)
+    validate_simple_polygon(spec.core_polygon, "core polygon", spec.level_id)
+    validate_simple_polygon(spec.generation_polygon, "generation polygon", spec.level_id)
     left, top, right, bottom = spec.crop_box
     for field, polygon in (
         ("core polygon", spec.core_polygon),

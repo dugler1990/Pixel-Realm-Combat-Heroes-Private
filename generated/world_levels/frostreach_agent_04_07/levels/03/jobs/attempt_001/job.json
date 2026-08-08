@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "level_id": "03",
+  "attempt": 1,
+  "state": "generated",
+  "created_at": "2026-08-01T16:20:50.470270+00:00",
+  "context_revision": 4,
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "input_hash": "f913c7f79a0fb5993b8ca9c5b44bc61ccd1e8fa7e00b68f3fc1c684f8fe71051",
+  "generation_mask_hash": "8ca4aabc760c0b3a7efb8596ccee9a601eb442801fae636fc579c364a35fdda0",
+  "locked_mask_hash": "efa1268bafaf123f5404fe21b6600a94a25950f5fdc3286bce4781fbd133d063",
+  "locked_pixels_hash": "1c964968d6f9a548b4898e03c3556f34a23e5a15be8e5b913c7679bb8872bcf3",
+  "neighbor_sources": [
+    {
+      "neighbor_id": "04",
+      "global_box": [
+        5220,
+        320,
+        5431,
+        1581
+      ],
+      "pixel_count": 158414,
+      "accepted_hash": "58d1edb02af13f51f1958f49870d8db5c4e5bdbd496678b877138b4192be8530"
+    }
+  ],
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/jobs/attempt_001/generated.png",
+  "footprint_iou_raw": 0.1031,
+  "rescale_below_iou": 0.9,
+  "rescale_applied": true,
+  "generation_result": {
+    "provider": "openai",
+    "model": "gpt-image-2",
+    "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/jobs/attempt_001/generated.png",
+    "width": 3072,
+    "height": 2304,
+    "input_images": [
+      "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/jobs/attempt_001/input.png"
+    ],
+    "mask": "/tmp/tmpj9jg8srw.png",
+    "quality": "high",
+    "usage": {
+      "input_tokens": 1584,
+      "input_tokens_details": {
+        "image_tokens": 1452,
+        "text_tokens": 132
+      },
+      "output_tokens": 15687,
+      "output_tokens_details": {
+        "image_tokens": 15687,
+        "text_tokens": 0
+      },
+      "total_tokens": 17271
+    },
+    "request": {
+      "model": "gpt-image-2",
+      "prompt": "Redraw this image at high finished quality.\n\nIt is a low resolution upscale: soft, blurred, washed out. Redraw it sharp and detailed,\nwith strong contrast and clear painted form. Nothing moves, nothing is added, nothing is\nremoved, nothing changes what it is. Quality only.\n\nReproduce the non-black shape exactly, same position, same size. Everything outside it\nstays black, the same black as the input, empty space. Do not zoom, crop, recentre or\nenlarge.\n\n3072x2304. Top-down, even lighting, no cast shadows. No text or labels.\n",
+      "size": "3072x2304",
+      "quality": "high"
+    },
+    "level_id": "03",
+    "attempt": 1,
+    "seed": null,
+    "returned_size": [
+      3072,
+      2304
+    ]
+  },
+  "scale_x": 6.6872,
+  "scale_y": 1.2853,
+  "source_bbox": [
+    2028,
+    548,
+    2239,
+    1568
+  ],
+  "target_bbox": [
+    828,
+    494,
+    2239,
+    1805
+  ],
+  "footprint_iou": 0.7771,
+  "ingested_at": "2026-08-01T16:22:51.600127+00:00",
+  "source_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/jobs/attempt_001/generated.png",
+  "raw_hash": "10fa4c892c78cb2d4cd2b50a73c5e28a7e41b9f8b277b9a1502360f962369c79",
+  "normalized_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/attempts/attempt_001/normalized.png",
+  "normalized_hash": "190bbf82df391e43ae11c00e10a90e4cdac0871542a2f12cc87eeb61b5b81431"
+}

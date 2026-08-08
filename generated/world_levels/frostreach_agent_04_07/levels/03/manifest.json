@@ -3,7 +3,7 @@
   "level_id": "03",
   "name": "Pale Uplands",
   "region": "Frostreach",
-  "state": "ready",
+  "state": "accepted",
   "crop_box_world": [
     804,
     54,
@@ -149,11 +149,11 @@
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "f241265a6203d37f8d266dc3fe83fd7021b248af9b94eed2c4028e2d48f97c0c",
     "generation_mask": "8ca4aabc760c0b3a7efb8596ccee9a601eb442801fae636fc579c364a35fdda0",
-    "generation_input": "f913c7f79a0fb5993b8ca9c5b44bc61ccd1e8fa7e00b68f3fc1c684f8fe71051",
-    "locked_pixels": "1c964968d6f9a548b4898e03c3556f34a23e5a15be8e5b913c7679bb8872bcf3",
-    "locked_mask": "efa1268bafaf123f5404fe21b6600a94a25950f5fdc3286bce4781fbd133d063"
+    "generation_input": "834ff6ea3382b061d389983b598d33dd72e8a970a9288d81d207ed6829664c18",
+    "locked_pixels": "4ae460d062d217dc94c518934f72f551515457005163d94a415d9ad5d9860db5",
+    "locked_mask": "ad789bd11973fb89f49e4d84f4c87dc66e455b83a388b7c4977ba33df56f5d6b"
   },
-  "context_revision": 4,
+  "context_revision": 7,
   "locked_sources": [
     {
       "neighbor_id": "04",
@@ -164,9 +164,26 @@
         1581
       ],
       "pixel_count": 158414,
-      "accepted_hash": "58d1edb02af13f51f1958f49870d8db5c4e5bdbd496678b877138b4192be8530"
+      "accepted_hash": "9b3513285dd759871015a32105f770a1b4c55c94a094352817f3ffdcc03f2fda"
+    },
+    {
+      "neighbor_id": "02",
+      "global_box": [
+        4020,
+        270,
+        4231,
+        1531
+      ],
+      "pixel_count": 150885,
+      "accepted_hash": "6cffcb98dd1a0d6006fa1b597e7861906f83caae73692ba377d0111db18821ea"
     }
   ],
-  "attempt_count": 0,
-  "updated_at": "2026-07-25T13:14:19.600560+00:00"
+  "attempt_count": 3,
+  "updated_at": "2026-08-02T21:27:04.969227+00:00",
+  "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/jobs/attempt_003/job.json",
+  "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/attempts/attempt_003/normalized.png",
+  "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/accepted/image.png",
+  "accepted_hash": "8b356508b660c897d24c4100df457e404d4713f7dffd109bd1f44c30916a5d2b",
+  "accepted_attempt": 3,
+  "acceptance_index": 6
 }

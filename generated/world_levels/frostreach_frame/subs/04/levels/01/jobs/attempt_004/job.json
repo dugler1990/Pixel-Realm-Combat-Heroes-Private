@@ -1,0 +1,99 @@
+{
+  "schema_version": 2,
+  "level_id": "01",
+  "attempt": 4,
+  "state": "generated",
+  "created_at": "2026-08-08T00:34:18.512928+00:00",
+  "context_revision": 1,
+  "renderer": "frame",
+  "frame": {
+    "origin": [
+      1056,
+      808
+    ],
+    "size": [
+      960,
+      688
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "input_size": [
+    960,
+    688
+  ],
+  "context": [
+    {
+      "filename": "input.png",
+      "role": "terrain",
+      "description": "the terrain to redraw at high quality, with any already-finished areas already in place"
+    },
+    {
+      "filename": "locator.png",
+      "role": "locator",
+      "description": "where this piece sits on the world map, for orientation only, do not copy from it"
+    }
+  ],
+  "input_hash": "4ed76a1fdc03d05388ec336955f7cbb9df3faf4a75d507c7a99f744f1a2dd74d",
+  "generation_mask_hash": "b4062f1968305c330780f7f8b3850849d7a64e48972e83eedff33a9c187557bd",
+  "locked_mask_hash": "b74dd2750f0c10a5a16b7f04581b57204cf9f95c292d12ca347aa416b961672b",
+  "locked_pixels_hash": "048d186b139d6cdb91f6a1b90bd1c39e4e5cf76f34ce74bbedb12ffd43ca7be3",
+  "neighbor_sources": [],
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/jobs/attempt_004/generated.png",
+  "refine": false,
+  "generation_result": {
+    "provider": "openai",
+    "model": "gpt-image-2",
+    "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/jobs/attempt_004/generated.png",
+    "width": 960,
+    "height": 688,
+    "input_images": [
+      "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/jobs/attempt_004/input.png",
+      "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/jobs/attempt_004/locator.png"
+    ],
+    "mask": null,
+    "quality": "high",
+    "usage": {
+      "input_tokens": 2501,
+      "input_tokens_details": {
+        "image_tokens": 2272,
+        "text_tokens": 229
+      },
+      "output_tokens": 4406,
+      "output_tokens_details": {
+        "image_tokens": 4406,
+        "text_tokens": 0
+      },
+      "total_tokens": 6907
+    },
+    "request": {
+      "model": "gpt-image-2",
+      "prompt": "Image 1 is the terrain to redraw at high quality, with any already-finished areas already in place.\nImage 2 is where this piece sits on the world map, for orientation only, do not copy from it.\n\nRedraw image 1 at high finished quality.\nIt is a low resolution upscale: soft, blurred, washed out. Redraw it sharp and\ndetailed, with strong contrast and clear painted form. Quality only.\n\nPaint the whole image, edge to edge, with no border and no empty space.\nEvery feature stays at exactly the same position and the same size as in image 1.\nNothing moves, nothing is added, nothing is removed, nothing is recentred,\nnothing changes what it is.\n\nCreate a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows.\n\nTop-down, even lighting, no cast shadows. No text or labels.\n",
+      "size": "960x688",
+      "quality": "high"
+    },
+    "level_id": "01",
+    "attempt": 4,
+    "seed": null,
+    "returned_size": [
+      960,
+      688
+    ]
+  },
+  "drift_px": [
+    0,
+    0
+  ],
+  "drift_applied": false,
+  "drift_reason": "no padding to register against",
+  "footprint_iou_raw": 1.0,
+  "footprint_iou": 1.0,
+  "rescale_applied": false,
+  "ingested_at": "2026-08-08T00:36:13.740603+00:00",
+  "source_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/jobs/attempt_004/generated.png",
+  "raw_hash": "a66a99cfe124a35e62de01dde6dcb82a367e5f79c55b502067d68e437b72064d",
+  "normalized_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/attempts/attempt_004/normalized.png",
+  "normalized_hash": "7018ac0d8154b374356835261b90b9f0c96a4662f761f7de505298920188060c"
+}

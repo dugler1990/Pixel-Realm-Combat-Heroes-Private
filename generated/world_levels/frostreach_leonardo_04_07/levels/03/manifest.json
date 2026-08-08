@@ -149,11 +149,11 @@
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "56114a9607ad55091709eb5e2fdbad80fe0e142534dbf6914bcae8e4eda17de3",
     "generation_mask": "db65d1b19ad5de82e38d3a98f4f9de6c7901d5ea965f507ff080dc02bd92a26f",
-    "generation_input": "26528cdc42b8e7902f91df87973d2ef3364634a5285d3ab659273007b38eed5a",
-    "locked_pixels": "ea26a166442d2eae2081517eca57fdf10adc9fc222cc9b7a47bfa5e4d0e0944d",
-    "locked_mask": "affee1a493cbe066a642a5bca6bb02ae328e0d771e12779f5438af58c7275e42"
+    "generation_input": "cdac383dc6abdc550a55fab93789514c3b69c6599dd397d4b279ced40f1b323d",
+    "locked_pixels": "f761ff0ef88347d4489bd53b043659d3830250f35e0b0931cfdce20ffe42d7a9",
+    "locked_mask": "bedef8042a66f74d2694d5183e033cd80b9fb6450bca86cb3e58dc48214ea16d"
   },
-  "context_revision": 2,
+  "context_revision": 7,
   "locked_sources": [
     {
       "neighbor_id": "04",
@@ -164,9 +164,20 @@
         2529
       ],
       "pixel_count": 404591,
-      "accepted_hash": "92c764beae04f7894cf91a18bd105acb0eaed8292ceb4f066b2e9b617681cc39"
+      "accepted_hash": "709870c6ed0fd8653f69e60058ed7a0205a04f4d7715a3f8c303a65180b2e37c"
+    },
+    {
+      "neighbor_id": "06",
+      "global_box": [
+        6432,
+        1712,
+        8689,
+        2529
+      ],
+      "pixel_count": 557417,
+      "accepted_hash": "ab6b44fb088d127c728c5a8e8e1f25bb1977a061a85fb8e8f087f6031039eb17"
     }
   ],
   "attempt_count": 0,
-  "updated_at": "2026-07-25T16:45:16.268334+00:00"
+  "updated_at": "2026-07-31T16:37:38.762904+00:00"
 }

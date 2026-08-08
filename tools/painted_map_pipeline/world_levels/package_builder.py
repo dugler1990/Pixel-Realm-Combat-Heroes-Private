@@ -8,8 +8,9 @@ from PIL import Image, ImageDraw
 
 from .config import RunConfig, config_as_dict
 from .coordinates import ScaledSpace, build_transform, resolve_canvas
+from .frames import Frame, constraints_for, derive_frame, world_box_covering
 from .masks import build_level_masks, compute_overlap, outside_mask, pending_mask
-from .models import LevelSpec, LevelState
+from .models import LevelSpec, LevelState, LevelTransform
 from .plan_loader import load_level_plan
 from .state_store import append_event, atomic_write_json, read_json, sha256_file, sha256_json, utc_now
 
@@ -32,7 +33,10 @@ def _level_paths(root: Path, level_id: str) -> dict[str, Path]:
         "root": level_root,
         "manifest": level_root / "manifest.json",
         "source_crop": level_root / "source" / "world_crop.png",
-        "base_template": level_root / "base_template.png",
+        # The soft world map over the whole frame, not cut to the polygon. Every renderer
+        # builds its input from this; masking to the silhouette is a presentation choice that
+        # belongs to the renderer that wants it.
+        "dense_template": level_root / "dense_template.png",
         "generation_input": level_root / "generation_input.png",
         "core_mask": level_root / "masks" / "core.png",
         "generation_mask": level_root / "masks" / "generation.png",
@@ -70,6 +74,31 @@ def _draw_plan_overlay(world: Image.Image, levels: dict[str, LevelSpec]) -> Imag
     return overlay
 
 
+def _dense_canvas(
+    config: RunConfig,
+    world: Image.Image,
+    scaled: ScaledSpace,
+    transform: LevelTransform,
+    frame: Frame,
+    canvas_size: tuple[int, int],
+) -> Image.Image:
+    """The world map painted across the whole frame, not just the level's own crop.
+
+    The frame is usually a little wider than the crop, so this pulls in the neighbouring
+    world map to fill it rather than padding with black -- black in the frame is what makes a
+    model crop to the content and reframe. Where the world image runs out, the deficit stays
+    ``outside_color``; that is bounded and only happens at the map's own edges.
+    """
+    world_box = world_box_covering(frame, transform, scaled, world.size)
+    left, top, right, bottom = world_box
+    crop = world.crop(world_box).convert("RGBA")
+    size = (scaled.span(left, right - left), scaled.span(top, bottom - top))
+    resized = crop.resize(size, _resample(config.source_resampling))
+    canvas = Image.new("RGBA", canvas_size, config.outside_color)
+    canvas.paste(resized, transform.global_to_local(scaled.coordinate(left), scaled.coordinate(top)))
+    return canvas
+
+
 def prepare_level(
     config: RunConfig,
     world: Image.Image,
@@ -83,21 +112,18 @@ def prepare_level(
         (paths["root"] / directory).mkdir(parents=True, exist_ok=True)
 
     transform = build_transform(level, scaled, config.canvas, canvas_size)
+    frame = derive_frame(transform, constraints_for(config.generation), level_id=level.level_id)
     crop = world.crop(level.crop_box).convert("RGBA")
     crop.save(paths["source_crop"])
-    resized = crop.resize((transform.scaled_crop_width, transform.scaled_crop_height), _resample(config.source_resampling))
-    source_canvas = Image.new("RGBA", canvas_size, config.outside_color)
-    source_canvas.paste(resized, (transform.canvas_offset_x, transform.canvas_offset_y))
+    dense = _dense_canvas(config, world, scaled, transform, frame, canvas_size)
 
     core, generation = build_level_masks(level, scaled, transform)
     outside = outside_mask(generation)
-    blank = Image.new("RGBA", canvas_size, config.outside_color)
-    base = Image.composite(source_canvas, blank, generation)
     locked_pixels = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
     locked_mask = Image.new("L", canvas_size, 0)
 
-    base.save(paths["base_template"])
-    base.save(paths["generation_input"])
+    dense.save(paths["dense_template"])
+    dense.save(paths["generation_input"])
     _save_mask(core, paths["core_mask"])
     _save_mask(generation, paths["generation_mask"])
     _save_mask(outside, paths["outside_mask"])
@@ -119,11 +145,12 @@ def prepare_level(
         "overlap_buffer_source_px": level.overlap_buffer,
         "connections": [{"level_id": item.level_id, "kind": item.kind} for item in level.connections],
         "transform": transform.as_dict(),
+        "frame": frame.as_dict(),
         "canvas_size": list(canvas_size),
         "paths": {key: str(value) for key, value in paths.items() if key != "root"},
         "hashes": {
             "world_map": sha256_file(config.world_map),
-            "base_template": sha256_file(paths["base_template"]),
+            "dense_template": sha256_file(paths["dense_template"]),
             "generation_mask": sha256_file(paths["generation_mask"]),
         },
         "context_revision": 0,
@@ -146,6 +173,15 @@ def prepare_run(config: RunConfig) -> dict[str, Any]:
     config.output_root.mkdir(parents=True, exist_ok=True)
     run_path = config.output_root / "run.json"
     existing = read_json(run_path) if run_path.exists() else {}
+    if existing and existing.get("renderer", "warp") != config.renderer:
+        # Levels are prepared differently per renderer -- the frame geometry in each manifest
+        # is derived from it -- and prepare reuses manifests that already exist. Switching in
+        # place would leave every level carrying geometry from the other method. Comparing
+        # two methods means two output roots, not one root edited back and forth.
+        raise ValueError(
+            f"run was prepared with renderer {existing.get('renderer', 'warp')!r} and the "
+            f"config now says {config.renderer!r}; use a separate output_root per renderer"
+        )
     if existing and existing.get("config_hash") != config_hash:
         accepted = [
             level_id
@@ -195,6 +231,7 @@ def prepare_run(config: RunConfig) -> dict[str, Any]:
     run = {
         "schema_version": 1,
         "config_hash": config_hash,
+        "renderer": config.renderer,
         "config_path": str(config.output_root / "config.resolved.json"),
         "world_size": list(world.size),
         "canvas_size": list(canvas_size),

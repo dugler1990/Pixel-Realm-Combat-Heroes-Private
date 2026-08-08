@@ -3,7 +3,7 @@
   "level_id": "12",
   "name": "Greenholt Forest",
   "region": "Emerald Heartlands",
-  "state": "prepared",
+  "state": "accepted",
   "crop_box_world": [
     334,
     404,
@@ -160,10 +160,19 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "4f8048ea368612ec175fb4042d23632e4c0499e9734d5c0c248a882212d7de5f",
-    "generation_mask": "45cebed5f1978ba94e0e755391b7d60ae60d409209fc7bb466a3783bb62351f7"
+    "generation_mask": "45cebed5f1978ba94e0e755391b7d60ae60d409209fc7bb466a3783bb62351f7",
+    "generation_input": "4f8048ea368612ec175fb4042d23632e4c0499e9734d5c0c248a882212d7de5f",
+    "locked_pixels": "e1a6d7ed0a65303667d9007f2c0ef97eea72b7e70365448fa60a0b34a7573ec3",
+    "locked_mask": "398836706937ad047e36ed97b9a209645398a4ddd9f4b9e60def61f98812454d"
   },
-  "context_revision": 0,
+  "context_revision": 1,
   "locked_sources": [],
-  "attempt_count": 0,
-  "updated_at": "2026-07-25T13:42:49.676590+00:00"
+  "attempt_count": 2,
+  "updated_at": "2026-07-31T16:36:48.871125+00:00",
+  "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/12/jobs/attempt_002/job.json",
+  "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/12/attempts/attempt_002/normalized.png",
+  "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/12/accepted/image.png",
+  "accepted_hash": "61bea9968d6605141c54a172dee601ba4574c0635756f82789814d772170d4f0",
+  "accepted_attempt": 2,
+  "acceptance_index": 17
 }

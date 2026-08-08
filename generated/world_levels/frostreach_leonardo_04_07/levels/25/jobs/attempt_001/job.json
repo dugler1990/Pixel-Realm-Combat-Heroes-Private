@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "level_id": "25",
+  "attempt": 1,
+  "state": "accepted",
+  "created_at": "2026-07-30T21:29:39.006493+00:00",
+  "context_revision": 1,
+  "canvas_size": [
+    5056,
+    3392
+  ],
+  "input_hash": "e02309ba1a847f473712e533a3e3a8f18af7a7c2d29df4bbcde7158486eab253",
+  "generation_mask_hash": "a9cfd3ee9eda3e4ca671577e01a0e74e8eb9bb66624e857fd1cdac89c13f33cb",
+  "locked_mask_hash": "398836706937ad047e36ed97b9a209645398a4ddd9f4b9e60def61f98812454d",
+  "locked_pixels_hash": "e1a6d7ed0a65303667d9007f2c0ef97eea72b7e70365448fa60a0b34a7573ec3",
+  "neighbor_sources": [],
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/25/jobs/attempt_001/generated.png",
+  "footprint_iou_raw": 0.0953,
+  "rescale_below_iou": 0.9,
+  "rescale_applied": true,
+  "generation_result": {
+    "provider": "leonardo",
+    "api_version": "v2",
+    "model": "nano-banana-2",
+    "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/25/jobs/attempt_001/generated.png",
+    "generation_id": "1f18c5dc-6fe7-6c90-aad9-3840f0df493e",
+    "init_image_ids": [
+      "48e1ed6a-30b4-4fef-82fd-67d79079d158"
+    ],
+    "init_image_id": "48e1ed6a-30b4-4fef-82fd-67d79079d158",
+    "source_url": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18c5dc-6fe7-6c90-aad9-3840f0df493e/nano-banana-2_Render_level_25_Ashen_Hellscar_._Return_exactly_5056x3392_pixels._Reference_imag-0.jpg",
+    "width": 5056,
+    "height": 3392,
+    "seed": 700001,
+    "request": {
+      "model": "nano-banana-2",
+      "parameters": {
+        "width": 5056,
+        "height": 3392,
+        "prompt": "Render level 25 (Ashen Hellscar).\nReturn exactly 5056x3392 pixels.\nReference image: input.png only.\nIn input.png, land is the non-black region on a pure black (#000000) background.\nThat non-black footprint is the exact output shape: every land edge and corner must match it.\nPaint terrain only on those non-black pixels.\nThe black region is void \u2014 outside the world. It is not sea, not sky, not fog.\nNothing is painted there. It keeps exactly the shape it has in input.png and stays #000000.\nDo not extend land or water into it, and do not fade, vignette, or feather into it.\nDo not enlarge, shrink, round, straighten, or otherwise change the land outline.\nIf land reaches the image border where the reference has black, that is wrong.\nTreat input.png as a locked layout to repaint, not as inspiration.\nKeep the same ridges, plains, water, and ice in the same places and proportions.\nDo not invent a new layout, new peak pattern, or relocated edges.\nUpgrade materials and detail only; the geography must remain recognizable as the same chunk.\nRemove any text or labels from the reference.\nKeep lighting diffuse and shadow-neutral: local form shading is allowed, directional cast shadows are not.\nDo not add labels, UI, borders, map symbols, characters, or a visible grid.\nNo neighbor padding is present. This is a seed level.\nStyle (materials and lighting only \u2014 must not override the layout above):\nCreate a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows.\n",
+        "quantity": 1,
+        "prompt_enhance": "OFF",
+        "guidances": {
+          "image_reference": [
+            {
+              "image": {
+                "id": "48e1ed6a-30b4-4fef-82fd-67d79079d158",
+                "type": "UPLOADED"
+              },
+              "strength": "HIGH"
+            }
+          ]
+        },
+        "seed": 700001
+      },
+      "public": false
+    },
+    "create_response": {
+      "generate": {
+        "apiCreditCost": null,
+        "generationId": "1f18c5dc-6fe7-6c90-aad9-3840f0df493e",
+        "cost": {
+          "amount": "0.0777",
+          "unit": "DOLLARS"
+        }
+      }
+    },
+    "generation_response": {
+      "generations_by_pk": {
+        "generated_images": [
+          {
+            "url": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18c5dc-6fe7-6c90-aad9-3840f0df493e/nano-banana-2_Render_level_25_Ashen_Hellscar_._Return_exactly_5056x3392_pixels._Reference_imag-0.jpg",
+            "nsfw": false,
+            "id": "c171949f-e68d-4210-9d27-b33cd176da11",
+            "likeCount": 0,
+            "motionMP4URL": null,
+            "threeDUrl": null,
+            "urls": {
+              "asset": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18c5dc-6fe7-6c90-aad9-3840f0df493e/nano-banana-2_Render_level_25_Ashen_Hellscar_._Return_exactly_5056x3392_pixels._Reference_imag-0.jpg",
+              "thumbnail": null
+            },
+            "generated_image_variation_generics": []
+          }
+        ],
+        "modelId": "7418e71f-4133-4e1b-9895-bee19f48f2ce",
+        "motion": false,
+        "motionModel": null,
+        "motionStrength": null,
+        "prompt": "Render level 25 (Ashen Hellscar).\nReturn exactly 5056x3392 pixels.\nReference image: input.png only.\nIn input.png, land is the non-black region on a pure black (#000000) background.\nThat non-black footprint is the exact output shape: every land edge and corner must match it.\nPaint terrain only on those non-black pixels.\nThe black region is void \u2014 outside the world. It is not sea, not sky, not fog.\nNothing is painted there. It keeps exactly the shape it has in input.png and stays #000000.\nDo not extend land or water into it, and do not fade, vignette, or feather into it.\nDo not enlarge, shrink, round, straighten, or otherwise change the land outline.\nIf land reaches the image border where the reference has black, that is wrong.\nTreat input.png as a locked layout to repaint, not as inspiration.\nKeep the same ridges, plains, water, and ice in the same places and proportions.\nDo not invent a new layout, new peak pattern, or relocated edges.\nUpgrade materials and detail only; the geography must remain recognizable as the same chunk.\nRemove any text or labels from the reference.\nKeep lighting diffuse and shadow-neutral: local form shading is allowed, directional cast shadows are not.\nDo not add labels, UI, borders, map symbols, characters, or a visible grid.\nNo neighbor padding is present. This is a seed level.\nStyle (materials and lighting only \u2014 must not override the layout above):\nCreate a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows.\n",
+        "negativePrompt": null,
+        "imageHeight": 3392,
+        "imageToVideo": false,
+        "imageWidth": 5056,
+        "inferenceSteps": null,
+        "seed": 700001,
+        "ultra": false,
+        "public": false,
+        "scheduler": null,
+        "sdVersion": "NANO_BANANA_2",
+        "status": "COMPLETE",
+        "presetStyle": null,
+        "initStrength": null,
+        "guidanceScale": null,
+        "id": "1f18c5dc-6fe7-6c90-aad9-3840f0df493e",
+        "createdAt": "2026-07-30T21:29:43.764",
+        "promptMagic": false,
+        "promptMagicVersion": null,
+        "promptMagicStrength": null,
+        "photoReal": null,
+        "photoRealStrength": null,
+        "fantasyAvatar": null,
+        "is3d": false,
+        "outputType": "IMAGE",
+        "prompt_moderations": [
+          {
+            "moderationClassification": []
+          }
+        ],
+        "generation_elements": []
+      }
+    },
+    "generation_size": [
+      5056,
+      3392
+    ],
+    "reference_count": 1,
+    "level_id": "25",
+    "attempt": 1,
+    "returned_size": [
+      5056,
+      3392
+    ]
+  },
+  "scale_x": 0.2391,
+  "scale_y": 0.5144,
+  "source_bbox": [
+    0,
+    0,
+    5056,
+    3392
+  ],
+  "target_bbox": [
+    1920,
+    824,
+    3129,
+    2569
+  ],
+  "footprint_iou": 0.7565,
+  "ingested_at": "2026-07-30T21:30:39.573490+00:00",
+  "source_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/25/jobs/attempt_001/generated.png",
+  "raw_hash": "fc8f52c8e60da9c167c5dcdfe0b1d3e8e4a796717a8a4a8938523aa8bd0984ec",
+  "normalized_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/25/attempts/attempt_001/normalized.png",
+  "normalized_hash": "a8bfa2b93dc4beda5fbb9de942cfe1ab06106c103827023589ae78a599559448",
+  "accepted_at": "2026-07-31T16:36:39.352291+00:00"
+}

@@ -14,16 +14,29 @@
     "pixels_per_world_pixel": 5
   },
   "rendering": {
-    "outside_color": [0, 0, 0, 255],
+    "outside_color": [
+      0,
+      0,
+      0,
+      255
+    ],
     "source_resampling": "lanczos"
   },
   "execution": {
-    "approval_mode": "automatic",
+    "approval_mode": "manual",
     "stop_on_failure": true,
-    "retry_limit": 2
+    "retry_limit": 2,
+    "rescale_below_iou": 0.9
   },
   "generation": {
-    "provider": "manifest"
+    "provider": "openai",
+    "api_key_env": "OPENAI_API_KEY",
+    "model": "gpt-image-2",
+    "width": 3072,
+    "height": 2304,
+    "quality": "high",
+    "timeout_seconds": 900,
+    "config_source": "frostreach.agent-test.json"
   },
   "style_prompt": "Create a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows."
 }

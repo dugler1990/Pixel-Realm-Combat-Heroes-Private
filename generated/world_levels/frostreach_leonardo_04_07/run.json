@@ -11,114 +11,158 @@
     3392
   ],
   "scale": "8",
-  "acceptance_counter": 4,
+  "acceptance_counter": 27,
   "levels": {
     "01": {
       "name": "Western Wallfoot",
       "region": "Frostreach",
-      "state": "prepared",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/01/manifest.json",
-      "updated_at": "2026-07-25T13:41:42.353141+00:00"
+      "updated_at": "2026-08-01T11:44:48.444318+00:00",
+      "context_revision": 8,
+      "attempt_count": 3,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/01/jobs/attempt_003/job.json",
+      "attempt": 3,
+      "error": "Missing API key in environment variable 'LEONARDO_API_KEY'"
     },
     "02": {
       "name": "Glacial Basin",
       "region": "Frostreach",
-      "state": "prepared",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/02/manifest.json",
-      "updated_at": "2026-07-25T13:41:48.068205+00:00"
+      "updated_at": "2026-08-01T11:44:54.497493+00:00",
+      "context_revision": 9
     },
     "03": {
       "name": "Pale Uplands",
       "region": "Frostreach",
       "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/03/manifest.json",
-      "updated_at": "2026-07-25T16:45:16.275303+00:00",
-      "context_revision": 2
+      "updated_at": "2026-07-31T16:37:38.774576+00:00",
+      "context_revision": 7
     },
     "04": {
       "name": "Howling Waste",
       "region": "Frostreach",
       "state": "accepted",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/04/manifest.json",
-      "updated_at": "2026-07-25T16:45:11.352549+00:00",
+      "updated_at": "2026-07-26T19:10:53.729101+00:00",
       "context_revision": 4,
-      "attempt_count": 3,
-      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/04/jobs/attempt_003/job.json",
-      "attempt": 3,
-      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/04/attempts/attempt_003/normalized.png",
+      "attempt_count": 7,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/04/jobs/attempt_007/job.json",
+      "attempt": 7,
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/04/attempts/attempt_007/normalized.png",
       "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/04/accepted/image.png",
-      "accepted_hash": "92c764beae04f7894cf91a18bd105acb0eaed8292ceb4f066b2e9b617681cc39",
-      "accepted_attempt": 3,
-      "acceptance_index": 4
+      "accepted_hash": "709870c6ed0fd8653f69e60058ed7a0205a04f4d7715a3f8c303a65180b2e37c",
+      "accepted_attempt": 7,
+      "acceptance_index": 8
     },
     "05": {
       "name": "Western Expanse",
       "region": "Frostreach",
-      "state": "prepared",
+      "state": "accepted",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/05/manifest.json",
-      "updated_at": "2026-07-25T13:42:07.701604+00:00"
+      "updated_at": "2026-08-01T11:44:43.146438+00:00",
+      "context_revision": 2,
+      "attempt_count": 10,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/05/jobs/attempt_010/job.json",
+      "attempt": 10,
+      "error": "'ascii' codec can't encode character '\\u2014' in position 186: ordinal not in range(128)",
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/05/attempts/attempt_010/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/05/accepted/image.png",
+      "accepted_hash": "f492bfd2901504643256834b16c44f24e658b70ebac111aeb1494b4af9c403cd",
+      "accepted_attempt": 10,
+      "acceptance_index": 27
     },
     "06": {
       "name": "Central Expanse",
       "region": "Frostreach",
-      "state": "ready",
+      "state": "accepted",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/manifest.json",
-      "updated_at": "2026-07-25T16:45:21.768461+00:00",
-      "context_revision": 4
+      "updated_at": "2026-07-31T16:37:19.756823+00:00",
+      "context_revision": 15,
+      "attempt_count": 1,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/jobs/attempt_001/job.json",
+      "attempt": 1,
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/attempts/attempt_001/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/accepted/image.png",
+      "accepted_hash": "ab6b44fb088d127c728c5a8e8e1f25bb1977a061a85fb8e8f087f6031039eb17",
+      "accepted_attempt": 1,
+      "acceptance_index": 18
     },
     "07": {
       "name": "Bitter Floe Coast",
       "region": "Frostreach",
-      "state": "ready",
+      "state": "accepted",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/manifest.json",
-      "updated_at": "2026-07-25T16:45:25.850439+00:00",
-      "context_revision": 4,
-      "attempt_count": 2,
-      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/jobs/attempt_002/job.json",
-      "attempt": 2
+      "updated_at": "2026-07-30T20:58:33.690176+00:00",
+      "context_revision": 8,
+      "attempt_count": 10,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/jobs/attempt_010/job.json",
+      "attempt": 10,
+      "error": "generated footprint IoU 0.241 is below execution.min_footprint_iou 0.850: the model did not paint the supplied silhouette (raw image kept at /home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/jobs/attempt_010/generated.png)",
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/attempts/attempt_010/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/accepted/image.png",
+      "accepted_hash": "dceef9eade61e4ba97058749c0e766fa9a0c137be5a77baa23db796b37892e71",
+      "accepted_attempt": 10,
+      "acceptance_index": 15
     },
     "08": {
       "name": "Blackpine Pass",
       "region": "Stonebreak",
-      "state": "prepared",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/08/manifest.json",
-      "updated_at": "2026-07-25T13:42:26.874886+00:00"
+      "updated_at": "2026-08-01T11:44:59.548158+00:00",
+      "context_revision": 8
     },
     "09": {
       "name": "Stonebreak Spine",
       "region": "Stonebreak",
-      "state": "prepared",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/09/manifest.json",
-      "updated_at": "2026-07-25T13:42:32.345980+00:00"
+      "updated_at": "2026-07-31T16:37:55.177326+00:00",
+      "context_revision": 2
     },
     "10": {
       "name": "Frostgate Passes",
       "region": "Stonebreak",
-      "state": "prepared",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/10/manifest.json",
-      "updated_at": "2026-07-25T13:42:37.848353+00:00"
+      "updated_at": "2026-07-31T16:38:02.146662+00:00",
+      "context_revision": 1
     },
     "11": {
       "name": "Eastern Rainshadow",
       "region": "Stonebreak",
       "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/11/manifest.json",
-      "updated_at": "2026-07-25T16:23:38.236077+00:00",
-      "context_revision": 2
+      "updated_at": "2026-07-30T20:58:44.601741+00:00",
+      "context_revision": 9
     },
     "12": {
       "name": "Greenholt Forest",
       "region": "Emerald Heartlands",
-      "state": "prepared",
+      "state": "accepted",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/12/manifest.json",
-      "updated_at": "2026-07-25T13:42:49.710969+00:00"
+      "updated_at": "2026-07-31T16:36:48.878486+00:00",
+      "context_revision": 1,
+      "attempt_count": 2,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/12/jobs/attempt_002/job.json",
+      "attempt": 2,
+      "error": "generated footprint IoU 0.473 -> 0.742 after rescale, still below execution.min_footprint_iou 0.850: the model did not paint the supplied silhouette (raw image kept at /home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/12/jobs/attempt_001/generated.png)",
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/12/attempts/attempt_002/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/12/accepted/image.png",
+      "accepted_hash": "61bea9968d6605141c54a172dee601ba4574c0635756f82789814d772170d4f0",
+      "accepted_attempt": 2,
+      "acceptance_index": 17
     },
     "13": {
       "name": "Heartland Plains",
       "region": "Emerald Heartlands",
-      "state": "prepared",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/13/manifest.json",
-      "updated_at": "2026-07-25T13:42:55.729670+00:00"
+      "updated_at": "2026-07-31T16:37:10.273540+00:00",
+      "context_revision": 1
     },
     "14": {
       "name": "Riverward Heartlands",
@@ -130,9 +174,10 @@
     "15": {
       "name": "Serentha West Shore",
       "region": "Emerald Heartlands",
-      "state": "prepared",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/15/manifest.json",
-      "updated_at": "2026-07-25T13:43:08.911339+00:00"
+      "updated_at": "2026-07-31T16:37:18.667546+00:00",
+      "context_revision": 1
     },
     "16": {
       "name": "Serentha East Shore",
@@ -160,8 +205,8 @@
       "region": "Sunspine Dunes",
       "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/19/manifest.json",
-      "updated_at": "2026-07-25T16:23:41.767425+00:00",
-      "context_revision": 2
+      "updated_at": "2026-07-30T20:58:48.853396+00:00",
+      "context_revision": 9
     },
     "20": {
       "name": "Glass Mesa",
@@ -180,9 +225,10 @@
     "22": {
       "name": "Ashfall Fringe",
       "region": "Sunspine Dunes",
-      "state": "prepared",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/22/manifest.json",
-      "updated_at": "2026-07-25T13:43:52.501360+00:00"
+      "updated_at": "2026-07-31T16:36:47.772512+00:00",
+      "context_revision": 1
     },
     "23": {
       "name": "North Verdant",
@@ -201,9 +247,18 @@
     "25": {
       "name": "Hellscar Tidal Cape",
       "region": "Ashen Hellscar",
-      "state": "prepared",
+      "state": "accepted",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/25/manifest.json",
-      "updated_at": "2026-07-25T13:44:10.178004+00:00"
+      "updated_at": "2026-07-31T16:36:39.382823+00:00",
+      "context_revision": 1,
+      "attempt_count": 1,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/25/jobs/attempt_001/job.json",
+      "attempt": 1,
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/25/attempts/attempt_001/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/25/accepted/image.png",
+      "accepted_hash": "a8bfa2b93dc4beda5fbb9de942cfe1ab06106c103827023589ae78a599559448",
+      "accepted_attempt": 1,
+      "acceptance_index": 16
     }
   },
   "updated_at": "2026-07-25T13:44:10.178040+00:00"

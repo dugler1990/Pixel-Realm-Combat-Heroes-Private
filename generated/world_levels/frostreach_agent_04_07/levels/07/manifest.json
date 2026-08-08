@@ -161,11 +161,11 @@
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "3ae75d657e6bfa73e46f37f30308984ec6e5d4e87a9cfdfa4aec79de63c9b094",
     "generation_mask": "93017d1f80e87c28b7fa3e7a0e538c8d93ca058e5c7ab4d04bde9948311eb80f",
-    "generation_input": "4caaf56f8fd7f26a0eb1973724d499d095ceda198299e9cf4bc5e00e4b93ec7c",
-    "locked_pixels": "5832f48140bf0045463d86d3fafb26cec89c1c18348870537fab1b57a5f3d050",
-    "locked_mask": "7753c5acf99f14c1467c8283640c3ceb650c7607022b4ce32dc70271998af19c"
+    "generation_input": "13beb1b702170dfbee7c006533cd1c4248a7131df26c2f2d037d9e2e13976620",
+    "locked_pixels": "ab2294bf261ca14afc5bc7f3fb58cc83083904ac0e0d3e5f9bafa8f38b033931",
+    "locked_mask": "49cd46a2ecfe447ccfc1de129165f7c360d91483b1459f983dc38c8a2bc0b36c"
   },
-  "context_revision": 5,
+  "context_revision": 6,
   "locked_sources": [
     {
       "neighbor_id": "04",
@@ -176,11 +176,22 @@
         1731
       ],
       "pixel_count": 160955,
-      "accepted_hash": "58d1edb02af13f51f1958f49870d8db5c4e5bdbd496678b877138b4192be8530"
+      "accepted_hash": "9b3513285dd759871015a32105f770a1b4c55c94a094352817f3ffdcc03f2fda"
+    },
+    {
+      "neighbor_id": "06",
+      "global_box": [
+        5420,
+        1420,
+        5981,
+        2181
+      ],
+      "pixel_count": 89523,
+      "accepted_hash": "ad9ddc017eb38a9894b8dddd52cc74c474c2df1813f696bd3806ab8ece176e86"
     }
   ],
   "attempt_count": 3,
-  "updated_at": "2026-07-25T13:33:00.998448+00:00",
+  "updated_at": "2026-08-02T21:39:16.072553+00:00",
   "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/jobs/attempt_003/job.json",
   "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/attempts/attempt_001/normalized.png",
   "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/accepted/image.png",

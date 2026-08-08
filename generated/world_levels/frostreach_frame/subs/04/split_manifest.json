@@ -1,0 +1,42 @@
+{
+  "source_chunk": "04",
+  "source_name": "Howling Waste",
+  "chunk_area": 64500.0,
+  "sub_level_count": 6,
+  "requested_count": 6,
+  "child_config": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/config.json",
+  "child_plan": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/plan.csv",
+  "sub_levels": [
+    {
+      "id": "01",
+      "name": "Howling Waste 1",
+      "tag": "flat"
+    },
+    {
+      "id": "02",
+      "name": "Howling Waste 2",
+      "tag": "flat"
+    },
+    {
+      "id": "03",
+      "name": "Howling Waste 3",
+      "tag": "flat"
+    },
+    {
+      "id": "04",
+      "name": "Howling Waste 4",
+      "tag": "flat"
+    },
+    {
+      "id": "05",
+      "name": "Howling Waste 5",
+      "tag": "flat"
+    },
+    {
+      "id": "06",
+      "name": "Howling Waste 6",
+      "tag": "flat"
+    }
+  ],
+  "warnings": []
+}

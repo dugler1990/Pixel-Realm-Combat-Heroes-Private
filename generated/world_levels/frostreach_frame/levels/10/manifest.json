@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "level_id": "10",
+  "name": "Frostgate Passes",
+  "region": "Stonebreak",
+  "state": "prepared",
+  "crop_box_world": [
+    864,
+    394,
+    1137,
+    557
+  ],
+  "core_polygon_world": [
+    [
+      900,
+      420
+    ],
+    [
+      1100,
+      410
+    ],
+    [
+      1120,
+      500
+    ],
+    [
+      1000,
+      540
+    ],
+    [
+      880,
+      500
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      1136,
+      495
+    ],
+    [
+      1115,
+      404
+    ],
+    [
+      1106,
+      395
+    ],
+    [
+      1091,
+      394
+    ],
+    [
+      894,
+      405
+    ],
+    [
+      888,
+      409
+    ],
+    [
+      883,
+      419
+    ],
+    [
+      864,
+      503
+    ],
+    [
+      868,
+      511
+    ],
+    [
+      876,
+      516
+    ],
+    [
+      1001,
+      556
+    ],
+    [
+      1124,
+      516
+    ],
+    [
+      1134,
+      508
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "06",
+      "kind": "land"
+    },
+    {
+      "level_id": "09",
+      "kind": "land"
+    },
+    {
+      "level_id": "11",
+      "kind": "land"
+    },
+    {
+      "level_id": "13",
+      "kind": "land"
+    },
+    {
+      "level_id": "14",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      4320,
+      1970
+    ],
+    "scaled_crop_size": [
+      1365,
+      815
+    ],
+    "canvas_offset": [
+      853,
+      744
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "frame": {
+    "origin": [
+      847,
+      743
+    ],
+    "size": [
+      1376,
+      816
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/10/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/10/source/world_crop.png",
+    "dense_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/10/dense_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/10/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/10/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/10/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/10/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/10/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/10/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/10/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/10/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "dense_template": "68b4c07d99629def99602835ddbc7e7a52e1a507262abf706f786d1c3e42f888",
+    "generation_mask": "32a3483cd30e5440613c9d4125c4fbe5561a4521d313b9671a16e328c5e94def"
+  },
+  "context_revision": 0,
+  "locked_sources": [],
+  "attempt_count": 0,
+  "updated_at": "2026-08-07T13:11:18.186696+00:00"
+}

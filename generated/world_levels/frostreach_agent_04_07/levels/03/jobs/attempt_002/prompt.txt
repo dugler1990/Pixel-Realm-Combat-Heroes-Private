@@ -1,0 +1,7 @@
+Redraw this image at high finished quality.
+
+It is a low resolution upscale: soft, blurred, washed out. Redraw it sharp and detailed,
+with strong contrast and clear painted form. Nothing moves, nothing is added, nothing is
+removed, nothing changes what it is. Quality only.
+
+Top-down, even lighting, no cast shadows. No text or labels.

@@ -9,7 +9,7 @@ from .generation_backend import make_generation_backend
 from .job_builder import create_job
 from .models import LevelState
 from .package_refresher import refresh_level
-from .result_ingest import ingest_result
+from .result_ingest import FootprintRejected, ingest_result
 from .state_store import append_event, read_json, update_level_state
 
 
@@ -35,6 +35,8 @@ def parse_level_selector(selector: str, available: Iterable[str]) -> list[str]:
 def run_batch(
     root: str | Path,
     level_ids: list[str],
+    prompt_file: str | Path | None = None,
+    refine: bool = False,
 ) -> dict:
     root_path = Path(root).resolve()
     config = load_config(root_path / "config.resolved.json")
@@ -43,11 +45,13 @@ def run_batch(
     append_event(root_path, "batch_started", selected=level_ids)
     for level_id in level_ids:
         run = read_json(root_path / "run.json")
-        if run["levels"][level_id]["state"] == LevelState.ACCEPTED.value:
+        # A refine pass deliberately reruns finished levels, so accepted is its input
+        # state rather than a reason to skip.
+        if run["levels"][level_id]["state"] == LevelState.ACCEPTED.value and not refine:
             summary["results"].append({"level_id": level_id, "skipped": "accepted"})
             continue
-        refresh_level(root_path, level_id)
-        job = create_job(root_path, level_id)
+        refresh_level(root_path, level_id, force=refine, refine=refine)
+        job = create_job(root_path, level_id, prompt_file, refine=refine)
         update_level_state(root_path, level_id, LevelState.GENERATING.value, attempt=job.attempt)
 
         generated_path = None
@@ -94,7 +98,33 @@ def run_batch(
             summary["status"] = "waiting_for_image"
             break
 
-        result = ingest_result(root_path, level_id, generated_path, attempt=job.attempt)
+        try:
+            result = ingest_result(root_path, level_id, generated_path, attempt=job.attempt)
+        except FootprintRejected as exc:
+            # A reframed draw is a failed draw, not a crash: fail the level the same way a
+            # generation error would, so the batch stays resumable.
+            update_level_state(
+                root_path,
+                level_id,
+                LevelState.FAILED.value,
+                attempt=job.attempt,
+                error=str(exc),
+            )
+            summary["results"].append(
+                {
+                    "level_id": level_id,
+                    "state": "failed",
+                    "reason": "footprint_rejected",
+                    "footprint_iou": exc.footprint_iou,
+                    "threshold": exc.threshold,
+                    "job": str(job.directory),
+                }
+            )
+            if config.execution.stop_on_failure:
+                summary["status"] = "failed"
+                break
+            continue
+
         summary["results"].append(result)
         if result["state"] != LevelState.ACCEPTED.value:
             summary["status"] = "waiting_for_approval"

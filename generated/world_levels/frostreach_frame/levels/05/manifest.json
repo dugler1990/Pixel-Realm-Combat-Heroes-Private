@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "level_id": "05",
+  "name": "Western Expanse",
+  "region": "Frostreach",
+  "state": "prepared",
+  "crop_box_world": [
+    404,
+    204,
+    717,
+    427
+  ],
+  "core_polygon_world": [
+    [
+      420,
+      270
+    ],
+    [
+      530,
+      280
+    ],
+    [
+      610,
+      220
+    ],
+    [
+      700,
+      290
+    ],
+    [
+      680,
+      380
+    ],
+    [
+      580,
+      410
+    ],
+    [
+      470,
+      370
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      715,
+      284
+    ],
+    [
+      709,
+      276
+    ],
+    [
+      628,
+      213
+    ],
+    [
+      610,
+      204
+    ],
+    [
+      596,
+      210
+    ],
+    [
+      525,
+      264
+    ],
+    [
+      420,
+      254
+    ],
+    [
+      409,
+      258
+    ],
+    [
+      404,
+      267
+    ],
+    [
+      405,
+      277
+    ],
+    [
+      459,
+      382
+    ],
+    [
+      579,
+      426
+    ],
+    [
+      681,
+      397
+    ],
+    [
+      692,
+      391
+    ],
+    [
+      697,
+      380
+    ],
+    [
+      716,
+      295
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "01",
+      "kind": "land"
+    },
+    {
+      "level_id": "02",
+      "kind": "land"
+    },
+    {
+      "level_id": "06",
+      "kind": "land"
+    },
+    {
+      "level_id": "08",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      2020,
+      1020
+    ],
+    "scaled_crop_size": [
+      1565,
+      1115
+    ],
+    "canvas_offset": [
+      753,
+      594
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "frame": {
+    "origin": [
+      751,
+      591
+    ],
+    "size": [
+      1568,
+      1120
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/05/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/05/source/world_crop.png",
+    "dense_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/05/dense_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/05/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/05/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/05/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/05/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/05/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/05/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/05/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/05/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "dense_template": "fcf1fac6169b4ebff6ba46ef3941ddf32d77eabcb028036b5058495a660189b2",
+    "generation_mask": "a05fac8d0839e577bedce2330eca817591bc49b979ae4159951e881a9684e6ad"
+  },
+  "context_revision": 0,
+  "locked_sources": [],
+  "attempt_count": 0,
+  "updated_at": "2026-08-07T13:10:56.913498+00:00"
+}

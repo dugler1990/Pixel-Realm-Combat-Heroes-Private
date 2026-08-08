@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .models import CanvasConfig, ExecutionConfig, RunConfig
+from .models import CanvasConfig, ExecutionConfig, RunConfig, SplitConfig
 
 
 def _path(value: Any, base_dir: Path, field: str, *, required: bool = True) -> Path | None:
@@ -26,6 +26,56 @@ def _positive_int(value: Any, field: str, *, optional: bool = False) -> int | No
     if parsed <= 0:
         raise ValueError(f"{field} must be positive")
     return parsed
+
+
+def _parse_split(raw: Any) -> SplitConfig | None:
+    """Parse the optional `split` block. Returns None when absent so existing configs
+    (with no split block) serialize and hash exactly as before."""
+    if not raw:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("split must be an object")
+    defaults = SplitConfig()
+
+    buckets_raw = raw.get("buckets")
+    if buckets_raw is None:
+        buckets = defaults.buckets
+    else:
+        if not isinstance(buckets_raw, list) or not buckets_raw:
+            raise ValueError("split.buckets must be a non-empty list of [area, count]")
+        buckets_list: list[tuple[float, int]] = []
+        last_upper = 0.0
+        for entry in buckets_raw:
+            if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+                raise ValueError("each split.buckets entry must be [upper_area, count]")
+            upper, count = float(entry[0]), int(entry[1])
+            if upper <= last_upper:
+                raise ValueError("split.buckets upper bounds must be strictly ascending")
+            if count <= 0:
+                raise ValueError("split.buckets counts must be positive")
+            buckets_list.append((upper, count))
+            last_upper = upper
+        buckets = tuple(buckets_list)
+
+    min_sub = int(raw.get("min_sublevels", defaults.min_sublevels))
+    max_sub = int(raw.get("max_sublevels", defaults.max_sublevels))
+    if min_sub < 1 or max_sub < min_sub:
+        raise ValueError("split requires 1 <= min_sublevels <= max_sublevels")
+    overlap_buffer = int(raw.get("overlap_buffer_px", defaults.overlap_buffer_px))
+    crop_margin = int(raw.get("crop_margin_px", defaults.crop_margin_px))
+    if overlap_buffer < 0 or crop_margin < 0:
+        raise ValueError("split overlap_buffer_px and crop_margin_px must be non-negative")
+
+    return SplitConfig(
+        buckets=buckets,
+        default_count=int(raw.get("default_count", defaults.default_count)),
+        min_sublevels=min_sub,
+        max_sublevels=max_sub,
+        overlap_buffer_px=overlap_buffer,
+        crop_margin_px=crop_margin,
+        criteria=str(raw.get("criteria") or defaults.criteria),
+        proposer=dict(raw.get("proposer") or {}),
+    )
 
 
 def parse_config(raw: dict[str, Any], config_path: Path) -> RunConfig:
@@ -70,6 +120,23 @@ def parse_config(raw: dict[str, Any], config_path: Path) -> RunConfig:
     retry_limit = int(execution_raw.get("retry_limit", 2))
     if retry_limit < 0:
         raise ValueError("execution.retry_limit must be non-negative")
+    rescale_below_iou = float(execution_raw.get("rescale_below_iou", 0.0))
+    if not 0.0 <= rescale_below_iou <= 1.0:
+        raise ValueError("execution.rescale_below_iou must be between 0 and 1")
+
+    generation_raw = dict(raw.get("generation") or {})
+    renderer = str(generation_raw.get("renderer") or "warp").strip().lower()
+    if renderer not in {"warp", "frame"}:
+        raise ValueError("generation.renderer must be 'warp' or 'frame'")
+    generation_raw["renderer"] = renderer
+    if renderer == "frame" and approval_mode == "automatic":
+        # The frame renderer has no footprint gate -- there is no silhouette to score, so a
+        # catastrophic draw is cut, kept, and propagated into every neighbour as padding.
+        # A human looking at it is the only defence, so automatic approval is refused.
+        raise ValueError(
+            "generation.renderer 'frame' requires execution.approval_mode 'manual': "
+            "it has no automatic reject gate"
+        )
 
     return RunConfig(
         config_path=config_path.resolve(),
@@ -85,9 +152,11 @@ def parse_config(raw: dict[str, Any], config_path: Path) -> RunConfig:
             approval_mode=approval_mode,
             stop_on_failure=bool(execution_raw.get("stop_on_failure", True)),
             retry_limit=retry_limit,
+            rescale_below_iou=rescale_below_iou,
         ),
-        generation=dict(raw.get("generation") or {}),
+        generation=generation_raw,
         style_prompt=str(raw.get("style_prompt") or "").strip(),
+        split=_parse_split(raw.get("split")),
     )
 
 
@@ -105,7 +174,7 @@ def load_config(path: str | Path) -> RunConfig:
 
 
 def config_as_dict(config: RunConfig) -> dict[str, Any]:
-    return {
+    result: dict[str, Any] = {
         "world_map": str(config.world_map),
         "level_plan": str(config.level_plan),
         "review_overlay": str(config.review_overlay) if config.review_overlay else None,
@@ -126,7 +195,22 @@ def config_as_dict(config: RunConfig) -> dict[str, Any]:
             "approval_mode": config.execution.approval_mode,
             "stop_on_failure": config.execution.stop_on_failure,
             "retry_limit": config.execution.retry_limit,
+            "rescale_below_iou": config.execution.rescale_below_iou,
         },
         "generation": config.generation,
         "style_prompt": config.style_prompt,
     }
+    # Only serialize `split` when configured, so existing run roots (no split block)
+    # keep their exact config hash.
+    if config.split is not None:
+        result["split"] = {
+            "buckets": [[upper, count] for upper, count in config.split.buckets],
+            "default_count": config.split.default_count,
+            "min_sublevels": config.split.min_sublevels,
+            "max_sublevels": config.split.max_sublevels,
+            "overlap_buffer_px": config.split.overlap_buffer_px,
+            "crop_margin_px": config.split.crop_margin_px,
+            "criteria": config.split.criteria,
+            "proposer": config.split.proposer,
+        }
+    return result

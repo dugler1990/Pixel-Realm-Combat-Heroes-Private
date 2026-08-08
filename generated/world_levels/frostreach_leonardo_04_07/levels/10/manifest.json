@@ -3,7 +3,7 @@
   "level_id": "10",
   "name": "Frostgate Passes",
   "region": "Stonebreak",
-  "state": "prepared",
+  "state": "ready",
   "crop_box_world": [
     864,
     394,
@@ -148,10 +148,25 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "7534ee78a4bc19f29f97b1d46c4d4c4ec0b51a03f1d564291ceafab807e39be8",
-    "generation_mask": "75f2839cbc8cc74fab475f6dd487e13435c6e7a92c6993c6aa2b4120a28c45e6"
+    "generation_mask": "75f2839cbc8cc74fab475f6dd487e13435c6e7a92c6993c6aa2b4120a28c45e6",
+    "generation_input": "0fff001c3eb874cfa8376a2e15e36e795ccce2c8776590573b654032f3306286",
+    "locked_pixels": "e2266a3824c04a61340d6630dd0cc8f0684701c3ce5728103c64c63568564a94",
+    "locked_mask": "f01078d3de72c5897591668cfcd5f5d49f67027272c84378176822a98fea046b"
   },
-  "context_revision": 0,
-  "locked_sources": [],
+  "context_revision": 1,
+  "locked_sources": [
+    {
+      "neighbor_id": "06",
+      "global_box": [
+        6912,
+        3152,
+        9089,
+        3489
+      ],
+      "pixel_count": 463644,
+      "accepted_hash": "ab6b44fb088d127c728c5a8e8e1f25bb1977a061a85fb8e8f087f6031039eb17"
+    }
+  ],
   "attempt_count": 0,
-  "updated_at": "2026-07-25T13:42:37.809430+00:00"
+  "updated_at": "2026-07-31T16:38:02.137485+00:00"
 }

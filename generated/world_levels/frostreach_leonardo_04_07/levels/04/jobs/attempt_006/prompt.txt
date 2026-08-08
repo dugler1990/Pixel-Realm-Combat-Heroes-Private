@@ -1,0 +1,15 @@
+Render level 04: Howling Waste (Frostreach).
+Return exactly 5056x3392 pixels.
+Reference image: input.png only.
+In input.png, land is the non-black region on a pure black (#000000) background.
+That non-black footprint is the exact output shape: every land edge, coastline, and corner must match it.
+Paint terrain only on those non-black pixels.
+Outside that footprint must stay pure black (#000000) — same black as the reference, no grey, no vignette, no fade, no fill to the rectangle border.
+Do not enlarge, shrink, round, straighten, or otherwise change the land outline.
+If land reaches the image border where the reference has black, that is wrong.
+Treat input.png as the exact composition, scale, coastline, and terrain placement.
+Keep lighting diffuse and shadow-neutral: local form shading is allowed, directional cast shadows are not.
+Do not add labels, UI, borders, map symbols, characters, or a visible grid.
+No neighbor padding is present. This is a seed level.
+Establish the level's look from the style guidance below and the land shown in input.png.
+Create a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows.

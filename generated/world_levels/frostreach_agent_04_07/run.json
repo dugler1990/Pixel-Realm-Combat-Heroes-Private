@@ -11,67 +11,94 @@
     2304
   ],
   "scale": "5",
-  "acceptance_counter": 5,
+  "acceptance_counter": 8,
   "levels": {
     "01": {
       "name": "Western Wallfoot",
       "region": "Frostreach",
-      "state": "prepared",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/01/manifest.json",
-      "updated_at": "2026-07-23T09:45:52.319590+00:00"
+      "updated_at": "2026-08-02T19:22:29.999875+00:00",
+      "context_revision": 1
     },
     "02": {
       "name": "Glacial Basin",
       "region": "Frostreach",
-      "state": "prepared",
+      "state": "accepted",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/02/manifest.json",
-      "updated_at": "2026-07-23T09:45:56.020902+00:00"
+      "updated_at": "2026-08-02T21:27:27.993870+00:00",
+      "context_revision": 3,
+      "attempt_count": 2,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/02/jobs/attempt_002/job.json",
+      "attempt": 2,
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/02/attempts/attempt_002/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/02/accepted/image.png",
+      "accepted_hash": "6cffcb98dd1a0d6006fa1b597e7861906f83caae73692ba377d0111db18821ea",
+      "accepted_attempt": 1,
+      "acceptance_index": 7
     },
     "03": {
       "name": "Pale Uplands",
       "region": "Frostreach",
-      "state": "ready",
+      "state": "accepted",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/manifest.json",
-      "updated_at": "2026-07-25T13:14:19.605941+00:00",
-      "context_revision": 4
+      "updated_at": "2026-08-02T21:27:04.969227+00:00",
+      "context_revision": 7,
+      "attempt_count": 3,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/jobs/attempt_003/job.json",
+      "attempt": 3,
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/attempts/attempt_003/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/accepted/image.png",
+      "accepted_hash": "8b356508b660c897d24c4100df457e404d4713f7dffd109bd1f44c30916a5d2b",
+      "accepted_attempt": 3,
+      "acceptance_index": 6
     },
     "04": {
       "name": "Howling Waste",
       "region": "Frostreach",
       "state": "accepted",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/04/manifest.json",
-      "updated_at": "2026-07-25T13:14:17.359849+00:00",
+      "updated_at": "2026-08-02T18:55:09.044977+00:00",
       "context_revision": 1,
       "attempt_count": 1,
       "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/04/jobs/attempt_001/job.json",
       "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/04/attempts/attempt_001/normalized.png",
       "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/04/accepted/image.png",
-      "accepted_hash": "58d1edb02af13f51f1958f49870d8db5c4e5bdbd496678b877138b4192be8530",
+      "accepted_hash": "9b3513285dd759871015a32105f770a1b4c55c94a094352817f3ffdcc03f2fda",
       "accepted_attempt": 1,
       "acceptance_index": 5
     },
     "05": {
       "name": "Western Expanse",
       "region": "Frostreach",
-      "state": "prepared",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/05/manifest.json",
-      "updated_at": "2026-07-23T09:46:08.183425+00:00"
+      "updated_at": "2026-08-02T21:39:12.738977+00:00",
+      "context_revision": 2
     },
     "06": {
       "name": "Central Expanse",
       "region": "Frostreach",
-      "state": "ready",
+      "state": "generated",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/manifest.json",
-      "updated_at": "2026-07-25T13:14:21.965032+00:00",
-      "context_revision": 5
+      "updated_at": "2026-08-02T21:41:49.335284+00:00",
+      "context_revision": 9,
+      "attempt_count": 2,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/jobs/attempt_002/job.json",
+      "attempt": 2,
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/attempts/attempt_002/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/accepted/image.png",
+      "accepted_hash": "ad9ddc017eb38a9894b8dddd52cc74c474c2df1813f696bd3806ab8ece176e86",
+      "accepted_attempt": 1,
+      "acceptance_index": 8
     },
     "07": {
       "name": "Bitter Floe Coast",
       "region": "Frostreach",
-      "state": "generating",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/manifest.json",
-      "updated_at": "2026-07-25T13:33:01.006681+00:00",
-      "context_revision": 5,
+      "updated_at": "2026-08-02T21:39:16.081519+00:00",
+      "context_revision": 6,
       "attempt_count": 3,
       "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/jobs/attempt_003/job.json",
       "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/07/attempts/attempt_001/normalized.png",
@@ -92,16 +119,18 @@
     "09": {
       "name": "Stonebreak Spine",
       "region": "Stonebreak",
-      "state": "prepared",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/09/manifest.json",
-      "updated_at": "2026-07-23T09:46:23.214884+00:00"
+      "updated_at": "2026-08-02T21:39:18.939951+00:00",
+      "context_revision": 1
     },
     "10": {
       "name": "Frostgate Passes",
       "region": "Stonebreak",
-      "state": "prepared",
+      "state": "ready",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/10/manifest.json",
-      "updated_at": "2026-07-23T09:46:26.428110+00:00"
+      "updated_at": "2026-08-02T21:39:21.505516+00:00",
+      "context_revision": 1
     },
     "11": {
       "name": "Eastern Rainshadow",

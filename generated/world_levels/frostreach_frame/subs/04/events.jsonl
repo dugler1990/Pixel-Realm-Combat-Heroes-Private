@@ -1,0 +1,22 @@
+{"config_hash": "ae1e880d3e4876d568205e7038c156deb031e6a23fa9172b21da2c97c33f46fc", "event": "run_prepared", "level_count": 6, "timestamp": "2026-08-08T00:32:24.012786+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "01", "locked_sources": [], "timestamp": "2026-08-08T00:32:32.559134+00:00"}
+{"attempt": 1, "event": "job_created", "level_id": "01", "timestamp": "2026-08-08T00:32:35.943462+00:00"}
+{"event": "batch_started", "selected": ["01"], "timestamp": "2026-08-08T00:33:26.809179+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "01", "locked_sources": [], "timestamp": "2026-08-08T00:33:28.011226+00:00"}
+{"attempt": 2, "event": "job_created", "level_id": "01", "timestamp": "2026-08-08T00:33:30.192245+00:00"}
+{"attempt": 2, "event": "state_changed", "level_id": "01", "state": "generating", "timestamp": "2026-08-08T00:33:30.199976+00:00"}
+{"attempt": 2, "error": "Missing API key in environment variable 'OPENAI_API_KEY'", "event": "generation_retry", "level_id": "01", "retry": 0, "timestamp": "2026-08-08T00:33:30.201365+00:00"}
+{"attempt": 2, "error": "Missing API key in environment variable 'OPENAI_API_KEY'", "event": "generation_retry", "level_id": "01", "retry": 1, "timestamp": "2026-08-08T00:33:30.202527+00:00"}
+{"attempt": 2, "error": "Missing API key in environment variable 'OPENAI_API_KEY'", "event": "generation_retry", "level_id": "01", "retry": 2, "timestamp": "2026-08-08T00:33:30.203135+00:00"}
+{"attempt": 2, "error": "Missing API key in environment variable 'OPENAI_API_KEY'", "event": "state_changed", "level_id": "01", "state": "failed", "timestamp": "2026-08-08T00:33:30.206789+00:00"}
+{"event": "batch_finished", "status": "failed", "timestamp": "2026-08-08T00:33:30.206920+00:00"}
+{"event": "batch_started", "selected": ["01"], "timestamp": "2026-08-08T00:33:40.800905+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "01", "locked_sources": [], "timestamp": "2026-08-08T00:33:41.925995+00:00"}
+{"attempt": 3, "event": "job_created", "level_id": "01", "timestamp": "2026-08-08T00:33:44.099658+00:00"}
+{"attempt": 3, "event": "state_changed", "level_id": "01", "state": "generating", "timestamp": "2026-08-08T00:33:44.109309+00:00"}
+{"event": "batch_started", "selected": ["01"], "timestamp": "2026-08-08T00:34:15.404476+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "01", "locked_sources": [], "timestamp": "2026-08-08T00:34:16.488281+00:00"}
+{"attempt": 4, "event": "job_created", "level_id": "01", "timestamp": "2026-08-08T00:34:18.531923+00:00"}
+{"attempt": 4, "event": "state_changed", "level_id": "01", "state": "generating", "timestamp": "2026-08-08T00:34:18.541954+00:00"}
+{"attempt": 4, "event": "result_ingested", "footprint_iou": 1.0, "footprint_iou_raw": 1.0, "level_id": "01", "normalized_hash": "7018ac0d8154b374356835261b90b9f0c96a4662f761f7de505298920188060c", "rescale_applied": false, "timestamp": "2026-08-08T00:36:13.761549+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-08-08T00:36:13.771220+00:00"}

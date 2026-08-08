@@ -1,0 +1,6 @@
+{
+  "level_id": "01",
+  "attempt": 2,
+  "seed": null,
+  "error": "Missing API key in environment variable 'OPENAI_API_KEY'"
+}

@@ -1,0 +1,118 @@
+{
+  "schema_version": 2,
+  "level_id": "19",
+  "attempt": 1,
+  "state": "accepted",
+  "created_at": "2026-08-07T15:05:23.400586+00:00",
+  "context_revision": 1,
+  "renderer": "frame",
+  "frame": {
+    "origin": [
+      751,
+      687
+    ],
+    "size": [
+      1568,
+      928
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "input_size": [
+    1568,
+    928
+  ],
+  "context": [
+    {
+      "filename": "input.png",
+      "role": "terrain",
+      "description": "the terrain to redraw at high quality, with any already-finished areas already in place"
+    },
+    {
+      "filename": "locked_overlap.png",
+      "role": "padding",
+      "description": "the already-finished art carried over from the neighbouring level, in its exact position"
+    },
+    {
+      "filename": "locator.png",
+      "role": "locator",
+      "description": "where this piece sits on the world map, for orientation only, do not copy from it"
+    }
+  ],
+  "input_hash": "c36734c6a8703cd8f34c143eafe49d8aa2e68517c1bcae1031c3fc61405c4335",
+  "generation_mask_hash": "06cef74063e30c5cf522a4044ec937fd5551bbb780d2d163255edac328fbac23",
+  "locked_mask_hash": "885d68dc85b8129bc9b010e3a268e6988af80d01282f6da7f9007258ea2cd0d6",
+  "locked_pixels_hash": "55ea40d1c01c3db13591e4a675ec7f4dcef69e620fa7144daebf9b1aa5b586d7",
+  "neighbor_sources": [
+    {
+      "neighbor_id": "07",
+      "global_box": [
+        5920,
+        1975,
+        7131,
+        2281
+      ],
+      "pixel_count": 155534,
+      "accepted_hash": "67227de6cd893969f8cf71907419cce949ee538bbeac449487f6d2e7e3c02e7f"
+    }
+  ],
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/19/jobs/attempt_001/generated.png",
+  "refine": false,
+  "generation_result": {
+    "provider": "openai",
+    "model": "gpt-image-2",
+    "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/19/jobs/attempt_001/generated.png",
+    "width": 1568,
+    "height": 928,
+    "input_images": [
+      "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/19/jobs/attempt_001/input.png",
+      "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/19/jobs/attempt_001/locked_overlap.png",
+      "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/19/jobs/attempt_001/locator.png"
+    ],
+    "mask": null,
+    "quality": "high",
+    "usage": {
+      "input_tokens": 4637,
+      "input_tokens_details": {
+        "image_tokens": 4378,
+        "text_tokens": 259
+      },
+      "output_tokens": 4727,
+      "output_tokens_details": {
+        "image_tokens": 4727,
+        "text_tokens": 0
+      },
+      "total_tokens": 9364
+    },
+    "request": {
+      "model": "gpt-image-2",
+      "prompt": "Image 1 is the terrain to redraw at high quality, with any already-finished areas already in place.\nImage 2 is the already-finished art carried over from the neighbouring level, in its exact position.\nImage 3 is where this piece sits on the world map, for orientation only, do not copy from it.\n\nRedraw image 1 at high finished quality.\nIt is a low resolution upscale: soft, blurred, washed out. Redraw it sharp and\ndetailed, with strong contrast and clear painted form. Quality only.\n\nPaint the whole image, edge to edge, with no border and no empty space.\nEvery feature stays at exactly the same position and the same size as in image 1.\nNothing moves, nothing is added, nothing is removed, nothing is recentred,\nnothing changes what it is.\n\nThe already-finished art is the standard to reach: its sharpness, its brush\ntreatment, its contrast, its lighting. Carry that outward across the rest of\nthe image so the whole thing reads as one painting, with nothing marking where\nthe finished part ends. Terrain type does not change, only how it is rendered.\n\nTop-down, even lighting, no cast shadows. No text or labels.\n",
+      "size": "1568x928",
+      "quality": "high"
+    },
+    "level_id": "19",
+    "attempt": 1,
+    "seed": null,
+    "returned_size": [
+      1568,
+      928
+    ]
+  },
+  "drift_px": [
+    12,
+    2
+  ],
+  "drift_applied": true,
+  "drift_response": 0.1119,
+  "footprint_iou_raw": 1.0,
+  "footprint_iou": 1.0,
+  "rescale_applied": false,
+  "ingested_at": "2026-08-07T15:07:37.204432+00:00",
+  "source_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/19/jobs/attempt_001/generated.png",
+  "raw_hash": "c3e85d409cc45dde11cf3bdfa1021b87236849fd44c558d56ef6eeb9c1609cda",
+  "normalized_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/19/attempts/attempt_001/normalized.png",
+  "normalized_hash": "d3dbe42f4f1a6fd9c5eb7c64dca7e55b8acccddf2bde20c02b50545eea172b6b",
+  "accepted_at": "2026-08-08T00:49:32.736776+00:00"
+}

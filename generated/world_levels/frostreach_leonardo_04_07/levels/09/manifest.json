@@ -3,7 +3,7 @@
   "level_id": "09",
   "name": "Stonebreak Spine",
   "region": "Stonebreak",
-  "state": "prepared",
+  "state": "ready",
   "crop_box_world": [
     634,
     364,
@@ -156,10 +156,36 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "20ef5ef9281ba6f37d2f220cd8f8521fde647f57cd7b23488ae2a1f8974537ca",
-    "generation_mask": "867d6ec6b159b49c5574d4b8c36f8ceeefdbd5509befa1958731689bf6c67fb4"
+    "generation_mask": "867d6ec6b159b49c5574d4b8c36f8ceeefdbd5509befa1958731689bf6c67fb4",
+    "generation_input": "02aa1992f725ab9e9e2e8fd7c1e6404abb1ee1a2b1d21ca3fd816728923945d7",
+    "locked_pixels": "6279fb90855a7440ddbcb78cfcc8b5c2a572767d2b621f373f67fde9d30a2e8b",
+    "locked_mask": "71e73e22c58f2cf760b16e221be9176a7aecafe2e4c21da98285bb5e13153a46"
   },
-  "context_revision": 0,
-  "locked_sources": [],
+  "context_revision": 2,
+  "locked_sources": [
+    {
+      "neighbor_id": "12",
+      "global_box": [
+        5072,
+        3240,
+        5329,
+        4361
+      ],
+      "pixel_count": 60308,
+      "accepted_hash": "61bea9968d6605141c54a172dee601ba4574c0635756f82789814d772170d4f0"
+    },
+    {
+      "neighbor_id": "06",
+      "global_box": [
+        5312,
+        2912,
+        7329,
+        3489
+      ],
+      "pixel_count": 512715,
+      "accepted_hash": "ab6b44fb088d127c728c5a8e8e1f25bb1977a061a85fb8e8f087f6031039eb17"
+    }
+  ],
   "attempt_count": 0,
-  "updated_at": "2026-07-25T13:42:32.311485+00:00"
+  "updated_at": "2026-07-31T16:37:55.168404+00:00"
 }

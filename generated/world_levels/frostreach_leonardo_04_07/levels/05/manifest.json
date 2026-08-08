@@ -3,7 +3,7 @@
   "level_id": "05",
   "name": "Western Expanse",
   "region": "Frostreach",
-  "state": "prepared",
+  "state": "accepted",
   "crop_box_world": [
     404,
     204,
@@ -164,10 +164,31 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "9df107eaee1475aef8f1328cc167a688eb2d56ef838988af2b882506a9b48752",
-    "generation_mask": "25f193f7607b43c5f63bb39d6bb1021d675e4467aaaac78a72fd4c2617eef3ea"
+    "generation_mask": "25f193f7607b43c5f63bb39d6bb1021d675e4467aaaac78a72fd4c2617eef3ea",
+    "generation_input": "5f63e7dde9003626d625f784f0480f7b0e697dc132c1f5d49c8755a1c0030b54",
+    "locked_pixels": "88d46abdb5bc3c6066ed720425b2595abda8619be692f1ce2725ef4726707956",
+    "locked_mask": "d9d6778b8252c91465e5767c3a403c21641e3a5d294b3ddf83cc9f4cfe21784b"
   },
-  "context_revision": 0,
-  "locked_sources": [],
-  "attempt_count": 0,
-  "updated_at": "2026-07-25T13:42:07.666856+00:00"
+  "context_revision": 2,
+  "locked_sources": [
+    {
+      "neighbor_id": "06",
+      "global_box": [
+        5312,
+        1712,
+        5729,
+        3409
+      ],
+      "pixel_count": 243662,
+      "accepted_hash": "ab6b44fb088d127c728c5a8e8e1f25bb1977a061a85fb8e8f087f6031039eb17"
+    }
+  ],
+  "attempt_count": 10,
+  "updated_at": "2026-08-01T11:44:43.139277+00:00",
+  "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/05/jobs/attempt_010/job.json",
+  "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/05/attempts/attempt_010/normalized.png",
+  "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/05/accepted/image.png",
+  "accepted_hash": "f492bfd2901504643256834b16c44f24e658b70ebac111aeb1494b4af9c403cd",
+  "accepted_attempt": 10,
+  "acceptance_index": 27
 }

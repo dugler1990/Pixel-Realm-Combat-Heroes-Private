@@ -3,7 +3,7 @@
   "level_id": "22",
   "name": "Ashfall Fringe",
   "region": "Sunspine Dunes",
-  "state": "prepared",
+  "state": "ready",
   "crop_box_world": [
     1034,
     664,
@@ -180,10 +180,25 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "3535b39540f8605d93b78b0223834de647919afdec640ec1ec136537e70ae3f7",
-    "generation_mask": "496872ae909f6f70c19238e6e70fd0c2f17ad17548109d66652059e96790c2f2"
+    "generation_mask": "496872ae909f6f70c19238e6e70fd0c2f17ad17548109d66652059e96790c2f2",
+    "generation_input": "e4b7fb222612dfb280686a4453876890561d2a900b7ae3b6d9e82a026eb05596",
+    "locked_pixels": "90f1813c568ceb05d3e212e8058f79c340d20e00e102a3da06f0e9a3d71afd52",
+    "locked_mask": "dfe1734bb01b4e4d806c04f8a270c425fcc5957ec927cdf90e5c4b6a5e6aea92"
   },
-  "context_revision": 0,
-  "locked_sources": [],
+  "context_revision": 1,
+  "locked_sources": [
+    {
+      "neighbor_id": "25",
+      "global_box": [
+        11072,
+        6440,
+        12049,
+        7249
+      ],
+      "pixel_count": 193286,
+      "accepted_hash": "a8bfa2b93dc4beda5fbb9de942cfe1ab06106c103827023589ae78a599559448"
+    }
+  ],
   "attempt_count": 0,
-  "updated_at": "2026-07-25T13:43:52.461148+00:00"
+  "updated_at": "2026-07-31T16:36:47.764912+00:00"
 }

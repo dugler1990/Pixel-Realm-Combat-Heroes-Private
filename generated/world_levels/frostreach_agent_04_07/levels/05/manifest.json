@@ -3,7 +3,7 @@
   "level_id": "05",
   "name": "Western Expanse",
   "region": "Frostreach",
-  "state": "prepared",
+  "state": "ready",
   "crop_box_world": [
     404,
     204,
@@ -164,10 +164,36 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "c3227b3f8c8247f31c1ef1db6b2e9f272a2bc670ebcf31546f233f0daa00430a",
-    "generation_mask": "a05fac8d0839e577bedce2330eca817591bc49b979ae4159951e881a9684e6ad"
+    "generation_mask": "a05fac8d0839e577bedce2330eca817591bc49b979ae4159951e881a9684e6ad",
+    "generation_input": "aef33c22f167f86223a3fc984ee4dbc78d6b82926d6e24a17df6d4d7842b5c2e",
+    "locked_pixels": "b716ae211834cdf3412d58c779c3ac3de91f6ce499ff600158d12559efcf3179",
+    "locked_mask": "024a7c7b55490296bb075d1399b687b1a82be51812b065b6c091e49678d8ad67"
   },
-  "context_revision": 0,
-  "locked_sources": [],
+  "context_revision": 2,
+  "locked_sources": [
+    {
+      "neighbor_id": "02",
+      "global_box": [
+        2920,
+        1020,
+        3581,
+        1531
+      ],
+      "pixel_count": 113047,
+      "accepted_hash": "6cffcb98dd1a0d6006fa1b597e7861906f83caae73692ba377d0111db18821ea"
+    },
+    {
+      "neighbor_id": "06",
+      "global_box": [
+        3320,
+        1070,
+        3581,
+        2131
+      ],
+      "pixel_count": 75025,
+      "accepted_hash": "ad9ddc017eb38a9894b8dddd52cc74c474c2df1813f696bd3806ab8ece176e86"
+    }
+  ],
   "attempt_count": 0,
-  "updated_at": "2026-07-23T09:46:08.156604+00:00"
+  "updated_at": "2026-08-02T21:39:12.732562+00:00"
 }

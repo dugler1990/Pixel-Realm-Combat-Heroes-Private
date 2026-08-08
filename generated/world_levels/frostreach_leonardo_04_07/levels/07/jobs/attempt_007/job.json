@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "level_id": "07",
+  "attempt": 7,
+  "state": "accepted",
+  "created_at": "2026-07-28T08:33:36.164594+00:00",
+  "context_revision": 8,
+  "canvas_size": [
+    5056,
+    3392
+  ],
+  "input_hash": "d92e2ba792ccb998e7db894801c2e473dc718b3acac34a1a883c5de87c7e770c",
+  "generation_mask_hash": "6b3bbe4c9bdd6986352bdeb40644de72830826f6f5a4c281c1ebdf67774d14ca",
+  "locked_mask_hash": "df8124e022a00ad516b0f904d6c16986c23385f82d3bf92c69363e77142bd1c7",
+  "locked_pixels_hash": "afd87379bc93517c00dc74de83ccf111ea308d51db9b6f65b033b69fac5fdf39",
+  "neighbor_sources": [
+    {
+      "neighbor_id": "04",
+      "global_box": [
+        8672,
+        2272,
+        11329,
+        2769
+      ],
+      "pixel_count": 411751,
+      "accepted_hash": "709870c6ed0fd8653f69e60058ed7a0205a04f4d7715a3f8c303a65180b2e37c"
+    }
+  ],
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/jobs/attempt_007/generated.png",
+  "ingested_at": "2026-07-28T08:35:09.325375+00:00",
+  "source_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/jobs/attempt_007/generated.png",
+  "raw_hash": "affbf3261bfabee89e408cd452e844eb241a870f226516953e2182f44c6f6c3b",
+  "normalized_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/attempts/attempt_007/normalized.png",
+  "normalized_hash": "6750b0955df9cb9261055d3eca90dfca722f9b91a8852043e0ea1aebfc88cbdf",
+  "accepted_at": "2026-07-28T08:35:09.365724+00:00"
+}

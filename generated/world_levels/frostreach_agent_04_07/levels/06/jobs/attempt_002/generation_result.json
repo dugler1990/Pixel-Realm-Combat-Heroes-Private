@@ -1,0 +1,41 @@
+{
+  "provider": "openai",
+  "model": "gpt-image-2",
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/jobs/attempt_002/generated.png",
+  "width": 3072,
+  "height": 2304,
+  "input_images": [
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/jobs/attempt_002/input.png",
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/jobs/attempt_002/generation_mask.png",
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/jobs/attempt_002/locked_overlap.png",
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/jobs/attempt_002/locator.png"
+  ],
+  "mask": null,
+  "quality": "high",
+  "usage": {
+    "input_tokens": 6080,
+    "input_tokens_details": {
+      "image_tokens": 5892,
+      "text_tokens": 188
+    },
+    "output_tokens": 15687,
+    "output_tokens_details": {
+      "image_tokens": 15687,
+      "text_tokens": 0
+    },
+    "total_tokens": 21767
+  },
+  "request": {
+    "model": "gpt-image-2",
+    "prompt": "Image 1 is the terrain to redraw at high quality, with any already-finished areas already in place.\nImage 2 is the exact shape to fill: paint only inside the white area, everything outside it stays black.\nImage 3 is the already-finished art carried over from the neighbouring level, in its exact position.\nImage 4 is where this piece sits on the world map, for orientation only, do not copy from it.\n\nImage 1 is already a finished painting.\nPart of it was carried over from the neighbouring level and is already correct.\nThat carried-over part is the source of truth for hue, contrast, texture scale\nand brushwork. Bring the rest of image 1 into line with it so the whole thing\nreads as one painting.\n\nDo not change what anything is or where it sits. Do not add or remove anything.\nNo text or labels.\n",
+    "size": "3072x2304",
+    "quality": "high"
+  },
+  "level_id": "06",
+  "attempt": 2,
+  "seed": null,
+  "returned_size": [
+    3072,
+    2304
+  ]
+}

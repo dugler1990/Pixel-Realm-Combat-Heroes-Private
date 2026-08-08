@@ -1,0 +1,6 @@
+{
+  "level_id": "05",
+  "attempt": 3,
+  "seed": 700003,
+  "error": "Missing API key in environment variable 'LEONARDO_API_KEY'"
+}

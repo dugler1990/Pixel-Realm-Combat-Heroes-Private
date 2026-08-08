@@ -1,17 +1,27 @@
 {
   "valid": true,
-  "checked_at": "2026-07-23T09:51:24.931010+00:00",
+  "checked_at": "2026-08-02T21:27:31.258329+00:00",
   "errors": [],
   "accepted_pairs": [
     {
       "levels": [
-        "04",
-        "07"
+        "02",
+        "03"
       ],
-      "overlap_pixels": 160955,
+      "overlap_pixels": 150885,
       "differing_pixels": 0,
-      "first_hash": "484ee8ad97438613ca6f176a89c50a0bb315fd6e47d96d7b3c2d41f5fbea02d7",
-      "second_hash": "73491f7203ae9655a2397c1d491598c25e0945dd75d209ace04be864b5c0a49d"
+      "first_hash": "6cffcb98dd1a0d6006fa1b597e7861906f83caae73692ba377d0111db18821ea",
+      "second_hash": "8b356508b660c897d24c4100df457e404d4713f7dffd109bd1f44c30916a5d2b"
+    },
+    {
+      "levels": [
+        "03",
+        "04"
+      ],
+      "overlap_pixels": 158414,
+      "differing_pixels": 0,
+      "first_hash": "8b356508b660c897d24c4100df457e404d4713f7dffd109bd1f44c30916a5d2b",
+      "second_hash": "9b3513285dd759871015a32105f770a1b4c55c94a094352817f3ffdcc03f2fda"
     }
   ]
 }

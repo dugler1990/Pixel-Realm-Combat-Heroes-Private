@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "level_id": "20",
+  "name": "Glass Mesa",
+  "region": "Sunspine Dunes",
+  "state": "ready",
+  "crop_box_world": [
+    1104,
+    484,
+    1497,
+    677
+  ],
+  "core_polygon_world": [
+    [
+      1180,
+      560
+    ],
+    [
+      1220,
+      500
+    ],
+    [
+      1280,
+      560
+    ],
+    [
+      1450,
+      540
+    ],
+    [
+      1480,
+      620
+    ],
+    [
+      1380,
+      660
+    ],
+    [
+      1220,
+      640
+    ],
+    [
+      1120,
+      570
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      1104,
+      567
+    ],
+    [
+      1105,
+      576
+    ],
+    [
+      1110,
+      583
+    ],
+    [
+      1210,
+      653
+    ],
+    [
+      1225,
+      657
+    ],
+    [
+      1381,
+      676
+    ],
+    [
+      1491,
+      632
+    ],
+    [
+      1496,
+      623
+    ],
+    [
+      1494,
+      610
+    ],
+    [
+      1467,
+      538
+    ],
+    [
+      1458,
+      526
+    ],
+    [
+      1446,
+      524
+    ],
+    [
+      1286,
+      543
+    ],
+    [
+      1231,
+      488
+    ],
+    [
+      1220,
+      484
+    ],
+    [
+      1207,
+      490
+    ],
+    [
+      1170,
+      546
+    ],
+    [
+      1114,
+      555
+    ],
+    [
+      1108,
+      559
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "11",
+      "kind": "land"
+    },
+    {
+      "level_id": "14",
+      "kind": "land"
+    },
+    {
+      "level_id": "19",
+      "kind": "land"
+    },
+    {
+      "level_id": "21",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      5520,
+      2420
+    ],
+    "scaled_crop_size": [
+      1965,
+      965
+    ],
+    "canvas_offset": [
+      553,
+      669
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "frame": {
+    "origin": [
+      551,
+      663
+    ],
+    "size": [
+      1968,
+      976
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/20/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/20/source/world_crop.png",
+    "dense_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/20/dense_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/20/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/20/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/20/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/20/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/20/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/20/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/20/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/20/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "dense_template": "f0c6da1dafce0173cbc78027e48072e62bc19b62bc7593ac42a91a4cda55ed97",
+    "generation_mask": "a97885d8ca5afbf5e11dbef4a1cc30a8de75a6b29789dbb75d964d782b5b40e4",
+    "generation_input": "a39ff4a455e88c03eda5e7a25d1781a0ca2ac7d063cca9ea8e805fb71715bf11",
+    "locked_pixels": "e43dd3dbb4c8ffbeb4f9ec9d2d417b1b02af9d679429909a6d9a264dae97bcfe",
+    "locked_mask": "4a712774489b2ab9b426fb533a39716f97cc3fc3b78f54d3887df8ee13d6fc5a"
+  },
+  "context_revision": 1,
+  "locked_sources": [
+    {
+      "neighbor_id": "19",
+      "global_box": [
+        5920,
+        2420,
+        7481,
+        2881
+      ],
+      "pixel_count": 222486,
+      "accepted_hash": "d3dbe42f4f1a6fd9c5eb7c64dca7e55b8acccddf2bde20c02b50545eea172b6b"
+    }
+  ],
+  "attempt_count": 0,
+  "updated_at": "2026-08-08T00:49:37.473241+00:00"
+}

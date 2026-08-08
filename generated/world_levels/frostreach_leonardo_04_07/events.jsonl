@@ -53,3 +53,300 @@
 {"context_revision": 4, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04"], "timestamp": "2026-07-25T16:45:21.772164+00:00"}
 {"context_revision": 4, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-25T16:45:25.854113+00:00"}
 {"event": "batch_finished", "status": "finished", "timestamp": "2026-07-25T16:45:25.882804+00:00"}
+{"event": "batch_started", "selected": ["04"], "timestamp": "2026-07-26T15:34:21.324828+00:00"}
+{"context_revision": 4, "event": "level_refreshed", "level_id": "04", "locked_sources": [], "timestamp": "2026-07-26T15:34:31.885144+00:00"}
+{"attempt": 4, "event": "job_created", "level_id": "04", "timestamp": "2026-07-26T15:34:31.984352+00:00"}
+{"attempt": 4, "event": "state_changed", "level_id": "04", "state": "generating", "timestamp": "2026-07-26T15:34:31.989182+00:00"}
+{"attempt": 4, "event": "result_ingested", "level_id": "04", "normalized_hash": "4a057cace49a318642bcb66a7e67071593f0502b83b32c3662864941b0cfa414", "timestamp": "2026-07-26T15:36:15.517877+00:00"}
+{"acceptance_index": 5, "attempt": 4, "event": "result_accepted", "level_id": "04", "timestamp": "2026-07-26T15:36:15.586318+00:00"}
+{"context_revision": 3, "event": "level_refreshed", "level_id": "03", "locked_sources": ["04"], "timestamp": "2026-07-26T15:36:26.955972+00:00"}
+{"context_revision": 5, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04"], "timestamp": "2026-07-26T15:36:39.570847+00:00"}
+{"context_revision": 5, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-26T15:36:48.929220+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-07-26T15:36:48.999701+00:00"}
+{"event": "batch_started", "selected": ["04"], "timestamp": "2026-07-26T15:56:03.629008+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-07-26T15:56:03.630843+00:00"}
+{"event": "state_changed", "level_id": "04", "reason": "reset_for_rerun", "state": "ready", "timestamp": "2026-07-26T16:43:35.672066+00:00"}
+{"event": "batch_started", "selected": ["04"], "timestamp": "2026-07-26T16:43:43.421944+00:00"}
+{"context_revision": 4, "event": "level_refreshed", "level_id": "04", "locked_sources": [], "timestamp": "2026-07-26T16:43:52.228655+00:00"}
+{"attempt": 5, "event": "job_created", "level_id": "04", "timestamp": "2026-07-26T16:43:52.323904+00:00"}
+{"attempt": 5, "event": "state_changed", "level_id": "04", "state": "generating", "timestamp": "2026-07-26T16:43:52.329556+00:00"}
+{"attempt": 5, "event": "result_ingested", "level_id": "04", "normalized_hash": "166bb08e1d77d033cbd4d265c269b482cb9e45ca2cc070f593ea1282e0b49752", "timestamp": "2026-07-26T16:45:22.638823+00:00"}
+{"acceptance_index": 6, "attempt": 5, "event": "result_accepted", "level_id": "04", "timestamp": "2026-07-26T16:45:22.711933+00:00"}
+{"context_revision": 4, "event": "level_refreshed", "level_id": "03", "locked_sources": ["04"], "timestamp": "2026-07-26T16:45:32.641078+00:00"}
+{"context_revision": 6, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04"], "timestamp": "2026-07-26T16:45:43.549160+00:00"}
+{"context_revision": 6, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-26T16:45:51.528527+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-07-26T16:45:51.587888+00:00"}
+{"event": "state_changed", "level_id": "04", "reason": "reset_for_prompt_retest", "state": "ready", "timestamp": "2026-07-26T19:00:41.537134+00:00"}
+{"event": "batch_started", "selected": ["04"], "timestamp": "2026-07-26T19:00:57.741998+00:00"}
+{"context_revision": 4, "event": "level_refreshed", "level_id": "04", "locked_sources": [], "timestamp": "2026-07-26T19:01:07.516543+00:00"}
+{"attempt": 6, "event": "job_created", "level_id": "04", "timestamp": "2026-07-26T19:01:07.647734+00:00"}
+{"attempt": 6, "event": "state_changed", "level_id": "04", "state": "generating", "timestamp": "2026-07-26T19:01:07.657072+00:00"}
+{"attempt": 6, "event": "result_ingested", "level_id": "04", "normalized_hash": "2082b6c02d0373f768d57284d66798846078d900c3be602595e20e04b4d8ecf0", "timestamp": "2026-07-26T19:02:43.960399+00:00"}
+{"acceptance_index": 7, "attempt": 6, "event": "result_accepted", "level_id": "04", "timestamp": "2026-07-26T19:02:44.031334+00:00"}
+{"context_revision": 5, "event": "level_refreshed", "level_id": "03", "locked_sources": ["04"], "timestamp": "2026-07-26T19:02:54.679800+00:00"}
+{"context_revision": 7, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04"], "timestamp": "2026-07-26T19:03:06.978324+00:00"}
+{"context_revision": 7, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-26T19:03:16.242552+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-07-26T19:03:16.315842+00:00"}
+{"event": "state_changed", "level_id": "04", "reason": "reset_for_layout_prompt_retest", "state": "ready", "timestamp": "2026-07-26T19:08:52.600974+00:00"}
+{"event": "batch_started", "selected": ["04"], "timestamp": "2026-07-26T19:09:07.040173+00:00"}
+{"context_revision": 4, "event": "level_refreshed", "level_id": "04", "locked_sources": [], "timestamp": "2026-07-26T19:09:17.840863+00:00"}
+{"attempt": 7, "event": "job_created", "level_id": "04", "timestamp": "2026-07-26T19:09:17.965598+00:00"}
+{"attempt": 7, "event": "state_changed", "level_id": "04", "state": "generating", "timestamp": "2026-07-26T19:09:17.971863+00:00"}
+{"attempt": 7, "event": "result_ingested", "level_id": "04", "normalized_hash": "709870c6ed0fd8653f69e60058ed7a0205a04f4d7715a3f8c303a65180b2e37c", "timestamp": "2026-07-26T19:10:53.661408+00:00"}
+{"acceptance_index": 8, "attempt": 7, "event": "result_accepted", "level_id": "04", "timestamp": "2026-07-26T19:10:53.734699+00:00"}
+{"context_revision": 6, "event": "level_refreshed", "level_id": "03", "locked_sources": ["04"], "timestamp": "2026-07-26T19:11:04.836493+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04"], "timestamp": "2026-07-26T19:11:17.337180+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-26T19:11:26.644437+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-07-26T19:11:26.713912+00:00"}
+{"event": "batch_started", "selected": ["07"], "timestamp": "2026-07-26T19:17:11.361950+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-26T19:17:20.677470+00:00"}
+{"attempt": 3, "event": "job_created", "level_id": "07", "timestamp": "2026-07-26T19:17:20.797878+00:00"}
+{"attempt": 3, "event": "state_changed", "level_id": "07", "state": "generating", "timestamp": "2026-07-26T19:17:20.803839+00:00"}
+{"attempt": 3, "event": "result_ingested", "level_id": "07", "normalized_hash": "ec5fb7525ac83a015b5be6a90983fe77b4c0b04c7ce9e4c2f93a683d32aa0c7e", "timestamp": "2026-07-26T19:18:30.771163+00:00"}
+{"acceptance_index": 9, "attempt": 3, "event": "result_accepted", "level_id": "07", "timestamp": "2026-07-26T19:18:30.818462+00:00"}
+{"context_revision": 9, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04", "07"], "timestamp": "2026-07-26T19:18:45.007097+00:00"}
+{"context_revision": 3, "event": "level_refreshed", "level_id": "11", "locked_sources": ["07"], "timestamp": "2026-07-26T19:18:53.036215+00:00"}
+{"context_revision": 3, "event": "level_refreshed", "level_id": "19", "locked_sources": ["07"], "timestamp": "2026-07-26T19:19:01.786300+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-07-26T19:19:01.848794+00:00"}
+{"event": "state_changed", "level_id": "07", "reason": "reset_for_padding_continuity_prompt", "state": "ready", "timestamp": "2026-07-26T19:36:21.094720+00:00"}
+{"event": "batch_started", "selected": ["07"], "timestamp": "2026-07-26T19:36:36.282558+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-26T19:36:45.738924+00:00"}
+{"attempt": 4, "event": "job_created", "level_id": "07", "timestamp": "2026-07-26T19:36:45.861347+00:00"}
+{"attempt": 4, "event": "state_changed", "level_id": "07", "state": "generating", "timestamp": "2026-07-26T19:36:45.867845+00:00"}
+{"attempt": 4, "event": "result_ingested", "level_id": "07", "normalized_hash": "4e477578b556f870d124a8b2067333659465bcee17f4ed7249b304c3f0177843", "timestamp": "2026-07-26T19:38:01.138404+00:00"}
+{"acceptance_index": 10, "attempt": 4, "event": "result_accepted", "level_id": "07", "timestamp": "2026-07-26T19:38:01.187230+00:00"}
+{"context_revision": 10, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04", "07"], "timestamp": "2026-07-26T19:38:15.050466+00:00"}
+{"context_revision": 4, "event": "level_refreshed", "level_id": "11", "locked_sources": ["07"], "timestamp": "2026-07-26T19:38:22.884732+00:00"}
+{"context_revision": 4, "event": "level_refreshed", "level_id": "19", "locked_sources": ["07"], "timestamp": "2026-07-26T19:38:31.877210+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-07-26T19:38:31.964556+00:00"}
+{"event": "state_changed", "level_id": "07", "reason": "revert_ab_prompt_reset_07", "state": "ready", "timestamp": "2026-07-26T20:53:51.403483+00:00"}
+{"event": "batch_started", "selected": ["07"], "timestamp": "2026-07-26T20:56:39.405134+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-26T20:56:49.053713+00:00"}
+{"attempt": 5, "event": "job_created", "level_id": "07", "timestamp": "2026-07-26T20:56:49.204203+00:00"}
+{"attempt": 5, "event": "state_changed", "level_id": "07", "state": "generating", "timestamp": "2026-07-26T20:56:49.211492+00:00"}
+{"attempt": 5, "event": "result_ingested", "level_id": "07", "normalized_hash": "dca206994272fc488f7300ebd4aa21537175bd8f791ac057a221cd39f6b5197a", "timestamp": "2026-07-26T20:58:13.743088+00:00"}
+{"acceptance_index": 11, "attempt": 5, "event": "result_accepted", "level_id": "07", "timestamp": "2026-07-26T20:58:13.813147+00:00"}
+{"context_revision": 11, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04", "07"], "timestamp": "2026-07-26T20:58:29.851808+00:00"}
+{"context_revision": 5, "event": "level_refreshed", "level_id": "11", "locked_sources": ["07"], "timestamp": "2026-07-26T20:58:37.714406+00:00"}
+{"context_revision": 5, "event": "level_refreshed", "level_id": "19", "locked_sources": ["07"], "timestamp": "2026-07-26T20:58:46.624371+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-07-26T20:58:46.695118+00:00"}
+{"event": "batch_started", "selected": ["07"], "timestamp": "2026-07-27T12:32:40.955763+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-07-27T12:32:40.956033+00:00"}
+{"event": "state_changed", "level_id": "07", "reason": "user_reset_for_rerun", "state": "ready", "timestamp": "2026-07-27T12:33:46.393566+00:00"}
+{"event": "batch_started", "selected": ["07"], "timestamp": "2026-07-27T12:34:03.622055+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-27T12:34:07.346308+00:00"}
+{"attempt": 6, "event": "job_created", "level_id": "07", "timestamp": "2026-07-27T12:34:07.423089+00:00"}
+{"attempt": 6, "event": "state_changed", "level_id": "07", "state": "generating", "timestamp": "2026-07-27T12:34:07.427470+00:00"}
+{"attempt": 6, "event": "result_ingested", "level_id": "07", "normalized_hash": "48225203ed7b061ff1e0137496b56d7a4570a519be8bdf2fa7c1371413dc6fb2", "timestamp": "2026-07-27T12:35:07.404151+00:00"}
+{"acceptance_index": 12, "attempt": 6, "event": "result_accepted", "level_id": "07", "timestamp": "2026-07-27T12:35:07.441765+00:00"}
+{"context_revision": 12, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04", "07"], "timestamp": "2026-07-27T12:35:14.862701+00:00"}
+{"context_revision": 6, "event": "level_refreshed", "level_id": "11", "locked_sources": ["07"], "timestamp": "2026-07-27T12:35:18.941299+00:00"}
+{"context_revision": 6, "event": "level_refreshed", "level_id": "19", "locked_sources": ["07"], "timestamp": "2026-07-27T12:35:23.470386+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-07-27T12:35:23.514062+00:00"}
+{"event": "state_changed", "level_id": "07", "reason": "nano_pro_retest", "state": "ready", "timestamp": "2026-07-28T08:33:13.698120+00:00"}
+{"event": "batch_started", "selected": ["07"], "timestamp": "2026-07-28T08:33:31.625744+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-28T08:33:36.121530+00:00"}
+{"attempt": 7, "event": "job_created", "level_id": "07", "timestamp": "2026-07-28T08:33:36.186869+00:00"}
+{"attempt": 7, "event": "state_changed", "level_id": "07", "state": "generating", "timestamp": "2026-07-28T08:33:36.191082+00:00"}
+{"attempt": 7, "event": "result_ingested", "level_id": "07", "normalized_hash": "6750b0955df9cb9261055d3eca90dfca722f9b91a8852043e0ea1aebfc88cbdf", "timestamp": "2026-07-28T08:35:09.362562+00:00"}
+{"acceptance_index": 13, "attempt": 7, "event": "result_accepted", "level_id": "07", "timestamp": "2026-07-28T08:35:09.389188+00:00"}
+{"context_revision": 13, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04", "07"], "timestamp": "2026-07-28T08:35:16.335076+00:00"}
+{"context_revision": 7, "event": "level_refreshed", "level_id": "11", "locked_sources": ["07"], "timestamp": "2026-07-28T08:35:20.224985+00:00"}
+{"context_revision": 7, "event": "level_refreshed", "level_id": "19", "locked_sources": ["07"], "timestamp": "2026-07-28T08:35:24.543703+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-07-28T08:35:24.577512+00:00"}
+{"event": "state_changed", "level_id": "07", "reason": "gpt_image_2_retest", "state": "ready", "timestamp": "2026-07-28T08:55:55.874082+00:00"}
+{"event": "batch_started", "selected": ["07"], "timestamp": "2026-07-28T09:05:07.921815+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-28T09:05:12.973506+00:00"}
+{"attempt": 8, "event": "job_created", "level_id": "07", "timestamp": "2026-07-28T09:05:13.030346+00:00"}
+{"attempt": 8, "event": "state_changed", "level_id": "07", "state": "generating", "timestamp": "2026-07-28T09:05:13.034371+00:00"}
+{"attempt": 8, "error": "Unexpected v2 generation response: [{'extensions': {'code': 'BadRequestException', 'details': {'code': 'VALIDATION_ERROR', 'errors': [{'code': 'VALIDATION_ERROR', 'message': 'Validation failed. Please check your request parameters.'}], 'message': 'Validation failed. Please check your request parameters.'}}, 'locations': [{'column': 73, 'line': 1}], 'message': 'An error occurred.', 'path': ['generate']}]", "event": "generation_retry", "level_id": "07", "retry": 0, "timestamp": "2026-07-28T09:05:15.897042+00:00"}
+{"attempt": 8, "error": "Unexpected v2 generation response: [{'extensions': {'code': 'BadRequestException', 'details': {'code': 'VALIDATION_ERROR', 'errors': [{'code': 'VALIDATION_ERROR', 'message': 'Validation failed. Please check your request parameters.'}], 'message': 'Validation failed. Please check your request parameters.'}}, 'locations': [{'column': 73, 'line': 1}], 'message': 'An error occurred.', 'path': ['generate']}]", "event": "generation_retry", "level_id": "07", "retry": 1, "timestamp": "2026-07-28T09:05:18.964504+00:00"}
+{"attempt": 8, "error": "Unexpected v2 generation response: [{'extensions': {'code': 'BadRequestException', 'details': {'code': 'VALIDATION_ERROR', 'errors': [{'code': 'VALIDATION_ERROR', 'message': 'Validation failed. Please check your request parameters.'}], 'message': 'Validation failed. Please check your request parameters.'}}, 'locations': [{'column': 73, 'line': 1}], 'message': 'An error occurred.', 'path': ['generate']}]", "event": "generation_retry", "level_id": "07", "retry": 2, "timestamp": "2026-07-28T09:05:20.841706+00:00"}
+{"attempt": 8, "error": "Unexpected v2 generation response: [{'extensions': {'code': 'BadRequestException', 'details': {'code': 'VALIDATION_ERROR', 'errors': [{'code': 'VALIDATION_ERROR', 'message': 'Validation failed. Please check your request parameters.'}], 'message': 'Validation failed. Please check your request parameters.'}}, 'locations': [{'column': 73, 'line': 1}], 'message': 'An error occurred.', 'path': ['generate']}]", "event": "state_changed", "level_id": "07", "state": "failed", "timestamp": "2026-07-28T09:05:20.856488+00:00"}
+{"event": "batch_finished", "status": "failed", "timestamp": "2026-07-28T09:05:20.857058+00:00"}
+{"event": "batch_started", "selected": ["07"], "timestamp": "2026-07-28T10:05:18.213252+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-28T10:05:22.277750+00:00"}
+{"attempt": 9, "event": "job_created", "level_id": "07", "timestamp": "2026-07-28T10:05:22.326319+00:00"}
+{"attempt": 9, "event": "state_changed", "level_id": "07", "state": "generating", "timestamp": "2026-07-28T10:05:22.330626+00:00"}
+{"attempt": 9, "event": "result_ingested", "level_id": "07", "normalized_hash": "ef73e1a21d0d6504ce9fdc04eb6c6526add48540e026929012d0435b070c6e88", "timestamp": "2026-07-28T10:06:30.098343+00:00"}
+{"acceptance_index": 14, "attempt": 9, "event": "result_accepted", "level_id": "07", "timestamp": "2026-07-28T10:06:30.124528+00:00"}
+{"context_revision": 14, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04", "07"], "timestamp": "2026-07-28T10:06:36.650316+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "11", "locked_sources": ["07"], "timestamp": "2026-07-28T10:06:40.751648+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "19", "locked_sources": ["07"], "timestamp": "2026-07-28T10:06:44.935717+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-07-28T10:06:44.966617+00:00"}
+{"event": "batch_started", "selected": ["07"], "timestamp": "2026-07-28T21:50:41.785684+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-07-28T21:50:50.555887+00:00"}
+{"attempt": 10, "event": "job_created", "level_id": "07", "timestamp": "2026-07-28T21:50:50.654759+00:00"}
+{"attempt": 10, "event": "state_changed", "level_id": "07", "state": "generating", "timestamp": "2026-07-28T21:50:50.659691+00:00"}
+{"attempt": 10, "event": "result_rejected", "footprint_iou": 0.2408, "level_id": "07", "threshold": 0.85, "timestamp": "2026-07-28T21:51:39.114466+00:00"}
+{"attempt": 10, "error": "generated footprint IoU 0.241 is below execution.min_footprint_iou 0.850: the model did not paint the supplied silhouette (raw image kept at /home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/07/jobs/attempt_010/generated.png)", "event": "state_changed", "level_id": "07", "state": "failed", "timestamp": "2026-07-28T21:51:39.120858+00:00"}
+{"event": "batch_finished", "status": "failed", "timestamp": "2026-07-28T21:51:39.128404+00:00"}
+{"attempt": 10, "event": "result_ingested", "footprint_iou": 0.9667, "footprint_iou_raw": 0.2408, "level_id": "07", "normalized_hash": "dceef9eade61e4ba97058749c0e766fa9a0c137be5a77baa23db796b37892e71", "rescale_applied": true, "timestamp": "2026-07-30T20:31:52.264329+00:00"}
+{"acceptance_index": 15, "attempt": 10, "event": "result_accepted", "level_id": "07", "timestamp": "2026-07-30T20:58:33.694320+00:00"}
+{"context_revision": 15, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04", "07"], "timestamp": "2026-07-30T20:58:40.766609+00:00"}
+{"context_revision": 9, "event": "level_refreshed", "level_id": "11", "locked_sources": ["07"], "timestamp": "2026-07-30T20:58:44.605928+00:00"}
+{"context_revision": 9, "event": "level_refreshed", "level_id": "19", "locked_sources": ["07"], "timestamp": "2026-07-30T20:58:48.857509+00:00"}
+{"event": "batch_started", "selected": ["12"], "timestamp": "2026-07-30T21:05:45.137400+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "12", "locked_sources": [], "timestamp": "2026-07-30T21:05:48.800721+00:00"}
+{"attempt": 1, "event": "job_created", "level_id": "12", "timestamp": "2026-07-30T21:05:48.854628+00:00"}
+{"attempt": 1, "event": "state_changed", "level_id": "12", "state": "generating", "timestamp": "2026-07-30T21:05:48.858659+00:00"}
+{"attempt": 1, "event": "result_rejected", "footprint_iou": 0.7425, "footprint_iou_raw": 0.4732, "level_id": "12", "rescale_applied": true, "threshold": 0.85, "timestamp": "2026-07-30T21:06:33.659643+00:00"}
+{"attempt": 1, "error": "generated footprint IoU 0.473 -> 0.742 after rescale, still below execution.min_footprint_iou 0.850: the model did not paint the supplied silhouette (raw image kept at /home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/12/jobs/attempt_001/generated.png)", "event": "state_changed", "level_id": "12", "state": "failed", "timestamp": "2026-07-30T21:06:33.663964+00:00"}
+{"event": "batch_finished", "status": "failed", "timestamp": "2026-07-30T21:06:33.674687+00:00"}
+{"event": "batch_started", "selected": ["12"], "timestamp": "2026-07-30T21:19:12.743647+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "12", "locked_sources": [], "timestamp": "2026-07-30T21:19:16.460974+00:00"}
+{"attempt": 2, "event": "job_created", "level_id": "12", "timestamp": "2026-07-30T21:19:16.505908+00:00"}
+{"attempt": 2, "event": "state_changed", "level_id": "12", "state": "generating", "timestamp": "2026-07-30T21:19:16.509938+00:00"}
+{"attempt": 2, "event": "result_ingested", "footprint_iou": 0.7139, "footprint_iou_raw": 0.2464, "level_id": "12", "normalized_hash": "61bea9968d6605141c54a172dee601ba4574c0635756f82789814d772170d4f0", "rescale_applied": true, "timestamp": "2026-07-30T21:20:23.020468+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-07-30T21:20:23.029780+00:00"}
+{"event": "batch_started", "selected": ["25"], "timestamp": "2026-07-30T21:29:36.270551+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "25", "locked_sources": [], "timestamp": "2026-07-30T21:29:38.977307+00:00"}
+{"attempt": 1, "event": "job_created", "level_id": "25", "timestamp": "2026-07-30T21:29:39.025452+00:00"}
+{"attempt": 1, "event": "state_changed", "level_id": "25", "state": "generating", "timestamp": "2026-07-30T21:29:39.029354+00:00"}
+{"attempt": 1, "event": "result_ingested", "footprint_iou": 0.7565, "footprint_iou_raw": 0.0953, "level_id": "25", "normalized_hash": "a8bfa2b93dc4beda5fbb9de942cfe1ab06106c103827023589ae78a599559448", "rescale_applied": true, "timestamp": "2026-07-30T21:30:39.610207+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-07-30T21:30:39.619467+00:00"}
+{"event": "batch_started", "selected": ["06"], "timestamp": "2026-07-30T21:33:50.670279+00:00"}
+{"context_revision": 15, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04", "07"], "timestamp": "2026-07-30T21:33:57.177329+00:00"}
+{"attempt": 1, "event": "job_created", "level_id": "06", "timestamp": "2026-07-30T21:33:57.236701+00:00"}
+{"attempt": 1, "event": "state_changed", "level_id": "06", "state": "generating", "timestamp": "2026-07-30T21:33:57.240586+00:00"}
+{"attempt": 1, "event": "result_ingested", "footprint_iou": 0.9794, "footprint_iou_raw": 0.9794, "level_id": "06", "normalized_hash": "ab6b44fb088d127c728c5a8e8e1f25bb1977a061a85fb8e8f087f6031039eb17", "rescale_applied": false, "timestamp": "2026-07-30T21:35:01.358924+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-07-30T21:35:01.367263+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-07-30T21:40:23.986869+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "05", "locked_sources": [], "timestamp": "2026-07-30T21:40:27.041650+00:00"}
+{"attempt": 1, "event": "job_created", "level_id": "05", "timestamp": "2026-07-30T21:40:27.085968+00:00"}
+{"attempt": 1, "event": "state_changed", "level_id": "05", "state": "generating", "timestamp": "2026-07-30T21:40:27.093502+00:00"}
+{"attempt": 1, "event": "result_rejected", "footprint_iou": 0.1698, "level_id": "05", "reason": "full_bleed", "timestamp": "2026-07-30T21:41:14.951782+00:00"}
+{"attempt": 1, "error": "generated image is full bleed (footprint IoU 0.170): it has no usable land outline, so it cannot be rescaled or warped (raw image kept at /home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/05/jobs/attempt_001/generated.png)", "event": "state_changed", "level_id": "05", "state": "failed", "timestamp": "2026-07-30T21:41:14.958134+00:00"}
+{"event": "batch_finished", "status": "failed", "timestamp": "2026-07-30T21:41:14.968009+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-07-30T21:46:11.497538+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "05", "locked_sources": [], "timestamp": "2026-07-30T21:46:14.582989+00:00"}
+{"attempt": 2, "event": "job_created", "level_id": "05", "timestamp": "2026-07-30T21:46:14.628708+00:00"}
+{"attempt": 2, "event": "state_changed", "level_id": "05", "state": "generating", "timestamp": "2026-07-30T21:46:14.632805+00:00"}
+{"attempt": 2, "event": "result_ingested", "footprint_iou": 0.9566, "footprint_iou_raw": 0.2838, "level_id": "05", "normalized_hash": "4e9ed2d1a67cc1c85379e97884f3ffaa1c0a9960e26fa478ea175ade67b280e1", "rescale_applied": true, "timestamp": "2026-07-30T21:47:10.605964+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-07-30T21:47:10.614163+00:00"}
+{"event": "batch_started", "selected": ["01"], "timestamp": "2026-07-31T08:26:38.159343+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "01", "locked_sources": [], "timestamp": "2026-07-31T08:26:41.703191+00:00"}
+{"attempt": 1, "event": "job_created", "level_id": "01", "timestamp": "2026-07-31T08:26:41.750963+00:00"}
+{"attempt": 1, "event": "state_changed", "level_id": "01", "state": "generating", "timestamp": "2026-07-31T08:26:41.755985+00:00"}
+{"attempt": 1, "event": "result_ingested", "footprint_iou": 0.6783, "footprint_iou_raw": 0.593, "level_id": "01", "normalized_hash": "373bc8263e6a009dbd0e7b46f42011ebe6c346dbc785498a657d1f72c838468b", "rescale_applied": true, "timestamp": "2026-07-31T08:27:53.874560+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-07-31T08:27:53.886136+00:00"}
+{"acceptance_index": 16, "attempt": 1, "event": "result_accepted", "level_id": "25", "timestamp": "2026-07-31T16:36:39.387385+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "22", "locked_sources": ["25"], "timestamp": "2026-07-31T16:36:47.777633+00:00"}
+{"acceptance_index": 17, "attempt": 2, "event": "result_accepted", "level_id": "12", "timestamp": "2026-07-31T16:36:48.886184+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "08", "locked_sources": ["12"], "timestamp": "2026-07-31T16:36:56.272737+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "09", "locked_sources": ["12"], "timestamp": "2026-07-31T16:37:02.944026+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "13", "locked_sources": ["12"], "timestamp": "2026-07-31T16:37:10.278187+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "15", "locked_sources": ["12"], "timestamp": "2026-07-31T16:37:18.672073+00:00"}
+{"acceptance_index": 18, "attempt": 1, "event": "result_accepted", "level_id": "06", "timestamp": "2026-07-31T16:37:19.761116+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "02", "locked_sources": ["06"], "timestamp": "2026-07-31T16:37:28.141953+00:00"}
+{"context_revision": 7, "event": "level_refreshed", "level_id": "03", "locked_sources": ["04", "06"], "timestamp": "2026-07-31T16:37:38.779400+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "05", "locked_sources": ["06"], "timestamp": "2026-07-31T16:37:46.557949+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "09", "locked_sources": ["12", "06"], "timestamp": "2026-07-31T16:37:55.182756+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "10", "locked_sources": ["06"], "timestamp": "2026-07-31T16:38:02.151153+00:00"}
+{"acceptance_index": 19, "attempt": 2, "event": "result_accepted", "level_id": "05", "timestamp": "2026-07-31T16:38:03.267859+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "01", "locked_sources": ["05"], "timestamp": "2026-07-31T16:38:11.453128+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "02", "locked_sources": ["06", "05"], "timestamp": "2026-07-31T16:38:21.049668+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "08", "locked_sources": ["12", "05"], "timestamp": "2026-07-31T16:38:29.902689+00:00"}
+{"acceptance_index": 20, "attempt": 1, "event": "result_accepted", "level_id": "01", "timestamp": "2026-07-31T16:38:31.013750+00:00"}
+{"event": "batch_started", "selected": ["01"], "timestamp": "2026-08-01T08:26:04.346946+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "01", "locked_sources": ["05"], "timestamp": "2026-08-01T08:26:09.895024+00:00"}
+{"attempt": 2, "event": "job_created", "level_id": "01", "timestamp": "2026-08-01T08:26:09.981880+00:00"}
+{"attempt": 2, "event": "state_changed", "level_id": "01", "state": "generating", "timestamp": "2026-08-01T08:26:09.987856+00:00"}
+{"attempt": 2, "error": "Missing API key in environment variable 'LEONARDO_API_KEY'", "event": "generation_retry", "level_id": "01", "retry": 0, "timestamp": "2026-08-01T08:26:10.814152+00:00"}
+{"attempt": 2, "error": "Missing API key in environment variable 'LEONARDO_API_KEY'", "event": "generation_retry", "level_id": "01", "retry": 1, "timestamp": "2026-08-01T08:26:11.521884+00:00"}
+{"attempt": 2, "error": "Missing API key in environment variable 'LEONARDO_API_KEY'", "event": "generation_retry", "level_id": "01", "retry": 2, "timestamp": "2026-08-01T08:26:12.091951+00:00"}
+{"attempt": 2, "error": "Missing API key in environment variable 'LEONARDO_API_KEY'", "event": "state_changed", "level_id": "01", "state": "failed", "timestamp": "2026-08-01T08:26:12.099778+00:00"}
+{"event": "batch_finished", "status": "failed", "timestamp": "2026-08-01T08:26:12.099996+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "01", "locked_sources": ["05"], "timestamp": "2026-08-01T08:28:07.370703+00:00"}
+{"event": "batch_started", "selected": ["01"], "timestamp": "2026-08-01T08:28:11.248922+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "01", "locked_sources": ["05"], "timestamp": "2026-08-01T08:28:15.959602+00:00"}
+{"attempt": 3, "event": "job_created", "level_id": "01", "timestamp": "2026-08-01T08:28:16.018086+00:00"}
+{"attempt": 3, "event": "state_changed", "level_id": "01", "state": "generating", "timestamp": "2026-08-01T08:28:16.021850+00:00"}
+{"attempt": 3, "event": "result_ingested", "footprint_iou": 0.829, "footprint_iou_raw": 0.2458, "level_id": "01", "normalized_hash": "2a5fcea616f10cdd97c578b4bddd072706164376b6a4dc78811a0f3ea4fdd7a2", "rescale_applied": true, "timestamp": "2026-08-01T08:29:20.255146+00:00"}
+{"acceptance_index": 21, "attempt": 3, "event": "result_accepted", "level_id": "01", "timestamp": "2026-08-01T08:29:20.288605+00:00"}
+{"context_revision": 3, "event": "level_refreshed", "level_id": "02", "locked_sources": ["06", "05", "01"], "timestamp": "2026-08-01T08:29:26.247155+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-08-01T08:29:26.286742+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-08-01T09:45:39.856347+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "05", "locked_sources": ["06"], "timestamp": "2026-08-01T09:45:44.761301+00:00"}
+{"attempt": 3, "event": "job_created", "level_id": "05", "timestamp": "2026-08-01T09:45:44.827817+00:00"}
+{"attempt": 3, "event": "state_changed", "level_id": "05", "state": "generating", "timestamp": "2026-08-01T09:45:44.832463+00:00"}
+{"attempt": 3, "error": "Missing API key in environment variable 'LEONARDO_API_KEY'", "event": "generation_retry", "level_id": "05", "retry": 0, "timestamp": "2026-08-01T09:45:45.486752+00:00"}
+{"attempt": 3, "error": "Missing API key in environment variable 'LEONARDO_API_KEY'", "event": "generation_retry", "level_id": "05", "retry": 1, "timestamp": "2026-08-01T09:45:46.056614+00:00"}
+{"attempt": 3, "error": "Missing API key in environment variable 'LEONARDO_API_KEY'", "event": "generation_retry", "level_id": "05", "retry": 2, "timestamp": "2026-08-01T09:45:46.594178+00:00"}
+{"attempt": 3, "error": "Missing API key in environment variable 'LEONARDO_API_KEY'", "event": "state_changed", "level_id": "05", "state": "failed", "timestamp": "2026-08-01T09:45:46.598512+00:00"}
+{"event": "batch_finished", "status": "failed", "timestamp": "2026-08-01T09:45:46.598685+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-08-01T09:47:45.811211+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "05", "locked_sources": ["06"], "timestamp": "2026-08-01T09:47:50.249009+00:00"}
+{"attempt": 4, "event": "job_created", "level_id": "05", "timestamp": "2026-08-01T09:47:50.304563+00:00"}
+{"attempt": 4, "event": "state_changed", "level_id": "05", "state": "generating", "timestamp": "2026-08-01T09:47:50.308926+00:00"}
+{"attempt": 4, "event": "result_ingested", "footprint_iou": 0.9279, "footprint_iou_raw": 0.2651, "level_id": "05", "normalized_hash": "243243d9db1ae204fcefd625fc5999248a71e2c25e42b9d01f7124616fa25962", "rescale_applied": true, "timestamp": "2026-08-01T09:48:50.374256+00:00"}
+{"acceptance_index": 22, "attempt": 4, "event": "result_accepted", "level_id": "05", "timestamp": "2026-08-01T09:48:50.420826+00:00"}
+{"context_revision": 3, "event": "level_refreshed", "level_id": "01", "locked_sources": ["05"], "timestamp": "2026-08-01T09:48:55.705199+00:00"}
+{"context_revision": 4, "event": "level_refreshed", "level_id": "02", "locked_sources": ["06", "05"], "timestamp": "2026-08-01T09:49:01.426726+00:00"}
+{"context_revision": 3, "event": "level_refreshed", "level_id": "08", "locked_sources": ["12", "05"], "timestamp": "2026-08-01T09:49:06.550597+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-08-01T09:49:06.584539+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-08-01T10:05:01.104524+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-08-01T10:05:01.104930+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-08-01T10:06:26.886081+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "05", "locked_sources": ["06"], "timestamp": "2026-08-01T10:06:30.850428+00:00"}
+{"attempt": 5, "event": "job_created", "level_id": "05", "timestamp": "2026-08-01T10:06:30.903544+00:00"}
+{"attempt": 5, "event": "state_changed", "level_id": "05", "state": "generating", "timestamp": "2026-08-01T10:06:30.907550+00:00"}
+{"attempt": 5, "event": "result_ingested", "footprint_iou": 0.9893, "footprint_iou_raw": 0.2885, "level_id": "05", "normalized_hash": "7b5ed359776f39e7f5aa32ee73b7e0483db0fa6c8369d89707451f49846de075", "rescale_applied": true, "timestamp": "2026-08-01T10:07:28.154829+00:00"}
+{"acceptance_index": 23, "attempt": 5, "event": "result_accepted", "level_id": "05", "timestamp": "2026-08-01T10:07:28.197544+00:00"}
+{"context_revision": 4, "event": "level_refreshed", "level_id": "01", "locked_sources": ["05"], "timestamp": "2026-08-01T10:07:32.291382+00:00"}
+{"context_revision": 5, "event": "level_refreshed", "level_id": "02", "locked_sources": ["06", "05"], "timestamp": "2026-08-01T10:07:37.404278+00:00"}
+{"context_revision": 4, "event": "level_refreshed", "level_id": "08", "locked_sources": ["12", "05"], "timestamp": "2026-08-01T10:07:42.171636+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-08-01T10:07:42.201014+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-08-01T10:23:21.592747+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-08-01T10:23:21.593049+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-08-01T10:24:00.500797+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "05", "locked_sources": ["06"], "timestamp": "2026-08-01T10:24:04.688384+00:00"}
+{"attempt": 6, "event": "job_created", "level_id": "05", "timestamp": "2026-08-01T10:24:04.860694+00:00"}
+{"attempt": 6, "event": "state_changed", "level_id": "05", "state": "generating", "timestamp": "2026-08-01T10:24:04.864772+00:00"}
+{"attempt": 6, "event": "result_ingested", "footprint_iou": 0.8479, "footprint_iou_raw": 0.8975, "level_id": "05", "normalized_hash": "3e4b11abd25bba7b3d8fe2a85481b9178ca98c72de018fe8b0893130ba38700f", "rescale_applied": true, "timestamp": "2026-08-01T10:24:58.174295+00:00"}
+{"acceptance_index": 24, "attempt": 6, "event": "result_accepted", "level_id": "05", "timestamp": "2026-08-01T10:24:58.200415+00:00"}
+{"context_revision": 5, "event": "level_refreshed", "level_id": "01", "locked_sources": ["05"], "timestamp": "2026-08-01T10:25:02.854580+00:00"}
+{"context_revision": 6, "event": "level_refreshed", "level_id": "02", "locked_sources": ["06", "05"], "timestamp": "2026-08-01T10:25:08.388601+00:00"}
+{"context_revision": 5, "event": "level_refreshed", "level_id": "08", "locked_sources": ["12", "05"], "timestamp": "2026-08-01T10:25:13.451452+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-08-01T10:25:13.488926+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-08-01T10:55:26.674047+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "05", "locked_sources": ["06"], "timestamp": "2026-08-01T10:55:30.871577+00:00"}
+{"attempt": 7, "event": "job_created", "level_id": "05", "timestamp": "2026-08-01T10:55:31.061895+00:00"}
+{"attempt": 7, "event": "state_changed", "level_id": "05", "state": "generating", "timestamp": "2026-08-01T10:55:31.066519+00:00"}
+{"attempt": 7, "event": "result_ingested", "footprint_iou": 0.9845, "footprint_iou_raw": 0.2799, "level_id": "05", "normalized_hash": "3cfd68af5ca441b0b52edee3c86dd3f106726184aaa16be3dfe4fd182398f258", "rescale_applied": true, "timestamp": "2026-08-01T10:56:32.688595+00:00"}
+{"acceptance_index": 25, "attempt": 7, "event": "result_accepted", "level_id": "05", "timestamp": "2026-08-01T10:56:32.724734+00:00"}
+{"context_revision": 6, "event": "level_refreshed", "level_id": "01", "locked_sources": ["05"], "timestamp": "2026-08-01T10:56:37.265092+00:00"}
+{"context_revision": 7, "event": "level_refreshed", "level_id": "02", "locked_sources": ["06", "05"], "timestamp": "2026-08-01T10:56:43.003234+00:00"}
+{"context_revision": 6, "event": "level_refreshed", "level_id": "08", "locked_sources": ["12", "05"], "timestamp": "2026-08-01T10:56:48.489445+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-08-01T10:56:48.577434+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-08-01T11:24:21.785216+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "05", "locked_sources": ["06"], "timestamp": "2026-08-01T11:24:27.144716+00:00"}
+{"attempt": 8, "event": "job_created", "level_id": "05", "timestamp": "2026-08-01T11:24:27.221608+00:00"}
+{"attempt": 8, "event": "state_changed", "level_id": "05", "state": "generating", "timestamp": "2026-08-01T11:24:27.226368+00:00"}
+{"attempt": 8, "error": "'ascii' codec can't encode character '\\u2014' in position 186: ordinal not in range(128)", "event": "generation_retry", "level_id": "05", "retry": 0, "timestamp": "2026-08-01T11:25:14.354368+00:00"}
+{"attempt": 8, "error": "'ascii' codec can't encode character '\\u2014' in position 186: ordinal not in range(128)", "event": "generation_retry", "level_id": "05", "retry": 1, "timestamp": "2026-08-01T11:26:04.865241+00:00"}
+{"attempt": 8, "error": "'ascii' codec can't encode character '\\u2014' in position 186: ordinal not in range(128)", "event": "generation_retry", "level_id": "05", "retry": 2, "timestamp": "2026-08-01T11:26:49.891290+00:00"}
+{"attempt": 8, "error": "'ascii' codec can't encode character '\\u2014' in position 186: ordinal not in range(128)", "event": "state_changed", "level_id": "05", "state": "failed", "timestamp": "2026-08-01T11:26:49.902168+00:00"}
+{"event": "batch_finished", "status": "failed", "timestamp": "2026-08-01T11:26:49.903131+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-08-01T11:35:33.351259+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "05", "locked_sources": ["06"], "timestamp": "2026-08-01T11:35:40.306846+00:00"}
+{"attempt": 9, "event": "job_created", "level_id": "05", "timestamp": "2026-08-01T11:35:40.388423+00:00"}
+{"attempt": 9, "event": "state_changed", "level_id": "05", "state": "generating", "timestamp": "2026-08-01T11:35:40.395433+00:00"}
+{"attempt": 9, "event": "result_ingested", "footprint_iou": 0.9937, "footprint_iou_raw": 0.9937, "level_id": "05", "normalized_hash": "49f2fbe3acb3035e4318e2d3fe4c422c748bed2f54e51cf39dc310bf2ad2bd3c", "rescale_applied": false, "timestamp": "2026-08-01T11:36:44.121924+00:00"}
+{"acceptance_index": 26, "attempt": 9, "event": "result_accepted", "level_id": "05", "timestamp": "2026-08-01T11:36:44.159235+00:00"}
+{"context_revision": 7, "event": "level_refreshed", "level_id": "01", "locked_sources": ["05"], "timestamp": "2026-08-01T11:36:50.650180+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "02", "locked_sources": ["06", "05"], "timestamp": "2026-08-01T11:36:59.191952+00:00"}
+{"context_revision": 7, "event": "level_refreshed", "level_id": "08", "locked_sources": ["12", "05"], "timestamp": "2026-08-01T11:37:05.193712+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-08-01T11:37:05.228216+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-08-01T11:41:16.220888+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-08-01T11:41:16.221336+00:00"}
+{"event": "batch_started", "selected": ["05"], "timestamp": "2026-08-01T11:43:34.788732+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "05", "locked_sources": ["06"], "timestamp": "2026-08-01T11:43:39.729221+00:00"}
+{"attempt": 10, "event": "job_created", "level_id": "05", "timestamp": "2026-08-01T11:43:39.795578+00:00"}
+{"attempt": 10, "event": "state_changed", "level_id": "05", "state": "generating", "timestamp": "2026-08-01T11:43:39.800376+00:00"}
+{"attempt": 10, "event": "result_ingested", "footprint_iou": 0.994, "footprint_iou_raw": 0.994, "level_id": "05", "normalized_hash": "f492bfd2901504643256834b16c44f24e658b70ebac111aeb1494b4af9c403cd", "rescale_applied": false, "timestamp": "2026-08-01T11:44:43.116922+00:00"}
+{"acceptance_index": 27, "attempt": 10, "event": "result_accepted", "level_id": "05", "timestamp": "2026-08-01T11:44:43.154073+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "01", "locked_sources": ["05"], "timestamp": "2026-08-01T11:44:48.448569+00:00"}
+{"context_revision": 9, "event": "level_refreshed", "level_id": "02", "locked_sources": ["06", "05"], "timestamp": "2026-08-01T11:44:54.502745+00:00"}
+{"context_revision": 8, "event": "level_refreshed", "level_id": "08", "locked_sources": ["12", "05"], "timestamp": "2026-08-01T11:44:59.552627+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-08-01T11:44:59.584465+00:00"}

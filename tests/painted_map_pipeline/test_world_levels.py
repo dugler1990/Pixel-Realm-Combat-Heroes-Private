@@ -11,7 +11,7 @@ from PIL import Image
 from tools.painted_map_pipeline.world_levels.batch_runner import parse_level_selector, run_batch
 from tools.painted_map_pipeline.world_levels.config import load_config
 from tools.painted_map_pipeline.world_levels.coordinates import ScaledSpace, build_transform
-from tools.painted_map_pipeline.world_levels.job_builder import create_job
+from tools.painted_map_pipeline.world_levels.job_builder import canvas_asset, create_job
 from tools.painted_map_pipeline.world_levels.masks import compute_overlap
 from tools.painted_map_pipeline.world_levels.package_builder import level_paths, prepare_run
 from tools.painted_map_pipeline.world_levels.package_refresher import refresh_level
@@ -36,7 +36,18 @@ CSV_FIELDS = [
 ]
 
 
-def _write_fixture(tmp_path: Path, *, canvas: dict | None = None) -> Path:
+def _write_fixture(
+    tmp_path: Path,
+    *,
+    canvas: dict | None = None,
+    generation: dict | None = None,
+    name: str = "",
+) -> Path:
+    """Write a world image, level plan and config into ``tmp_path``.
+
+    ``name`` gives the run its own output root and config file, so two runs can be prepared
+    side by side from the same world and plan -- which is how the renderers get compared.
+    """
     world_path = tmp_path / "world.png"
     world = np.zeros((10, 20, 4), dtype=np.uint8)
     for y in range(10):
@@ -78,13 +89,13 @@ def _write_fixture(tmp_path: Path, *, canvas: dict | None = None) -> Path:
         writer.writeheader()
         writer.writerows(rows)
 
-    config_path = tmp_path / "config.json"
+    config_path = tmp_path / f"config{name}.json"
     config_path.write_text(
         json.dumps(
             {
                 "world_map": str(world_path),
                 "level_plan": str(plan_path),
-                "output_root": str(tmp_path / "output"),
+                "output_root": str(tmp_path / f"output{name}"),
                 "canvas": canvas
                 or {
                     "mode": "derived",
@@ -101,7 +112,7 @@ def _write_fixture(tmp_path: Path, *, canvas: dict | None = None) -> Path:
                     "stop_on_failure": True,
                     "retry_limit": 0,
                 },
-                "generation": {"provider": "copy"},
+                "generation": generation or {"provider": "copy"},
                 "style_prompt": "Test prompt.",
             }
         ),
@@ -117,9 +128,11 @@ def test_prepare_uses_configured_canvas_and_binary_masks(tmp_path: Path):
     paths = level_paths(config.output_root, "01")
     with Image.open(paths["generation_mask"]) as mask:
         assert set(np.unique(np.asarray(mask))).issubset({0, 255})
-    with Image.open(paths["base_template"]) as base, Image.open(paths["generation_mask"]) as mask:
-        base_array = np.asarray(base)
-        assert np.all(base_array[np.asarray(mask) == 0] == np.array([0, 0, 0, 255]))
+    # The prepared template is dense: masking to the polygon is a renderer's presentation
+    # choice, so the world map survives outside it rather than being cut away here.
+    with Image.open(paths["dense_template"]) as dense, Image.open(paths["generation_mask"]) as mask:
+        outside = np.asarray(dense)[np.asarray(mask) == 0]
+        assert np.any(outside != np.array([0, 0, 0, 255]))
 
 
 def test_explicit_canvas_rejects_scaled_crop_that_does_not_fit(tmp_path: Path):
@@ -177,7 +190,7 @@ def test_acceptance_embeds_exact_neighbor_pixels_and_restores_locks(tmp_path: Pa
     with Image.open(second_job.input_path) as opened:
         tampered = opened.convert("RGBA")
     tampered_array = np.array(tampered)
-    with Image.open(second_job.directory / "locked_overlap_mask.png") as locked:
+    with Image.open(canvas_asset(second_job.directory, "locked_mask")) as locked:
         tampered_array[np.asarray(locked) > 0] = (255, 0, 0, 255)
     tampered_path = tmp_path / "tampered.png"
     Image.fromarray(tampered_array, mode="RGBA").save(tampered_path)

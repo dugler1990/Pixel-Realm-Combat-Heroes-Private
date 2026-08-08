@@ -1,0 +1,113 @@
+{
+  "provider": "leonardo",
+  "api_version": "v2",
+  "model": "nano-banana-2",
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/05/jobs/attempt_002/generated.png",
+  "generation_id": "1f18c601-77cf-6410-b51e-a0b3f6cacc2c",
+  "init_image_ids": [
+    "75877ae4-5b84-45c5-b8d2-802ce0d7111a"
+  ],
+  "init_image_id": "75877ae4-5b84-45c5-b8d2-802ce0d7111a",
+  "source_url": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18c601-77cf-6410-b51e-a0b3f6cacc2c/nano-banana-2_Render_level_05_Frostreach_._Return_exactly_5056x3392_pixels._Reference_image_in-0.jpg",
+  "width": 5056,
+  "height": 3392,
+  "seed": 700002,
+  "request": {
+    "model": "nano-banana-2",
+    "parameters": {
+      "width": 5056,
+      "height": 3392,
+      "prompt": "Render level 05 (Frostreach).\nReturn exactly 5056x3392 pixels.\nReference image: input.png only.\nIn input.png, land is the non-black region on a pure black (#000000) background.\nThat non-black footprint is the exact output shape: every land edge and corner must match it.\nPaint terrain only on those non-black pixels.\nThe black region is void \u2014 outside the world. It is not sea, not sky, not fog.\nNothing is painted there. It keeps exactly the shape it has in input.png and stays #000000.\nDo not extend land or water into it, and do not fade, vignette, or feather into it.\nDo not enlarge, shrink, round, straighten, or otherwise change the land outline.\nIf land reaches the image border where the reference has black, that is wrong.\nTreat input.png as a locked layout to repaint, not as inspiration.\nKeep the same ridges, plains, water, and ice in the same places and proportions.\nDo not invent a new layout, new peak pattern, or relocated edges.\nUpgrade materials and detail only; the geography must remain recognizable as the same chunk.\nRemove any text or labels from the reference.\nKeep lighting diffuse and shadow-neutral: local form shading is allowed, directional cast shadows are not.\nDo not add labels, UI, borders, map symbols, characters, or a visible grid.\nNo neighbor padding is present. This is a seed level.\nStyle (materials and lighting only \u2014 must not override the layout above):\nCreate a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows.\n",
+      "quantity": 1,
+      "prompt_enhance": "OFF",
+      "guidances": {
+        "image_reference": [
+          {
+            "image": {
+              "id": "75877ae4-5b84-45c5-b8d2-802ce0d7111a",
+              "type": "UPLOADED"
+            },
+            "strength": "HIGH"
+          }
+        ]
+      },
+      "seed": 700002
+    },
+    "public": false
+  },
+  "create_response": {
+    "generate": {
+      "apiCreditCost": null,
+      "generationId": "1f18c601-77cf-6410-b51e-a0b3f6cacc2c",
+      "cost": {
+        "amount": "0.0777",
+        "unit": "DOLLARS"
+      }
+    }
+  },
+  "generation_response": {
+    "generations_by_pk": {
+      "generated_images": [
+        {
+          "url": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18c601-77cf-6410-b51e-a0b3f6cacc2c/nano-banana-2_Render_level_05_Frostreach_._Return_exactly_5056x3392_pixels._Reference_image_in-0.jpg",
+          "nsfw": false,
+          "id": "eceeb9e0-d1bf-4a97-837a-5a164ef67f97",
+          "likeCount": 0,
+          "motionMP4URL": null,
+          "threeDUrl": null,
+          "urls": {
+            "asset": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18c601-77cf-6410-b51e-a0b3f6cacc2c/nano-banana-2_Render_level_05_Frostreach_._Return_exactly_5056x3392_pixels._Reference_image_in-0.jpg",
+            "thumbnail": null
+          },
+          "generated_image_variation_generics": []
+        }
+      ],
+      "modelId": "7418e71f-4133-4e1b-9895-bee19f48f2ce",
+      "motion": false,
+      "motionModel": null,
+      "motionStrength": null,
+      "prompt": "Render level 05 (Frostreach).\nReturn exactly 5056x3392 pixels.\nReference image: input.png only.\nIn input.png, land is the non-black region on a pure black (#000000) background.\nThat non-black footprint is the exact output shape: every land edge and corner must match it.\nPaint terrain only on those non-black pixels.\nThe black region is void \u2014 outside the world. It is not sea, not sky, not fog.\nNothing is painted there. It keeps exactly the shape it has in input.png and stays #000000.\nDo not extend land or water into it, and do not fade, vignette, or feather into it.\nDo not enlarge, shrink, round, straighten, or otherwise change the land outline.\nIf land reaches the image border where the reference has black, that is wrong.\nTreat input.png as a locked layout to repaint, not as inspiration.\nKeep the same ridges, plains, water, and ice in the same places and proportions.\nDo not invent a new layout, new peak pattern, or relocated edges.\nUpgrade materials and detail only; the geography must remain recognizable as the same chunk.\nRemove any text or labels from the reference.\nKeep lighting diffuse and shadow-neutral: local form shading is allowed, directional cast shadows are not.\nDo not add labels, UI, borders, map symbols, characters, or a visible grid.\nNo neighbor padding is present. This is a seed level.\nStyle (materials and lighting only \u2014 must not override the layout above):\nCreate a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows.\n",
+      "negativePrompt": null,
+      "imageHeight": 3392,
+      "imageToVideo": false,
+      "imageWidth": 5056,
+      "inferenceSteps": null,
+      "seed": 700002,
+      "ultra": false,
+      "public": false,
+      "scheduler": null,
+      "sdVersion": "NANO_BANANA_2",
+      "status": "COMPLETE",
+      "presetStyle": null,
+      "initStrength": null,
+      "guidanceScale": null,
+      "id": "1f18c601-77cf-6410-b51e-a0b3f6cacc2c",
+      "createdAt": "2026-07-30T21:46:17.255",
+      "promptMagic": false,
+      "promptMagicVersion": null,
+      "promptMagicStrength": null,
+      "photoReal": null,
+      "photoRealStrength": null,
+      "fantasyAvatar": null,
+      "is3d": false,
+      "outputType": "IMAGE",
+      "prompt_moderations": [
+        {
+          "moderationClassification": []
+        }
+      ],
+      "generation_elements": []
+    }
+  },
+  "generation_size": [
+    5056,
+    3392
+  ],
+  "reference_count": 1,
+  "level_id": "05",
+  "attempt": 2,
+  "returned_size": [
+    5056,
+    3392
+  ]
+}

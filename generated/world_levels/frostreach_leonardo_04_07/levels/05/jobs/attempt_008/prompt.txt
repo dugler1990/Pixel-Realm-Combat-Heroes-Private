@@ -1,0 +1,14 @@
+Redraw this image at high finished quality.
+
+It is a low-resolution upscale — soft, blurred, washed out. Redraw it sharp and
+detailed, with strong contrast and clear painted form. Nothing moves, nothing is
+added, nothing is removed, nothing changes what it is. Quality only.
+
+The strip at (3356, 1347) to (3772, 2346) is already finished. Leave it untouched
+and match it everywhere else — same sharpness, same brush treatment, same contrast,
+same lighting — so the result reads as one painting with no trace of where it ends.
+
+Reproduce the non-black shape exactly, same position, same size. Outside it stays
+pure black #000000, empty space. Do not zoom, crop, recentre or enlarge.
+
+5056x3392. Top-down, even lighting, no cast shadows. No text or labels.

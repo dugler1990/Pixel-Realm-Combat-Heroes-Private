@@ -164,11 +164,11 @@
   "context_revision": 1,
   "locked_sources": [],
   "attempt_count": 1,
-  "updated_at": "2026-07-25T13:14:17.356215+00:00",
+  "updated_at": "2026-08-02T18:55:09.044977+00:00",
   "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/04/jobs/attempt_001/job.json",
   "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/04/attempts/attempt_001/normalized.png",
   "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/04/accepted/image.png",
-  "accepted_hash": "58d1edb02af13f51f1958f49870d8db5c4e5bdbd496678b877138b4192be8530",
+  "accepted_hash": "9b3513285dd759871015a32105f770a1b4c55c94a094352817f3ffdcc03f2fda",
   "accepted_attempt": 1,
   "acceptance_index": 5
 }

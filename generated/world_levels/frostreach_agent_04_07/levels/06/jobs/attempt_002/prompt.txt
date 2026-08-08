@@ -1,0 +1,13 @@
+Image 1 is the terrain to redraw at high quality, with any already-finished areas already in place.
+Image 2 is the exact shape to fill: paint only inside the white area, everything outside it stays black.
+Image 3 is the already-finished art carried over from the neighbouring level, in its exact position.
+Image 4 is where this piece sits on the world map, for orientation only, do not copy from it.
+
+Image 1 is already a finished painting.
+Part of it was carried over from the neighbouring level and is already correct.
+That carried-over part is the source of truth for hue, contrast, texture scale
+and brushwork. Bring the rest of image 1 into line with it so the whole thing
+reads as one painting.
+
+Do not change what anything is or where it sits. Do not add or remove anything.
+No text or labels.

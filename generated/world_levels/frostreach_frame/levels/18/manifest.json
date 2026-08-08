@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "level_id": "18",
+  "name": "Jadevale Coast",
+  "region": "Emerald Heartlands",
+  "state": "prepared",
+  "crop_box_world": [
+    504,
+    784,
+    1117,
+    947
+  ],
+  "core_polygon_world": [
+    [
+      620,
+      800
+    ],
+    [
+      730,
+      860
+    ],
+    [
+      850,
+      850
+    ],
+    [
+      930,
+      820
+    ],
+    [
+      1050,
+      830
+    ],
+    [
+      1100,
+      900
+    ],
+    [
+      950,
+      930
+    ],
+    [
+      780,
+      920
+    ],
+    [
+      650,
+      880
+    ],
+    [
+      520,
+      820
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      504,
+      817
+    ],
+    [
+      505,
+      826
+    ],
+    [
+      512,
+      834
+    ],
+    [
+      643,
+      895
+    ],
+    [
+      779,
+      936
+    ],
+    [
+      952,
+      946
+    ],
+    [
+      1103,
+      916
+    ],
+    [
+      1111,
+      912
+    ],
+    [
+      1116,
+      903
+    ],
+    [
+      1113,
+      890
+    ],
+    [
+      1063,
+      820
+    ],
+    [
+      1056,
+      815
+    ],
+    [
+      929,
+      804
+    ],
+    [
+      844,
+      835
+    ],
+    [
+      734,
+      844
+    ],
+    [
+      638,
+      791
+    ],
+    [
+      618,
+      784
+    ],
+    [
+      517,
+      804
+    ],
+    [
+      509,
+      808
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "16",
+      "kind": "land"
+    },
+    {
+      "level_id": "17",
+      "kind": "land"
+    },
+    {
+      "level_id": "22",
+      "kind": "land"
+    },
+    {
+      "level_id": "24",
+      "kind": "boat"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      2520,
+      3920
+    ],
+    "scaled_crop_size": [
+      3065,
+      815
+    ],
+    "canvas_offset": [
+      3,
+      744
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "frame": {
+    "origin": [
+      0,
+      639
+    ],
+    "size": [
+      3072,
+      1024
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/18/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/18/source/world_crop.png",
+    "dense_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/18/dense_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/18/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/18/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/18/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/18/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/18/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/18/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/18/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/18/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "dense_template": "5f334c82ff1c4c5c6ba059325eb2a8949fd397d52b4ba4d92ee5a61e859b1f6b",
+    "generation_mask": "16b0356563530bb8184953a2779f40595281a3c9e3cbcd6650aee09ad091b037"
+  },
+  "context_revision": 0,
+  "locked_sources": [],
+  "attempt_count": 0,
+  "updated_at": "2026-08-07T13:11:57.815089+00:00"
+}

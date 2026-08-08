@@ -3,7 +3,7 @@
   "level_id": "02",
   "name": "Glacial Basin",
   "region": "Frostreach",
-  "state": "prepared",
+  "state": "ready",
   "crop_box_world": [
     584,
     54,
@@ -144,10 +144,36 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "e7485050ed0dff305e99979e80a36834bcff1eddcb9ed618b6b8ae020ebff180",
-    "generation_mask": "0e10ecd37835c8bdbbb0d092042b5d6da5fbd3926749abb724a68e01dd25b058"
+    "generation_mask": "0e10ecd37835c8bdbbb0d092042b5d6da5fbd3926749abb724a68e01dd25b058",
+    "generation_input": "b9134eebcc5f1af8c93c585a0dda4d4d8031902e296ad4d5f18166b81403e825",
+    "locked_pixels": "e7df36cec830c9c2baf37f5a46cd1db023ad7926e65373887bd0bce3a547b8b3",
+    "locked_mask": "0d16ae541498c559fc29e84f88ab2a77e063dd55c126222e11978b2663d8511a"
   },
-  "context_revision": 0,
-  "locked_sources": [],
+  "context_revision": 9,
+  "locked_sources": [
+    {
+      "neighbor_id": "06",
+      "global_box": [
+        5312,
+        1712,
+        6769,
+        2449
+      ],
+      "pixel_count": 326692,
+      "accepted_hash": "ab6b44fb088d127c728c5a8e8e1f25bb1977a061a85fb8e8f087f6031039eb17"
+    },
+    {
+      "neighbor_id": "05",
+      "global_box": [
+        4672,
+        1632,
+        5729,
+        2449
+      ],
+      "pixel_count": 236890,
+      "accepted_hash": "f492bfd2901504643256834b16c44f24e658b70ebac111aeb1494b4af9c403cd"
+    }
+  ],
   "attempt_count": 0,
-  "updated_at": "2026-07-25T13:41:48.037223+00:00"
+  "updated_at": "2026-08-01T11:44:54.484768+00:00"
 }

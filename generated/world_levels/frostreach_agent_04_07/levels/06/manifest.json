@@ -3,7 +3,7 @@
   "level_id": "06",
   "name": "Central Expanse",
   "region": "Frostreach",
-  "state": "ready",
+  "state": "generated",
   "crop_box_world": [
     664,
     214,
@@ -181,11 +181,11 @@
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "553856fd1e691fb04bcedbedab1eba632be3bddfa123fb4c43ed22f2e8290217",
     "generation_mask": "1cf6ba4903b20f3a60071afc3f24a57d48da221ebeaaacb0bc5412099daeaa81",
-    "generation_input": "68648224822fa4269f80b46c1de53bd631f6ff0d5b2add950aab2edb4da1a51c",
-    "locked_pixels": "f20301f81e568593dbc38de9353d7aa94d7bc204cd47f8f542cb793a24efab53",
-    "locked_mask": "969efa23c82d418589bbf617f4ee7172b686e05301df39f1fe753e5cfe50b839"
+    "generation_input": "ad9ddc017eb38a9894b8dddd52cc74c474c2df1813f696bd3806ab8ece176e86",
+    "locked_pixels": "3f48416a999dd78728f6ff64bd547294213a71fb4042971c1ad42656e46af274",
+    "locked_mask": "53c61127ab7931741539687d281f036c3b0f0b82ff23ce0e7a65044a9dd197ac"
   },
-  "context_revision": 5,
+  "context_revision": 9,
   "locked_sources": [
     {
       "neighbor_id": "04",
@@ -196,9 +196,37 @@
         1731
       ],
       "pixel_count": 131309,
-      "accepted_hash": "58d1edb02af13f51f1958f49870d8db5c4e5bdbd496678b877138b4192be8530"
+      "accepted_hash": "9b3513285dd759871015a32105f770a1b4c55c94a094352817f3ffdcc03f2fda"
+    },
+    {
+      "neighbor_id": "03",
+      "global_box": [
+        4020,
+        1070,
+        5431,
+        1581
+      ],
+      "pixel_count": 217961,
+      "accepted_hash": "8b356508b660c897d24c4100df457e404d4713f7dffd109bd1f44c30916a5d2b"
+    },
+    {
+      "neighbor_id": "02",
+      "global_box": [
+        3320,
+        1070,
+        4231,
+        1531
+      ],
+      "pixel_count": 106996,
+      "accepted_hash": "6cffcb98dd1a0d6006fa1b597e7861906f83caae73692ba377d0111db18821ea"
     }
   ],
-  "attempt_count": 0,
-  "updated_at": "2026-07-25T13:14:21.959166+00:00"
+  "attempt_count": 2,
+  "updated_at": "2026-08-02T21:41:49.328521+00:00",
+  "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/jobs/attempt_002/job.json",
+  "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/attempts/attempt_002/normalized.png",
+  "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/06/accepted/image.png",
+  "accepted_hash": "ad9ddc017eb38a9894b8dddd52cc74c474c2df1813f696bd3806ab8ece176e86",
+  "accepted_attempt": 1,
+  "acceptance_index": 8
 }

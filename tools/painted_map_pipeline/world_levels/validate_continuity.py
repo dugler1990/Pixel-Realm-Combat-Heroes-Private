@@ -30,7 +30,7 @@ def validate_run(root: str | Path) -> dict[str, Any]:
     pairs: list[dict[str, Any]] = []
     for level_id, level in levels.items():
         paths = level_paths(root_path, level_id)
-        for required in ("manifest", "base_template", "generation_mask", "core_mask"):
+        for required in ("manifest", "dense_template", "generation_mask", "core_mask"):
             if not paths[required].is_file():
                 errors.append(f"level {level_id}: missing {required}")
         for connection in level.connections:

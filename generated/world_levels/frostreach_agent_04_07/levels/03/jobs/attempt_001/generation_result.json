@@ -1,0 +1,38 @@
+{
+  "provider": "openai",
+  "model": "gpt-image-2",
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/jobs/attempt_001/generated.png",
+  "width": 3072,
+  "height": 2304,
+  "input_images": [
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/03/jobs/attempt_001/input.png"
+  ],
+  "mask": "/tmp/tmpj9jg8srw.png",
+  "quality": "high",
+  "usage": {
+    "input_tokens": 1584,
+    "input_tokens_details": {
+      "image_tokens": 1452,
+      "text_tokens": 132
+    },
+    "output_tokens": 15687,
+    "output_tokens_details": {
+      "image_tokens": 15687,
+      "text_tokens": 0
+    },
+    "total_tokens": 17271
+  },
+  "request": {
+    "model": "gpt-image-2",
+    "prompt": "Redraw this image at high finished quality.\n\nIt is a low resolution upscale: soft, blurred, washed out. Redraw it sharp and detailed,\nwith strong contrast and clear painted form. Nothing moves, nothing is added, nothing is\nremoved, nothing changes what it is. Quality only.\n\nReproduce the non-black shape exactly, same position, same size. Everything outside it\nstays black, the same black as the input, empty space. Do not zoom, crop, recentre or\nenlarge.\n\n3072x2304. Top-down, even lighting, no cast shadows. No text or labels.\n",
+    "size": "3072x2304",
+    "quality": "high"
+  },
+  "level_id": "03",
+  "attempt": 1,
+  "seed": null,
+  "returned_size": [
+    3072,
+    2304
+  ]
+}

@@ -3,7 +3,7 @@
   "level_id": "25",
   "name": "Hellscar Tidal Cape",
   "region": "Ashen Hellscar",
-  "state": "prepared",
+  "state": "accepted",
   "crop_box_world": [
     1384,
     804,
@@ -116,10 +116,19 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "e02309ba1a847f473712e533a3e3a8f18af7a7c2d29df4bbcde7158486eab253",
-    "generation_mask": "a9cfd3ee9eda3e4ca671577e01a0e74e8eb9bb66624e857fd1cdac89c13f33cb"
+    "generation_mask": "a9cfd3ee9eda3e4ca671577e01a0e74e8eb9bb66624e857fd1cdac89c13f33cb",
+    "generation_input": "e02309ba1a847f473712e533a3e3a8f18af7a7c2d29df4bbcde7158486eab253",
+    "locked_pixels": "e1a6d7ed0a65303667d9007f2c0ef97eea72b7e70365448fa60a0b34a7573ec3",
+    "locked_mask": "398836706937ad047e36ed97b9a209645398a4ddd9f4b9e60def61f98812454d"
   },
-  "context_revision": 0,
+  "context_revision": 1,
   "locked_sources": [],
-  "attempt_count": 0,
-  "updated_at": "2026-07-25T13:44:10.144512+00:00"
+  "attempt_count": 1,
+  "updated_at": "2026-07-31T16:36:39.378619+00:00",
+  "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/25/jobs/attempt_001/job.json",
+  "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/25/attempts/attempt_001/normalized.png",
+  "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/25/accepted/image.png",
+  "accepted_hash": "a8bfa2b93dc4beda5fbb9de942cfe1ab06106c103827023589ae78a599559448",
+  "accepted_attempt": 1,
+  "acceptance_index": 16
 }

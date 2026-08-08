@@ -1,0 +1,39 @@
+{
+  "provider": "openai",
+  "model": "gpt-image-2",
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/jobs/attempt_004/generated.png",
+  "width": 960,
+  "height": 688,
+  "input_images": [
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/jobs/attempt_004/input.png",
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/jobs/attempt_004/locator.png"
+  ],
+  "mask": null,
+  "quality": "high",
+  "usage": {
+    "input_tokens": 2501,
+    "input_tokens_details": {
+      "image_tokens": 2272,
+      "text_tokens": 229
+    },
+    "output_tokens": 4406,
+    "output_tokens_details": {
+      "image_tokens": 4406,
+      "text_tokens": 0
+    },
+    "total_tokens": 6907
+  },
+  "request": {
+    "model": "gpt-image-2",
+    "prompt": "Image 1 is the terrain to redraw at high quality, with any already-finished areas already in place.\nImage 2 is where this piece sits on the world map, for orientation only, do not copy from it.\n\nRedraw image 1 at high finished quality.\nIt is a low resolution upscale: soft, blurred, washed out. Redraw it sharp and\ndetailed, with strong contrast and clear painted form. Quality only.\n\nPaint the whole image, edge to edge, with no border and no empty space.\nEvery feature stays at exactly the same position and the same size as in image 1.\nNothing moves, nothing is added, nothing is removed, nothing is recentred,\nnothing changes what it is.\n\nCreate a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows.\n\nTop-down, even lighting, no cast shadows. No text or labels.\n",
+    "size": "960x688",
+    "quality": "high"
+  },
+  "level_id": "01",
+  "attempt": 4,
+  "seed": null,
+  "returned_size": [
+    960,
+    688
+  ]
+}

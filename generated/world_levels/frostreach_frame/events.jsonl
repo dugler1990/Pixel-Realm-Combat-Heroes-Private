@@ -1,0 +1,36 @@
+{"config_hash": "3154eff78302552d3238774385f4ed53b4ab7f9a5bec4d24ad67094a7947c8c8", "event": "run_prepared", "level_count": 25, "timestamp": "2026-08-07T13:12:45.868338+00:00"}
+{"event": "batch_started", "selected": ["04"], "timestamp": "2026-08-07T14:48:50.807364+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "04", "locked_sources": [], "timestamp": "2026-08-07T14:48:52.624699+00:00"}
+{"attempt": 1, "event": "job_created", "level_id": "04", "timestamp": "2026-08-07T14:48:55.482175+00:00"}
+{"attempt": 1, "event": "state_changed", "level_id": "04", "state": "generating", "timestamp": "2026-08-07T14:48:55.509857+00:00"}
+{"attempt": 1, "event": "result_ingested", "footprint_iou": 1.0, "footprint_iou_raw": 1.0, "level_id": "04", "normalized_hash": "ba0df80a40d02b8d8779a7ccb93efd7869fb1f34240978d53af91448a0dae996", "rescale_applied": false, "timestamp": "2026-08-07T14:51:17.890411+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-08-07T14:51:17.899684+00:00"}
+{"acceptance_index": 1, "attempt": 1, "event": "result_accepted", "level_id": "04", "timestamp": "2026-08-07T14:59:30.445041+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "03", "locked_sources": ["04"], "timestamp": "2026-08-07T14:59:32.548708+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04"], "timestamp": "2026-08-07T14:59:35.128391+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-08-07T14:59:36.921623+00:00"}
+{"event": "batch_started", "selected": ["07"], "timestamp": "2026-08-07T14:59:41.216541+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "07", "locked_sources": ["04"], "timestamp": "2026-08-07T14:59:42.973711+00:00"}
+{"attempt": 1, "event": "job_created", "level_id": "07", "timestamp": "2026-08-07T14:59:45.601540+00:00"}
+{"attempt": 1, "event": "state_changed", "level_id": "07", "state": "generating", "timestamp": "2026-08-07T14:59:45.610097+00:00"}
+{"attempt": 1, "event": "result_ingested", "footprint_iou": 1.0, "footprint_iou_raw": 1.0, "level_id": "07", "normalized_hash": "67227de6cd893969f8cf71907419cce949ee538bbeac449487f6d2e7e3c02e7f", "rescale_applied": false, "timestamp": "2026-08-07T15:01:55.904551+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-08-07T15:01:55.914060+00:00"}
+{"acceptance_index": 2, "attempt": 1, "event": "result_accepted", "level_id": "07", "timestamp": "2026-08-07T15:05:01.050722+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "06", "locked_sources": ["04", "07"], "timestamp": "2026-08-07T15:05:04.003132+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "11", "locked_sources": ["07"], "timestamp": "2026-08-07T15:05:05.513390+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "19", "locked_sources": ["07"], "timestamp": "2026-08-07T15:05:07.136337+00:00"}
+{"event": "batch_started", "selected": ["19"], "timestamp": "2026-08-07T15:05:19.543659+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "19", "locked_sources": ["07"], "timestamp": "2026-08-07T15:05:21.122908+00:00"}
+{"attempt": 1, "event": "job_created", "level_id": "19", "timestamp": "2026-08-07T15:05:23.428633+00:00"}
+{"attempt": 1, "event": "state_changed", "level_id": "19", "state": "generating", "timestamp": "2026-08-07T15:05:23.437087+00:00"}
+{"attempt": 1, "event": "result_ingested", "footprint_iou": 1.0, "footprint_iou_raw": 1.0, "level_id": "19", "normalized_hash": "d3dbe42f4f1a6fd9c5eb7c64dca7e55b8acccddf2bde20c02b50545eea172b6b", "rescale_applied": false, "timestamp": "2026-08-07T15:07:37.239246+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-08-07T15:07:37.248426+00:00"}
+{"event": "batch_started", "selected": ["19"], "timestamp": "2026-08-08T00:49:27.716829+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "19", "locked_sources": ["07"], "timestamp": "2026-08-08T00:49:29.802825+00:00"}
+{"acceptance_index": 3, "attempt": 1, "event": "result_accepted", "level_id": "19", "timestamp": "2026-08-08T00:49:32.762680+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "11", "locked_sources": ["07", "19"], "timestamp": "2026-08-08T00:49:35.121535+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "20", "locked_sources": ["19"], "timestamp": "2026-08-08T00:49:37.490730+00:00"}
+{"event": "batch_started", "selected": ["19"], "timestamp": "2026-08-08T00:50:00.463385+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-08-08T00:50:00.463896+00:00"}
+{"event": "batch_started", "selected": ["19"], "timestamp": "2026-08-08T00:50:36.099368+00:00"}
+{"event": "batch_finished", "status": "finished", "timestamp": "2026-08-08T00:50:36.099836+00:00"}

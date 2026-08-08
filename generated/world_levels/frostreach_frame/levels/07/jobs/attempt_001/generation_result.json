@@ -1,0 +1,40 @@
+{
+  "provider": "openai",
+  "model": "gpt-image-2",
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/07/jobs/attempt_001/generated.png",
+  "width": 1728,
+  "height": 880,
+  "input_images": [
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/07/jobs/attempt_001/input.png",
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/07/jobs/attempt_001/locked_overlap.png",
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/07/jobs/attempt_001/locator.png"
+  ],
+  "mask": null,
+  "quality": "high",
+  "usage": {
+    "input_tokens": 4819,
+    "input_tokens_details": {
+      "image_tokens": 4560,
+      "text_tokens": 259
+    },
+    "output_tokens": 4141,
+    "output_tokens_details": {
+      "image_tokens": 4141,
+      "text_tokens": 0
+    },
+    "total_tokens": 8960
+  },
+  "request": {
+    "model": "gpt-image-2",
+    "prompt": "Image 1 is the terrain to redraw at high quality, with any already-finished areas already in place.\nImage 2 is the already-finished art carried over from the neighbouring level, in its exact position.\nImage 3 is where this piece sits on the world map, for orientation only, do not copy from it.\n\nRedraw image 1 at high finished quality.\nIt is a low resolution upscale: soft, blurred, washed out. Redraw it sharp and\ndetailed, with strong contrast and clear painted form. Quality only.\n\nPaint the whole image, edge to edge, with no border and no empty space.\nEvery feature stays at exactly the same position and the same size as in image 1.\nNothing moves, nothing is added, nothing is removed, nothing is recentred,\nnothing changes what it is.\n\nThe already-finished art is the standard to reach: its sharpness, its brush\ntreatment, its contrast, its lighting. Carry that outward across the rest of\nthe image so the whole thing reads as one painting, with nothing marking where\nthe finished part ends. Terrain type does not change, only how it is rendered.\n\nTop-down, even lighting, no cast shadows. No text or labels.\n",
+    "size": "1728x880",
+    "quality": "high"
+  },
+  "level_id": "07",
+  "attempt": 1,
+  "seed": null,
+  "returned_size": [
+    1728,
+    880
+  ]
+}

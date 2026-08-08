@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "level_id": "12",
+  "attempt": 1,
+  "state": "failed",
+  "created_at": "2026-07-30T21:05:48.832466+00:00",
+  "context_revision": 1,
+  "canvas_size": [
+    5056,
+    3392
+  ],
+  "input_hash": "4f8048ea368612ec175fb4042d23632e4c0499e9734d5c0c248a882212d7de5f",
+  "generation_mask_hash": "45cebed5f1978ba94e0e755391b7d60ae60d409209fc7bb466a3783bb62351f7",
+  "locked_mask_hash": "398836706937ad047e36ed97b9a209645398a4ddd9f4b9e60def61f98812454d",
+  "locked_pixels_hash": "e1a6d7ed0a65303667d9007f2c0ef97eea72b7e70365448fa60a0b34a7573ec3",
+  "neighbor_sources": [],
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/12/jobs/attempt_001/generated.png",
+  "footprint_iou_raw": 0.4732,
+  "footprint_iou_threshold": 0.85,
+  "rescale_applied": true,
+  "generation_result": {
+    "provider": "leonardo",
+    "api_version": "v2",
+    "model": "nano-banana-2",
+    "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/12/jobs/attempt_001/generated.png",
+    "generation_id": "1f18c5a7-1cd2-60d0-8cb1-e0610974eac9",
+    "init_image_ids": [
+      "2c35320d-fed7-4fe2-9196-e484e813d304"
+    ],
+    "init_image_id": "2c35320d-fed7-4fe2-9196-e484e813d304",
+    "source_url": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18c5a7-1cd2-60d0-8cb1-e0610974eac9/nano-banana-2_Render_level_12_Emerald_Heartlands_._Return_exactly_5056x3392_pixels._Reference_-0.jpg",
+    "width": 5056,
+    "height": 3392,
+    "seed": 700001,
+    "request": {
+      "model": "nano-banana-2",
+      "parameters": {
+        "width": 5056,
+        "height": 3392,
+        "prompt": "Render level 12 (Emerald Heartlands).\nReturn exactly 5056x3392 pixels.\nReference image: input.png only.\nIn input.png, land is the non-black region on a pure black (#000000) background.\nThat non-black footprint is the exact output shape: every land edge and corner must match it.\nPaint terrain only on those non-black pixels.\nThe black region is void \u2014 outside the world. It is not sea, not sky, not fog.\nNothing is painted there. It keeps exactly the shape it has in input.png and stays #000000.\nDo not extend land or water into it, and do not fade, vignette, or feather into it.\nDo not enlarge, shrink, round, straighten, or otherwise change the land outline.\nIf land reaches the image border where the reference has black, that is wrong.\nTreat input.png as a locked layout to repaint, not as inspiration.\nKeep the same ridges, plains, water, and ice in the same places and proportions.\nDo not invent a new layout, new peak pattern, or relocated edges.\nUpgrade materials and detail only; the geography must remain recognizable as the same chunk.\nRemove any text or labels from the reference.\nKeep lighting diffuse and shadow-neutral: local form shading is allowed, directional cast shadows are not.\nDo not add labels, UI, borders, map symbols, characters, or a visible grid.\nNo neighbor padding is present. This is a seed level.\nStyle (materials and lighting only \u2014 must not override the layout above):\nCreate a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows.\n",
+        "quantity": 1,
+        "prompt_enhance": "OFF",
+        "guidances": {
+          "image_reference": [
+            {
+              "image": {
+                "id": "2c35320d-fed7-4fe2-9196-e484e813d304",
+                "type": "UPLOADED"
+              },
+              "strength": "HIGH"
+            }
+          ]
+        },
+        "seed": 700001
+      },
+      "public": false
+    },
+    "create_response": {
+      "generate": {
+        "apiCreditCost": null,
+        "generationId": "1f18c5a7-1cd2-60d0-8cb1-e0610974eac9",
+        "cost": {
+          "amount": "0.0777",
+          "unit": "DOLLARS"
+        }
+      }
+    },
+    "generation_response": {
+      "generations_by_pk": {
+        "generated_images": [
+          {
+            "url": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18c5a7-1cd2-60d0-8cb1-e0610974eac9/nano-banana-2_Render_level_12_Emerald_Heartlands_._Return_exactly_5056x3392_pixels._Reference_-0.jpg",
+            "nsfw": false,
+            "id": "d73edffd-2183-4541-bf71-18b31527ba12",
+            "likeCount": 0,
+            "motionMP4URL": null,
+            "threeDUrl": null,
+            "urls": {
+              "asset": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18c5a7-1cd2-60d0-8cb1-e0610974eac9/nano-banana-2_Render_level_12_Emerald_Heartlands_._Return_exactly_5056x3392_pixels._Reference_-0.jpg",
+              "thumbnail": null
+            },
+            "generated_image_variation_generics": []
+          }
+        ],
+        "modelId": "7418e71f-4133-4e1b-9895-bee19f48f2ce",
+        "motion": false,
+        "motionModel": null,
+        "motionStrength": null,
+        "prompt": "Render level 12 (Emerald Heartlands).\nReturn exactly 5056x3392 pixels.\nReference image: input.png only.\nIn input.png, land is the non-black region on a pure black (#000000) background.\nThat non-black footprint is the exact output shape: every land edge and corner must match it.\nPaint terrain only on those non-black pixels.\nThe black region is void \u2014 outside the world. It is not sea, not sky, not fog.\nNothing is painted there. It keeps exactly the shape it has in input.png and stays #000000.\nDo not extend land or water into it, and do not fade, vignette, or feather into it.\nDo not enlarge, shrink, round, straighten, or otherwise change the land outline.\nIf land reaches the image border where the reference has black, that is wrong.\nTreat input.png as a locked layout to repaint, not as inspiration.\nKeep the same ridges, plains, water, and ice in the same places and proportions.\nDo not invent a new layout, new peak pattern, or relocated edges.\nUpgrade materials and detail only; the geography must remain recognizable as the same chunk.\nRemove any text or labels from the reference.\nKeep lighting diffuse and shadow-neutral: local form shading is allowed, directional cast shadows are not.\nDo not add labels, UI, borders, map symbols, characters, or a visible grid.\nNo neighbor padding is present. This is a seed level.\nStyle (materials and lighting only \u2014 must not override the layout above):\nCreate a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows.\n",
+        "negativePrompt": null,
+        "imageHeight": 3392,
+        "imageToVideo": false,
+        "imageWidth": 5056,
+        "inferenceSteps": null,
+        "seed": 700001,
+        "ultra": false,
+        "public": false,
+        "scheduler": null,
+        "sdVersion": "NANO_BANANA_2",
+        "status": "COMPLETE",
+        "presetStyle": null,
+        "initStrength": null,
+        "guidanceScale": null,
+        "id": "1f18c5a7-1cd2-60d0-8cb1-e0610974eac9",
+        "createdAt": "2026-07-30T21:05:51.802",
+        "promptMagic": false,
+        "promptMagicVersion": null,
+        "promptMagicStrength": null,
+        "photoReal": null,
+        "photoRealStrength": null,
+        "fantasyAvatar": null,
+        "is3d": false,
+        "outputType": "IMAGE",
+        "prompt_moderations": [
+          {
+            "moderationClassification": []
+          }
+        ],
+        "generation_elements": []
+      }
+    },
+    "generation_size": [
+      5056,
+      3392
+    ],
+    "reference_count": 1,
+    "level_id": "12",
+    "attempt": 1,
+    "returned_size": [
+      5056,
+      3392
+    ]
+  },
+  "scale_x": 0.6887,
+  "scale_y": 0.6879,
+  "source_bbox": [
+    0,
+    0,
+    3858,
+    3025
+  ],
+  "target_bbox": [
+    1196,
+    652,
+    3853,
+    2733
+  ],
+  "footprint_iou": 0.7425
+}

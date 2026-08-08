@@ -1,0 +1,113 @@
+{
+  "provider": "leonardo",
+  "api_version": "v2",
+  "model": "nano-banana-2",
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/05/jobs/attempt_009/generated.png",
+  "generation_id": "1f18d9d2-0d8d-6860-952f-9893e80731e0",
+  "init_image_ids": [
+    "8610b49c-566e-4409-a1ee-a9933a43df4b"
+  ],
+  "init_image_id": "8610b49c-566e-4409-a1ee-a9933a43df4b",
+  "source_url": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18d9d2-0d8d-6860-952f-9893e80731e0/nano-banana-2_Redraw_this_image_at_high_finished_quality._It_is_a_low-resolution_upscale_soft_-0.jpg",
+  "width": 5056,
+  "height": 3392,
+  "seed": 700009,
+  "request": {
+    "model": "nano-banana-2",
+    "parameters": {
+      "width": 5056,
+      "height": 3392,
+      "prompt": "Redraw this image at high finished quality.\n\nIt is a low-resolution upscale: soft, blurred, washed out. Redraw it sharp and\ndetailed, with strong contrast and clear painted form. Nothing moves, nothing is\nadded, nothing is removed, nothing changes what it is. Quality only.\n\nThe strip at 3356, 1347 to 3772, 2346 is already finished. Leave it untouched\nand match it everywhere else: same sharpness, same brush treatment, same contrast,\nsame lighting, so the result reads as one painting with no trace of where it ends.\n\nReproduce the non-black shape exactly, same position, same size. Everything outside\nit stays black, the same black as the input, empty space. Do not zoom, crop,\nrecentre or enlarge.\n\n5056x3392. Top-down, even lighting, no cast shadows. No text or labels.",
+      "quantity": 1,
+      "prompt_enhance": "OFF",
+      "guidances": {
+        "image_reference": [
+          {
+            "image": {
+              "id": "8610b49c-566e-4409-a1ee-a9933a43df4b",
+              "type": "UPLOADED"
+            },
+            "strength": "HIGH"
+          }
+        ]
+      },
+      "seed": 700009
+    },
+    "public": false
+  },
+  "create_response": {
+    "generate": {
+      "apiCreditCost": null,
+      "generationId": "1f18d9d2-0d8d-6860-952f-9893e80731e0",
+      "cost": {
+        "amount": "0.0777",
+        "unit": "DOLLARS"
+      }
+    }
+  },
+  "generation_response": {
+    "generations_by_pk": {
+      "generated_images": [
+        {
+          "url": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18d9d2-0d8d-6860-952f-9893e80731e0/nano-banana-2_Redraw_this_image_at_high_finished_quality._It_is_a_low-resolution_upscale_soft_-0.jpg",
+          "nsfw": false,
+          "id": "d0470ee1-4f1b-42ba-9378-5452452d5461",
+          "likeCount": 0,
+          "motionMP4URL": null,
+          "threeDUrl": null,
+          "urls": {
+            "asset": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18d9d2-0d8d-6860-952f-9893e80731e0/nano-banana-2_Redraw_this_image_at_high_finished_quality._It_is_a_low-resolution_upscale_soft_-0.jpg",
+            "thumbnail": null
+          },
+          "generated_image_variation_generics": []
+        }
+      ],
+      "modelId": "7418e71f-4133-4e1b-9895-bee19f48f2ce",
+      "motion": false,
+      "motionModel": null,
+      "motionStrength": null,
+      "prompt": "Redraw this image at high finished quality.\n\nIt is a low-resolution upscale: soft, blurred, washed out. Redraw it sharp and\ndetailed, with strong contrast and clear painted form. Nothing moves, nothing is\nadded, nothing is removed, nothing changes what it is. Quality only.\n\nThe strip at 3356, 1347 to 3772, 2346 is already finished. Leave it untouched\nand match it everywhere else: same sharpness, same brush treatment, same contrast,\nsame lighting, so the result reads as one painting with no trace of where it ends.\n\nReproduce the non-black shape exactly, same position, same size. Everything outside\nit stays black, the same black as the input, empty space. Do not zoom, crop,\nrecentre or enlarge.\n\n5056x3392. Top-down, even lighting, no cast shadows. No text or labels.",
+      "negativePrompt": null,
+      "imageHeight": 3392,
+      "imageToVideo": false,
+      "imageWidth": 5056,
+      "inferenceSteps": null,
+      "seed": 700009,
+      "ultra": false,
+      "public": false,
+      "scheduler": null,
+      "sdVersion": "NANO_BANANA_2",
+      "status": "COMPLETE",
+      "presetStyle": null,
+      "initStrength": null,
+      "guidanceScale": null,
+      "id": "1f18d9d2-0d8d-6860-952f-9893e80731e0",
+      "createdAt": "2026-08-01T11:35:43.639",
+      "promptMagic": false,
+      "promptMagicVersion": null,
+      "promptMagicStrength": null,
+      "photoReal": null,
+      "photoRealStrength": null,
+      "fantasyAvatar": null,
+      "is3d": false,
+      "outputType": "IMAGE",
+      "prompt_moderations": [
+        {
+          "moderationClassification": []
+        }
+      ],
+      "generation_elements": []
+    }
+  },
+  "generation_size": [
+    5056,
+    3392
+  ],
+  "reference_count": 1,
+  "level_id": "05",
+  "attempt": 9,
+  "returned_size": [
+    5056,
+    3392
+  ]
+}

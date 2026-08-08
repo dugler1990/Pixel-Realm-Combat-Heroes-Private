@@ -3,7 +3,7 @@
   "level_id": "13",
   "name": "Heartland Plains",
   "region": "Emerald Heartlands",
-  "state": "prepared",
+  "state": "ready",
   "crop_box_world": [
     624,
     454,
@@ -172,10 +172,25 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "7098bdc944e993af9dae527f4500b879ac7ad43ea697be8c427fe6449e698c65",
-    "generation_mask": "f9d188cbedb4757cdedd2bb23b191b3b441b2fcd81a7f1d1deada1aa9dd52bb1"
+    "generation_mask": "f9d188cbedb4757cdedd2bb23b191b3b441b2fcd81a7f1d1deada1aa9dd52bb1",
+    "generation_input": "3e6b742f17821a5b7efeddb7fd8d894db724747f8c8fadca9c95a8d7a2d53ff8",
+    "locked_pixels": "06768f3a266c8523c141e8f960ecb77b6007a3ad38a902f79b3126f928256bbf",
+    "locked_mask": "02ee485c91212771013c0da0b4a125b31385deea25cb6ab1515a4df308014f0a"
   },
-  "context_revision": 0,
-  "locked_sources": [],
+  "context_revision": 1,
+  "locked_sources": [
+    {
+      "neighbor_id": "12",
+      "global_box": [
+        4992,
+        3640,
+        5329,
+        5321
+      ],
+      "pixel_count": 275383,
+      "accepted_hash": "61bea9968d6605141c54a172dee601ba4574c0635756f82789814d772170d4f0"
+    }
+  ],
   "attempt_count": 0,
-  "updated_at": "2026-07-25T13:42:55.694909+00:00"
+  "updated_at": "2026-07-31T16:37:10.265041+00:00"
 }

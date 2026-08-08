@@ -5,11 +5,12 @@ from __future__ import annotations
 import base64
 import io
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
+
+from ...api_common import api_key
 
 try:
     from inference_sdk import InferenceHTTPClient
@@ -29,11 +30,7 @@ def load_config(path: Path) -> dict[str, Any]:
 
 
 def _api_key(config: dict[str, Any]) -> str:
-    env_name = str(config.get("api_key_env") or "ROBOFLOW_API_KEY")
-    key = os.environ.get(env_name, "").strip()
-    if not key:
-        raise WorkflowError(f"Missing API key in environment variable {env_name!r}")
-    return key
+    return api_key(config, default_env="ROBOFLOW_API_KEY", error_cls=WorkflowError)
 
 
 def _client(config: dict[str, Any]) -> InferenceHTTPClient:

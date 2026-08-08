@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "level_id": "25",
+  "name": "Hellscar Tidal Cape",
+  "region": "Ashen Hellscar",
+  "state": "prepared",
+  "crop_box_world": [
+    1384,
+    804,
+    1536,
+    1024
+  ],
+  "core_polygon_world": [
+    [
+      1450,
+      850
+    ],
+    [
+      1530,
+      820
+    ],
+    [
+      1535,
+      1010
+    ],
+    [
+      1430,
+      1000
+    ],
+    [
+      1400,
+      930
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      1535,
+      805
+    ],
+    [
+      1523,
+      805
+    ],
+    [
+      1439,
+      838
+    ],
+    [
+      1384,
+      927
+    ],
+    [
+      1385,
+      937
+    ],
+    [
+      1412,
+      1000
+    ],
+    [
+      1422,
+      1014
+    ],
+    [
+      1499,
+      1023
+    ],
+    [
+      1535,
+      1023
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "22",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      6920,
+      4020
+    ],
+    "scaled_crop_size": [
+      760,
+      1100
+    ],
+    "canvas_offset": [
+      1156,
+      602
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "frame": {
+    "origin": [
+      1152,
+      600
+    ],
+    "size": [
+      768,
+      1104
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/25/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/25/source/world_crop.png",
+    "dense_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/25/dense_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/25/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/25/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/25/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/25/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/25/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/25/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/25/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/25/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "dense_template": "efbd1ef03ef55fcdf4f1087e1569ccd3a844faee17357768407f83d21352122e",
+    "generation_mask": "69a8fa0dc1b706afdc1faffc7cf583c8014628a56d786fbd09fbbffa7ba6aded"
+  },
+  "context_revision": 0,
+  "locked_sources": [],
+  "attempt_count": 0,
+  "updated_at": "2026-08-07T13:12:45.834268+00:00"
+}

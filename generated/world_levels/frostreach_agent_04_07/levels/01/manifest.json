@@ -3,7 +3,7 @@
   "level_id": "01",
   "name": "Western Wallfoot",
   "region": "Frostreach",
-  "state": "prepared",
+  "state": "ready",
   "crop_box_world": [
     354,
     64,
@@ -136,10 +136,25 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "141d591be085a1c32136a62020ba7a2ddd9fc8bd4282b78cac93d9fd0ae7163c",
-    "generation_mask": "07894a5339e286d9ade1dcc63ab2582b02f69e6d91d368d0c5b69350af321570"
+    "generation_mask": "07894a5339e286d9ade1dcc63ab2582b02f69e6d91d368d0c5b69350af321570",
+    "generation_input": "dd46a856d59c4f88b357a5e8f63cf5c5d1e6aeac9e90174658298a313c4e017f",
+    "locked_pixels": "481c1255cd1eef6d0ba0f84badd11304bed9efa240ad9d91356adea5e7cc6630",
+    "locked_mask": "93c96ce1bea0e504cd82015f1e8236725e9db206f7ed3d97bd4bda83ca766233"
   },
-  "context_revision": 0,
-  "locked_sources": [],
+  "context_revision": 1,
+  "locked_sources": [
+    {
+      "neighbor_id": "02",
+      "global_box": [
+        2920,
+        320,
+        3131,
+        1476
+      ],
+      "pixel_count": 133922,
+      "accepted_hash": "f9b174d2fdd945a12629ce3385ee04f79dd5fdf08f79ddf530a98c0fa5df5918"
+    }
+  ],
   "attempt_count": 0,
-  "updated_at": "2026-07-23T09:45:52.297664+00:00"
+  "updated_at": "2026-08-02T19:22:29.993186+00:00"
 }

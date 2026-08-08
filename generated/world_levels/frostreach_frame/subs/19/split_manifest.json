@@ -1,0 +1,29 @@
+{
+  "source_chunk": "19",
+  "source_name": "North Sunspine",
+  "chunk_area": 27650.0,
+  "sub_level_count": 3,
+  "requested_count": 3,
+  "source_art": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/19/accepted/image.png",
+  "child_config": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/config.json",
+  "child_plan": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/plan.csv",
+  "division_overlay": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/division_overlay.png",
+  "sub_levels": [
+    {
+      "id": "01",
+      "name": "Region 1",
+      "tag": "flat"
+    },
+    {
+      "id": "02",
+      "name": "Region 2",
+      "tag": "flat"
+    },
+    {
+      "id": "03",
+      "name": "Region 3",
+      "tag": "flat"
+    }
+  ],
+  "warnings": []
+}

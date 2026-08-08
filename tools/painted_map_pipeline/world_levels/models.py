@@ -66,6 +66,43 @@ class ExecutionConfig:
     approval_mode: str = "manual"
     stop_on_failure: bool = True
     retry_limit: int = 2
+    # Rescale a generation onto the template bbox when its raw land footprint matches
+    # generation_mask.png worse than this. 0 disables the rescale entirely.
+    rescale_below_iou: float = 0.0
+
+
+@dataclass(frozen=True)
+class SplitConfig:
+    """Settings for the chunk -> sub-level splitter (the `split` command).
+
+    ``buckets`` maps chunk core-polygon area to a sub-level count: an ascending list of
+    ``(upper_exclusive_area, count)``; an area at or above the last threshold uses
+    ``default_count``. The result is clamped to ``[min_sublevels, max_sublevels]``.
+    ``proposer`` is a make_image_client-style dict (provider/model/api_key_env) for the
+    region-proposal call.
+    """
+
+    buckets: tuple[tuple[float, int], ...] = (
+        (24000.0, 2),
+        (40000.0, 3),
+        (52000.0, 4),
+        (62000.0, 5),
+    )
+    default_count: int = 6
+    min_sublevels: int = 2
+    max_sublevels: int = 6
+    overlap_buffer_px: int = 8
+    crop_margin_px: int = 4
+    criteria: str = ""  # optional extra instruction appended to the proposer prompt
+    proposer: dict[str, Any] = field(default_factory=dict)
+
+    def count_for_area(self, area: float) -> int:
+        chosen = self.default_count
+        for upper, count in self.buckets:
+            if area < upper:
+                chosen = count
+                break
+        return max(self.min_sublevels, min(self.max_sublevels, chosen))
 
 
 @dataclass(frozen=True)
@@ -82,6 +119,33 @@ class RunConfig:
     generation: dict[str, Any] = field(default_factory=dict)
     style_prompt: str = ""
     review_overlay: Path | None = None
+    split: "SplitConfig | None" = None
+
+    @property
+    def renderer(self) -> str:
+        """Which renderer this run was prepared for. Validated in ``parse_config``."""
+        return str(self.generation.get("renderer") or "warp").strip().lower()
+
+
+@dataclass(frozen=True)
+class ContextImage:
+    """One reference image and the job it does.
+
+    The API has no per-image caption, so position in the list is the only label the model
+    gets. A renderer builds its roster and its prompt together from this, so the numbering
+    in the text cannot drift away from the pictures that arrive.
+    """
+
+    filename: str
+    role: str
+    description: str
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"filename": self.filename, "role": self.role, "description": self.description}
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "ContextImage":
+        return cls(str(value["filename"]), str(value["role"]), str(value["description"]))
 
 
 @dataclass(frozen=True)

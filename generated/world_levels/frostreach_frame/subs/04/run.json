@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "config_hash": "ae1e880d3e4876d568205e7038c156deb031e6a23fa9172b21da2c97c33f46fc",
+  "renderer": "frame",
+  "config_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/config.resolved.json",
+  "world_size": [
+    1536,
+    1024
+  ],
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "scale": "5",
+  "acceptance_counter": 0,
+  "levels": {
+    "01": {
+      "name": "Howling Waste 1",
+      "region": "Frostreach",
+      "state": "generated",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/manifest.json",
+      "updated_at": "2026-08-08T00:36:13.758311+00:00",
+      "context_revision": 1,
+      "attempt_count": 4,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/jobs/attempt_004/job.json",
+      "attempt": 4,
+      "error": "Missing API key in environment variable 'OPENAI_API_KEY'",
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/attempts/attempt_004/normalized.png"
+    },
+    "02": {
+      "name": "Howling Waste 2",
+      "region": "Frostreach",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/02/manifest.json",
+      "updated_at": "2026-08-08T00:32:07.060900+00:00"
+    },
+    "03": {
+      "name": "Howling Waste 3",
+      "region": "Frostreach",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/03/manifest.json",
+      "updated_at": "2026-08-08T00:32:11.290146+00:00"
+    },
+    "04": {
+      "name": "Howling Waste 4",
+      "region": "Frostreach",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/04/manifest.json",
+      "updated_at": "2026-08-08T00:32:15.503610+00:00"
+    },
+    "05": {
+      "name": "Howling Waste 5",
+      "region": "Frostreach",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/05/manifest.json",
+      "updated_at": "2026-08-08T00:32:19.759873+00:00"
+    },
+    "06": {
+      "name": "Howling Waste 6",
+      "region": "Frostreach",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/06/manifest.json",
+      "updated_at": "2026-08-08T00:32:24.005562+00:00"
+    }
+  },
+  "updated_at": "2026-08-08T00:32:24.005614+00:00"
+}

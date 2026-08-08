@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "level_id": "17",
+  "name": "Jadevale Highlands",
+  "region": "Emerald Heartlands",
+  "state": "prepared",
+  "crop_box_world": [
+    604,
+    634,
+    947,
+    877
+  ],
+  "core_polygon_world": [
+    [
+      620,
+      800
+    ],
+    [
+      680,
+      730
+    ],
+    [
+      700,
+      650
+    ],
+    [
+      780,
+      700
+    ],
+    [
+      850,
+      750
+    ],
+    [
+      930,
+      820
+    ],
+    [
+      850,
+      850
+    ],
+    [
+      730,
+      860
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      604,
+      797
+    ],
+    [
+      605,
+      806
+    ],
+    [
+      613,
+      815
+    ],
+    [
+      712,
+      869
+    ],
+    [
+      730,
+      876
+    ],
+    [
+      857,
+      865
+    ],
+    [
+      941,
+      832
+    ],
+    [
+      946,
+      823
+    ],
+    [
+      942,
+      809
+    ],
+    [
+      860,
+      737
+    ],
+    [
+      784,
+      683
+    ],
+    [
+      712,
+      638
+    ],
+    [
+      700,
+      634
+    ],
+    [
+      689,
+      638
+    ],
+    [
+      684,
+      646
+    ],
+    [
+      665,
+      723
+    ],
+    [
+      611,
+      785
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "13",
+      "kind": "land"
+    },
+    {
+      "level_id": "15",
+      "kind": "land"
+    },
+    {
+      "level_id": "16",
+      "kind": "land"
+    },
+    {
+      "level_id": "18",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      3020,
+      3170
+    ],
+    "scaled_crop_size": [
+      1715,
+      1215
+    ],
+    "canvas_offset": [
+      678,
+      544
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "frame": {
+    "origin": [
+      671,
+      543
+    ],
+    "size": [
+      1728,
+      1216
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/17/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/17/source/world_crop.png",
+    "dense_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/17/dense_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/17/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/17/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/17/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/17/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/17/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/17/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/17/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/17/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "dense_template": "74856a889c08b81f447b04709a36c670e8d80e3ffb039709fd64cefd8de52321",
+    "generation_mask": "3252ca59abf1fe073d76aaa6b9f0b624f340ee1016b8f12145b14a07b95fb6c4"
+  },
+  "context_revision": 0,
+  "locked_sources": [],
+  "attempt_count": 0,
+  "updated_at": "2026-08-07T13:11:49.660731+00:00"
+}

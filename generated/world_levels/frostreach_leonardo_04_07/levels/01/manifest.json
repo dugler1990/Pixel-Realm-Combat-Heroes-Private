@@ -3,7 +3,7 @@
   "level_id": "01",
   "name": "Western Wallfoot",
   "region": "Frostreach",
-  "state": "prepared",
+  "state": "ready",
   "crop_box_world": [
     354,
     64,
@@ -136,10 +136,26 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "2100c0fbe1f3bcbb4edf20e7a50b84e59444924714b16ee973adbe8192c5ab53",
-    "generation_mask": "c8499d61ce31ca470b384ae20934c78e6d6f55f0703a1c4844c1b90c4a2b6a4a"
+    "generation_mask": "c8499d61ce31ca470b384ae20934c78e6d6f55f0703a1c4844c1b90c4a2b6a4a",
+    "generation_input": "b03c6643f4f2e02a2e02698fcb4e9569081879e0ad62b2ad414c920d951791b1",
+    "locked_pixels": "fb6f166765a5ee498132e984de77bb3284fe8b1618ec952dd27bfee20a6ffedc",
+    "locked_mask": "8eaf22524dfddee62112e54d1af20f9a35b6ac55b5ceaa383f77938a626e2401"
   },
-  "context_revision": 0,
-  "locked_sources": [],
-  "attempt_count": 0,
-  "updated_at": "2026-07-25T13:41:42.320982+00:00"
+  "context_revision": 8,
+  "locked_sources": [
+    {
+      "neighbor_id": "05",
+      "global_box": [
+        3232,
+        1632,
+        5009,
+        2361
+      ],
+      "pixel_count": 472888,
+      "accepted_hash": "f492bfd2901504643256834b16c44f24e658b70ebac111aeb1494b4af9c403cd"
+    }
+  ],
+  "attempt_count": 3,
+  "updated_at": "2026-08-01T11:44:48.438175+00:00",
+  "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/01/jobs/attempt_003/job.json"
 }

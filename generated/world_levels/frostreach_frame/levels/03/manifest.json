@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "level_id": "03",
+  "name": "Pale Uplands",
+  "region": "Frostreach",
+  "state": "ready",
+  "crop_box_world": [
+    804,
+    54,
+    1087,
+    317
+  ],
+  "core_polygon_world": [
+    [
+      820,
+      70
+    ],
+    [
+      1060,
+      80
+    ],
+    [
+      1070,
+      250
+    ],
+    [
+      930,
+      300
+    ],
+    [
+      830,
+      230
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      808,
+      59
+    ],
+    [
+      804,
+      67
+    ],
+    [
+      813,
+      225
+    ],
+    [
+      815,
+      236
+    ],
+    [
+      820,
+      243
+    ],
+    [
+      920,
+      313
+    ],
+    [
+      930,
+      316
+    ],
+    [
+      1069,
+      268
+    ],
+    [
+      1082,
+      261
+    ],
+    [
+      1086,
+      253
+    ],
+    [
+      1077,
+      86
+    ],
+    [
+      1071,
+      68
+    ],
+    [
+      1048,
+      63
+    ],
+    [
+      832,
+      54
+    ],
+    [
+      814,
+      55
+    ]
+  ],
+  "overlap_buffer_source_px": 16,
+  "connections": [
+    {
+      "level_id": "02",
+      "kind": "land"
+    },
+    {
+      "level_id": "04",
+      "kind": "land"
+    },
+    {
+      "level_id": "06",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      4020,
+      270
+    ],
+    "scaled_crop_size": [
+      1415,
+      1315
+    ],
+    "canvas_offset": [
+      828,
+      494
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "frame": {
+    "origin": [
+      823,
+      487
+    ],
+    "size": [
+      1424,
+      1328
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/03/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/03/source/world_crop.png",
+    "dense_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/03/dense_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/03/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/03/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/03/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/03/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/03/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/03/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/03/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/levels/03/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "dense_template": "908c601e95bb5e03d836cbbd9bcfb87a0a29c809ea1cefb7fc18864c9c9184f8",
+    "generation_mask": "8ca4aabc760c0b3a7efb8596ccee9a601eb442801fae636fc579c364a35fdda0",
+    "generation_input": "9462f459b2d2954b101126c1732c472fac352f265572c496b535505880892e80",
+    "locked_pixels": "b75b8e54533e581446a03839159e196063a972b488c9cd2c61c6805e859281b5",
+    "locked_mask": "efa1268bafaf123f5404fe21b6600a94a25950f5fdc3286bce4781fbd133d063"
+  },
+  "context_revision": 1,
+  "locked_sources": [
+    {
+      "neighbor_id": "04",
+      "global_box": [
+        5220,
+        320,
+        5431,
+        1581
+      ],
+      "pixel_count": 158414,
+      "accepted_hash": "ba0df80a40d02b8d8779a7ccb93efd7869fb1f34240978d53af91448a0dae996"
+    }
+  ],
+  "attempt_count": 0,
+  "updated_at": "2026-08-07T14:59:32.536108+00:00"
+}

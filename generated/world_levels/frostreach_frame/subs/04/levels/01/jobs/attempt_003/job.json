@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "level_id": "01",
+  "attempt": 3,
+  "state": "ready",
+  "created_at": "2026-08-08T00:33:44.078803+00:00",
+  "context_revision": 1,
+  "renderer": "frame",
+  "frame": {
+    "origin": [
+      1056,
+      808
+    ],
+    "size": [
+      960,
+      688
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "input_size": [
+    960,
+    688
+  ],
+  "context": [
+    {
+      "filename": "input.png",
+      "role": "terrain",
+      "description": "the terrain to redraw at high quality, with any already-finished areas already in place"
+    },
+    {
+      "filename": "locator.png",
+      "role": "locator",
+      "description": "where this piece sits on the world map, for orientation only, do not copy from it"
+    }
+  ],
+  "input_hash": "4ed76a1fdc03d05388ec336955f7cbb9df3faf4a75d507c7a99f744f1a2dd74d",
+  "generation_mask_hash": "b4062f1968305c330780f7f8b3850849d7a64e48972e83eedff33a9c187557bd",
+  "locked_mask_hash": "b74dd2750f0c10a5a16b7f04581b57204cf9f95c292d12ca347aa416b961672b",
+  "locked_pixels_hash": "048d186b139d6cdb91f6a1b90bd1c39e4e5cf76f34ce74bbedb12ffd43ca7be3",
+  "neighbor_sources": [],
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/jobs/attempt_003/generated.png",
+  "refine": false
+}

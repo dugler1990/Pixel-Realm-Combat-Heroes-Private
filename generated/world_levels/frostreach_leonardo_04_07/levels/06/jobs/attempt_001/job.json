@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "level_id": "06",
+  "attempt": 1,
+  "state": "accepted",
+  "created_at": "2026-07-30T21:33:57.205363+00:00",
+  "context_revision": 15,
+  "canvas_size": [
+    5056,
+    3392
+  ],
+  "input_hash": "4980705ac6f0df9d35dc0cca23d7c8d8e0c5765ea0159032470fecfdc2af5383",
+  "generation_mask_hash": "e52e2b8462019f91368bce95d235d3c3cd50c8dd6ebc64c32c4ef1ca73d7a6b5",
+  "locked_mask_hash": "1958e2fa11c5abc2d36e6aa9d59222b17aec2ea26f58168bee97d7851ea9c751",
+  "locked_pixels_hash": "975e41661095df29fb3704336b203e4fb799147cb2b0c6a81bfd64ad99068d8b",
+  "neighbor_sources": [
+    {
+      "neighbor_id": "04",
+      "global_box": [
+        8352,
+        1712,
+        9569,
+        2769
+      ],
+      "pixel_count": 335597,
+      "accepted_hash": "709870c6ed0fd8653f69e60058ed7a0205a04f4d7715a3f8c303a65180b2e37c"
+    },
+    {
+      "neighbor_id": "07",
+      "global_box": [
+        8672,
+        2272,
+        9569,
+        3489
+      ],
+      "pixel_count": 228800,
+      "accepted_hash": "dceef9eade61e4ba97058749c0e766fa9a0c137be5a77baa23db796b37892e71"
+    }
+  ],
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/jobs/attempt_001/generated.png",
+  "footprint_iou_raw": 0.9794,
+  "rescale_below_iou": 0.9,
+  "rescale_applied": false,
+  "generation_result": {
+    "provider": "leonardo",
+    "api_version": "v2",
+    "model": "nano-banana-2",
+    "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/jobs/attempt_001/generated.png",
+    "generation_id": "1f18c5e6-01f3-6b30-84d1-5ba99ecddcf2",
+    "init_image_ids": [
+      "41cdedc2-72bf-4b78-a6d7-53e7cd0ab411"
+    ],
+    "init_image_id": "41cdedc2-72bf-4b78-a6d7-53e7cd0ab411",
+    "source_url": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18c5e6-01f3-6b30-84d1-5ba99ecddcf2/nano-banana-2_Render_level_06_Frostreach_._Return_exactly_5056x3392_pixels._Reference_image_in-0.jpg",
+    "width": 5056,
+    "height": 3392,
+    "seed": 700001,
+    "request": {
+      "model": "nano-banana-2",
+      "parameters": {
+        "width": 5056,
+        "height": 3392,
+        "prompt": "Render level 06 (Frostreach).\nReturn exactly 5056x3392 pixels.\nReference image: input.png only.\nIn input.png, land is the non-black region on a pure black (#000000) background.\nThat non-black footprint is the exact output shape: every land edge and corner must match it.\nPaint terrain only on those non-black pixels.\nThe black region is void \u2014 outside the world. It is not sea, not sky, not fog.\nNothing is painted there. It keeps exactly the shape it has in input.png and stays #000000.\nDo not extend land or water into it, and do not fade, vignette, or feather into it.\nDo not enlarge, shrink, round, straighten, or otherwise change the land outline.\nIf land reaches the image border where the reference has black, that is wrong.\nTreat input.png as a locked layout to repaint, not as inspiration.\nKeep the same ridges, plains, water, and ice in the same places and proportions.\nDo not invent a new layout, new peak pattern, or relocated edges.\nUpgrade materials and detail only; the geography must remain recognizable as the same chunk.\nRemove any text or labels from the reference.\nKeep lighting diffuse and shadow-neutral: local form shading is allowed, directional cast shadows are not.\nDo not add labels, UI, borders, map symbols, characters, or a visible grid.\ninput.png contains finished art carried over from level(s) 04, 07, already painted at final quality.\nThat strip is the style reference for this entire image.\nMatch it exactly: same palette, same value range, same snow and rock treatment,\nsame texture frequency, same edge quality, same lighting.\nPaint every remaining land pixel as though it came from that same painting session.\nWhere geography differs, the materials still come from the strip \u2014 a new landform\nrendered in the strip's exact style, never a new style.\nThe strip is the only style authority. Do not introduce a look it does not contain.\n",
+        "quantity": 1,
+        "prompt_enhance": "OFF",
+        "guidances": {
+          "image_reference": [
+            {
+              "image": {
+                "id": "41cdedc2-72bf-4b78-a6d7-53e7cd0ab411",
+                "type": "UPLOADED"
+              },
+              "strength": "HIGH"
+            }
+          ]
+        },
+        "seed": 700001
+      },
+      "public": false
+    },
+    "create_response": {
+      "generate": {
+        "apiCreditCost": null,
+        "generationId": "1f18c5e6-01f3-6b30-84d1-5ba99ecddcf2",
+        "cost": {
+          "amount": "0.0777",
+          "unit": "DOLLARS"
+        }
+      }
+    },
+    "generation_response": {
+      "generations_by_pk": {
+        "generated_images": [
+          {
+            "url": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18c5e6-01f3-6b30-84d1-5ba99ecddcf2/nano-banana-2_Render_level_06_Frostreach_._Return_exactly_5056x3392_pixels._Reference_image_in-0.jpg",
+            "nsfw": false,
+            "id": "39e48848-ed9d-4bd8-8e16-7fa760acb1ff",
+            "likeCount": 0,
+            "motionMP4URL": null,
+            "threeDUrl": null,
+            "urls": {
+              "asset": "https://cdn.leonardo.ai/users/24edb405-70ee-4873-b97c-81286d3c5fde/generations/1f18c5e6-01f3-6b30-84d1-5ba99ecddcf2/nano-banana-2_Render_level_06_Frostreach_._Return_exactly_5056x3392_pixels._Reference_image_in-0.jpg",
+              "thumbnail": null
+            },
+            "generated_image_variation_generics": []
+          }
+        ],
+        "modelId": "7418e71f-4133-4e1b-9895-bee19f48f2ce",
+        "motion": false,
+        "motionModel": null,
+        "motionStrength": null,
+        "prompt": "Render level 06 (Frostreach).\nReturn exactly 5056x3392 pixels.\nReference image: input.png only.\nIn input.png, land is the non-black region on a pure black (#000000) background.\nThat non-black footprint is the exact output shape: every land edge and corner must match it.\nPaint terrain only on those non-black pixels.\nThe black region is void \u2014 outside the world. It is not sea, not sky, not fog.\nNothing is painted there. It keeps exactly the shape it has in input.png and stays #000000.\nDo not extend land or water into it, and do not fade, vignette, or feather into it.\nDo not enlarge, shrink, round, straighten, or otherwise change the land outline.\nIf land reaches the image border where the reference has black, that is wrong.\nTreat input.png as a locked layout to repaint, not as inspiration.\nKeep the same ridges, plains, water, and ice in the same places and proportions.\nDo not invent a new layout, new peak pattern, or relocated edges.\nUpgrade materials and detail only; the geography must remain recognizable as the same chunk.\nRemove any text or labels from the reference.\nKeep lighting diffuse and shadow-neutral: local form shading is allowed, directional cast shadows are not.\nDo not add labels, UI, borders, map symbols, characters, or a visible grid.\ninput.png contains finished art carried over from level(s) 04, 07, already painted at final quality.\nThat strip is the style reference for this entire image.\nMatch it exactly: same palette, same value range, same snow and rock treatment,\nsame texture frequency, same edge quality, same lighting.\nPaint every remaining land pixel as though it came from that same painting session.\nWhere geography differs, the materials still come from the strip \u2014 a new landform\nrendered in the strip's exact style, never a new style.\nThe strip is the only style authority. Do not introduce a look it does not contain.\n",
+        "negativePrompt": null,
+        "imageHeight": 3392,
+        "imageToVideo": false,
+        "imageWidth": 5056,
+        "inferenceSteps": null,
+        "seed": 700001,
+        "ultra": false,
+        "public": false,
+        "scheduler": null,
+        "sdVersion": "NANO_BANANA_2",
+        "status": "COMPLETE",
+        "presetStyle": null,
+        "initStrength": null,
+        "guidanceScale": null,
+        "id": "1f18c5e6-01f3-6b30-84d1-5ba99ecddcf2",
+        "createdAt": "2026-07-30T21:34:00.319",
+        "promptMagic": false,
+        "promptMagicVersion": null,
+        "promptMagicStrength": null,
+        "photoReal": null,
+        "photoRealStrength": null,
+        "fantasyAvatar": null,
+        "is3d": false,
+        "outputType": "IMAGE",
+        "prompt_moderations": [
+          {
+            "moderationClassification": []
+          }
+        ],
+        "generation_elements": []
+      }
+    },
+    "generation_size": [
+      5056,
+      3392
+    ],
+    "reference_count": 1,
+    "level_id": "06",
+    "attempt": 1,
+    "returned_size": [
+      5056,
+      3392
+    ]
+  },
+  "footprint_iou": 0.9794,
+  "ingested_at": "2026-07-30T21:35:01.318085+00:00",
+  "source_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/jobs/attempt_001/generated.png",
+  "raw_hash": "227fa5357c83d8cd8afd5817dd9d383aaf0244a0f2198e43f1f3b9f8ebf9a674",
+  "normalized_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_leonardo_04_07/levels/06/attempts/attempt_001/normalized.png",
+  "normalized_hash": "ab6b44fb088d127c728c5a8e8e1f25bb1977a061a85fb8e8f087f6031039eb17",
+  "accepted_at": "2026-07-31T16:37:19.704678+00:00"
+}

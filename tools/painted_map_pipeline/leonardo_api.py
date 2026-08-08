@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import mimetypes
-import os
 import time
 import uuid
 from pathlib import Path
 from urllib import error, parse, request
+
+from .api_common import api_key
 
 DEFAULT_V1_BASE_URL = "https://cloud.leonardo.ai/api/rest/v1"
 DEFAULT_V2_BASE_URL = "https://cloud.leonardo.ai/api/rest/v2"
@@ -22,11 +23,7 @@ class LeonardoApiError(RuntimeError):
 
 
 def _api_key(config: dict) -> str:
-    env_name = str(config.get("api_key_env") or "LEONARDO_API_KEY")
-    key = os.environ.get(env_name, "").strip()
-    if not key:
-        raise LeonardoApiError(f"Missing API key in environment variable {env_name!r}")
-    return key
+    return api_key(config, default_env="LEONARDO_API_KEY", error_cls=LeonardoApiError)
 
 
 def is_v2_config(config: dict) -> bool:
@@ -198,6 +195,7 @@ def create_v2_generation(
     height: int,
     init_image_ids: list[str],
     config: dict,
+    capture: dict | None = None,
 ) -> str:
     api_key = _api_key(config)
     base = _generation_base_url(config)
@@ -206,8 +204,18 @@ def create_v2_generation(
     prompt_enhance = str(config.get("prompt_enhance") or "OFF").upper()
     style_ids = list(config.get("style_ids") or [])
     seed = config.get("seed")
+    quality = config.get("quality")
+    # GPT Image 2 rejects reference strength; keep strength for Banana / GPT 1.5.
+    supports_reference_strength = model not in {"gpt-image-2"}
     if not init_image_ids:
         raise LeonardoApiError("v2 generation requires at least one init image id")
+
+    image_refs = []
+    for image_id in init_image_ids:
+        entry: dict = {"image": {"id": image_id, "type": "UPLOADED"}}
+        if supports_reference_strength:
+            entry["strength"] = reference_strength
+        image_refs.append(entry)
 
     parameters: dict = {
         "width": int(width),
@@ -215,18 +223,12 @@ def create_v2_generation(
         "prompt": prompt,
         "quantity": int(config.get("quantity", 1)),
         "prompt_enhance": prompt_enhance,
-        "guidances": {
-            "image_reference": [
-                {
-                    "image": {"id": image_id, "type": "UPLOADED"},
-                    "strength": reference_strength,
-                }
-                for image_id in init_image_ids
-            ]
-        },
+        "guidances": {"image_reference": image_refs},
     }
-    if style_ids:
+    if style_ids and model not in {"gpt-image-2"}:
         parameters["style_ids"] = style_ids
+    if quality is not None and model.startswith("gpt-image-"):
+        parameters["quality"] = str(quality).upper()
     if seed is not None:
         parameters["seed"] = int(seed)
 
@@ -235,7 +237,11 @@ def create_v2_generation(
         "parameters": parameters,
         "public": bool(config.get("public", False)),
     }
+    if capture is not None:
+        capture["request"] = json.loads(json.dumps(payload))
     result = _request_json("POST", f"{base}/generations", api_key, payload)
+    if capture is not None:
+        capture["create_response"] = result
     generation_id = _extract_generation_id(result)
     if not generation_id:
         raise LeonardoApiError(f"Unexpected v2 generation response: {result}")
@@ -395,12 +401,14 @@ def generate_with_image_reference(
     if not input_images:
         raise LeonardoApiError("v2 image reference requires at least one input image")
     init_image_ids = [upload_init_image(path, config) for path in input_images]
+    capture: dict = {}
     generation_id = create_v2_generation(
         prompt=prompt,
         width=width,
         height=height,
         init_image_ids=init_image_ids,
         config=config,
+        capture=capture,
     )
     result = wait_for_generation(generation_id, config)
     urls = _extract_image_urls(result)
@@ -418,6 +426,10 @@ def generate_with_image_reference(
         "source_url": urls[0],
         "width": width,
         "height": height,
+        "seed": config.get("seed"),
+        "request": capture.get("request"),
+        "create_response": capture.get("create_response"),
+        "generation_response": result,
     }
 
 

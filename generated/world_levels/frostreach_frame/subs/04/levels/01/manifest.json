@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "level_id": "01",
+  "name": "Howling Waste 1",
+  "region": "Frostreach",
+  "state": "generated",
+  "crop_box_world": [
+    1056,
+    76,
+    1220,
+    194
+  ],
+  "core_polygon_world": [
+    [
+      1060,
+      80
+    ],
+    [
+      1066,
+      190
+    ],
+    [
+      1216,
+      190
+    ],
+    [
+      1216,
+      92
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      1060,
+      80
+    ],
+    [
+      1066,
+      190
+    ],
+    [
+      1216,
+      190
+    ],
+    [
+      1216,
+      92
+    ]
+  ],
+  "overlap_buffer_source_px": 8,
+  "connections": [
+    {
+      "level_id": "05",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "5",
+    "scaled_crop_origin": [
+      5280,
+      380
+    ],
+    "scaled_crop_size": [
+      820,
+      590
+    ],
+    "canvas_offset": [
+      1126,
+      857
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "frame": {
+    "origin": [
+      1056,
+      808
+    ],
+    "size": [
+      960,
+      688
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/source/world_crop.png",
+    "dense_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/dense_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/locator.png"
+  },
+  "hashes": {
+    "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
+    "dense_template": "0c3e983e76998a347e7b049b70e4d24e054cdb964cd47b58efd852944595cd4e",
+    "generation_mask": "b4062f1968305c330780f7f8b3850849d7a64e48972e83eedff33a9c187557bd",
+    "generation_input": "0c3e983e76998a347e7b049b70e4d24e054cdb964cd47b58efd852944595cd4e",
+    "locked_pixels": "048d186b139d6cdb91f6a1b90bd1c39e4e5cf76f34ce74bbedb12ffd43ca7be3",
+    "locked_mask": "b74dd2750f0c10a5a16b7f04581b57204cf9f95c292d12ca347aa416b961672b"
+  },
+  "context_revision": 1,
+  "locked_sources": [],
+  "attempt_count": 4,
+  "updated_at": "2026-08-08T00:36:13.754481+00:00",
+  "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/jobs/attempt_004/job.json",
+  "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/04/levels/01/attempts/attempt_004/normalized.png"
+}

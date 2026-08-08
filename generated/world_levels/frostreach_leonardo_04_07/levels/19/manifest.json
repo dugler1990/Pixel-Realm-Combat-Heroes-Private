@@ -153,11 +153,11 @@
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "bbbee63412e80b1796f7fad1f510a8c4dfe09fef617fe4a2a81d900cf10d1ac1",
     "generation_mask": "5cab78fdcb153ab6794bafb9bde3a58e96be9beba1aeabe87902075dc6c5e78f",
-    "generation_input": "41b9d9aa8cc9f530e4e77a61da912072116231c386286f6a237efc9c7bb6b09d",
-    "locked_pixels": "51310d38723781661b75f7bd8abf43e6574817eb2db43f49b77e333f54b48f23",
+    "generation_input": "b715cc9aa27c3b2083dd5aeeb4c3c2d6cbd16e90127b4341d9cb010e6c4f5c30",
+    "locked_pixels": "4bbea9810191b3a28288c5f23c510ccc7c13823c3eeee84505cb47d2f5ba2ee5",
     "locked_mask": "10174fb58bfab6973314328183e07211f7a3fa5244b6ee50313deab885f8d86a"
   },
-  "context_revision": 2,
+  "context_revision": 9,
   "locked_sources": [
     {
       "neighbor_id": "07",
@@ -168,9 +168,9 @@
         3649
       ],
       "pixel_count": 397781,
-      "accepted_hash": "ea19b7b762351ddf7464d7d765aff11c4e975fd971c153aeb6e142603bd7153c"
+      "accepted_hash": "dceef9eade61e4ba97058749c0e766fa9a0c137be5a77baa23db796b37892e71"
     }
   ],
   "attempt_count": 0,
-  "updated_at": "2026-07-25T16:23:41.760422+00:00"
+  "updated_at": "2026-07-30T20:58:48.847142+00:00"
 }

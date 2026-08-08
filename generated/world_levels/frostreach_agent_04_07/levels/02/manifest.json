@@ -3,7 +3,7 @@
   "level_id": "02",
   "name": "Glacial Basin",
   "region": "Frostreach",
-  "state": "prepared",
+  "state": "accepted",
   "crop_box_world": [
     584,
     54,
@@ -144,10 +144,31 @@
   "hashes": {
     "world_map": "19cec095e10d547c40691b5de3aae5f75e2ac458ae2da8cb339b4a29f9cea8f9",
     "base_template": "a7b9e05675c3be34f2bc32c2506593a55374f75d42f17f7a7149861d97480a5a",
-    "generation_mask": "7c36b7c64b5dea71080ddffd92fda394bde86b9d6e9ac4b8367af7c68945216d"
+    "generation_mask": "7c36b7c64b5dea71080ddffd92fda394bde86b9d6e9ac4b8367af7c68945216d",
+    "generation_input": "2f44e15d174702d863aaf51a45657d6881795cbc93cc11afa7c83f17ce00dd1d",
+    "locked_pixels": "98bde754e59edadc544f17f1a4406ef39ee473ed092e10e9886d990961cf8385",
+    "locked_mask": "c1bf3653ed1d3825e7f237b5b1a78c5e8683e7b44c62f165dacf2267d1ebae7f"
   },
-  "context_revision": 0,
-  "locked_sources": [],
-  "attempt_count": 0,
-  "updated_at": "2026-07-23T09:45:55.996627+00:00"
+  "context_revision": 3,
+  "locked_sources": [
+    {
+      "neighbor_id": "03",
+      "global_box": [
+        4020,
+        270,
+        4231,
+        1531
+      ],
+      "pixel_count": 150885,
+      "accepted_hash": "8b356508b660c897d24c4100df457e404d4713f7dffd109bd1f44c30916a5d2b"
+    }
+  ],
+  "attempt_count": 2,
+  "updated_at": "2026-08-02T21:27:27.993870+00:00",
+  "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/02/jobs/attempt_002/job.json",
+  "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/02/attempts/attempt_002/normalized.png",
+  "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_agent_04_07/levels/02/accepted/image.png",
+  "accepted_hash": "6cffcb98dd1a0d6006fa1b597e7861906f83caae73692ba377d0111db18821ea",
+  "accepted_attempt": 1,
+  "acceptance_index": 7
 }

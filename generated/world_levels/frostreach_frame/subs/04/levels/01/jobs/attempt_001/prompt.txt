@@ -1,0 +1,15 @@
+Image 1 is the terrain to redraw at high quality, with any already-finished areas already in place.
+Image 2 is where this piece sits on the world map, for orientation only, do not copy from it.
+
+Redraw image 1 at high finished quality.
+It is a low resolution upscale: soft, blurred, washed out. Redraw it sharp and
+detailed, with strong contrast and clear painted form. Quality only.
+
+Paint the whole image, edge to edge, with no border and no empty space.
+Every feature stays at exactly the same position and the same size as in image 1.
+Nothing moves, nothing is added, nothing is removed, nothing is recentred,
+nothing changes what it is.
+
+Create a richly detailed top-down fantasy RPG albedo background matching the accepted Frostreach palette and geography. Preserve monumental geographic scale, broad traversable ice plains, major terrain silhouettes, coastlines, and every supplied transition edge. Use diffuse shadow-neutral lighting with local form shading but no directional cast shadows.
+
+Top-down, even lighting, no cast shadows. No text or labels.

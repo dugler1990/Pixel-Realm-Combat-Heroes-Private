@@ -1,0 +1,19 @@
+Image 1 is the terrain to redraw at high quality, with any already-finished areas already in place.
+Image 2 is the already-finished art carried over from the neighbouring level, in its exact position.
+Image 3 is where this piece sits on the world map, for orientation only, do not copy from it.
+
+Redraw image 1 at high finished quality.
+It is a low resolution upscale: soft, blurred, washed out. Redraw it sharp and
+detailed, with strong contrast and clear painted form. Quality only.
+
+Paint the whole image, edge to edge, with no border and no empty space.
+Every feature stays at exactly the same position and the same size as in image 1.
+Nothing moves, nothing is added, nothing is removed, nothing is recentred,
+nothing changes what it is.
+
+The already-finished art is the standard to reach: its sharpness, its brush
+treatment, its contrast, its lighting. Carry that outward across the rest of
+the image so the whole thing reads as one painting, with nothing marking where
+the finished part ends. Terrain type does not change, only how it is rendered.
+
+Top-down, even lighting, no cast shadows. No text or labels.
