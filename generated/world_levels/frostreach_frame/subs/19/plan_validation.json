@@ -1,0 +1,13 @@
+{
+  "valid": true,
+  "level_count": 3,
+  "world_size": [
+    3072,
+    2304
+  ],
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "config_hash": "cc9a149cd09411f39f4ee90d2b175f29ca5746a6ef8765e3b043f456a541b7a6"
+}

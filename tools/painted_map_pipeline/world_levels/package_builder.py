@@ -62,15 +62,44 @@ def _draw_locator(world: Image.Image, level: LevelSpec) -> Image.Image:
     return locator
 
 
-def _draw_plan_overlay(world: Image.Image, levels: dict[str, LevelSpec]) -> Image.Image:
+_PLAN_OVERLAY_COLORS = [
+    (220, 50, 50),
+    (50, 200, 80),
+    (60, 120, 230),
+    (235, 200, 40),
+    (200, 70, 210),
+    (240, 140, 40),
+]
+
+
+def draw_plan_overlay(world: Image.Image, levels: dict[str, LevelSpec]) -> Image.Image:
+    """The one review overlay, used at every tier: each level's core polygon filled with a
+    distinct translucent color + outline + id/name label, cropped to the levels' extent."""
     overlay = world.convert("RGBA")
     draw = ImageDraw.Draw(overlay, "RGBA")
-    for level in levels.values():
-        draw.polygon(level.generation_polygon, fill=(0, 170, 255, 22), outline=(0, 200, 255, 170), width=1)
-        draw.polygon(level.core_polygon, fill=(255, 190, 0, 20), outline=(255, 225, 0, 220), width=2)
+    for index, level in enumerate(levels.values()):
+        red, green, blue = _PLAN_OVERLAY_COLORS[index % len(_PLAN_OVERLAY_COLORS)]
+        draw.polygon(level.core_polygon, fill=(red, green, blue, 70), outline=(red, green, blue, 255), width=3)
         x = sum(point[0] for point in level.core_polygon) // len(level.core_polygon)
         y = sum(point[1] for point in level.core_polygon) // len(level.core_polygon)
-        draw.text((x, y), level.level_id, fill=(255, 255, 255, 255), stroke_width=2, stroke_fill=(0, 0, 0, 255))
+        draw.text(
+            (x, y),
+            f"{level.level_id} {level.name}",
+            fill=(255, 255, 255, 255),
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 255),
+        )
+    xs = [p[0] for lv in levels.values() for p in lv.generation_polygon]
+    ys = [p[1] for lv in levels.values() for p in lv.generation_polygon]
+    if xs and ys:
+        margin = 24
+        box = (
+            max(0, min(xs) - margin),
+            max(0, min(ys) - margin),
+            min(overlay.width, max(xs) + margin),
+            min(overlay.height, max(ys) + margin),
+        )
+        overlay = overlay.crop(box)
     return overlay
 
 
@@ -202,7 +231,7 @@ def prepare_run(config: RunConfig) -> dict[str, Any]:
                 raise ValueError(f"land connection {level.level_id}-{connection.level_id} has no generation overlap")
 
     atomic_write_json(config.output_root / "config.resolved.json", config_dict)
-    _draw_plan_overlay(world, levels).save(config.output_root / "plan_validation_overlay.png")
+    draw_plan_overlay(world, levels).save(config.output_root / "plan_validation_overlay.png")
     manifests: dict[str, Any] = {}
     run_levels: dict[str, Any] = {}
     for level_id, level in levels.items():

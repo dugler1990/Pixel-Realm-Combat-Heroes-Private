@@ -19,13 +19,14 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 from scipy.ndimage import distance_transform_edt
 
 from . import geometry
 from .config import config_as_dict
 from .coordinates import ScaledSpace, build_transform, polygon_to_local, resolve_canvas
 from .masks import compute_overlap, rasterize_polygon
+from .package_builder import draw_plan_overlay
 from .models import Connection, LevelSpec, Point, RunConfig, SplitConfig
 from .plan_loader import load_level_plan
 
@@ -34,56 +35,8 @@ Image.MAX_IMAGE_PIXELS = None
 # The sub-run lives in the chunk art's own pixels, so no rescale of the source art.
 _SUB_SCALE = "1"
 
-# Match the proposer's paint palette so the overlay lines up 1:1 with proposer_painted.png.
-_OVERLAY_COLORS = [
-    (220, 50, 50, 255),
-    (50, 200, 80, 255),
-    (60, 120, 230, 255),
-    (235, 200, 40, 255),
-    (200, 70, 210, 255),
-    (240, 140, 40, 255),
-]
-
-
 def _encode_polygon(points: tuple[Point, ...]) -> str:
     return "|".join(f"{int(x)}:{int(y)}" for x, y in points)
-
-
-def _draw_division_overlay(
-    source_image: Path,
-    specs: list[LevelSpec],
-    tags: list[str],
-    frame_bbox: tuple[int, int, int, int],
-    out_path: Path,
-) -> None:
-    """The review image: the chunk's own art (cropped to the chunk) with each sub-level's
-    shape (filled translucent) + name drawn on it. ``frame_bbox`` is the region (in the
-    spec coordinate frame) that the crop covers, so spec polygons map onto crop pixels."""
-    left, top, right, bottom = frame_bbox
-    span_x = max(1, right - left)
-    span_y = max(1, bottom - top)
-    with Image.open(source_image) as opened:
-        base = opened.convert("RGBA")
-    width, height = base.size
-    draw = ImageDraw.Draw(base, "RGBA")
-
-    def to_pixels(point: Point) -> tuple[float, float]:
-        return ((point[0] - left) / span_x * width, (point[1] - top) / span_y * height)
-
-    for index, (spec, tag) in enumerate(zip(specs, tags)):
-        red, green, blue, _ = _OVERLAY_COLORS[index % len(_OVERLAY_COLORS)]
-        pixels = [to_pixels(point) for point in spec.core_polygon]
-        draw.polygon(pixels, fill=(red, green, blue, 90))          # translucent fill = the level shape
-        draw.line(pixels + [pixels[0]], fill=(red, green, blue, 255), width=3)
-        cx = sum(p[0] for p in pixels) / len(pixels)
-        cy = sum(p[1] for p in pixels) / len(pixels)
-        label = f"{spec.level_id} {spec.name}" + (" [mountain]" if tag == "mountain" else "")
-        for dx, dy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
-            draw.text((cx + dx, cy + dy), label, fill=(0, 0, 0, 255))
-        draw.text((cx, cy), label, fill=(255, 255, 255, 255))
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    base.save(out_path)
 
 
 def _scaled_contains(
@@ -112,6 +65,7 @@ def _region_specs(
     split_cfg: SplitConfig,
     frame_size: tuple[int, int],
     scaled: ScaledSpace,
+    source_image: Path,
 ) -> tuple[list[LevelSpec], list[str], list[str]]:
     """Turn proposed regions (in the sub-run frame) into valid LevelSpecs (no connections
     yet). ``chunk_polygon`` is the chunk outline in that frame; ``frame_size`` is the sub-run
@@ -125,7 +79,13 @@ def _region_specs(
     def to_local(points: tuple[Point, ...]) -> tuple[Point, ...]:
         return tuple((x - ox, y - oy) for x, y in points)
 
-    chunk_mask = np.asarray(rasterize_polygon(size, to_local(chunk_polygon))) > 0
+    # The chunk's *visible* land = the non-black pixels of the chunk art crop. Partition THIS
+    # (not the inset core polygon) so the sub-levels fill the whole image with no rim.
+    with Image.open(source_image) as opened:
+        src_land = np.asarray(opened.convert("RGB")).sum(axis=2) > 40
+    chunk_mask = np.zeros((size[1], size[0]), dtype=bool)
+    crop_h, crop_w = src_land.shape
+    chunk_mask[pad : pad + crop_h, pad : pad + crop_w] = src_land
     chunk_pixels = int(chunk_mask.sum())
     min_pixels = max(64, int(0.05 * chunk_pixels / max(1, len(regions))))
 
@@ -353,7 +313,7 @@ def split_chunk(
 
     sub_scaled = ScaledSpace(_SUB_SCALE)
     specs, tags, warnings = _region_specs(
-        chunk, canvas_poly, regions, split_cfg, parent_canvas_size, sub_scaled
+        chunk, canvas_poly, regions, split_cfg, parent_canvas_size, sub_scaled, source_image
     )
     if not specs:
         raise ValueError(f"chunk {chunk.level_id}: no usable sub-levels were produced")
@@ -364,7 +324,8 @@ def split_chunk(
     load_level_plan(plan_csv, parent_canvas_size)  # self-check against the real loader
     config_path = _write_child_config(config, plan_csv, child_root, accepted, parent_canvas_size)
     overlay_path = child_root / "division_overlay.png"
-    _draw_division_overlay(source_image, specs, tags, frame_bbox, overlay_path)
+    with Image.open(accepted) as art:
+        draw_plan_overlay(art.convert("RGBA"), {spec.level_id: spec for spec in specs}).save(overlay_path)
 
     manifest = {
         "source_chunk": chunk.level_id,

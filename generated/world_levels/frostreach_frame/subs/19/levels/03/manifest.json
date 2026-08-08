@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "level_id": "03",
+  "name": "Region 3",
+  "region": "Sunspine Dunes",
+  "state": "prepared",
+  "crop_box_world": [
+    1680,
+    797,
+    2237,
+    1498
+  ],
+  "core_polygon_world": [
+    [
+      1684,
+      801
+    ],
+    [
+      1704,
+      976
+    ],
+    [
+      1788,
+      1143
+    ],
+    [
+      1926,
+      1269
+    ],
+    [
+      1962,
+      1329
+    ],
+    [
+      2123,
+      1494
+    ],
+    [
+      2164,
+      1442
+    ],
+    [
+      2233,
+      1235
+    ],
+    [
+      2233,
+      892
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      1684,
+      801
+    ],
+    [
+      1704,
+      976
+    ],
+    [
+      1788,
+      1143
+    ],
+    [
+      1926,
+      1269
+    ],
+    [
+      1962,
+      1329
+    ],
+    [
+      2123,
+      1494
+    ],
+    [
+      2164,
+      1442
+    ],
+    [
+      2233,
+      1235
+    ],
+    [
+      2233,
+      892
+    ]
+  ],
+  "overlap_buffer_source_px": 8,
+  "connections": [
+    {
+      "level_id": "01",
+      "kind": "land"
+    },
+    {
+      "level_id": "02",
+      "kind": "land"
+    }
+  ],
+  "transform": {
+    "scale": "1",
+    "scaled_crop_origin": [
+      1680,
+      797
+    ],
+    "scaled_crop_size": [
+      557,
+      701
+    ],
+    "canvas_offset": [
+      0,
+      0
+    ],
+    "canvas_size": [
+      3072,
+      2304
+    ]
+  },
+  "frame": {
+    "origin": [
+      0,
+      0
+    ],
+    "size": [
+      736,
+      912
+    ]
+  },
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "paths": {
+    "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/manifest.json",
+    "source_crop": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/source/world_crop.png",
+    "dense_template": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/dense_template.png",
+    "generation_input": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/generation_input.png",
+    "core_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/masks/core.png",
+    "generation_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/masks/generation.png",
+    "outside_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/masks/outside.png",
+    "pending_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/masks/pending.png",
+    "locked_pixels": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/locked/canonical_overlap.png",
+    "locked_mask": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/locked/canonical_overlap_mask.png",
+    "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/locator.png"
+  },
+  "hashes": {
+    "world_map": "d3dbe42f4f1a6fd9c5eb7c64dca7e55b8acccddf2bde20c02b50545eea172b6b",
+    "dense_template": "4b235d46f37dd55ddf7f2ac8aaa66145bc9b040de9a42df24fe3c8300095fdd6",
+    "generation_mask": "ed2d1c3c6117756388e40045a768d7c8e32e105b14bae617631172763fc04d68"
+  },
+  "context_revision": 0,
+  "locked_sources": [],
+  "attempt_count": 0,
+  "updated_at": "2026-08-08T10:03:12.651036+00:00"
+}

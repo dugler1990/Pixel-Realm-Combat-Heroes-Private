@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "config_hash": "cc9a149cd09411f39f4ee90d2b175f29ca5746a6ef8765e3b043f456a541b7a6",
+  "renderer": "frame",
+  "config_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/config.resolved.json",
+  "world_size": [
+    3072,
+    2304
+  ],
+  "canvas_size": [
+    3072,
+    2304
+  ],
+  "scale": "1",
+  "acceptance_counter": 0,
+  "levels": {
+    "01": {
+      "name": "Region 1",
+      "region": "Sunspine Dunes",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/01/manifest.json",
+      "updated_at": "2026-08-08T10:10:25.460119+00:00"
+    },
+    "02": {
+      "name": "Region 2",
+      "region": "Sunspine Dunes",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/02/manifest.json",
+      "updated_at": "2026-08-08T10:10:25.460364+00:00"
+    },
+    "03": {
+      "name": "Region 3",
+      "region": "Sunspine Dunes",
+      "state": "prepared",
+      "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/manifest.json",
+      "updated_at": "2026-08-08T10:10:25.460601+00:00"
+    }
+  },
+  "updated_at": "2026-08-08T10:10:25.460622+00:00"
+}
