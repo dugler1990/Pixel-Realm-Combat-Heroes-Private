@@ -3,3 +3,32 @@ Code/logs/*.log
 
 # py-spy multiplayer profiling output (tools/profile_mp.sh)
 profiles/
+
+# ── Regenerable dev cruft ──────────────────────────────
+__pycache__/
+*.pyc
+Code/sprite_venv/
+logs/
+
+# ── Generated-art pipeline: default-deny allowlist ─────
+# Ignore everything the pipeline emits; re-include ONLY real assets
+# and the small manifests that describe them. New junk is ignored
+# automatically. To track a NEW asset type, add one '!' line.
+generated/painted/**
+!generated/painted/**/
+!generated/painted/**/painted.png
+!generated/painted/**/*_manifest.json
+!generated/painted/**/metadata.json
+
+levels/Frostreach/expanse/export/**
+!levels/Frostreach/expanse/export/**/
+!levels/Frostreach/expanse/export/painted_4k_leonardo/*.png
+!levels/Frostreach/expanse/export/collision_leonardo/*.png
+!levels/Frostreach/expanse/export/sam3_obstacle/**/polygons.json
+!levels/Frostreach/expanse/export/**/*_manifest.json
+!levels/Frostreach/expanse/export/**/*_summary.json
+
+# ── World-levels pipeline: ignore generation retries ───
+# (accepted/ and locked/ finals stay tracked; these are throwaway retries)
+generated/world_levels/**/jobs/
+generated/world_levels/**/attempts/
