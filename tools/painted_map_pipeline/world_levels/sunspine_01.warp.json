@@ -1,0 +1,41 @@
+{
+  "world_map": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/sunspine_dunes_01/background.png",
+  "level_plan": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/sunspine_01/plan.csv",
+  "output_root": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/sunspine_01_warp",
+  "canvas": {
+    "mode": "explicit",
+    "width": 3344,
+    "height": 2288,
+    "placement": "center",
+    "margin": 0
+  },
+  "scale": {
+    "pixels_per_world_pixel": 1
+  },
+  "rendering": {
+    "outside_color": [
+      0,
+      0,
+      0,
+      255
+    ],
+    "source_resampling": "lanczos"
+  },
+  "execution": {
+    "approval_mode": "manual",
+    "stop_on_failure": true,
+    "retry_limit": 2,
+    "rescale_below_iou": 0.9
+  },
+  "generation": {
+    "provider": "openai",
+    "api_key_env": "OPENAI_API_KEY",
+    "model": "gpt-image-2",
+    "quality": "medium",
+    "timeout_seconds": 900,
+    "config_source": "sunspine_01.warp.json",
+    "renderer": "warp",
+    "mask_edits": true
+  },
+  "style_prompt": "Richly detailed top-down / slightly 2.5D painted pixel-art RPG desert ground, finished game-art quality. Sharp sand grain, cracked hardpan, dune ripples, weathered sandstone. Preserve the layout exactly; do not invent or remove structures. Even lighting, no cast shadows, no text or labels."
+}

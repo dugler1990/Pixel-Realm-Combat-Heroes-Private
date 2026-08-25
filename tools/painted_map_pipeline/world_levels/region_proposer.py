@@ -17,7 +17,7 @@ about the art/frame coordinate system.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -249,13 +249,17 @@ class ImageDivisionProposer(RegionProposer):
         masks = _partition_masks(painted, _PALETTE[:n])
 
         # Ruggedness -> mountain tag, measured on the real terrain art (not the flat paint).
+        # Coarse (blurred) gradient captures large-scale mountain relief, not fine surface
+        # texture; an ABSOLUTE cutoff so a chunk that is mostly mountains still tags them all --
+        # a relative-to-average test structurally cannot (2 of 3 mountains raise the average and
+        # clear no one).
         rugged: list[float] | None = None
+        blur_sigma = float(self.config.get("mountain_blur_sigma", 16.0))
         if source_path is not None:
             with Image.open(source_path) as opened:
                 gray = np.asarray(opened.convert("L").resize((width_px, height_px)))
-            rugged = [geometry.gradient_magnitude_mean(gray, mask) for mask in masks]
-        ratio = float(self.config.get("mountain_ruggedness_ratio", 1.15))
-        mean_rugged = (sum(rugged) / len(rugged)) if rugged else 0.0
+            rugged = [geometry.gradient_magnitude_mean(gray, mask, blur_sigma=blur_sigma) for mask in masks]
+        threshold = float(self.config.get("mountain_ruggedness_threshold", 5.5))
 
         regions: list[ProposedRegion] = []
         for index, mask in enumerate(masks):
@@ -271,7 +275,7 @@ class ImageDivisionProposer(RegionProposer):
                 for px, py in poly_px
             )
             tag = "flat"
-            if rugged is not None and mean_rugged > 0 and rugged[index] > ratio * mean_rugged:
+            if rugged is not None and rugged[index] > threshold:
                 tag = "mountain"
             regions.append(ProposedRegion(polygon=polygon, tag=tag, name=f"Region {index + 1}"))
         return regions

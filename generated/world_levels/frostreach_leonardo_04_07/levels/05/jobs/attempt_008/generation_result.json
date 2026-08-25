@@ -1,6 +1,0 @@
-{
-  "level_id": "05",
-  "attempt": 8,
-  "seed": 700008,
-  "error": "'ascii' codec can't encode character '\\u2014' in position 186: ordinal not in range(128)"
-}

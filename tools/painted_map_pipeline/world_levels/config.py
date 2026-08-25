@@ -73,6 +73,8 @@ def _parse_split(raw: Any) -> SplitConfig | None:
         max_sublevels=max_sub,
         overlap_buffer_px=overlap_buffer,
         crop_margin_px=crop_margin,
+        smooth_kernel=int(raw.get("smooth_kernel", defaults.smooth_kernel)),
+        simplify_tolerance=float(raw.get("simplify_tolerance", defaults.simplify_tolerance)),
         criteria=str(raw.get("criteria") or defaults.criteria),
         proposer=dict(raw.get("proposer") or {}),
     )
@@ -210,6 +212,8 @@ def config_as_dict(config: RunConfig) -> dict[str, Any]:
             "max_sublevels": config.split.max_sublevels,
             "overlap_buffer_px": config.split.overlap_buffer_px,
             "crop_margin_px": config.split.crop_margin_px,
+            "smooth_kernel": config.split.smooth_kernel,
+            "simplify_tolerance": config.split.simplify_tolerance,
             "criteria": config.split.criteria,
             "proposer": config.split.proposer,
         }

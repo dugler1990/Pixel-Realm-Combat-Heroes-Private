@@ -93,6 +93,8 @@ class SplitConfig:
     max_sublevels: int = 6
     overlap_buffer_px: int = 8
     crop_margin_px: int = 4
+    smooth_kernel: int = 3        # majority-filter kernel applied to the partition before vectorizing
+    simplify_tolerance: float = 2.0  # Douglas-Peucker distance (px) for de-staircasing borders
     criteria: str = ""  # optional extra instruction appended to the proposer prompt
     proposer: dict[str, Any] = field(default_factory=dict)
 

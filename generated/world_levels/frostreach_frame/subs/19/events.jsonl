@@ -1,2 +1,41 @@
-{"config_hash": "cc9a149cd09411f39f4ee90d2b175f29ca5746a6ef8765e3b043f456a541b7a6", "event": "run_prepared", "level_count": 3, "timestamp": "2026-08-08T10:03:12.674114+00:00"}
-{"config_hash": "cc9a149cd09411f39f4ee90d2b175f29ca5746a6ef8765e3b043f456a541b7a6", "event": "run_prepared", "level_count": 3, "timestamp": "2026-08-08T10:10:25.467936+00:00"}
+{"config_hash": "5604ad906304f6c62ad3e8863116c50e79c820eb2cde88e4b64927d65db6bb38", "event": "run_prepared", "level_count": 3, "timestamp": "2026-08-16T02:14:22.107889+00:00"}
+{"config_hash": "5604ad906304f6c62ad3e8863116c50e79c820eb2cde88e4b64927d65db6bb38", "event": "run_prepared", "level_count": 3, "timestamp": "2026-08-16T02:16:47.514094+00:00"}
+{"event": "batch_started", "selected": ["01", "02", "03"], "timestamp": "2026-08-16T02:21:45.503502+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "01", "locked_sources": [], "timestamp": "2026-08-16T02:21:49.953898+00:00"}
+{"attempt": 1, "event": "job_created", "level_id": "01", "timestamp": "2026-08-16T02:21:55.059855+00:00"}
+{"attempt": 1, "event": "state_changed", "level_id": "01", "state": "generating", "timestamp": "2026-08-16T02:21:55.072318+00:00"}
+{"attempt": 1, "error": "Missing API key in environment variable 'OPENAI_API_KEY'", "event": "generation_retry", "level_id": "01", "retry": 0, "timestamp": "2026-08-16T02:21:55.073135+00:00"}
+{"attempt": 1, "error": "Missing API key in environment variable 'OPENAI_API_KEY'", "event": "generation_retry", "level_id": "01", "retry": 1, "timestamp": "2026-08-16T02:21:55.073753+00:00"}
+{"attempt": 1, "error": "Missing API key in environment variable 'OPENAI_API_KEY'", "event": "generation_retry", "level_id": "01", "retry": 2, "timestamp": "2026-08-16T02:21:55.074323+00:00"}
+{"attempt": 1, "error": "Missing API key in environment variable 'OPENAI_API_KEY'", "event": "state_changed", "level_id": "01", "state": "failed", "timestamp": "2026-08-16T02:21:55.078324+00:00"}
+{"event": "batch_finished", "status": "failed", "timestamp": "2026-08-16T02:21:55.078616+00:00"}
+{"event": "batch_started", "selected": ["01", "02", "03"], "timestamp": "2026-08-16T02:22:51.473183+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "01", "locked_sources": [], "timestamp": "2026-08-16T02:22:55.841598+00:00"}
+{"attempt": 2, "event": "job_created", "level_id": "01", "timestamp": "2026-08-16T02:23:00.979237+00:00"}
+{"attempt": 2, "event": "state_changed", "level_id": "01", "state": "generating", "timestamp": "2026-08-16T02:23:00.991896+00:00"}
+{"attempt": 2, "event": "result_ingested", "footprint_iou": 1.0, "footprint_iou_raw": 1.0, "level_id": "01", "normalized_hash": "7a8989ef2b333c5a4713cb18138e1f8d35938e4eb97ed0bff19d6f1b71155ad7", "rescale_applied": false, "timestamp": "2026-08-16T02:24:53.992225+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-08-16T02:24:54.008392+00:00"}
+{"event": "batch_started", "selected": ["01"], "timestamp": "2026-08-16T02:34:27.253939+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "01", "locked_sources": [], "timestamp": "2026-08-16T02:34:31.708934+00:00"}
+{"attempt": 3, "event": "job_created", "level_id": "01", "timestamp": "2026-08-16T02:34:36.847388+00:00"}
+{"attempt": 3, "event": "state_changed", "level_id": "01", "state": "generating", "timestamp": "2026-08-16T02:34:36.859879+00:00"}
+{"attempt": 3, "event": "result_ingested", "footprint_iou": 1.0, "footprint_iou_raw": 1.0, "level_id": "01", "normalized_hash": "3f1ea444c54255d172678272fd986c107dbbf75439e697ee07ba4fb12aa86403", "rescale_applied": false, "timestamp": "2026-08-16T02:36:33.159400+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-08-16T02:36:33.176444+00:00"}
+{"acceptance_index": 1, "attempt": 3, "event": "result_accepted", "level_id": "01", "timestamp": "2026-08-16T02:37:46.121297+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "02", "locked_sources": ["01"], "timestamp": "2026-08-16T02:37:49.159011+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "03", "locked_sources": ["01"], "timestamp": "2026-08-16T02:37:51.645920+00:00"}
+{"event": "batch_started", "selected": ["02"], "timestamp": "2026-08-16T02:37:56.476835+00:00"}
+{"context_revision": 1, "event": "level_refreshed", "level_id": "02", "locked_sources": ["01"], "timestamp": "2026-08-16T02:37:59.360737+00:00"}
+{"attempt": 1, "event": "job_created", "level_id": "02", "timestamp": "2026-08-16T02:38:02.719313+00:00"}
+{"attempt": 1, "event": "state_changed", "level_id": "02", "state": "generating", "timestamp": "2026-08-16T02:38:02.731892+00:00"}
+{"attempt": 1, "event": "result_ingested", "footprint_iou": 1.0, "footprint_iou_raw": 1.0, "level_id": "02", "normalized_hash": "da66b43251f13872aff0344bb88891e24367af5cc1aec4ea9a27f65aaefbf428", "rescale_applied": false, "timestamp": "2026-08-16T02:39:39.658413+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-08-16T02:39:39.669301+00:00"}
+{"acceptance_index": 2, "attempt": 1, "event": "result_accepted", "level_id": "02", "timestamp": "2026-08-16T02:39:58.533399+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "03", "locked_sources": ["01", "02"], "timestamp": "2026-08-16T02:40:01.584439+00:00"}
+{"event": "batch_started", "selected": ["03"], "timestamp": "2026-08-16T02:40:20.745260+00:00"}
+{"context_revision": 2, "event": "level_refreshed", "level_id": "03", "locked_sources": ["01", "02"], "timestamp": "2026-08-16T02:40:23.767787+00:00"}
+{"attempt": 1, "event": "job_created", "level_id": "03", "timestamp": "2026-08-16T02:40:27.104451+00:00"}
+{"attempt": 1, "event": "state_changed", "level_id": "03", "state": "generating", "timestamp": "2026-08-16T02:40:27.117859+00:00"}
+{"attempt": 1, "event": "result_ingested", "footprint_iou": 0.9953, "footprint_iou_raw": 0.9953, "level_id": "03", "normalized_hash": "31441cb223a583e0092d9788b3e452589281cc17b738674c642e7e681e699512", "rescale_applied": false, "timestamp": "2026-08-16T02:42:48.477786+00:00"}
+{"event": "batch_finished", "status": "waiting_for_approval", "timestamp": "2026-08-16T02:42:48.488343+00:00"}
+{"acceptance_index": 3, "attempt": 1, "event": "result_accepted", "level_id": "03", "timestamp": "2026-08-16T08:24:09.501821+00:00"}

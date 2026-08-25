@@ -1,0 +1,16 @@
+This is one piece of a larger map. Part of image 1 is already finished: it was
+painted as the neighbouring piece, and image 3 shows that part on its own. It
+gets put back exactly as it is, so nothing you do to it survives.
+
+Your job is the rest. Image 1 is a soft, blurred, washed out upscale, so redraw
+it sharp and detailed - and match the finished part exactly: its colours, its
+brightness, its contrast, its brush treatment, the size of its detail. The two
+must read as one painting, with nothing marking where one ends and the other
+begins.
+
+Keep everything where image 1 puts it. The one exception is the join: a road,
+track, ridge or crack that arrives offset must be bent so it runs straight
+through - and bend it out in the middle, away from the join, never at the edge
+itself.
+
+Reminder: the finished part is the standard. Match it, and leave it untouched.

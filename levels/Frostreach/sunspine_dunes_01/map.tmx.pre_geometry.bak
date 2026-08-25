@@ -1,0 +1,30 @@
+<?xml version='1.0' encoding='utf-8'?>
+<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="33" height="18" tilewidth="550" tileheight="550" infinite="0" nextlayerid="8" nextobjectid="98">
+ <tileset firstgid="10" source="painted_chunks.tsx" />
+ <objectgroup id="7" name="PaintedGround">
+  <object id="74" gid="10" x="0" y="2544" width="3040" height="2544" />
+  <object id="75" gid="11" x="3040" y="2544" width="3040" height="2544" />
+  <object id="76" gid="12" x="6080" y="2544" width="3040" height="2544" />
+  <object id="77" gid="13" x="9120" y="2544" width="3040" height="2544" />
+  <object id="78" gid="14" x="12160" y="2544" width="3040" height="2544" />
+  <object id="79" gid="15" x="15200" y="2544" width="3040" height="2544" />
+  <object id="80" gid="16" x="0" y="5088" width="3040" height="2544" />
+  <object id="81" gid="17" x="3040" y="5088" width="3040" height="2544" />
+  <object id="82" gid="18" x="6080" y="5088" width="3040" height="2544" />
+  <object id="83" gid="19" x="9120" y="5088" width="3040" height="2544" />
+  <object id="84" gid="20" x="12160" y="5088" width="3040" height="2544" />
+  <object id="85" gid="21" x="15200" y="5088" width="3040" height="2544" />
+  <object id="86" gid="22" x="0" y="7632" width="3040" height="2544" />
+  <object id="87" gid="23" x="3040" y="7632" width="3040" height="2544" />
+  <object id="88" gid="24" x="6080" y="7632" width="3040" height="2544" />
+  <object id="89" gid="25" x="9120" y="7632" width="3040" height="2544" />
+  <object id="90" gid="26" x="12160" y="7632" width="3040" height="2544" />
+  <object id="91" gid="27" x="15200" y="7632" width="3040" height="2544" />
+  <object id="92" gid="28" x="0" y="10176" width="3040" height="2544" />
+  <object id="93" gid="29" x="3040" y="10176" width="3040" height="2544" />
+  <object id="94" gid="30" x="6080" y="10176" width="3040" height="2544" />
+  <object id="95" gid="31" x="9120" y="10176" width="3040" height="2544" />
+  <object id="96" gid="32" x="12160" y="10176" width="3040" height="2544" />
+  <object id="97" gid="33" x="15200" y="10176" width="3040" height="2544" />
+ </objectgroup>
+ </map>

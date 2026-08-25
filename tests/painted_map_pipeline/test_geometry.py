@@ -16,14 +16,6 @@ def test_polygon_area_and_bbox():
     assert g.polygon_area(tuple(reversed(square))) == 100.0
 
 
-def test_polygon_is_simple():
-    square = ((0, 0), (10, 0), (10, 10), (0, 10))
-    bowtie = ((0, 0), (10, 10), (10, 0), (0, 10))
-    assert g.polygon_is_simple(square)
-    assert not g.polygon_is_simple(bowtie)
-    assert not g.polygon_is_simple(((0, 0), (1, 0)))  # fewer than 3 points
-
-
 def test_validate_simple_polygon_matches_plan_loader_behavior():
     # These are the exact failure modes plan_loader relied on before the lift.
     colinear = ((0, 0), (1, 0), (2, 0))
@@ -49,11 +41,10 @@ def test_mask_to_polygon_recovers_a_square():
     assert g.polygon_area(poly) > 100  # ~144, allowing for contour simplification
 
 
-def test_connected_components_and_dilation():
+def test_largest_component_and_dilation():
     mask = np.zeros((20, 40), dtype=bool)
     mask[2:6, 2:6] = True     # small blob (16 px)
     mask[2:12, 20:30] = True  # large blob (100 px)
-    assert g.count_components(mask) == 2
     largest = g.largest_connected_component(mask)
     assert largest[5, 25]        # inside the large blob
     assert not largest[3, 3]     # small blob removed

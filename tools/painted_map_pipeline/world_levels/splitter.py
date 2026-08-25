@@ -22,9 +22,10 @@ import numpy as np
 from PIL import Image
 from scipy.ndimage import distance_transform_edt
 
-from . import geometry
+from . import geometry, topology
 from .config import config_as_dict
-from .coordinates import ScaledSpace, build_transform, polygon_to_local, resolve_canvas
+from .coordinates import ScaledSpace, resolve_canvas
+from .frames import _grow_to_constraints, constraints_for
 from .masks import compute_overlap, rasterize_polygon
 from .package_builder import draw_plan_overlay
 from .models import Connection, LevelSpec, Point, RunConfig, SplitConfig
@@ -32,7 +33,9 @@ from .plan_loader import load_level_plan
 
 Image.MAX_IMAGE_PIXELS = None
 
-# The sub-run lives in the chunk art's own pixels, so no rescale of the source art.
+# The sub-level plan is authored in the chunk art's own pixel coordinates (its "world"), so
+# plan-geometry checks (overlap/containment) run at scale 1. The render BLOW-UP factor that
+# enlarges each sub-level to fill its page is a separate number, computed in _child_frame.
 _SUB_SCALE = "1"
 
 def _encode_polygon(points: tuple[Point, ...]) -> str:
@@ -100,6 +103,15 @@ def _region_specs(
         _, (iy, ix) = distance_transform_edt(labels == 0, return_indices=True)
         labels[holes] = labels[iy[holes], ix[holes]]
 
+    # Topology-preserving vectorization: one simple polygon per region, sharing simplified
+    # borders so the sub-levels tile exactly and cover the whole chunk (see topology.py).
+    topo = topology.partition_to_polygons(
+        labels,
+        smooth_kernel=split_cfg.smooth_kernel,
+        tolerance=split_cfg.simplify_tolerance,
+        simplify_outer=True,
+    )
+
     specs: list[LevelSpec] = []
     tags: list[str] = []
     warnings: list[str] = []
@@ -108,10 +120,9 @@ def _region_specs(
         if int(core_mask.sum()) < min_pixels:
             warnings.append(f"{chunk.level_id}: dropped region {index} (below min area)")
             continue
-        try:
-            core_local = geometry.mask_to_polygon(core_mask, epsilon_frac=0.005)
-        except ValueError as exc:
-            warnings.append(f"{chunk.level_id}: dropped region {index} ({exc})")
+        core_local = topo.get(index)
+        if core_local is None or len(core_local) < 3:
+            warnings.append(f"{chunk.level_id}: dropped region {index} (no polygon)")
             continue
         # Generation polygon = core buffered for overlap, guaranteed to contain the exact
         # stored core at scale. Dilate the core polygon's own raster and OR it back so the
@@ -239,26 +250,61 @@ def _write_plan_csv(path: Path, specs: list[LevelSpec], tags: list[str]) -> None
             )
 
 
+def _child_frame(specs: list[LevelSpec], config: RunConfig) -> tuple[str, int, int]:
+    """The sub-run's blow-up scale and canvas, mirroring what the chunk tier does one level up.
+
+    Every sub-level shares ONE scale (so in-level scale is identical across a chunk's
+    sub-levels) chosen to enlarge the LARGEST sub-level until it just fills the provider's
+    biggest legal page -- so the frame renderer redraws each region big and centred, exactly
+    like the chunk tier blows the low-res world up to fill its page. The canvas is the largest
+    grown frame at that scale, so each final output is the enlarged sub-level with black only
+    at the edges. No provider size limits (tests) -> scale 1, canvas = largest crop.
+    """
+    limits = constraints_for(config.generation)
+    a_max = max(spec.crop_width * spec.crop_height for spec in specs)
+    e_max = max(max(spec.crop_width, spec.crop_height) for spec in specs)
+    if limits.max_pixels and limits.max_edge:
+        by_area = (limits.max_pixels / a_max) ** 0.5
+        by_edge = limits.max_edge / e_max
+        scale = max(1.0, 0.95 * min(by_area, by_edge))  # 0.95 leaves headroom for frame growth
+    else:
+        scale = 1.0
+    scale_str = f"{scale:.4f}"
+    scaled = ScaledSpace(scale_str)
+    canvas_w = canvas_h = 0
+    for spec in specs:
+        frame_w, frame_h = _grow_to_constraints(
+            scaled.span(spec.crop_x, spec.crop_width),
+            scaled.span(spec.crop_y, spec.crop_height),
+            limits,
+        )
+        canvas_w, canvas_h = max(canvas_w, frame_w), max(canvas_h, frame_h)
+    return scale_str, canvas_w, canvas_h
+
+
 def _write_child_config(
     config: RunConfig,
     plan_csv: Path,
     child_root: Path,
     world_map: Path,
-    canvas_size: tuple[int, int],
+    sub_scale: str,
+    canvas_wh: tuple[int, int],
 ) -> Path:
     """A normal world-level config for the nested run: the generated chunk art as its world
-    map, scale 1 (art is already at final resolution), an explicit canvas the size of that
-    art, its own plan + output root, same renderer/generation as the parent, no split."""
+    map, a uniform blow-up scale so each sub-level is enlarged to fill its page, an explicit
+    canvas sized to the largest grown frame with CENTRED placement (so each sub-level sits in
+    the middle of its page, not the corner), its own plan + output root, same renderer, no
+    split."""
     child = config_as_dict(config)
     child["level_plan"] = str(plan_csv)
     child["output_root"] = str(child_root)
     child["world_map"] = str(world_map)
-    child["scale"] = {"pixels_per_world_pixel": _SUB_SCALE}
+    child["scale"] = {"pixels_per_world_pixel": sub_scale}
     child["canvas"] = {
         "mode": "explicit",
-        "width": int(canvas_size[0]),
-        "height": int(canvas_size[1]),
-        "placement": "top_left",
+        "width": int(canvas_wh[0]),
+        "height": int(canvas_wh[1]),
+        "placement": "center",
         "margin": 0,
     }
     child.pop("split", None)
@@ -272,7 +318,6 @@ def split_chunk(
     config: RunConfig,
     chunk: LevelSpec,
     proposer,
-    parent_scaled: ScaledSpace,
     parent_canvas_size: tuple[int, int],
 ) -> dict[str, Any]:
     from .region_proposer import ProposeRequest
@@ -286,10 +331,14 @@ def split_chunk(
             f"(missing {accepted})"
         )
 
-    # The chunk outline in the parent CANVAS frame = the sub-run's coordinate frame.
-    transform = build_transform(chunk, parent_scaled, config.canvas, parent_canvas_size)
-    canvas_poly = polygon_to_local(chunk.core_polygon, parent_scaled, transform)
-    frame_bbox = geometry.polygon_bbox(canvas_poly)
+    # Slice the chunk's actual visible art (its non-black pixels), not a plan outline, so the
+    # sub-levels cover exactly what is on screen -- no uncovered edge strip.
+    with Image.open(accepted) as opened:
+        land = np.asarray(opened.convert("RGB")).sum(axis=2) > 40
+    ys, xs = np.where(land)
+    cl, ct, cr, cb = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
+    frame_bbox = (cl, ct, cr, cb)
+    canvas_poly = ((cl, ct), (cr, ct), (cr, cb), (cl, cb))
 
     child_root = root / "subs" / chunk.level_id
     child_root.mkdir(parents=True, exist_ok=True)
@@ -322,7 +371,8 @@ def split_chunk(
     plan_csv = child_root / "plan.csv"
     _write_plan_csv(plan_csv, specs, tags)
     load_level_plan(plan_csv, parent_canvas_size)  # self-check against the real loader
-    config_path = _write_child_config(config, plan_csv, child_root, accepted, parent_canvas_size)
+    sub_scale, canvas_w, canvas_h = _child_frame(specs, config)
+    config_path = _write_child_config(config, plan_csv, child_root, accepted, sub_scale, (canvas_w, canvas_h))
     overlay_path = child_root / "division_overlay.png"
     with Image.open(accepted) as art:
         draw_plan_overlay(art.convert("RGBA"), {spec.level_id: spec for spec in specs}).save(overlay_path)
@@ -362,7 +412,7 @@ def split_run(config: RunConfig, chunk_ids: list[str] | None = None) -> dict[str
         raise ValueError(f"unknown chunks: {', '.join(unknown)}")
 
     results = [
-        split_chunk(config, levels[cid], proposer, parent_scaled, parent_canvas_size)
+        split_chunk(config, levels[cid], proposer, parent_canvas_size)
         for cid in selected
     ]
     return {"chunks": selected, "results": results}

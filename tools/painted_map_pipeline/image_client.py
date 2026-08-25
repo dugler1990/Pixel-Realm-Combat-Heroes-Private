@@ -282,7 +282,23 @@ class OpenAIImageClient(ImageClient):
 
     @staticmethod
     def _alpha_mask(pending_mask: Path, size: tuple[int, int]) -> Path:
-        """Canonical white-means-repaint -> OpenAI's transparent-means-edit."""
+        """Canonical white-means-repaint -> the alpha polarity gpt-image-2 actually obeys.
+
+        OPAQUE is the region the model repaints; transparent is left alone. That is the
+        reverse of what OpenAI's own guide says ("transparent areas indicate where the image
+        should be edited"), so it was measured rather than assumed -- two identical calls on
+        level 02, one image, differing only in polarity:
+
+            alpha 0 over the polygon (what the docs describe)   painted 100% of the canvas,
+                                                                footprint IoU 0.305
+            alpha 255 over the polygon (this)                   painted 31.1%, IoU 0.970,
+                                                                detail inside the polygon
+                                                                29.1 -> 334.9, everything
+                                                                outside 98.2% untouched
+
+        Sending it the documented way told the model to repaint everything except the level,
+        which is exactly what it did, on every masked call this pipeline ever made.
+        """
         with Image.open(pending_mask) as opened:
             editable = np.asarray(opened.convert("L")) > 0
         if (editable.shape[1], editable.shape[0]) != size:
@@ -294,7 +310,7 @@ class OpenAIImageClient(ImageClient):
             raise ImageClientError(f"mask {pending_mask} has no editable area")
         rgba = np.zeros((*editable.shape, 4), dtype=np.uint8)
         rgba[..., :3] = 255
-        rgba[..., 3] = np.where(editable, 0, 255).astype(np.uint8)
+        rgba[..., 3] = np.where(editable, 255, 0).astype(np.uint8)
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
             path = Path(tmp.name)
         Image.fromarray(rgba, mode="RGBA").save(path)

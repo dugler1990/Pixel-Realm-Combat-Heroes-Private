@@ -1,0 +1,12 @@
+Image 1 is the terrain to redraw at high quality, with the finished padding already in place.
+Image 2 is that padding on its own, at its exact position, everything else blank.
+Image 3 is where this piece sits on the world map, for orientation only, do not copy from it.
+
+Image 1 is already a finished painting.
+Part of it was carried over from the neighbouring level and is already correct.
+That carried-over part is the source of truth for hue, contrast, texture scale
+and brushwork. Bring the rest of image 1 into line with it so the whole thing
+reads as one painting.
+
+Do not change what anything is or where it sits. Do not add or remove anything.
+No text or labels.

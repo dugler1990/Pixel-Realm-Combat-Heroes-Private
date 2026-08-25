@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='utf-8'?>
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="92" height="39" tilewidth="200" tileheight="200" infinite="0" nextlayerid="2" nextobjectid="1">
+ <tileset firstgid="1" source="painted_chunks.tsx" />
+ <objectgroup id="1" name="PaintedGround">
+  <object id="1" gid="1" x="0" y="2544" width="3040" height="2544" />
+  <object id="2" gid="2" x="3040" y="2544" width="3040" height="2544" />
+  <object id="3" gid="3" x="6080" y="2544" width="3040" height="2544" />
+  <object id="4" gid="4" x="9120" y="2544" width="3040" height="2544" />
+  <object id="5" gid="5" x="12160" y="2544" width="3040" height="2544" />
+  <object id="6" gid="6" x="15200" y="2544" width="3040" height="2544" />
+  <object id="7" gid="7" x="0" y="5088" width="3040" height="2544" />
+  <object id="8" gid="8" x="3040" y="5088" width="3040" height="2544" />
+  <object id="9" gid="9" x="6080" y="5088" width="3040" height="2544" />
+  <object id="10" gid="10" x="9120" y="5088" width="3040" height="2544" />
+  <object id="11" gid="11" x="12160" y="5088" width="3040" height="2544" />
+  <object id="12" gid="12" x="15200" y="5088" width="3040" height="2544" />
+  <object id="13" gid="13" x="0" y="7632" width="3040" height="2544" />
+  <object id="14" gid="14" x="3040" y="7632" width="3040" height="2544" />
+ </objectgroup>
+</map>

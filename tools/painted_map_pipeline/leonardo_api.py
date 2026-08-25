@@ -209,6 +209,13 @@ def create_v2_generation(
     supports_reference_strength = model not in {"gpt-image-2"}
     if not init_image_ids:
         raise LeonardoApiError("v2 generation requires at least one init image id")
+    # Pre-flight: catch an unsupported generation size here rather than paying a round trip
+    # to be told "VALIDATION_ERROR" with no detail.
+    if int(width) % 8 or int(height) % 8:
+        raise LeonardoApiError(
+            f"Leonardo generation size {width}x{height} is not a multiple of 8; "
+            f"the known-good size for this pipeline is 5056x3392"
+        )
 
     image_refs = []
     for image_id in init_image_ids:
@@ -244,8 +251,31 @@ def create_v2_generation(
         capture["create_response"] = result
     generation_id = _extract_generation_id(result)
     if not generation_id:
-        raise LeonardoApiError(f"Unexpected v2 generation response: {result}")
+        raise LeonardoApiError(_readable_api_error(result, width, height, model))
     return str(generation_id)
+
+
+def _readable_api_error(result, width: int, height: int, model: str) -> str:
+    """One human line instead of a raw GraphQL error dump. Leonardo answers a rejected
+    request with a nested envelope whose only useful parts are the code and message, and a
+    validation failure is nearly always the generation size or the model id."""
+    entries = result if isinstance(result, list) else [result]
+    code = message = ""
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        details = (entry.get("extensions") or {}).get("details") or {}
+        code = code or str(details.get("code") or (entry.get("extensions") or {}).get("code") or "")
+        message = message or str(details.get("message") or entry.get("message") or "")
+    reason = f"Leonardo rejected the request ({code or 'unknown error'})"
+    if "VALIDATION" in code.upper():
+        reason += (
+            f": {width}x{height} for model '{model}' is most likely an unsupported generation "
+            f"size (the known-good size for this pipeline is 5056x3392)"
+        )
+    elif message:
+        reason += f": {message}"
+    return reason
 
 
 def _first_dict(value) -> dict:
@@ -430,7 +460,21 @@ def generate_with_image_reference(
         "request": capture.get("request"),
         "create_response": capture.get("create_response"),
         "generation_response": result,
+        # Leonardo prices each generation on the create response; surface it at the top level
+        # so cost is recorded per call instead of being read off the dashboard.
+        "cost_usd": _cost_usd(capture.get("create_response")),
     }
+
+
+def _cost_usd(create_response) -> float | None:
+    """The generation's price in dollars, if the API reported one."""
+    cost = ((create_response or {}).get("generate") or {}).get("cost") or {}
+    if str(cost.get("unit", "")).upper() == "DOLLARS" and cost.get("amount") is not None:
+        try:
+            return float(cost["amount"])
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def generate_with_content_reference(

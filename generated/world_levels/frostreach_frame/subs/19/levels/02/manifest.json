@@ -3,79 +3,29 @@
   "level_id": "02",
   "name": "Region 2",
   "region": "Sunspine Dunes",
-  "state": "prepared",
+  "state": "accepted",
   "crop_box_world": [
-    829,
-    770,
-    1808,
-    1181
+    749,
+    695,
+    1821,
+    1172
   ],
   "core_polygon_world": [
     [
-      833,
-      774
+      1817,
+      1144
     ],
     [
-      835,
-      901
+      1724,
+      946
     ],
     [
-      1452,
-      1080
+      1709,
+      805
     ],
     [
-      1573,
-      1161
-    ],
-    [
-      1787,
-      1142
-    ],
-    [
-      1703,
-      976
-    ],
-    [
-      1684,
-      800
-    ],
-    [
-      1246,
-      844
-    ],
-    [
-      1065,
-      774
-    ]
-  ],
-  "generation_polygon_world": [
-    [
-      833,
-      774
-    ],
-    [
-      833,
-      918
-    ],
-    [
-      1442,
-      1094
-    ],
-    [
-      1567,
-      1177
-    ],
-    [
-      1804,
-      1146
-    ],
-    [
-      1720,
-      972
-    ],
-    [
-      1702,
-      803
+      1708,
+      804
     ],
     [
       1648,
@@ -86,8 +36,94 @@
       844
     ],
     [
-      1065,
-      774
+      869,
+      699
+    ],
+    [
+      803,
+      699
+    ],
+    [
+      766,
+      731
+    ],
+    [
+      762,
+      738
+    ],
+    [
+      753,
+      802
+    ],
+    [
+      766,
+      856
+    ],
+    [
+      1439,
+      1068
+    ],
+    [
+      1577,
+      1168
+    ]
+  ],
+  "generation_polygon_world": [
+    [
+      1817,
+      1144
+    ],
+    [
+      1724,
+      946
+    ],
+    [
+      1709,
+      805
+    ],
+    [
+      1708,
+      804
+    ],
+    [
+      1648,
+      794
+    ],
+    [
+      1246,
+      844
+    ],
+    [
+      869,
+      699
+    ],
+    [
+      803,
+      699
+    ],
+    [
+      766,
+      731
+    ],
+    [
+      762,
+      738
+    ],
+    [
+      753,
+      802
+    ],
+    [
+      766,
+      856
+    ],
+    [
+      1439,
+      1068
+    ],
+    [
+      1577,
+      1168
     ]
   ],
   "overlap_buffer_source_px": 8,
@@ -102,37 +138,37 @@
     }
   ],
   "transform": {
-    "scale": "1",
+    "scale": "2.6804",
     "scaled_crop_origin": [
-      829,
-      770
+      2008,
+      1863
     ],
     "scaled_crop_size": [
-      979,
-      411
+      2873,
+      1278
     ],
     "canvas_offset": [
-      0,
-      0
+      387,
+      377
     ],
     "canvas_size": [
-      3072,
-      2304
+      3648,
+      2032
     ]
   },
   "frame": {
     "origin": [
-      0,
-      0
+      383,
+      376
     ],
     "size": [
-      1264,
-      528
+      2880,
+      1280
     ]
   },
   "canvas_size": [
-    3072,
-    2304
+    3648,
+    2032
   ],
   "paths": {
     "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/02/manifest.json",
@@ -149,11 +185,32 @@
   },
   "hashes": {
     "world_map": "d3dbe42f4f1a6fd9c5eb7c64dca7e55b8acccddf2bde20c02b50545eea172b6b",
-    "dense_template": "ae6fce093760c9ab5053da0ba411cad04240193dc6513177605924c854952e8b",
-    "generation_mask": "e8c2b1f9abb10c36d0ac6e6ea621d98401b9c266fb1416cb737f3c90262292ec"
+    "dense_template": "fd0e3a1493ac68fb6703c79ee0a23583905192be16a2d783d0c5838920f06c9c",
+    "generation_mask": "e47c71a111828ff074724a8b5f3f851ca7b3d8932147c06527832df22e6d5b22",
+    "generation_input": "a493600a49e8afefe62623e9093d5a65957803e4a20a12b8763c863d9863353e",
+    "locked_pixels": "0a5ac3b7f79826fd20f6a7e95f385d23cd7af2db4360e14d299fc83b1f0bab41",
+    "locked_mask": "09fb5c53623479f879008a10daf483062f447bfea0dda73bd74cb3a11c50af11"
   },
-  "context_revision": 0,
-  "locked_sources": [],
-  "attempt_count": 0,
-  "updated_at": "2026-08-08T10:03:10.848004+00:00"
+  "context_revision": 1,
+  "locked_sources": [
+    {
+      "neighbor_id": "01",
+      "global_box": [
+        2053,
+        2294,
+        4871,
+        3132
+      ],
+      "pixel_count": 901,
+      "accepted_hash": "3f1ea444c54255d172678272fd986c107dbbf75439e697ee07ba4fb12aa86403"
+    }
+  ],
+  "attempt_count": 1,
+  "updated_at": "2026-08-16T02:39:58.519730+00:00",
+  "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/02/jobs/attempt_001/job.json",
+  "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/02/attempts/attempt_001/normalized.png",
+  "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/02/accepted/image.png",
+  "accepted_hash": "da66b43251f13872aff0344bb88891e24367af5cc1aec4ea9a27f65aaefbf428",
+  "accepted_attempt": 1,
+  "acceptance_index": 2
 }

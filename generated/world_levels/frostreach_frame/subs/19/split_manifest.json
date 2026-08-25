@@ -17,12 +17,12 @@
     {
       "id": "02",
       "name": "Region 2",
-      "tag": "flat"
+      "tag": "mountain"
     },
     {
       "id": "03",
       "name": "Region 3",
-      "tag": "flat"
+      "tag": "mountain"
     }
   ],
   "warnings": []

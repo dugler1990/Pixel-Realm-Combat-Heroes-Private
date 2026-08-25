@@ -1,0 +1,24 @@
+Richly detailed top-down / slightly 2.5D painted pixel-art RPG desert ground -- modern,
+high-end pixel art with painterly texture, finished game-art quality. Use image 1 only for the
+outline shape of the playable area; re-compose everything inside as a vast, mostly empty
+desert.
+
+The ground is the star: wide stretches of open sand with fine dune-ripple fields, cracked
+hardpan, wind-scoured flats, salt-crust patches, scattered pebbles and tiny rubble. One long,
+winding dry riverbed crosses the map. Faint traces of giant ancient geoglyphs are etched into
+the hardpan, barely visible from above. The half-buried bones of something colossal lie in one
+remote corner. Subtle palette variation across the sand so the expanse feels huge, never flat
+or uniform.
+
+Monuments are sparse, spread far apart with wide empty sand between them, in an Egyptian /
+Aztec / alien style. Their sizes are RELATIVE, keep these proportions:
+- ONE great stepped pyramid, by far the tallest thing on the map; its dark entrance doorway is
+  tiny in comparison, about one tenth of the pyramid's height.
+- 2 or 3 smaller pyramids, about half the great pyramid's height.
+- a few slender obelisks, about a fifth of the great pyramid's height.
+- one or two sphinxes or half-buried statues, slightly smaller than the obelisks.
+- scattered broken colonnades, low ruins and rubble piles, tiny against the pyramid.
+No roads; at most faint worn tracks between monuments.
+
+Keep the outer boundary of the playable area exactly as image 1; everything outside stays pure
+black. Top-down, even lighting, no cast shadows. No text, labels, UI, grid lines, or people.

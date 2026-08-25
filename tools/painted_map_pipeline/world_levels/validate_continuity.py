@@ -8,7 +8,7 @@ from PIL import Image
 
 from .config import load_config
 from .coordinates import ScaledSpace, build_transform
-from .masks import compute_overlap
+from .masks import shared_strip
 from .models import LevelState
 from .package_builder import level_paths
 from .plan_loader import load_level_plan
@@ -42,36 +42,58 @@ def validate_run(root: str | Path) -> dict[str, Any]:
                 or run["levels"][neighbor_id]["state"] != LevelState.ACCEPTED.value
             ):
                 continue
-            overlap = compute_overlap(level, levels[neighbor_id], scaled)
-            if overlap is None:
-                errors.append(f"accepted land pair {level_id}-{neighbor_id}: missing overlap")
+            # Two neighbours no longer agree across the whole overlap, and should not: each
+            # owns its own core there and paints it itself. What must agree is only what one
+            # actually inherited from the other -- its shared strip, and only where its locked
+            # mask says those pixels were taken. Checked in both directions, since which level
+            # was accepted first decides who inherited from whom.
+            checked = False
+            for receiver, giver in ((level_id, neighbor_id), (neighbor_id, level_id)):
+                strip = shared_strip(levels[receiver], levels[giver], scaled)
+                if strip is None:
+                    continue
+                receiver_path = level_paths(root_path, receiver)["root"] / "accepted" / "image.png"
+                giver_path = level_paths(root_path, giver)["root"] / "accepted" / "image.png"
+                locked_path = level_paths(root_path, receiver)["locked_mask"]
+                if not locked_path.is_file():
+                    continue
+                with Image.open(receiver_path) as opened:
+                    receiver_image = opened.convert("RGBA")
+                with Image.open(giver_path) as opened:
+                    giver_image = opened.convert("RGBA")
+                with Image.open(locked_path) as opened:
+                    locked = np.asarray(opened.convert("L")) > 0
+                rx, ry = transforms[receiver].global_to_local(*strip.global_box[:2])
+                gx, gy = transforms[giver].global_to_local(*strip.global_box[:2])
+                receiver_array = np.asarray(
+                    receiver_image.crop((rx, ry, rx + strip.width, ry + strip.height))
+                )
+                giver_array = np.asarray(
+                    giver_image.crop((gx, gy, gx + strip.width, gy + strip.height))
+                )
+                active = (strip.pixels > 0) & locked[ry : ry + strip.height, rx : rx + strip.width]
+                if not np.any(active):
+                    continue
+                checked = True
+                difference = np.any(receiver_array != giver_array, axis=2) & active
+                differing = int(np.count_nonzero(difference))
+                pairs.append(
+                    {
+                        "levels": [receiver, giver],
+                        "inherited_by": receiver,
+                        "overlap_pixels": int(np.count_nonzero(active)),
+                        "differing_pixels": differing,
+                        "first_hash": sha256_file(receiver_path),
+                        "second_hash": sha256_file(giver_path),
+                    }
+                )
+                if differing:
+                    errors.append(
+                        f"accepted pair {receiver}-{giver}: {differing} inherited pixels differ"
+                    )
+            if not checked:
                 continue
-            first_path = level_paths(root_path, level_id)["root"] / "accepted" / "image.png"
-            second_path = level_paths(root_path, neighbor_id)["root"] / "accepted" / "image.png"
-            with Image.open(first_path) as opened:
-                first = opened.convert("RGBA")
-            with Image.open(second_path) as opened:
-                second = opened.convert("RGBA")
-            first_x, first_y = transforms[level_id].global_to_local(*overlap.global_box[:2])
-            second_x, second_y = transforms[neighbor_id].global_to_local(*overlap.global_box[:2])
-            first_array = np.asarray(
-                first.crop((first_x, first_y, first_x + overlap.width, first_y + overlap.height))
-            )
-            second_array = np.asarray(
-                second.crop((second_x, second_y, second_x + overlap.width, second_y + overlap.height))
-            )
-            active = overlap.pixels > 0
-            difference = np.any(first_array != second_array, axis=2) & active
-            differing = int(np.count_nonzero(difference))
-            pairs.append(
-                {
-                    "levels": [level_id, neighbor_id],
-                    "overlap_pixels": int(np.count_nonzero(active)),
-                    "differing_pixels": differing,
-                    "first_hash": sha256_file(first_path),
-                    "second_hash": sha256_file(second_path),
-                }
-            )
+            differing = 0
             if differing:
                 errors.append(f"accepted pair {level_id}-{neighbor_id}: {differing} overlap pixels differ")
     report = {

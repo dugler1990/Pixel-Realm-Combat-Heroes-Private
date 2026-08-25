@@ -32,6 +32,8 @@ level_7_layout_path = '../levels/Map7'
 level_6_layout_path = '../levels/tmx'
 level_9_layout_path = '../levels/Frostreach/ice_wall_gate'
 level_10_layout_path = '../levels/Frostreach/expanse'
+level_11_layout_path = '../levels/Frostreach/sunspine_dunes_01'
+level_12_layout_path = '../levels/Frostreach/sunspine_7x6_play'
 
 LAYOUT_TO_LEVEL = {
     level_6_layout_path: 6,
@@ -39,7 +41,14 @@ LAYOUT_TO_LEVEL = {
     level_8_layout_path: 8,
     level_9_layout_path: 9,
     level_10_layout_path: 10,
+    level_11_layout_path: 11,
+    level_12_layout_path: 12,
 }
+
+# Inverted so a level number resolves to its folder in one lookup. Adding a level
+# is then one entry in the table above rather than another branch in a chain.
+LEVEL_TO_LAYOUT = {number: path for path, number in LAYOUT_TO_LEVEL.items()}
+
 
 DEV_STATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.dev_reload_state.json')
 
@@ -277,10 +286,7 @@ class Game:
             if BENCHMARK_RUNTIME.enabled:
                 layouts_dir = BENCHMARK_RUNTIME.layout_dir
             else:
-                layouts_dir = (level_6_layout_path if level_number == 6 else
-                              level_7_layout_path if level_number == 7 else
-                              level_8_layout_path if level_number == 8 else
-                              level_9_layout_path if level_number == 9 else level_10_layout_path)
+                layouts_dir = LEVEL_TO_LAYOUT.get(level_number, level_10_layout_path)
             player_position = None
 
         if player_info_dir is not None:

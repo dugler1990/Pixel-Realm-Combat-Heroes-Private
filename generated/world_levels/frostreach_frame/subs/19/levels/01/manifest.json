@@ -3,87 +3,95 @@
   "level_id": "01",
   "name": "Region 1",
   "region": "Sunspine Dunes",
-  "state": "prepared",
+  "state": "accepted",
   "crop_box_world": [
-    829,
-    889,
-    2127,
-    1528
+    762,
+    852,
+    2123,
+    1609
   ],
   "core_polygon_world": [
     [
-      833,
-      901
-    ],
-    [
-      833,
-      1139
+      766,
+      856
     ],
     [
       863,
-      1264
+      1265
     ],
     [
-      1127,
-      1524
+      1203,
+      1600
     ],
     [
-      1886,
-      1524
+      1254,
+      1605
     ],
     [
-      2115,
+      2119,
       1495
     ],
     [
-      1787,
-      1143
+      2013,
+      1373
     ],
     [
-      1573,
-      1162
+      1971,
+      1297
     ],
     [
-      1452,
-      1081
+      1817,
+      1144
+    ],
+    [
+      1577,
+      1168
+    ],
+    [
+      1439,
+      1068
     ]
   ],
   "generation_polygon_world": [
     [
-      833,
-      893
-    ],
-    [
-      833,
-      1141
+      766,
+      856
     ],
     [
       863,
-      1264
+      1265
     ],
     [
-      1127,
-      1524
+      1203,
+      1600
     ],
     [
-      1886,
-      1524
+      1254,
+      1605
     ],
     [
-      2123,
-      1494
+      2119,
+      1495
     ],
     [
-      1791,
-      1136
+      2013,
+      1373
     ],
     [
-      1575,
-      1154
+      1971,
+      1297
     ],
     [
-      1456,
-      1074
+      1817,
+      1144
+    ],
+    [
+      1577,
+      1168
+    ],
+    [
+      1439,
+      1068
     ]
   ],
   "overlap_buffer_source_px": 8,
@@ -98,22 +106,22 @@
     }
   ],
   "transform": {
-    "scale": "1",
+    "scale": "2.6804",
     "scaled_crop_origin": [
-      829,
-      889
+      2042,
+      2284
     ],
     "scaled_crop_size": [
-      1298,
-      639
+      3648,
+      2029
     ],
     "canvas_offset": [
       0,
-      0
+      1
     ],
     "canvas_size": [
-      3072,
-      2304
+      3648,
+      2032
     ]
   },
   "frame": {
@@ -122,13 +130,13 @@
       0
     ],
     "size": [
-      1312,
-      640
+      3648,
+      2032
     ]
   },
   "canvas_size": [
-    3072,
-    2304
+    3648,
+    2032
   ],
   "paths": {
     "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/01/manifest.json",
@@ -145,11 +153,20 @@
   },
   "hashes": {
     "world_map": "d3dbe42f4f1a6fd9c5eb7c64dca7e55b8acccddf2bde20c02b50545eea172b6b",
-    "dense_template": "be77dd2d56539bdf5cad08b08501c584a98ad08184e2e2b92c88e97249362126",
-    "generation_mask": "49f335a529229524faa3febe3815bfbc6f71c6769ee3bef7a15a519db0fe9ca0"
+    "dense_template": "4a1d11e6aa13b2c3ebbdfb8c4d22c5e1189c283ef8a4e02cfce109bbc63cc107",
+    "generation_mask": "3ec153f2f5c9f6e9b35be1e8f76d9725c4168b65d96730542290ede5f26d749b",
+    "generation_input": "4a1d11e6aa13b2c3ebbdfb8c4d22c5e1189c283ef8a4e02cfce109bbc63cc107",
+    "locked_pixels": "277ccfd137ca67ccee3f12b72d7fee6c9898b50e771b6dd34ae0706acd1e96e4",
+    "locked_mask": "c8fb73d2f143a2636e6461331753da0b725efebd3203917b2000420f471bc369"
   },
-  "context_revision": 0,
+  "context_revision": 1,
   "locked_sources": [],
-  "attempt_count": 0,
-  "updated_at": "2026-08-08T10:03:08.889522+00:00"
+  "attempt_count": 3,
+  "updated_at": "2026-08-16T02:37:46.113409+00:00",
+  "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/01/jobs/attempt_003/job.json",
+  "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/01/attempts/attempt_003/normalized.png",
+  "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/01/accepted/image.png",
+  "accepted_hash": "3f1ea444c54255d172678272fd986c107dbbf75439e697ee07ba4fb12aa86403",
+  "accepted_attempt": 3,
+  "acceptance_index": 1
 }

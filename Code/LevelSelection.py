@@ -60,6 +60,8 @@ class LevelSelection:
              (0, 1): 7,  # Top row, second column starts level 2
              (0, 2): 9,
              (0, 3): 10,  # Frostreach Expanse (PNG bootstrap)
+             (1, 0): 11,  # Frostreach Sunspine Dunes 01 (painted desert)
+             (1, 2): 12,  # sunspine_7x6_play
              (1,1):6,
             # (1, 0): 4,
             # (1, 1): 5,

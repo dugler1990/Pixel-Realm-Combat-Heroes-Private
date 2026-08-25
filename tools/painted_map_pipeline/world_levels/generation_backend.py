@@ -34,6 +34,32 @@ def job_generation_size(job: GenerationJob) -> tuple[int, int] | None:
     return (int(size[0]), int(size[1])) if size else None
 
 
+def write_generation_mask(job: GenerationJob, size: tuple[int, int] | None) -> Path:
+    """The level's polygon, as the plain white-means-repaint mask the client contract expects.
+
+    Not converted here. ``ImageClient.generate`` owns that: "each client converts to whatever
+    its provider expects; the pipeline never does." Converting here as well is what produced a
+    mask the client then read as empty.
+
+    All this does is choose the mask and match it to the image it will accompany -- the frame
+    renderer asks for a crop rather than the whole canvas, and a mask of the wrong size is
+    rejected. Written into the job directory beside every other image sent, so an attempt
+    replays exactly.
+    """
+    from .job_builder import canvas_asset
+
+    with Image.open(canvas_asset(job.directory, "generation_mask")) as opened:
+        mask = opened.convert("L")
+    if size is not None and mask.size != tuple(size):
+        frame = read_json(job.manifest_path)["frame"]
+        left, top = frame["origin"]
+        width, height = frame["size"]
+        mask = mask.crop((left, top, left + width, top + height))
+    path = job.directory / "api_mask.png"
+    mask.save(path)
+    return path
+
+
 class GenerationBackend:
     def generate(self, job: GenerationJob) -> Path | None:
         raise NotImplementedError
@@ -75,12 +101,11 @@ class ImageClientBackend(GenerationBackend):
             config["width"], config["height"] = size
         client = make_image_client(config)
 
-        # No mask. Masked editing hides the region under the mask from the model, so
-        # masking the land asks it to invent terrain it cannot see -- measured on level
-        # 03, that returns a black frame with only the unmasked padding surviving. The
-        # images go in as labelled references instead, and the silhouette is enforced by
-        # the mask picture in the roster plus the composite at ingest.
-        mask = None
+        # Off unless a config asks for it. Masking was disabled after one test on level 03
+        # returned a black frame with only the padding surviving -- which is also exactly what
+        # an inverted mask produces, so that result settles nothing about whether masking works,
+        # only that one polarity does not. Opt in per run and let the first generation say.
+        mask = write_generation_mask(job, size) if config.get("mask_edits") else None
 
         result_path = job.directory / "generation_result.json"
         try:

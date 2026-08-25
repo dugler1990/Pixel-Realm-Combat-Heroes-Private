@@ -5,13 +5,13 @@
   "output_root": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19",
   "canvas": {
     "mode": "explicit",
-    "width": 3072,
-    "height": 2304,
-    "placement": "top_left",
+    "width": 3648,
+    "height": 2032,
+    "placement": "center",
     "margin": 0
   },
   "scale": {
-    "pixels_per_world_pixel": "1"
+    "pixels_per_world_pixel": "2.6804"
   },
   "rendering": {
     "outside_color": [

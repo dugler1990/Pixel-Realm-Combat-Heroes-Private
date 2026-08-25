@@ -19,17 +19,17 @@ from PIL import Image
 
 from ..land_fit import footprint_iou
 from ..models import ContextImage
+from . import prompt
 from .base import (
     INPUT,
     LOCATOR,
     PADDING,
+    neighbour_context,
     PlaceContext,
     Request,
     RequestContext,
-    ascii_prompt,
     blank_canvas,
     has_padding,
-    roster_lines,
 )
 
 # Beyond this fraction of the frame's shorter edge, a correlation peak is far more likely to
@@ -38,42 +38,37 @@ from .base import (
 MAX_DRIFT_FRACTION = 0.05
 
 
-def build_prompt(style_prompt: str, context: list[ContextImage]) -> str:
-    """Full-frame repaint. No silhouette language anywhere.
+def build_prompt(
+    style_prompt: str,
+    context: list[ContextImage],
+    pad_box: tuple[int, int, int, int] | None = None,
+    frame_size: tuple[int, int] | None = None,
+) -> str:
+    """Full-frame repaint, as the list of paragraphs that apply. No silhouette language.
 
     The position instruction is load-bearing rather than decorative: the pipeline pastes the
     return back at a fixed offset and cuts a fixed polygon out of it, so a model that
     recomposes produces terrain out of register with the padding beside it.
     """
     has_pad = any(item.role == "padding" for item in context)
-    lines = roster_lines(context)
-    lines.extend(
-        [
-            "Redraw image 1 at high finished quality.",
-            "It is a low resolution upscale: soft, blurred, washed out. Redraw it sharp and",
-            "detailed, with strong contrast and clear painted form. Quality only.",
-            "",
-            "Paint the whole image, edge to edge, with no border and no empty space.",
-            "Every feature stays at exactly the same position and the same size as in image 1.",
-            "Nothing moves, nothing is added, nothing is removed, nothing is recentred,",
-            "nothing changes what it is.",
-            "",
-        ]
+    rect = ""
+    if pad_box:
+        x0, y0, x1, y1 = pad_box
+        rect = f" ({x0}, {y0}) to ({x1}, {y1})"
+
+    if not has_pad:
+        return prompt.assemble(context, prompt.REDRAW_THE_FRAME, prompt.text(style_prompt))
+    return prompt.assemble(
+        context,
+        prompt.padding_rectangle(rect.strip(), frame_size) if rect and frame_size else None,
+        prompt.REDRAW_THE_FRAME,
+        prompt.padding_is_fixed(rect),
+        prompt.PADDING_SETS_THE_STYLE,
+        prompt.NEIGHBOURS_ARE_CONTEXT,
+        prompt.ONE_PICTURE,
+        prompt.ABSORB_THE_CORRECTION_INWARD,
+        prompt.reminder_padding_pixel_perfect(rect),
     )
-    if has_pad:
-        lines.extend(
-            [
-                "The already-finished art is the standard to reach: its sharpness, its brush",
-                "treatment, its contrast, its lighting. Carry that outward across the rest of",
-                "the image so the whole thing reads as one painting, with nothing marking where",
-                "the finished part ends. Terrain type does not change, only how it is rendered.",
-                "",
-            ]
-        )
-    elif style_prompt:
-        lines.extend([style_prompt, ""])
-    lines.append("Top-down, even lighting, no cast shadows. No text or labels.")
-    return ascii_prompt(lines)
 
 
 def _gradient(image: Image.Image) -> np.ndarray:
@@ -145,17 +140,28 @@ def shift_image(image: Image.Image, dx: int, dy: int) -> Image.Image:
 class FrameRenderer:
     name = "frame"
 
+    def preflight(self, ctx: RequestContext) -> None:
+        """Nothing to refuse: this method cuts the polygon itself and never needs the
+        model to leave black, so a polygon filling the canvas is fine here."""
+
     def request(self, ctx: RequestContext) -> Request:
         box = ctx.frame.box
         roster: list[tuple[ContextImage, Image.Image]] = [(INPUT, ctx.generation_input.crop(box))]
         if has_padding(ctx.locked_mask):
             roster.append((PADDING, ctx.locked_pixels.crop(box)))
         roster.append((LOCATOR, ctx.locator))
+        for level_id, status, image, direction in ctx.neighbours:
+            roster.append((neighbour_context(level_id, status, direction), image))
 
         context = [item for item, _ in roster]
+        pad_box = None
+        if has_padding(ctx.locked_mask):
+            bbox = ctx.locked_mask.crop(box).getbbox()      # padding rect in frame pixels
+            if bbox:
+                pad_box = (bbox[0], bbox[1], bbox[2] - 1, bbox[3] - 1)
         return Request(
             images=tuple(roster),
-            prompt=build_prompt(ctx.style_prompt, context),
+            prompt=build_prompt(ctx.style_prompt, context, pad_box, ctx.frame.size),
             size=ctx.frame.size,
         )
 

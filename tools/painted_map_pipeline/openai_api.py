@@ -154,6 +154,12 @@ def edit_image(
     quality = config.get("quality")
     if quality:
         fields.append(("quality", str(quality).lower()))
+    # Sent only when a config asks for it. gpt-image-2 rejects the field outright --
+    # "does not support the 'input_fidelity' parameter", 400 on every call -- so defaulting it
+    # on breaks the whole run. It exists here for models that do take it.
+    input_fidelity = config.get("input_fidelity")
+    if input_fidelity:
+        fields.append(("input_fidelity", str(input_fidelity).lower()))
     # `background: transparent` is rejected by gpt-image-2; never send it.
 
     files: list[tuple[str, Path]] = [("image[]", path) for path in input_images]

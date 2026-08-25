@@ -28,7 +28,25 @@ levels/Frostreach/expanse/export/**
 !levels/Frostreach/expanse/export/**/*_manifest.json
 !levels/Frostreach/expanse/export/**/*_summary.json
 
-# ── World-levels pipeline: ignore generation retries ───
-# (accepted/ and locked/ finals stay tracked; these are throwaway retries)
-generated/world_levels/**/jobs/
-generated/world_levels/**/attempts/
+# ── World-levels pipeline: none of it belongs in git ───
+# Everything under here is pipeline working state -- jobs, retries, canvases, masks,
+# and the accepted art itself. The deliverable is the level directory the art ends up
+# in, not the machinery that produced it. Keep accepted/ backed up OUTSIDE the repo:
+# it is what the generations were paid for and it cannot be rebuilt for free.
+generated/world_levels/**
+
+# ── Painted-map art: managed outside git ──────────────────────────────────────
+# The map art is hundreds of MB per level and git keeps every version of it forever,
+# so none of it lives here -- including the images the .tmx files point at. A fresh
+# clone therefore has the levels but not their art, and needs it restored from the
+# asset store before those levels will render.
+#
+# The .tmx, .tsx and the small config sidecars stay tracked: they are the level, and
+# they are text.
+levels/*/*/generated_bootstrap/
+levels/*/*/background*.png
+levels/*/*/export/**/*.png
+
+# Scratch renders that collect in the repo root while iterating.
+/*.png
+

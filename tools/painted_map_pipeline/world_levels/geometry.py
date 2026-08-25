@@ -88,11 +88,6 @@ def validate_simple_polygon(points: tuple[Point, ...], field: str, level_id: str
         raise ValueError(f"level {level_id}: {field} self-intersects")
 
 
-def polygon_is_simple(points: tuple[Point, ...]) -> bool:
-    """Non-raising variant: True when the polygon has non-zero area and no self-intersection."""
-    return len(points) >= 3 and polygon_area(points) > 0 and not _self_intersects(points)
-
-
 def polygon_bbox(points: tuple[Point, ...]) -> tuple[int, int, int, int]:
     """Axis-aligned bounding box (left, top, right, bottom), right/bottom exclusive-ish
     at the max vertex (callers add +1 or a margin as needed)."""
@@ -104,13 +99,6 @@ def polygon_bbox(points: tuple[Point, ...]) -> tuple[int, int, int, int]:
 # --------------------------------------------------------------------------- #
 # Raster → vertex (splitter support)
 # --------------------------------------------------------------------------- #
-def count_components(mask: np.ndarray) -> int:
-    """Number of connected foreground components in a boolean mask."""
-    u8 = np.ascontiguousarray(mask.astype(np.uint8))
-    num, _ = cv2.connectedComponents(u8, connectivity=8)
-    return max(0, num - 1)  # label 0 is background
-
-
 def largest_connected_component(mask: np.ndarray) -> np.ndarray:
     """Return a boolean mask keeping only the largest connected component."""
     u8 = np.ascontiguousarray(mask.astype(np.uint8))
@@ -122,12 +110,18 @@ def largest_connected_component(mask: np.ndarray) -> np.ndarray:
     return labels == keep
 
 
-def gradient_magnitude_mean(gray: np.ndarray, mask: np.ndarray) -> float:
-    """Mean Sobel gradient magnitude over a mask -- a cheap 'ruggedness' measure
-    (mountains/cliffs are high-gradient, plains/ice are low). 0.0 for an empty mask."""
+def gradient_magnitude_mean(gray: np.ndarray, mask: np.ndarray, *, blur_sigma: float = 0.0) -> float:
+    """Mean Sobel gradient magnitude over a mask -- a 'ruggedness' measure.
+
+    With ``blur_sigma`` > 0 the image is Gaussian-blurred first, so fine surface texture (sand
+    grain, ice floes) is smoothed away and only large-scale relief (actual mountain ranges) is
+    measured -- the raw 3x3 gradient scores textured desert and choppy water as high as peaks.
+    0.0 for an empty mask."""
     if not mask.any():
         return 0.0
     g = gray.astype(np.float32)
+    if blur_sigma > 0:
+        g = cv2.GaussianBlur(g, (0, 0), float(blur_sigma))
     gx = cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3)
     gy = cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=3)
     return float(np.hypot(gx, gy)[mask].mean())

@@ -37,6 +37,33 @@ def _global_polygon_raster(
     return rasterize_polygon((box[2] - box[0], box[3] - box[1]), points)
 
 
+def shared_strip(
+    target: LevelSpec,
+    neighbor: LevelSpec,
+    scaled: ScaledSpace,
+) -> OverlapRaster | None:
+    """Everything ``neighbor`` painted that lies in ``target``'s margin.
+
+    A level's core is always its own: it is the one part nobody may hand it a finished version
+    of. Everything else the two have in common is fair game, including the corner squares where
+    four cells meet, which belong to no core at all. Restricting a giver to its own core leaves
+    those corners unfillable -- no level owns them, so nobody could ever supply them, and every
+    four-way junction on the map keeps a hard edge.
+
+    Which giver wins where two of them cover the same ground is not decided here: the caller
+    applies them in acceptance order and masks against what is already locked, so the first
+    level accepted keeps it.
+    """
+    overlap = compute_overlap(target, neighbor, scaled)
+    if overlap is None:
+        return None
+    own = np.asarray(_global_polygon_raster(target.core_polygon, scaled, overlap.global_box)) > 0
+    strip = (np.asarray(overlap.pixels) > 0) & ~own
+    if not np.any(strip):
+        return None
+    return OverlapRaster(overlap.global_box, (strip.astype(np.uint8) * 255))
+
+
 def compute_overlap(
     first: LevelSpec,
     second: LevelSpec,

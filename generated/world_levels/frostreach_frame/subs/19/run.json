@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "config_hash": "cc9a149cd09411f39f4ee90d2b175f29ca5746a6ef8765e3b043f456a541b7a6",
+  "config_hash": "5604ad906304f6c62ad3e8863116c50e79c820eb2cde88e4b64927d65db6bb38",
   "renderer": "frame",
   "config_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/config.resolved.json",
   "world_size": [
@@ -8,33 +8,61 @@
     2304
   ],
   "canvas_size": [
-    3072,
-    2304
+    3648,
+    2032
   ],
-  "scale": "1",
-  "acceptance_counter": 0,
+  "scale": "2.6804",
+  "acceptance_counter": 3,
   "levels": {
     "01": {
       "name": "Region 1",
       "region": "Sunspine Dunes",
-      "state": "prepared",
+      "state": "accepted",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/01/manifest.json",
-      "updated_at": "2026-08-08T10:10:25.460119+00:00"
+      "updated_at": "2026-08-16T02:37:46.117593+00:00",
+      "context_revision": 1,
+      "attempt_count": 3,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/01/jobs/attempt_003/job.json",
+      "attempt": 3,
+      "error": "Missing API key in environment variable 'OPENAI_API_KEY'",
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/01/attempts/attempt_003/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/01/accepted/image.png",
+      "accepted_hash": "3f1ea444c54255d172678272fd986c107dbbf75439e697ee07ba4fb12aa86403",
+      "accepted_attempt": 3,
+      "acceptance_index": 1
     },
     "02": {
       "name": "Region 2",
       "region": "Sunspine Dunes",
-      "state": "prepared",
+      "state": "accepted",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/02/manifest.json",
-      "updated_at": "2026-08-08T10:10:25.460364+00:00"
+      "updated_at": "2026-08-16T02:39:58.526624+00:00",
+      "context_revision": 1,
+      "attempt_count": 1,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/02/jobs/attempt_001/job.json",
+      "attempt": 1,
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/02/attempts/attempt_001/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/02/accepted/image.png",
+      "accepted_hash": "da66b43251f13872aff0344bb88891e24367af5cc1aec4ea9a27f65aaefbf428",
+      "accepted_attempt": 1,
+      "acceptance_index": 2
     },
     "03": {
       "name": "Region 3",
       "region": "Sunspine Dunes",
-      "state": "prepared",
+      "state": "accepted",
       "manifest": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/manifest.json",
-      "updated_at": "2026-08-08T10:10:25.460601+00:00"
+      "updated_at": "2026-08-16T08:24:09.498135+00:00",
+      "context_revision": 2,
+      "attempt_count": 1,
+      "latest_job": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/jobs/attempt_001/job.json",
+      "attempt": 1,
+      "latest_candidate": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/attempts/attempt_001/normalized.png",
+      "accepted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/generated/world_levels/frostreach_frame/subs/19/levels/03/accepted/image.png",
+      "accepted_hash": "31441cb223a583e0092d9788b3e452589281cc17b738674c642e7e681e699512",
+      "accepted_attempt": 1,
+      "acceptance_index": 3
     }
   },
-  "updated_at": "2026-08-08T10:10:25.460622+00:00"
+  "updated_at": "2026-08-16T02:16:47.506886+00:00"
 }

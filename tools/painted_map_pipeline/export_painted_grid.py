@@ -33,24 +33,23 @@ def _resolve_image_path(map_path: Path, map_root: ET.Element, painted_obj: ET.El
         raise ValueError("PaintedGround object has no gid")
     gid = int(gid_raw)
 
+    # TMX rule: a gid belongs to the tileset with the LARGEST firstgid <= gid (each range is
+    # capped by the next tileset's firstgid), so an overlapping declared tilecount in an
+    # earlier tileset must not shadow a later one.
     tileset_nodes = [n for n in map_root if n.tag == "tileset"]
     chosen_ts = None
     chosen_firstgid = None
     for ts in tileset_nodes:
-        firstgid = int(ts.attrib["firstgid"])
         source = ts.attrib.get("source")
         if not source:
             continue
-        ts_path = (map_path.parent / source).resolve()
-        ts_root = ET.parse(ts_path).getroot()
-        tilecount = int(ts_root.attrib.get("tilecount", "0"))
-        if firstgid <= gid < firstgid + max(tilecount, 1):
-            chosen_ts = ts_path
+        firstgid = int(ts.attrib["firstgid"])
+        if firstgid <= gid and (chosen_firstgid is None or firstgid > chosen_firstgid):
             chosen_firstgid = firstgid
-            ts_root_data = ts_root
-            break
+            chosen_ts = (map_path.parent / source).resolve()
     if chosen_ts is None:
         raise ValueError(f"Could not resolve tileset for gid {gid}")
+    ts_root_data = ET.parse(chosen_ts).getroot()
 
     local_id = gid - chosen_firstgid
     tile_node = ts_root_data.find(f"./tile[@id='{local_id}']")

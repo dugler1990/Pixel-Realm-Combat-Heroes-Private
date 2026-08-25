@@ -92,17 +92,22 @@ def test_warp_masks_the_input_to_the_polygon_itself():
     assert request.size == CANVAS
 
 
-def test_warp_roster_carries_the_silhouette_and_drops_padding_when_there_is_none():
+def test_warp_roster_omits_the_silhouette_and_drops_padding_when_there_is_none():
+    """The silhouette is gone: the same polygon goes as the API's mask, bitwise identical.
+
+    Sending it as a reference image too showed the model the shape twice, and the picture is
+    the weaker of the two -- the mask measured 0.970 IoU where the prompt-and-silhouette
+    route ranged 0.71 to 0.95.
+    """
     with_padding = WarpRenderer().request(_request_context())
     assert [item.role for item, _ in with_padding.images] == [
         "terrain",
-        "silhouette",
         "padding",
         "locator",
     ]
 
     seed = WarpRenderer().request(_request_context(locked_mask=Image.new("L", CANVAS, 0)))
-    assert [item.role for item, _ in seed.images] == ["terrain", "silhouette", "locator"]
+    assert [item.role for item, _ in seed.images] == ["terrain", "locator"]
 
 
 def test_prompt_numbering_matches_the_roster_it_was_built_from():
@@ -206,3 +211,63 @@ def test_shift_replicates_the_edge_rather_than_filling_with_black():
     # a hole in the art.
     shifted = np.asarray(shift_image(_texture((40, 30)), 5, 0))
     assert not np.any(np.all(shifted == np.array(OUTSIDE), axis=2))
+
+
+# --- the single-image prompt --------------------------------------------------------------
+
+def _padding_mask(size, box):
+    mask = Image.new("L", size, 0)
+    ImageDraw.Draw(mask).rectangle(box, fill=255)
+    return mask
+
+
+def _input_image():
+    from tools.painted_map_pipeline.world_levels.renderers.base import INPUT
+
+    return INPUT
+
+
+def test_describe_padding_names_the_edges_it_lies_along():
+    """The padding is a region inside the one image, so only the prompt can point at it."""
+    from tools.painted_map_pipeline.world_levels.renderers.prompt import describe_padding
+
+    size = (1000, 1000)
+    assert describe_padding(_padding_mask(size, (0, 200, 89, 800))) == "the left 9%"
+    assert describe_padding(_padding_mask(size, (200, 0, 800, 129))) == "the top 13%"
+    both = describe_padding(_padding_mask(size, (0, 0, 89, 999)))
+    assert "the left 9%" in both
+    assert describe_padding(Image.new("L", size, 0)) is None
+
+
+def test_unpadded_single_image_prompt_forbids_all_movement():
+    """With no join to reconcile, any licence to move something is licence to be wrong."""
+    from tools.painted_map_pipeline.world_levels.renderers.warp import build_prompt
+
+    text = build_prompt("Preserve the layout exactly; do not invent.", [_input_image()],
+                        single_image=True, padding_at=None)
+    assert "position and size of everything must be exactly the same" in text
+    assert "Preserve the layout exactly" in text          # correct here, and kept
+    for banned in ("finished art", "exception", "border", "move the half"):
+        assert banned not in text
+
+
+def test_padded_single_image_prompt_has_no_blanket_exactness():
+    """The padded form permits one movement, so nothing may state the opposite absolutely.
+
+    The strip is pasted back byte-identical afterwards, so a mismatch the model reconciled on
+    that side is discarded and returns as a seam. Only the rest of the image can give.
+    """
+    from tools.painted_map_pipeline.world_levels.renderers.warp import build_prompt
+
+    text = build_prompt("Sharp sand. Preserve the layout exactly; do not invent.", [_input_image()],
+                        single_image=True, padding_at="the left 9%")
+    assert "Preserve the layout exactly" not in text
+    assert "Nothing moves" not in text
+    assert "Do not invent." in text                        # the clause after it, recapitalised
+    assert "The left 9% of this image is finished art" in text
+    # one vocabulary throughout
+    assert "the finished art" in text and "the rest of the image" in text
+    for banned in ("the band", "your side", "Part of this image"):
+        assert banned not in text
+    # the style prompt must not follow the join rule and override it
+    assert text.index("Sharp sand.") < text.index("The one exception")

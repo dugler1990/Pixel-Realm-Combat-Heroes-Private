@@ -8,7 +8,7 @@ from PIL import Image
 
 from .config import load_config
 from .coordinates import ScaledSpace, build_transform
-from .masks import compute_overlap, overlap_on_canvas, pending_mask
+from .masks import overlap_on_canvas, pending_mask, shared_strip
 from .models import LevelState
 from .package_builder import level_paths
 from .plan_loader import load_level_plan
@@ -81,19 +81,26 @@ def refresh_level(
     locked_mask_array = np.zeros((canvas_size[1], canvas_size[0]), dtype=bool)
     locked_sources: list[dict[str, Any]] = []
 
-    accepted_neighbors = []
-    for connection in target.connections:
-        entry = run["levels"].get(connection.level_id, {})
-        if connection.kind != "boat" and entry.get("state") == LevelState.ACCEPTED.value:
-            accepted_neighbors.append(
-                (int(entry.get("acceptance_index", 2**31)), connection.level_id)
-            )
-    accepted_neighbors.sort()
+    # Every accepted level, not the declared connections. A cell's margin reaches 150px past
+    # its core, so it also overlaps the four levels it meets only at a corner -- which the
+    # connection list, being edge adjacency, never names. Driving padding from that list is
+    # what leaves a hard edge at every four-way junction. Levels that do not actually overlap
+    # cost nothing: shared_strip returns None for them.
+    #
+    # Sorted by acceptance index so the first level accepted keeps whatever it painted, and
+    # the caller's mask against already-locked pixels does the rest.
+    accepted_neighbors = sorted(
+        (int(entry.get("acceptance_index", 2**31)), other_id)
+        for other_id, entry in run["levels"].items()
+        if other_id != level_id and entry.get("state") == LevelState.ACCEPTED.value
+    )
 
     overlaps_dir = target_paths["root"] / "masks" / "overlaps"
     overlaps_dir.mkdir(parents=True, exist_ok=True)
     for _, neighbor_id in accepted_neighbors:
-        overlap = compute_overlap(target, levels[neighbor_id], scaled)
+        # Only the neighbour's own half of the overlap. Taking the whole thing would hand
+        # this level a fixed rendering of 150px of its own core.
+        overlap = shared_strip(target, levels[neighbor_id], scaled)
         if overlap is None:
             continue
         neighbor_paths = level_paths(root_path, neighbor_id)
@@ -207,15 +214,20 @@ def refresh_neighbors(
     must not shift underneath them, but after correcting a defect they do need the fix.
     """
     root_path = Path(root).resolve()
-    _, run, levels, _, _, _ = _load_context(root_path)
+    _, run, levels, scaled, _, _ = _load_context(root_path)
     level_id = accepted_level_id.zfill(2)
     results = []
-    for connection in levels[level_id].connections:
-        if connection.kind == "boat":
+    # Whoever this level's pixels can reach, which is anyone it overlaps -- including the
+    # levels it meets only at a corner. Pushing only to declared connections would leave those
+    # levels holding a stale input that never learns this one was accepted.
+    for other_id in sorted(run["levels"]):
+        if other_id == level_id:
             continue
-        neighbor_accepted = run["levels"][connection.level_id]["state"] == LevelState.ACCEPTED.value
+        if shared_strip(levels[other_id], levels[level_id], scaled) is None:
+            continue
+        neighbor_accepted = run["levels"][other_id]["state"] == LevelState.ACCEPTED.value
         if not neighbor_accepted or force:
-            results.append(refresh_level(root_path, connection.level_id, force=force))
+            results.append(refresh_level(root_path, other_id, force=force))
     return results
 
 

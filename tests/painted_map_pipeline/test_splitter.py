@@ -11,7 +11,7 @@ from tools.painted_map_pipeline.world_levels import region_proposer as rp
 from tools.painted_map_pipeline.world_levels.config import load_config
 from tools.painted_map_pipeline.world_levels.coordinates import ScaledSpace, resolve_canvas
 from tools.painted_map_pipeline.world_levels.geometry import polygon_bbox
-from tools.painted_map_pipeline.world_levels.masks import compute_overlap
+from tools.painted_map_pipeline.world_levels.masks import compute_overlap, rasterize_polygon
 from tools.painted_map_pipeline.world_levels.models import SplitConfig
 from tools.painted_map_pipeline.world_levels.plan_loader import load_level_plan
 from tools.painted_map_pipeline.world_levels.region_proposer import ProposeRequest, ProposedRegion
@@ -87,11 +87,16 @@ def _single_chunk_config(tmp_path: Path) -> Path:
     return config_path
 
 
-def _write_fake_chunk_art(output_root: Path, level_id: str, size: tuple[int, int]) -> Path:
-    """A stand-in accepted chunk image, so split_chunk (which sources from it) can run."""
-    path = Path(output_root) / "levels" / level_id / "accepted" / "image.png"
+def _write_fake_chunk_art(output_root, chunk, size: tuple[int, int]) -> Path:
+    """A stand-in accepted chunk image, so split_chunk (which sources from it) can run.
+    Real chunk art is the chunk silhouette painted on black, so paint only the generation
+    polygon non-black -- the splitter derives its frame from the non-black extent."""
+    path = Path(output_root) / "levels" / chunk.level_id / "accepted" / "image.png"
     path.parent.mkdir(parents=True, exist_ok=True)
-    art = np.full((size[1], size[0], 4), (60, 80, 60, 255), dtype=np.uint8)
+    land = np.asarray(rasterize_polygon(size, chunk.generation_polygon)) > 0
+    art = np.zeros((size[1], size[0], 4), dtype=np.uint8)
+    art[..., 3] = 255
+    art[land] = (60, 80, 60, 255)
     Image.fromarray(art, mode="RGBA").save(path)
     return path
 
@@ -111,8 +116,9 @@ def test_split_config_buckets_clamp():
 
 def test_split_run_emits_valid_nested_run(tmp_path: Path):
     config = load_config(_single_chunk_config(tmp_path))
-    canvas_size = resolve_canvas(config.canvas, load_level_plan(config.level_plan), ScaledSpace(config.scale))
-    _write_fake_chunk_art(config.output_root, "01", canvas_size)
+    plan = load_level_plan(config.level_plan)
+    canvas_size = resolve_canvas(config.canvas, plan, ScaledSpace(config.scale))
+    _write_fake_chunk_art(config.output_root, plan["01"], canvas_size)
     result = split_run(config, ["01"])
     entry = result["results"][0]
     assert entry["requested_count"] == 3
@@ -165,8 +171,8 @@ def test_split_chunk_propagates_mountain_tag(tmp_path: Path):
     chunk = levels["01"]
     parent_scaled = ScaledSpace(config.scale)
     canvas_size = resolve_canvas(config.canvas, levels, parent_scaled)
-    _write_fake_chunk_art(config.output_root, "01", canvas_size)
-    manifest = split_chunk(config, chunk, _StubProposer(), parent_scaled, canvas_size)
+    _write_fake_chunk_art(config.output_root, chunk, canvas_size)
+    manifest = split_chunk(config, chunk, _StubProposer(), canvas_size)
 
     tags = [sub["tag"] for sub in manifest["sub_levels"]]
     assert tags == ["flat", "mountain"]

@@ -26,7 +26,16 @@ def _accept_first_level(tmp_path: Path):
     root = config.output_root
     refresh_level(root, "01")
     job = create_job(root, "01")
-    ingest_result(root, "01", job.input_path, attempt=job.attempt, auto_accept=True)
+    # A real generation comes back different from what was sent; with the warp off by default
+    # nothing else would make the accepted art differ from the template, and the refine pass
+    # would have nothing to be a pass over.
+    with Image.open(job.input_path) as opened:
+        drawn = np.asarray(opened.convert("RGBA")).copy()
+    painted = drawn[..., :3].sum(axis=2) > 40      # leave the black background black
+    drawn[painted, :3] = np.clip(drawn[painted, :3].astype(np.int16) + 40, 0, 255).astype(np.uint8)
+    generated = tmp_path / "generated.png"
+    Image.fromarray(drawn, mode="RGBA").save(generated)
+    ingest_result(root, "01", generated, attempt=job.attempt, auto_accept=True)
     return config, root
 
 

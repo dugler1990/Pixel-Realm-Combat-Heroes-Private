@@ -11,11 +11,17 @@ from scipy.ndimage import binary_erosion, distance_transform_edt, map_coordinate
 _RESAMPLE = getattr(getattr(Image, "Resampling", Image), "LANCZOS", Image.LANCZOS)
 
 
+# Summed RGB above which a pixel counts as painted rather than background. Every measurement
+# of "where the art is" uses this one number, so a picture of an error and the score for it
+# cannot disagree about which pixels are involved.
+CONTENT_LUMA_THRESHOLD = 40
+
+
 def footprint_iou(
     generated: Image.Image,
     generation_mask: Image.Image,
     *,
-    content_luma_threshold: int = 40,
+    content_luma_threshold: int = CONTENT_LUMA_THRESHOLD,
 ) -> float:
     """IoU between the generated land footprint and the template silhouette.
 
@@ -52,7 +58,7 @@ def _bbox(mask: np.ndarray) -> tuple[int, int, int, int]:
 def content_bbox(
     generated: Image.Image,
     *,
-    content_luma_threshold: int = 40,
+    content_luma_threshold: int = CONTENT_LUMA_THRESHOLD,
 ) -> tuple[int, int, int, int]:
     """Bounding box of the painted region, as (x0, y0, x1, y1).
 
@@ -78,7 +84,7 @@ def content_bbox(
 def is_full_bleed(
     generated: Image.Image,
     *,
-    content_luma_threshold: int = 40,
+    content_luma_threshold: int = CONTENT_LUMA_THRESHOLD,
     min_black_fraction: float = 0.02,
 ) -> bool:
     """True when the render has essentially no black left, so there is no land outline.
@@ -99,7 +105,7 @@ def rescale_to_mask(
     generation_mask: Image.Image,
     *,
     outside_color: tuple[int, int, int, int] = (0, 0, 0, 255),
-    content_luma_threshold: int = 40,
+    content_luma_threshold: int = CONTENT_LUMA_THRESHOLD,
 ) -> tuple[Image.Image, dict]:
     """Squash a reframed render back onto the template silhouette's bounding box.
 
@@ -167,12 +173,39 @@ def sample_radial_outline(mask: np.ndarray, count: int) -> tuple[np.ndarray, tup
     return sampled, (cx, cy)
 
 
+def cut_to_mask(
+    generated: Image.Image,
+    generation_mask: Image.Image,
+    *,
+    outside_color: tuple[int, int, int, int],
+) -> Image.Image:
+    """Keep what landed inside the polygon, discard what spilled past it. No deformation.
+
+    The blunt sibling of ``fit_generated_to_mask``. That one drags the outline onto the mask
+    by warping the whole picture, which moves every feature in it -- worth it only when the
+    return is genuinely the wrong shape.
+
+    Once the API mask is sent with the polarity the model actually obeys, it is not: the error
+    collapses to a soft fringe at the boundary -- measured on level 02, 95% of disagreeing
+    pixels within 25px of the edge, and mostly overshoot. Trimming a fringe needs no warp, and
+    a cut cannot invent the shortfall, so it is honest about what it does not fix.
+    """
+    canvas = generated.convert("RGBA")
+    mask = generation_mask.convert("L")
+    if mask.size != canvas.size:
+        raise ValueError(
+            f"generation mask size {mask.size[0]}x{mask.size[1]} "
+            f"does not match canvas {canvas.size[0]}x{canvas.size[1]}"
+        )
+    return Image.composite(canvas, Image.new("RGBA", canvas.size, outside_color), mask)
+
+
 def fit_generated_to_mask(
     generated: Image.Image,
     generation_mask: Image.Image,
     *,
     outside_color: tuple[int, int, int, int],
-    content_luma_threshold: int = 40,
+    content_luma_threshold: int = CONTENT_LUMA_THRESHOLD,
     outline_samples: int = 96,
     rbf_smoothing: float = 1.0,
     edge_trim: int = 3,

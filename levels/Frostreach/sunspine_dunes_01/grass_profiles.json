@@ -1,0 +1,32 @@
+{
+  "snow_tufts": {
+    "grass_options": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "density_mean": 18,
+    "density_sigma": 5,
+    "wind_scale": 0.8,
+    "force_scale": 0.7,
+    "stiffness": 300,
+    "z_index": 8
+  },
+  "tundra_sparse": {
+    "grass_options": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "density_mean": 26,
+    "density_sigma": 8,
+    "wind_scale": 1.0,
+    "force_scale": 0.8,
+    "stiffness": 260,
+    "z_index": 9
+  }
+}

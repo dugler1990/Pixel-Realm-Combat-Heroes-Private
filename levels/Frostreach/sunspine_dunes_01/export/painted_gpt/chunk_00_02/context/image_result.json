@@ -1,0 +1,50 @@
+{
+  "provider": "openai",
+  "model": "gpt-image-2",
+  "output_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/sunspine_dunes_01/export/painted_gpt/chunk_00_02/context/mini_generated.png",
+  "width": 1872,
+  "height": 2192,
+  "input_images": [
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/sunspine_dunes_01/export/painted_gpt/chunk_00_02/context/mini_source.png",
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/sunspine_dunes_01/export/painted_gpt/chunk_00_02/context/locator.png",
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/sunspine_dunes_01/export/painted_grid/chunk_01_02.png",
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/sunspine_dunes_01/export/painted_gpt/chunk_00_01.png",
+    "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/sunspine_dunes_01/export/painted_grid/chunk_00_03.png"
+  ],
+  "mask": null,
+  "quality": "medium",
+  "usage": {
+    "input_tokens": 7660,
+    "input_tokens_details": {
+      "image_tokens": 7218,
+      "text_tokens": 442
+    },
+    "output_tokens": 3003,
+    "output_tokens_details": {
+      "image_tokens": 3003,
+      "text_tokens": 0
+    },
+    "total_tokens": 10663
+  },
+  "request": {
+    "model": "gpt-image-2",
+    "prompt": "Polish this desert map chunk into a coherent top-down / slightly 2.5D painted RPG ground\nbackground, modern high-end pixel-art / painted hybrid, finished game-art quality. The input\nis an upscaled section of a larger map, soft and blurred from enlargement; repaint it sharp\nand richly textured.\n\nTreat the input image as the exact production layout, not a loose concept sketch. Preserve the\nlayout exactly: every shape, structure, rock formation and terrain marking stays in the same\nplace, at the same size, with the same silhouette. Unusual or surprising shapes are deliberate\n-- preserve them exactly as they are; do not reinterpret them as something else. Do not invent\nor add any new structures, objects, or terrain features. Do not remove or relocate anything.\nWhere the input shows plain sand, output plain sand. Improve only the rendering: sharpness,\nsand grain, stone texture, weathering, subtle palette variation.\n\nMaintain edge continuity with the neighboring chunks of the same map. Top-down, even lighting,\nno cast shadows. No text, labels, UI, grid lines, characters, or creatures.\n\nImage 1 is the map chunk to redraw. Image 2 is the FULL map with this chunk's location outlined in magenta, for orientation only: use it to understand what the partial shapes in image 1 belong to (a corner of a large structure, part of a larger formation, and so on). Do not copy content, framing, or scale from image 2. Redraw image 1 only, keeping its layout exactly.\n\nThe remaining images are the adjoining map chunks (image 3 = the east neighbour, image 4 = the north neighbour, image 5 = the south neighbour). Use them ONLY for continuity across the shared edge: match their colour, tone, brightness and texture density so the chunks read as one continuous painting, and carry any feature that crosses the border straight through. Do NOT copy a neighbour's composition or content into this chunk -- image 1's layout is what you redraw.\n\nChunk ID: chunk_00_02\nPreserve the input layout exactly while improving painted terrain detail.",
+    "size": "1872x2192",
+    "quality": "medium"
+  },
+  "chunk_id": "chunk_00_02",
+  "source_path": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/sunspine_dunes_01/export/painted_grid/chunk_00_02.png",
+  "output_pixel_rect": [
+    0,
+    0,
+    3040,
+    2544
+  ],
+  "mini_rect": [
+    1168,
+    0,
+    1872,
+    2192
+  ],
+  "locator": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/sunspine_dunes_01/export/painted_gpt/chunk_00_02/context/locator.png"
+}

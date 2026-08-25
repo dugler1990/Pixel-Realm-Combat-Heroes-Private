@@ -12,7 +12,7 @@ from tools.painted_map_pipeline.world_levels.batch_runner import parse_level_sel
 from tools.painted_map_pipeline.world_levels.config import load_config
 from tools.painted_map_pipeline.world_levels.coordinates import ScaledSpace, build_transform
 from tools.painted_map_pipeline.world_levels.job_builder import canvas_asset, create_job
-from tools.painted_map_pipeline.world_levels.masks import compute_overlap
+from tools.painted_map_pipeline.world_levels.masks import compute_overlap, shared_strip
 from tools.painted_map_pipeline.world_levels.package_builder import level_paths, prepare_run
 from tools.painted_map_pipeline.world_levels.package_refresher import refresh_level
 from tools.painted_map_pipeline.world_levels.plan_loader import load_level_plan
@@ -164,7 +164,9 @@ def test_acceptance_embeds_exact_neighbor_pixels_and_restores_locks(tmp_path: Pa
 
     levels = load_level_plan(config.level_plan, (20, 10))
     scaled = ScaledSpace(config.scale)
-    overlap = compute_overlap(levels["01"], levels["02"], scaled)
+    # 02 inherits only the half of the overlap lying in 01's core. The other half is 02's own
+    # core: it paints that itself, and must not be handed a fixed copy of 01's version.
+    overlap = shared_strip(levels["02"], levels["01"], scaled)
     assert overlap is not None
     canvas_size = tuple(read_json(root / "run.json")["canvas_size"])
     first_transform = build_transform(levels["01"], scaled, config.canvas, canvas_size)
@@ -185,6 +187,30 @@ def test_acceptance_embeds_exact_neighbor_pixels_and_restores_locks(tmp_path: Pa
         )
     active = overlap.pixels > 0
     assert np.array_equal(first_region[active], second_region[active])
+
+    # and the reclaimed half really is 02's own: inside 02's core the input still shows the
+    # template, not 01's art, and it is left free to paint there.
+    full = compute_overlap(levels["01"], levels["02"], scaled)
+    reclaimed = (np.asarray(full.pixels) > 0) & ~active
+    assert reclaimed.any(), "the overlap should extend into 02's core"
+    with Image.open(level_paths(root, "02")["locked_mask"]) as locked:
+        locked_array = np.asarray(locked.convert("L")) > 0
+    locked_region = locked_array[
+        second_y : second_y + overlap.height, second_x : second_x + overlap.width
+    ]
+    assert not locked_region[reclaimed].any(), "02's own core must not be locked by 01"
+
+    # ...and 01 may hand over everything else it painted, including ground inside neither
+    # level's core. Those are the corner squares where cells meet: no core owns them, so
+    # restricting a giver to its own core would leave them permanently unfillable.
+    own_core = np.asarray(Image.open(level_paths(root, "01")["core_mask"]).convert("L")) > 0
+    first_x, first_y = first_transform.global_to_local(*overlap.global_box[:2])
+    givers_core = own_core[
+        first_y : first_y + overlap.height, first_x : first_x + overlap.width
+    ]
+    givers_margin = active & ~givers_core
+    if givers_margin.any():
+        assert not (givers_margin & reclaimed).any(), "02's own core is still off limits"
 
     second_job = create_job(root, "02")
     with Image.open(second_job.input_path) as opened:
@@ -258,3 +284,27 @@ def test_batch_records_provider_failure_after_configured_retries(tmp_path: Path,
     run = read_json(config.output_root / "run.json")
     assert run["levels"]["01"]["state"] == "failed"
     assert run["levels"]["01"]["error"] == "provider unavailable"
+
+
+def test_each_placement_is_kept_under_its_own_name(tmp_path):
+    """Re-placing the same generation must not destroy the previous one.
+
+    Comparing two settings is the only way to judge them, and a viewer handed the same path
+    twice shows its cached copy -- which is how a working feather once looked like a no-op.
+    """
+    config = load_config(_write_fixture(tmp_path))
+    prepare_run(config)
+    root = config.output_root
+    refresh_level(root, "01")
+    job = create_job(root, "01")
+
+    first = ingest_result(root, "01", job.input_path, attempt=job.attempt)
+    second = ingest_result(root, "01", job.input_path, attempt=job.attempt, feather=8)
+
+    attempt_dir = level_paths(root, "01")["root"] / "attempts" / f"attempt_{job.attempt:03d}"
+    placements = sorted(p.name for p in attempt_dir.glob("placement_*.png"))
+    assert placements == ["placement_001.png", "placement_002.png"]
+    assert Path(first["placement_path"]).name == "placement_001.png"
+    assert Path(second["placement_path"]).name == "placement_002.png"
+    # current.png tracks the newest, and is the one name anything else passes around
+    assert sha256_file(attempt_dir / "current.png") == sha256_file(attempt_dir / "placement_002.png")

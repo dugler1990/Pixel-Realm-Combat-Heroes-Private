@@ -16,10 +16,44 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+import numpy as np
 from PIL import Image
 
 from ..frames import Frame
 from ..models import ContextImage
+
+
+class PreflightRejected(ValueError):
+    """The generation is certain to be rejected, and that was knowable before paying for it.
+
+    ``is_full_bleed`` throws out a return with no black left in it, because the warp then
+    traces the canvas rectangle as if it were a coastline. When the polygon already fills the
+    canvas, the model has no black to leave -- the rejection is guaranteed, not likely.
+    """
+
+    def __init__(self, message: str, *, reason: str, coverage: float):
+        super().__init__(message)
+        self.reason = reason
+        self.coverage = coverage
+
+
+# Leaving less black than is_full_bleed's 2% floor. Checked against the mask, which exists
+# long before the call does.
+MAX_POLYGON_COVERAGE = 0.98
+
+
+def check_coverage(generation_mask, level_id: str) -> None:
+    coverage = float((np.asarray(generation_mask.convert("L")) > 0).mean())
+    if coverage > MAX_POLYGON_COVERAGE:
+        raise PreflightRejected(
+            f"level {level_id} cannot be generated with the warp renderer: its polygon covers "
+            f"{coverage:.1%} of the canvas, leaving under {(1 - MAX_POLYGON_COVERAGE):.0%} "
+            f"black. The warp needs black around the art to find its outline, so whatever "
+            f"comes back is rejected as full bleed. Use the frame renderer for this level, or "
+            f"give it a smaller polygon on a larger canvas.",
+            reason="no_margin",
+            coverage=coverage,
+        )
 
 
 class FootprintRejected(ValueError):
@@ -68,6 +102,22 @@ class RequestContext:
     style_prompt: str = ""
     manifest: dict[str, Any] = field(default_factory=dict)
     refine: bool = False
+    # True when the polygon goes as the API's mask. Both of this renderer's guards -- the
+    # coverage preflight and the full-bleed rejection -- exist for one reason: the warp had to
+    # recover the outline from the returned pixels, so a render with no black left was
+    # unusable. Under the mask nothing is recovered; the polygon is known independently. Six
+    # levels here have polygons covering 98.8-99.1% of their canvas, and a correct render of
+    # those legitimately leaves almost no black. Guarding them then throws away the right
+    # answer.
+    mask_holds_the_shape: bool = False
+    # Send ONLY the terrain image plus the API mask -- no silhouette, locator or neighbours.
+    # Four images with a correct mask came back 100% painted on level 01 of the 7x6 run; one
+    # image with the same mask lands on the polygon.
+    single_image: bool = False
+    # The complete adjacent levels the padding strip is cut from: (level_id, status, image),
+    # status being "finished" for accepted art or "rough" for the un-generated template. A
+    # 150px strip on its own gives the model no idea what it belongs to.
+    neighbours: tuple[tuple[str, str, Image.Image, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -86,10 +136,27 @@ class PlaceContext:
     locked_mask: Image.Image
     sent_input: Image.Image
     rescale_below_iou: float = 0.0
+    # Off by default. The warp forces the outline onto the mask by deforming the whole
+    # picture, which shifts every feature in it -- including the padding strips other
+    # levels will inherit. A raw score is reported instead, so a bad draw is retried
+    # rather than stretched into place.
+    fit_to_mask: bool = False
+    # Trim the spill at the polygon instead. Nothing moves, so unlike the warp it is safe on
+    # art other levels inherit -- but it cannot fill a shortfall. Right when ``cut_iou`` is
+    # near 1 and the raw IoU is not, which is the normal shape of the error now the API mask
+    # is sent correctly. Ignored when fit_to_mask is on: the warp already lands on the mask.
+    cut_to_mask: bool = False
+    # See RequestContext.mask_holds_the_shape: with the polygon known from the mask,
+    # a full-bleed return has nothing to be rejected for -- unless the warp is on,
+    # which does still trace the outline out of the pixels.
+    mask_holds_the_shape: bool = False
 
 
 class Renderer(Protocol):
     name: str
+
+    def preflight(self, ctx: RequestContext) -> None:
+        """Raise PreflightRejected if this level cannot possibly be placed."""
 
     def request(self, ctx: RequestContext) -> Request:
         """Images, prompt and requested size for one generation."""
@@ -103,7 +170,7 @@ class Renderer(Protocol):
 INPUT = ContextImage(
     "input.png",
     "terrain",
-    "the terrain to redraw at high quality, with any already-finished areas already in place",
+    "the terrain to redraw at high quality, with the finished padding already in place",
 )
 SILHOUETTE = ContextImage(
     "generation_mask.png",
@@ -113,8 +180,38 @@ SILHOUETTE = ContextImage(
 PADDING = ContextImage(
     "locked_overlap.png",
     "padding",
-    "the already-finished art carried over from the neighbouring level, in its exact position",
+    "that padding on its own, at its exact position, everything else blank",
 )
+def neighbour_context(level_id: str, status: str, direction: str = "") -> ContextImage:
+    where = f" lying to the {direction} of this one" if direction else ""
+    return ContextImage(
+        f"neighbor_{level_id}.png",
+        "neighbour",
+        f"the complete neighbouring level {level_id}{where} ({status} art); the padding is cut "
+        f"from it, and it is context only - do not copy it into this frame",
+    )
+
+
+# Only present on a retry. It is the one image the model made itself, so it is named as
+# such -- "your previous attempt" is what makes the criticism that follows land on it.
+def retry_context(attempt: int, ordinal: str) -> ContextImage:
+    """One rejected attempt. Numbered so the criticism of each can name its own picture."""
+    return ContextImage(
+        f"previous_attempt_{attempt:03d}.png",
+        "retry",
+        f"your {ordinal} attempt at this piece, which was rejected",
+    )
+
+
+def annotation_context(filename: str, note: str) -> ContextImage:
+    """An image attached by hand to one retry, described by whatever was said about it.
+
+    The note is the whole description: an attachment is only worth sending if the person
+    sending it can say what it shows and what to do about it.
+    """
+    return ContextImage(filename, "annotation", note)
+
+
 LOCATOR = ContextImage(
     "locator.png",
     "locator",

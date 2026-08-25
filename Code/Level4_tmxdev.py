@@ -251,6 +251,8 @@ LAYOUT_TO_LEVEL = {
     '../levels/Map8': 8,
     '../levels/Frostreach/ice_wall_gate': 9,
     '../levels/Frostreach/expanse': 10,
+    '../levels/Frostreach/sunspine_dunes_01': 11,
+    '../levels/Frostreach/sunspine_7x6_play': 12,
 }
 
 

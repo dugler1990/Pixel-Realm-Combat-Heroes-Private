@@ -37,6 +37,13 @@ def run_batch(
     level_ids: list[str],
     prompt_file: str | Path | None = None,
     refine: bool = False,
+    feather: int = 0,
+    retry_reason: str | None = None,
+    retry_image: str | None = None,
+    retry_note: str = "",
+    fit_to_mask: bool = False,
+    cut_to_mask: bool = False,
+    padding: str = "all",
 ) -> dict:
     root_path = Path(root).resolve()
     config = load_config(root_path / "config.resolved.json")
@@ -51,7 +58,15 @@ def run_batch(
             summary["results"].append({"level_id": level_id, "skipped": "accepted"})
             continue
         refresh_level(root_path, level_id, force=refine, refine=refine)
-        job = create_job(root_path, level_id, prompt_file, refine=refine)
+        job = create_job(
+                root_path,
+                level_id,
+                prompt_file,
+                refine=refine,
+                retry_reason=retry_reason,
+                retry_image=retry_image,
+                retry_note=retry_note,
+            )
         update_level_state(root_path, level_id, LevelState.GENERATING.value, attempt=job.attempt)
 
         generated_path = None
@@ -99,7 +114,16 @@ def run_batch(
             break
 
         try:
-            result = ingest_result(root_path, level_id, generated_path, attempt=job.attempt)
+            result = ingest_result(
+                root_path,
+                level_id,
+                generated_path,
+                attempt=job.attempt,
+                feather=feather,
+                fit_to_mask=fit_to_mask,
+                cut_to_mask=cut_to_mask,
+                padding=padding,
+            )
         except FootprintRejected as exc:
             # A reframed draw is a failed draw, not a crash: fail the level the same way a
             # generation error would, so the batch stays resumable.

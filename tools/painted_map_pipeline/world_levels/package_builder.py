@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -52,13 +51,29 @@ def level_paths(root: str | Path, level_id: str) -> dict[str, Path]:
     return _level_paths(Path(root), level_id)
 
 
+# The locator only says "you are here" -- it is never copied from. Rendering it at world
+# resolution makes a 100MB+ PNG for a large world, which blows past the provider's 50MB
+# per-file upload limit, so it is capped to a thumbnail.
+LOCATOR_MAX_EDGE = 2048
+
+
 def _draw_locator(world: Image.Image, level: LevelSpec) -> Image.Image:
-    locator = world.convert("RGBA")
+    scale = min(1.0, LOCATOR_MAX_EDGE / max(world.size))
+    if scale < 1.0:
+        size = (max(1, round(world.width * scale)), max(1, round(world.height * scale)))
+        locator = world.convert("RGBA").resize(size, Image.LANCZOS)
+    else:
+        locator = world.convert("RGBA")
+
+    def at(points):
+        return [(round(x * scale), round(y * scale)) for x, y in points]
+
     draw = ImageDraw.Draw(locator, "RGBA")
-    draw.polygon(level.generation_polygon, fill=(0, 180, 255, 50), outline=(0, 210, 255, 255), width=2)
-    draw.polygon(level.core_polygon, fill=(255, 210, 0, 45), outline=(255, 225, 0, 255), width=2)
+    draw.polygon(at(level.generation_polygon), fill=(0, 180, 255, 50), outline=(0, 210, 255, 255), width=2)
+    draw.polygon(at(level.core_polygon), fill=(255, 210, 0, 45), outline=(255, 225, 0, 255), width=2)
     left, top, right, bottom = level.crop_box
-    draw.rectangle((left, top, right - 1, bottom - 1), outline=(255, 255, 255, 255), width=2)
+    (sl, st), (sr, sb) = at([(left, top), (right - 1, bottom - 1)])
+    draw.rectangle((sl, st, sr, sb), outline=(255, 255, 255, 255), width=2)
     return locator
 
 

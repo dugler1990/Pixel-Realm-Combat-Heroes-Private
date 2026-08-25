@@ -1,0 +1,19 @@
+Polish this desert map chunk into a coherent top-down / slightly 2.5D painted RPG ground
+background, modern high-end pixel-art / painted hybrid, finished game-art quality. The input
+is an upscaled section of a larger map, soft and blurred from enlargement; repaint it sharp
+and richly textured.
+
+Treat the input image as the exact production layout, not a loose concept sketch. Preserve the
+layout exactly: every shape, structure, rock formation and terrain marking stays in the same
+place, at the same size, with the same silhouette. Unusual or surprising shapes are deliberate
+-- preserve them exactly as they are; do not reinterpret them as something else. Do not invent
+or add any new structures, objects, or terrain features. Do not remove or relocate anything.
+Where the input shows plain sand, output plain sand. Improve only the rendering: sharpness,
+sand grain, stone texture, weathering, subtle palette variation.
+
+This is an edge chunk: pure black (#000000) regions are outside the playable map. Do not
+paint, texture, fill, or invent any detail in black areas. Keep black regions exactly black
+and preserve their position and shape. Only repaint the visible terrain.
+
+Maintain edge continuity with the neighboring chunks of the same map. Top-down, even lighting,
+no cast shadows. No text, labels, UI, grid lines, characters, or creatures.
