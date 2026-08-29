@@ -86,6 +86,31 @@ class CPUBackend(RenderBackend):
     def raw_surface(self) -> pygame.Surface:
         return self._surface
 
+    def draw_shadow(self, *args, **kwargs):
+        pass
+
+    def draw_light(self, *args, **kwargs):
+        pass
+
+    def begin_light_pass(self, *args, **kwargs):
+        pass
+
+    def end_light_pass(self, *args, **kwargs):
+        pass
+
+    def composite_lights(self, *args, **kwargs):
+        pass
+
+    def draw_grass_instances(self, *args, **kwargs):
+        pass
+
+    def build_grass_atlas(self, *args, **kwargs):
+        pass
+
+    @property
+    def grass_atlas_ready(self) -> bool:
+        return False
+
 
 # Batch vertex shader — per-vertex position (pixel coords), texcoord (atlas UV), tint.
 # Only u_screen_size is a per-frame uniform; no per-sprite uniforms needed.

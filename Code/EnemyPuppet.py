@@ -80,12 +80,12 @@ class EnemyPuppet(CombatUnit):
         # get_direction_as_string(); drive it from the relayed dir string.
         self.direction.x = -1.0 if self._net_dir == "left" else 1.0
         self.hitbox.center = (self._net_x, self._net_y)
-        self.rect.center = self.hitbox.center
+        self.plant_sprite_on_hitbox()
 
     def update(self, *args, **kwargs):
         # Render-only (camera group update_parallel calls this). Deliberately
         # skips CombatUnit.update's move()/cooldowns()/check_death() -- the host
-        # owns position/death. animate() rebuilds the frame + re-centers rect.
+        # owns position/death. animate() rebuilds the frame and plants rect.
         self._sync_from_snapshot()
         self.animate()
         # C2.5a: blink while recently hit so the joiner sees the hit land.

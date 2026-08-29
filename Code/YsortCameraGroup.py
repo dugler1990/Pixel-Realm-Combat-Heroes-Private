@@ -15,6 +15,7 @@ from Settings import (
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from Entity import Entity
+from Support import sprite_feet_sort_y
 from AnimatedEnvironmentSprite import AnimatedEnvironmentSprite
 from Torch import Torch
 from benchmark_runtime import BENCHMARK_RUNTIME
@@ -273,10 +274,15 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.set_grass_render_window_size_with_timeofday(light_intensity)
 
         focus = camera_focus or player
-        self.offset.x = focus.rect.centerx - self.half_width 
-        self.offset.y = focus.rect.centery - self.half_height
-        self.grass_offset.x = focus.rect.centerx - self.grass_half_width 
-        self.grass_offset.y = focus.rect.centery - self.grass_half_height
+        # Hitbox is world-position authority; planted rect.center bobs with mask
+        # height and would shake the camera. Fall back to rect when no hitbox.
+        focus_hitbox = getattr(focus, "hitbox", None)
+        fx = focus_hitbox.centerx if focus_hitbox is not None else focus.rect.centerx
+        fy = focus_hitbox.centery if focus_hitbox is not None else focus.rect.centery
+        self.offset.x = fx - self.half_width
+        self.offset.y = fy - self.half_height
+        self.grass_offset.x = fx - self.grass_half_width
+        self.grass_offset.y = fy - self.grass_half_height
 
         if self.ground_chunks:
             # Only the chunks the camera can see. cache_key stays id(surface) to match
@@ -406,7 +412,7 @@ class YSortCameraGroup(pygame.sprite.Group):
                 self.backend.draw_shadow(img, corners, id(img), sstr)
 
         player_drawn = False
-        for sprite in sorted(self.sprites(), key=lambda sprite: sprite.rect.centery):
+        for sprite in sorted(self.sprites(), key=sprite_feet_sort_y):
             #print(sprite)
             #print(dir(sprite))
             offset_pos = sprite.rect.topleft - self.offset

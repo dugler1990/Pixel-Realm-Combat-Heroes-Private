@@ -8,11 +8,17 @@ from rts.assets import normalize_faction_id
 from rts.categories import FOOD
 from rts.entities.worker import IDLE, WAITING_AT_NODE
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
+from Support import mask_midbottom_world
+from hashRect import HashableRect
 
 
 def _press_key(input_manager, key):
     input_manager.current_key_states[key] = True
     input_manager.key_press_events[key] = True
+
+
+def _release_key(input_manager, key):
+    input_manager.current_key_states[key] = False
 
 
 def _clear_just_pressed(input_manager):
@@ -134,6 +140,7 @@ class RtsValidationDriver:
         "depletable_respawns": 14.0,
         "non_depletable_stays_active": 12.0,
         "lost_without_dropoff": 28.0,
+        "player_feet_plant": 10.0,
     }
 
     def __init__(self):
@@ -161,7 +168,22 @@ class RtsValidationDriver:
             "depletable_respawns",
             "non_depletable_stays_active",
             "lost_without_dropoff",
+            "player_feet_plant",
         ]
+        self._feet_idle_y = None
+        self._feet_start_hitbox = None
+        self._feet_max_bob = 0
+        self._feet_idle_match = None
+        self._feet_wall_phase = None
+        self._feet_wall_contacted = False
+        self._feet_wall_reversed = False
+        self._feet_wall_tunnel = False
+        self._feet_last_x = None
+        self._feet_last_y = None
+        self._feet_wall_key = pygame.K_RIGHT
+        self._feet_wall_reverse_key = pygame.K_LEFT
+        self._feet_wall_sign = 1
+        self._feet_wall_axis = "x"
 
     def _filtered_names(self):
         return [
@@ -198,6 +220,20 @@ class RtsValidationDriver:
             lines.append(f"wallet food={session.wallet.get(FOOD)}")
         if extra:
             lines.extend(extra)
+        if name == "player_feet_plant":
+            if self._feet_idle_y is not None:
+                lines.append(f"idle_feet_y={self._feet_idle_y}")
+            lines.append(f"max_bob={self._feet_max_bob}")
+            if self._feet_idle_y is not None and getattr(level, "player", None) is not None:
+                player = level.player
+                if getattr(player, "mask", None) and getattr(player, "rect", None):
+                    live = int(mask_midbottom_world(player.rect, player.mask)[1])
+                    lines.append(f"live_delta={abs(live - self._feet_idle_y)}")
+            if self._feet_wall_phase:
+                lines.append(
+                    f"wall={self._feet_wall_phase} contacted={int(self._feet_wall_contacted)} "
+                    f"reversed={int(self._feet_wall_reversed)}"
+                )
         runtime.set_overlay(lines, phase=phase)
 
     def tick(self, level, dt):
@@ -229,6 +265,21 @@ class RtsValidationDriver:
             self._hold_started = None
             self._pending_result = None
             print(f"[RTS_VAL] Starting scenario: {name}", flush=True)
+            if name == "player_feet_plant":
+                self._feet_idle_y = None
+                self._feet_start_hitbox = None
+                self._feet_max_bob = 0
+                self._feet_idle_match = None
+                self._feet_wall_phase = None
+                self._feet_wall_contacted = False
+                self._feet_wall_reversed = False
+                self._feet_wall_tunnel = False
+                self._feet_last_x = None
+                self._feet_last_y = None
+                self._feet_wall_key = pygame.K_RIGHT
+                self._feet_wall_reverse_key = pygame.K_LEFT
+                self._feet_wall_sign = 1
+                self._feet_wall_axis = "x"
 
         elapsed = time.time() - self._scenario_started
         limit = self._max_seconds_for(name, runtime)
@@ -272,7 +323,26 @@ class RtsValidationDriver:
             self._advance(level)
         return False
 
+    def _restore_feet_plant_player(self, level):
+        player = getattr(level, "player", None)
+        if player is None or self._feet_start_hitbox is None:
+            return
+        _release_key(level.input_manager, pygame.K_RIGHT)
+        _release_key(level.input_manager, pygame.K_LEFT)
+        _release_key(level.input_manager, pygame.K_UP)
+        _release_key(level.input_manager, pygame.K_DOWN)
+        player.direction.x = 0
+        player.direction.y = 0
+        player.velocity = pygame.math.Vector2(0, 0)
+        player.hitbox.center = self._feet_start_hitbox
+        if hasattr(player, "plant_sprite_on_hitbox"):
+            player.plant_sprite_on_hitbox()
+        else:
+            player.rect.center = player.hitbox.center
+
     def _advance(self, level=None):
+        if level is not None and self._active == "player_feet_plant":
+            self._restore_feet_plant_player(level)
         self._scenario_index += 1
         self._active = None
         self._hold_started = None
@@ -686,6 +756,181 @@ class RtsValidationDriver:
             ):
                 return True, False, f"state={workers[0].gather_state} lost={workers[0].gather_lost}"
         return False, False, ""
+
+    FEET_PLANT_IDLE_FRAMES = 4
+    FEET_PLANT_WALK_FRAMES = 90
+    FEET_PLANT_GOLDEN_IDLE_Y = 3848  # Phase-1 headless capture (level 6 TMX spawn)
+    FEET_PLANT_WALL_APPROACH_FRAMES = 90
+    FEET_PLANT_WALL_STUCK_FRAMES = 8
+    FEET_PLANT_WALL_REVERSE_FRAMES = 24
+    FEET_PLANT_TUNNEL_STEP_PX = 24
+
+    def _run_player_feet_plant(self, level):
+        player = getattr(level, "player", None)
+        if player is None:
+            return True, False, "no player"
+        if not getattr(player, "mask", None) or not getattr(player, "rect", None):
+            return True, False, "player missing rect/mask"
+
+        # Snapshot idle before walking. Tick runs before player.update, so frame 1
+        # is still the spawn idle pose.
+        if self._scenario_frame <= self.FEET_PLANT_IDLE_FRAMES:
+            feet = mask_midbottom_world(player.rect, player.mask)
+            center_rect = player.image.get_rect(center=player.hitbox.center)
+            legacy_feet = mask_midbottom_world(center_rect, player.mask)
+            self._feet_idle_y = int(feet[1])
+            self._feet_start_hitbox = (player.hitbox.centerx, player.hitbox.centery)
+            self._feet_idle_match = abs(int(feet[1]) - int(legacy_feet[1]))
+            self._feet_last_x = player.hitbox.centerx
+            return False, False, ""
+
+        walk_frames = self._scenario_frame - self.FEET_PLANT_IDLE_FRAMES
+        if walk_frames <= self.FEET_PLANT_WALK_FRAMES:
+            _press_key(level.input_manager, pygame.K_RIGHT)
+            feet_y = int(mask_midbottom_world(player.rect, player.mask)[1])
+            bob = abs(feet_y - self._feet_idle_y)
+            if bob > self._feet_max_bob:
+                self._feet_max_bob = bob
+            self._note_feet_step(player)
+            return False, False, ""
+
+        wall_done = self._run_feet_wall_walk(level, player)
+        if not wall_done:
+            feet_y = int(mask_midbottom_world(player.rect, player.mask)[1])
+            bob = abs(feet_y - self._feet_idle_y)
+            if bob > self._feet_max_bob:
+                self._feet_max_bob = bob
+            return False, False, ""
+
+        idle_ok = self._feet_idle_match is not None and self._feet_idle_match <= 1
+        golden_ok = abs(self._feet_idle_y - self.FEET_PLANT_GOLDEN_IDLE_Y) <= 1
+        bob_ok = self._feet_max_bob <= 1
+        wall_ok = (
+            (not self._feet_wall_tunnel)
+            and self._feet_wall_contacted
+            and self._feet_wall_reversed
+        )
+        details = (
+            f"idle_feet_y={self._feet_idle_y} idle_match_px={self._feet_idle_match} "
+            f"max_bob={self._feet_max_bob} wall_contacted={int(self._feet_wall_contacted)} "
+            f"wall_reversed={int(self._feet_wall_reversed)} tunnel={int(self._feet_wall_tunnel)}"
+        )
+        return True, idle_ok and golden_ok and bob_ok and wall_ok, details
+
+    def _note_feet_step(self, player):
+        x = player.hitbox.centerx
+        y = player.hitbox.centery
+        if self._feet_last_x is not None and abs(x - self._feet_last_x) > self.FEET_PLANT_TUNNEL_STEP_PX:
+            self._feet_wall_tunnel = True
+        if self._feet_last_y is not None and abs(y - self._feet_last_y) > self.FEET_PLANT_TUNNEL_STEP_PX:
+            self._feet_wall_tunnel = True
+        self._feet_last_x = x
+        self._feet_last_y = y
+
+    def _feet_axis_pos(self, player):
+        if self._feet_wall_axis == "y":
+            return player.hitbox.centery
+        return player.hitbox.centerx
+
+    def _aim_feet_wall_walk(self, player):
+        """Steer toward the nearest obstacle so planted-rect collision is actually hit."""
+        self._feet_wall_key = pygame.K_RIGHT
+        self._feet_wall_reverse_key = pygame.K_LEFT
+        self._feet_wall_sign = 1
+        self._feet_wall_axis = "x"
+        qt = getattr(player, "QuadTree", None)
+        if qt is None or not hasattr(player, "hitbox"):
+            return
+        px, py = player.hitbox.center
+        best = None
+        best_d2 = None
+        for radius in (256, 768, 2048):
+            probe = player.hitbox.inflate(radius * 2, radius * 2)
+            hits = qt.hit(HashableRect(probe, player.id))
+            for item in hits:
+                other = getattr(item, "rect", None)
+                if other is None:
+                    continue
+                cx = min(max(px, other.left), other.right)
+                cy = min(max(py, other.top), other.bottom)
+                dx = cx - px
+                dy = cy - py
+                d2 = dx * dx + dy * dy
+                if d2 < 4:
+                    continue
+                if best_d2 is None or d2 < best_d2:
+                    best_d2 = d2
+                    best = (dx, dy)
+            if best is not None:
+                break
+        if best is None:
+            return
+        dx, dy = best
+        if abs(dx) >= abs(dy):
+            self._feet_wall_axis = "x"
+            if dx >= 0:
+                self._feet_wall_key = pygame.K_RIGHT
+                self._feet_wall_reverse_key = pygame.K_LEFT
+                self._feet_wall_sign = 1
+            else:
+                self._feet_wall_key = pygame.K_LEFT
+                self._feet_wall_reverse_key = pygame.K_RIGHT
+                self._feet_wall_sign = -1
+        else:
+            self._feet_wall_axis = "y"
+            if dy >= 0:
+                self._feet_wall_key = pygame.K_DOWN
+                self._feet_wall_reverse_key = pygame.K_UP
+                self._feet_wall_sign = 1
+            else:
+                self._feet_wall_key = pygame.K_UP
+                self._feet_wall_reverse_key = pygame.K_DOWN
+                self._feet_wall_sign = -1
+
+    def _run_feet_wall_walk(self, level, player):
+        """Walk into the nearest obstacle, then reverse to check stuck/tunnel."""
+        if self._feet_wall_phase is None:
+            self._aim_feet_wall_walk(player)
+            self._feet_wall_phase = "approach"
+            self._feet_stuck_frames = 0
+            self._feet_wall_frame = 0
+            self._feet_reverse_frames = 0
+            self._feet_approach_prev = self._feet_axis_pos(player)
+
+        self._note_feet_step(player)
+        pos = self._feet_axis_pos(player)
+
+        if self._feet_wall_phase == "approach":
+            _press_key(level.input_manager, self._feet_wall_key)
+            self._feet_wall_frame += 1
+            progress = (pos - self._feet_approach_prev) * self._feet_wall_sign
+            if progress <= 0:
+                self._feet_stuck_frames += 1
+            else:
+                self._feet_stuck_frames = 0
+            self._feet_approach_prev = pos
+            if self._feet_stuck_frames >= self.FEET_PLANT_WALL_STUCK_FRAMES:
+                self._feet_wall_contacted = True
+                _release_key(level.input_manager, self._feet_wall_key)
+                self._feet_wall_phase = "reverse"
+                self._feet_reverse_start = pos
+                self._feet_reverse_frames = 0
+            elif self._feet_wall_frame >= self.FEET_PLANT_WALL_APPROACH_FRAMES:
+                _release_key(level.input_manager, self._feet_wall_key)
+                self._feet_wall_phase = "done"
+            return self._feet_wall_phase == "done"
+
+        if self._feet_wall_phase == "reverse":
+            _press_key(level.input_manager, self._feet_wall_reverse_key)
+            self._feet_reverse_frames += 1
+            if (pos - self._feet_reverse_start) * self._feet_wall_sign < -2:
+                self._feet_wall_reversed = True
+            if self._feet_reverse_frames >= self.FEET_PLANT_WALL_REVERSE_FRAMES:
+                _release_key(level.input_manager, self._feet_wall_reverse_key)
+                self._feet_wall_phase = "done"
+            return self._feet_wall_phase == "done"
+
+        return True
 
 
 def _find_depletable_node(registry, faction_id):

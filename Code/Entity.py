@@ -6,7 +6,7 @@ import math
 import collision_core
 from hashRect import HashableRect
 from game_logging import get_collision_mask_logger
-from Support import print_mask
+from Support import print_mask, position_surface_mask_midbottom_at, mask_midbottom_world
 from Effect import EFFECT_REGISTRY, SlipperyEffect
 from benchmark_runtime import BENCHMARK_RUNTIME
 from Interaction import InteractionContext
@@ -27,8 +27,31 @@ SLIP_PARALLEL_SUPPRESSION = 0.12  # Mildly reduce along-momentum response on hig
 SLIP_PERP_SUPPRESSION = 0.72  # Strongly reduce turning authority on high-slip surfaces (main drift control).
 LOW_SPEED_MOMENTUM_EPS = 0.1  # Use input axis as momentum axis below this speed.
 
+# Ground covered, in pixels, for each frame of a walk cycle. Walk animations advance on
+# distance travelled rather than on the clock, so the feet cannot slide: at half speed the
+# legs cycle at half rate, and an entity held against a wall stops cycling entirely.
+#
+# 10 is chosen, not measured: the barb's 19-frame cycle then covers 190px, which at speed 6
+# (180 px/s at 30fps) is ~0.95 cycles/sec -- about the cadence of a real walk. Anatomically
+# the stride should be ~1.6 body heights, i.e. 83px per cycle and a value near 4, but at
+# these speeds that reads as frantic. Lower this for shorter, faster steps.
+PIXELS_PER_ANIM_FRAME = 10.0
+
+# A single tick that covers more ground than this was not walking: a spawn, a respawn, a
+# level entry, or a remote puppet snapping to its first authoritative position. Those have no
+# gait, so they phase nothing -- without this, a puppet placed 781px from its spawn point
+# spins its legs through 78 frames in one tick and plants the sprite on an arbitrary pose.
+# Legitimate movement stays far below: the fastest speed in Settings is 15, and collision
+# pushback is capped at MAX_DISPLACEMENT, so a real tick lands around 21px at the very most.
+MAX_PHASED_STEP = 40.0
+
 class Entity(pygame.sprite.Sprite):
     casts_shadow = True  # entities (player/enemies/friendlies) drop directional shadows
+    # Statuses whose animation is a walk cycle, and so phased on distance rather than time.
+    # Declared per subclass because each has its own vocabulary: the player uses bare
+    # direction names, enemies and friendlies "move", neutrals "walking". A status missing
+    # from here stays on the clock, which is what idle, attack and sit want.
+    WALK_STATUSES = frozenset()
     # Class-level variable to keep track of IDs
     id_counter = 0
     benchmark_runtime = BENCHMARK_RUNTIME
@@ -38,12 +61,17 @@ class Entity(pygame.sprite.Sprite):
         self.id = Entity.id_counter
         self.frame_index = 0
         self.animation_speed = 0.25
+        # Pixels actually covered by the last move(), after collision. Not velocity: nothing
+        # in collision() clears velocity, so an entity pressed against a wall keeps a full
+        # velocity vector forever and phasing on it would spin the legs while stuck.
+        self.distance_moved = 0.0
         self.direction = pygame.math.Vector2()
         self.velocity = pygame.math.Vector2(0, 0)  # Current velocity for movement
         self.weight = 1.0  # Weight affects acceleration (higher weight = slower acceleration)
         self.max_collision_distance_squared = 10000
         self.max_collision_distance = 10
         self.mask = None
+        self.anchor_offset = None  # idle feet_y - hitbox.midbottom; captured once at first plant
         self._collision_probe_rect = pygame.Rect(0, 0, 1, 1)
         # Flag to track whether move method has been called before
         self.move_not_called_before = True
@@ -58,11 +86,40 @@ class Entity(pygame.sprite.Sprite):
             def empty_func_is_not_nicey(*args, alive = True, remove_existing = True):pass
             self.layout_callback_update_quad_tree  =  empty_func_is_not_nicey
 
+    def capture_feet_anchor(self):
+        """Record idle soles vs hitbox.midbottom so planting does not teleport."""
+        if not hasattr(self, "hitbox") or getattr(self, "image", None) is None:
+            self.anchor_offset = 0
+            return
+        mask = getattr(self, "mask", None)
+        if mask is None:
+            mask = pygame.mask.from_surface(self.image)
+        feet_y = mask_midbottom_world(self.rect, mask)[1]
+        self.anchor_offset = feet_y - self.hitbox.midbottom[1]
+
+    def plant_sprite_on_hitbox(self):
+        """Hang the sprite so opaque feet sit on hitbox.midbottom + anchor_offset.
+
+        Hitbox stays the world-position authority; rect is derived for draw/y-sort.
+        """
+        if not hasattr(self, "hitbox") or getattr(self, "image", None) is None:
+            return
+        if self.anchor_offset is None:
+            self.capture_feet_anchor()
+        mask = getattr(self, "mask", None)
+        target = (
+            self.hitbox.midbottom[0],
+            self.hitbox.midbottom[1] + int(self.anchor_offset or 0),
+        )
+        self.rect = position_surface_mask_midbottom_at(self.image, mask, target)
+
     #@profile
     def move(self, speed, QuadTree,entity_quad_tree, update_quad_tree = True):
-        
-        
-        
+
+        # Where this tick started, so the walk animation can be phased on ground actually
+        # covered. Read before anything moves and compared after collision has had its say.
+        move_origin_x, move_origin_y = self.hitbox.x, self.hitbox.y
+
         #print(f'speed as stated in move method: {speed}')
         #print(f"Quadtree in move method : {entity_quad_tree.manager.item_mapping}")
         #print( f"self.move_not_called_before : {self.move_not_called_before}" )
@@ -178,15 +235,27 @@ class Entity(pygame.sprite.Sprite):
      
         
         #self.collision("Vertical",QuadTree=QuadTree)
-        self.rect.center = self.hitbox.center
-        #print(f"rec center post move  : {self.rect.center}")
-        
-        self.collision(  
+        self.collision(
                         QuadTree=QuadTree ,
                         entity_quad_tree = entity_quad_tree,
                         speed = speed
                         )
-        
+        self.distance_moved = math.hypot(self.hitbox.x - move_origin_x,
+                                         self.hitbox.y - move_origin_y)
+        self.plant_sprite_on_hitbox()
+
+
+    def advance_frame(self):
+        """Frames to advance this tick: distance-phased while walking, time-based otherwise.
+
+        Idle, attack and sit stay on the clock. They are not locomotion, so phasing them on
+        distance would freeze them the moment the entity stood still.
+        """
+        if self.status in self.WALK_STATUSES:
+            if self.distance_moved > MAX_PHASED_STEP:
+                return 0.0  # a teleport, not a stride
+            return self.distance_moved / PIXELS_PER_ANIM_FRAME
+        return self.animation_speed
 
 
     def _collision_mode(self):
@@ -1189,8 +1258,7 @@ class Entity(pygame.sprite.Sprite):
         if hasattr(self, "hitbox"):
             self.hitbox.x += int(dx)
             self.hitbox.y += int(dy)
-        if hasattr(self, "rect") and hasattr(self, "hitbox"):
-            self.rect.center = self.hitbox.center
+        self.plant_sprite_on_hitbox()
         self.velocity.x += dx * follow_through
         self.velocity.y += dy * follow_through
 

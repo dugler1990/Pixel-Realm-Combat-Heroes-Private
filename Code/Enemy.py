@@ -15,6 +15,9 @@ from Interaction import InteractionContext
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 class Enemy(Entity):
+    # "move" is the walk cycle; "idle" and "attack" stay time-based.
+    WALK_STATUSES = frozenset({"move"})
+
     def __init__(self,
                  monster_name,
                  pos,
@@ -106,6 +109,7 @@ class Enemy(Entity):
         # Movement
         self.rect = self.image.get_rect(topleft=pos)
         self.hitbox = self.rect.inflate(0, -10)
+        self.capture_feet_anchor()
         self.obstacle_sprites = obstacle_sprites
         self.direction_update_time = 500
         self.last_direction_update_time = pygame.time.get_ticks()
@@ -300,7 +304,7 @@ class Enemy(Entity):
             self.image = self.animations[self.status][self.direction_string][int(self.frame_index)]
         else:
             self.image = self.animations[self.status][int(self.frame_index)]
-        self.rect = self.image.get_rect(center=self.hitbox.center)
+        self.plant_sprite_on_hitbox()
         
 
 
@@ -470,7 +474,7 @@ class Enemy(Entity):
         if self.frozen:
             #print("FROZEN")
             self.image = self.frozen_image
-            self.rect = self.image.get_rect(center = self.hitbox.center)
+            self.plant_sprite_on_hitbox()
         else:
         
             if self.animations_left_right_indicator:
@@ -484,7 +488,7 @@ class Enemy(Entity):
                 animation = self.animations[self.status]
                 masks = self.masks[self.status]
             
-            self.frame_index += self.animation_speed
+            self.frame_index += self.advance_frame()
             if self.frame_index >= len(animation):
                 if self.status == "attack":
                     self.can_attack = False
@@ -502,7 +506,7 @@ class Enemy(Entity):
     
             self.image = animation[int(self.frame_index)]
             self.mask = masks[int(self.frame_index)]
-            self.rect = self.image.get_rect(center = self.hitbox.center)
+            self.plant_sprite_on_hitbox()
     
             if not self.vulnerable:
                 alpha = self.wave_value()

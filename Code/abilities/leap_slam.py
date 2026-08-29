@@ -133,7 +133,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
         self._accumulate_air_control(entity, runtime, dt)
         entity.hitbox.x = int(base_x + float(runtime.get("air_steer_x", 0.0)))
         entity.hitbox.y = int(base_y + float(runtime.get("air_steer_y", 0.0)))
-        entity.rect.center = entity.hitbox.center
+        entity.plant_sprite_on_hitbox()
 
     def _apply_launch_snap(self, entity, runtime) -> None:
         snap = int(self.config.get("launch_snap_px", 0))
@@ -146,7 +146,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
             return
         entity.hitbox.x += int(snap * dx / dist)
         entity.hitbox.y += int(snap * dy / dist)
-        entity.rect.center = entity.hitbox.center
+        entity.plant_sprite_on_hitbox()
 
     def _arc_height_for_ratio(self, charge_ratio: float) -> float:
         min_h = float(self.config.get("min_arc_height", self.config.get("arc_height", 64)))
@@ -283,7 +283,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
             base_x, base_y = self._airborne_base_position(runtime, 1.0)
             entity.hitbox.x = int(base_x + float(runtime.get("air_steer_x", 0.0)))
             entity.hitbox.y = int(base_y + float(runtime.get("air_steer_y", 0.0)))
-            entity.rect.center = entity.hitbox.center
+            entity.plant_sprite_on_hitbox()
             runtime["impact_center"] = entity.hitbox.center
             runtime["phase"] = "impact"
             presentation = self.config.get("presentation") or {}

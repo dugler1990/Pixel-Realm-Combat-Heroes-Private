@@ -77,6 +77,7 @@ def main():
         env["PRCH_RTS_VALIDATION_VISIBLE"] = "0"
         env["SDL_VIDEODRIVER"] = "dummy"
         env["SDL_AUDIODRIVER"] = "dummy"
+        env["RENDER_BACKEND"] = "cpu"
     else:
         env["PRCH_RTS_VALIDATION_FAST"] = "0"
         env["PRCH_RTS_VALIDATION_VISIBLE"] = "1"

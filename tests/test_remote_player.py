@@ -102,13 +102,28 @@ def test_idle_status_is_honored_verbatim_from_server():
 
 
 def test_animation_frame_advances_across_updates():
+    # The puppet has to actually travel between snapshots: walk cycles are phased on ground
+    # covered, so a puppet standing still holds its frame by design. Steps stay under
+    # Entity.MAX_PHASED_STEP so they read as strides rather than as a teleport.
     remote = _make_remote()
     remote.apply_snapshot(0.0, 0.0, 1.0, 0.0, "right")
     remote.update()
     first = remote.frame_index
+    remote.apply_snapshot(12.0, 0.0, 1.0, 0.0, "right")
     remote.update()
     second = remote.frame_index
     assert second != first  # animate() is being driven each tick
+
+
+def test_stationary_puppet_holds_its_walk_frame():
+    # The other half of the contract above, and the bug it exists to prevent: a puppet that
+    # is not moving must not cycle its legs on the spot.
+    remote = _make_remote()
+    remote.apply_snapshot(0.0, 0.0, 1.0, 0.0, "right")
+    remote.update()
+    held = remote.frame_index
+    remote.update()
+    assert remote.frame_index == held
 
 
 def test_world_sim_hooks_are_inert_noops():

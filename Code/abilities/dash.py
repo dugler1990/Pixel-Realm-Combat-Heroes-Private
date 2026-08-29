@@ -117,16 +117,19 @@ class DashAbility(PlayerAbility):
 
         pre_x = entity.hitbox.x
         entity.hitbox.x += int(delta)
-        entity.rect.center = entity.hitbox.center
 
         collision_mode = runtime["collision_mode"]
         if collision_mode == "resolve":
             entity.collision(QuadTree, entity_quad_tree, speed=abs(delta))
+            entity.plant_sprite_on_hitbox()
             if runtime["stop_on_wall"] and int(delta) != 0 and entity.hitbox.x == pre_x:
                 self._end(entity, runtime)
                 return
         elif collision_mode == "damage_on_hit":
+            entity.plant_sprite_on_hitbox()
             self._apply_damage_on_hit(entity, context, entity_quad_tree, runtime)
+        else:
+            entity.plant_sprite_on_hitbox()
 
     def _apply_damage_on_hit(self, entity, context, entity_quad_tree, runtime) -> None:
         if entity_quad_tree is None or runtime.get("damage") is None:

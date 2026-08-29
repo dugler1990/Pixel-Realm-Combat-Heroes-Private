@@ -5,6 +5,9 @@ from Settings import TILESIZE
 from Entity import Entity
 from Interaction import InteractionContext
 class NeutralCharacter(Entity):
+    # "walking" is the walk cycle; "idle" stays time-based.
+    WALK_STATUSES = frozenset({"walking"})
+
     def __init__(self, pos,
                  groups,
                  obstacle_sprites,
@@ -30,6 +33,7 @@ class NeutralCharacter(Entity):
         self.image = self.animations[self.status][self.frame_index]
         self.rect = self.image.get_rect(topleft=pos)
         self.hitbox = self.rect.inflate(0, -10)
+        self.capture_feet_anchor()
         self.interactable_tile_types = interactable_tile_types
         self.team_id = "neutral"
         self.roam_direction_change_coef = 0.2
@@ -244,9 +248,9 @@ class NeutralCharacter(Entity):
         
         animation = self.animations[self.status]
         #print(f"animation: {animation}")
-        self.frame_index += self.animation_speed
+        self.frame_index += self.advance_frame()
         #print(f"frame index: {self.frame_index}")
         if self.frame_index >= len(animation):
             self.frame_index = 0
         self.image = animation[int(self.frame_index)]
-        self.rect = self.image.get_rect(center=self.hitbox.center)
+        self.plant_sprite_on_hitbox()

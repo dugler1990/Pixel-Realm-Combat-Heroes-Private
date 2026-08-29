@@ -33,7 +33,8 @@ class Eskimo(NeutralCharacter):
         #print(f"self.animations in int : {self.animations}")
         self.image = self.animations['idle'][0]  # Default image
         self.rect = self.image.get_rect(topleft=pos)  # Sprite position
-        self.hitbox = self.rect.inflate(0, -10) 
+        self.hitbox = self.rect.inflate(0, -10)
+        self.capture_feet_anchor()
         self.direction = pygame.math.Vector2() 
         self.obstacle_sprites = obstacle_sprites 
         self.update_item_spawner = update_item_spawner_callback

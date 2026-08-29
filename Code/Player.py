@@ -17,6 +17,10 @@ from Interaction import InteractionContext
 from abilities.registry import build_action_controller, load_evasion_loadout
 
 class BasePlayer(Entity):
+    # Bare direction names are the walk cycles; every other status ("_idle", "_attack",
+    # "sit_*", "jump_*", "land_*", "leap_*") is not locomotion and stays time-based.
+    WALK_STATUSES = frozenset({"up", "down", "left", "right"})
+
     def __init__(self,
                  pos,
                  groups,
@@ -515,7 +519,7 @@ class BasePlayer(Entity):
                 self.frame_index = 0
                 if not animation or not masks:
                     return
-        self.frame_index += self.animation_speed
+        self.frame_index += self.advance_frame()
         if self.frame_index >= len(animation):
             if self.status == "sit_down":
                 self.status = "sit_idle"
@@ -537,7 +541,7 @@ class BasePlayer(Entity):
         if self.status.startswith("sit_"):
             self._position_sprite_for_seat()
         else:
-            self.rect = self.image.get_rect(center = self.hitbox.center)
+            self.plant_sprite_on_hitbox()
         if not self.vulnerable:
             alpha = self.wave_value()
             self.image.set_alpha(alpha)
@@ -619,9 +623,11 @@ class BasePlayer(Entity):
     def _position_sprite_for_seat(self):
         target = self._seat_world_target()
         if target is None:
-            self.rect = self.image.get_rect(center=self.hitbox.center)
+            self.plant_sprite_on_hitbox()
             return
         self.rect = position_surface_mask_midbottom_at(self.image, self.mask, target)
+        # Seat world point is the authority here (not hitbox). Locomotion uses
+        # the opposite split: hitbox owns position, rect is planted from it.
         if hasattr(self, "hitbox"):
             self.hitbox.center = self.rect.center
 
@@ -713,4 +719,5 @@ class SpecificPlayer(BasePlayer):
         self.rect = self.image.get_rect(topleft=pos)
          # Initialize hitbox for SpecificPlayer
         self.hitbox = self.rect.inflate(-6, HITBOX_OFFSET["player"])
+        self.capture_feet_anchor()
 # You can add more specific player classes here in a similar fashion.

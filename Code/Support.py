@@ -45,23 +45,45 @@ def print_mask(mask):
                 row_str += "0"
         _mask_ascii_log.debug("%s", row_str)
 
+_MASK_BOUNDS_CACHE = {}  # id(mask) -> (size, Rect|None); size guards id reuse
+
+
 def _mask_opaque_bounds(mask):
-    """Union bounding box of opaque pixels in mask coords, or None if empty."""
-    if mask is None or mask.count() == 0:
+    """Union bounding box of opaque pixels in mask coords, or None if empty.
+
+    Cached by id(mask), validated by size (same pattern as YSortCameraGroup._feet_row).
+    """
+    if mask is None:
+        return None
+    try:
+        size = mask.get_size()
+    except Exception:
+        return None
+    key = id(mask)
+    entry = _MASK_BOUNDS_CACHE.get(key)
+    if entry is not None and entry[0] == size:
+        bounds = entry[1]
+        return None if bounds is None else bounds.copy()
+    if mask.count() == 0:
+        _MASK_BOUNDS_CACHE[key] = (size, None)
         return None
     try:
         rects = mask.get_bounding_rects()
     except AttributeError:
         rects = [mask.get_bounding_rect()]
     if not rects:
+        _MASK_BOUNDS_CACHE[key] = (size, None)
         return None
     left = min(r.left for r in rects)
     top = min(r.top for r in rects)
     right = max(r.right for r in rects)
     bottom = max(r.bottom for r in rects)
     if right <= left or bottom <= top:
+        _MASK_BOUNDS_CACHE[key] = (size, None)
         return None
-    return pygame.Rect(left, top, right - left, bottom - top)
+    bounds = pygame.Rect(left, top, right - left, bottom - top)
+    _MASK_BOUNDS_CACHE[key] = (size, bounds)
+    return bounds.copy()
 
 
 def mask_footprint_size(mask):
@@ -96,6 +118,17 @@ def position_surface_mask_midbottom_at(surface, mask, world_midbottom):
         return surface.get_rect(midbottom=world_midbottom)
     wx, wy = int(world_midbottom[0]), int(world_midbottom[1])
     return surface.get_rect(topleft=(wx - bounds.centerx, wy - bounds.bottom))
+
+
+def sprite_feet_sort_y(sprite):
+    """World Y of the sprite's opaque feet for y-sort. Falls back to rect.bottom."""
+    rect = getattr(sprite, "rect", None)
+    if rect is None:
+        return 0
+    mask = getattr(sprite, "mask", None)
+    if mask is None:
+        return rect.bottom
+    return mask_midbottom_world(rect, mask)[1]
 
 
 def frames_to_masks(animation_frames):

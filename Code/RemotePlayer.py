@@ -16,6 +16,8 @@ methods exist but are deliberately never driven here (that is Stage C/D in
 the plan's convergence roadmap).
 """
 
+import math
+
 import pygame
 
 from Settings import HITBOX_OFFSET
@@ -79,10 +81,11 @@ class RemotePlayer(BasePlayer):
         self.image = pygame.image.load(character_assets + "down_idle/0.png").convert_alpha()
         self.rect = self.image.get_rect(center=center)
         self.hitbox = self.rect.inflate(-6, HITBOX_OFFSET["player"])
+        self.capture_feet_anchor()
 
         # Latest authoritative network values, consumed in update(). Seeded so
         # the puppet sits idle at its spawn until the first snapshot arrives.
-        self._net_x, self._net_y = self.rect.center
+        self._net_x, self._net_y = self.hitbox.center
         self._net_dx = 0.0
         self._net_dy = 0.0
         self._net_status = "down_idle"
@@ -160,7 +163,7 @@ class RemotePlayer(BasePlayer):
         downed player drops out of the entity tree). No-op'ish for client mode."""
         self._net_x, self._net_y = x, y
         self.hitbox.center = (int(x), int(y))
-        self.rect.center = self.hitbox.center
+        self.plant_sprite_on_hitbox()
         if health is not None:
             self.health = health
 
@@ -193,12 +196,18 @@ class RemotePlayer(BasePlayer):
 
     def _sync_position_from_snapshot(self):
         # v0 "snap" (no interpolation): teleport to each authoritative position.
-        # animate() rebuilds self.rect centered on the *previous* hitbox, so we
-        # re-anchor both hitbox and rect to the latest network center here.
+        # animate() plants rect from hitbox; re-plant after applying the
+        # network hitbox so the puppet is not left on a stale draw rect.
         # tick/server_time_ms already ride in the protocol for a Stage D lerp
         # upgrade if testing shows visible popping.
+        # A puppet never runs Entity.move(), so nothing else would ever set
+        # distance_moved and its walk cycle would sit frozen on one frame. The
+        # authoritative step between snapshots is exactly the distance it covered.
+        previous_x, previous_y = self.hitbox.centerx, self.hitbox.centery
         self.hitbox.center = (self._net_x, self._net_y)
-        self.rect.center = self.hitbox.center
+        self.distance_moved = math.hypot(self.hitbox.centerx - previous_x,
+                                         self.hitbox.centery - previous_y)
+        self.plant_sprite_on_hitbox()
 
     # -- v0 isolation: keep the puppet inert wrt the LOCAL world simulation.
     #    Level4.run() calls these on every Entity in visible_sprites; the

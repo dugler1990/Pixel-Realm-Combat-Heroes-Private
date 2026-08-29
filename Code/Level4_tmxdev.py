@@ -771,7 +771,10 @@ class Level4:
             self._benchmark_player_anchor = self.player.hitbox.center
         cx, cy = self._benchmark_player_anchor
         self.player.hitbox.center = (cx, cy)
-        self.player.rect.center = self.player.hitbox.center
+        if hasattr(self.player, "plant_sprite_on_hitbox"):
+            self.player.plant_sprite_on_hitbox()
+        else:
+            self.player.rect.center = self.player.hitbox.center
         self.player.velocity.update(0, 0)
         self.player.direction.update(0, 0)
 
@@ -2631,16 +2634,16 @@ class Level4:
         # Code/multiplayer_runtime.py): report this frame's local player state to
         # the server now that update_parallel/custom_draw have run, so position
         # and direction/attacking reflect this frame. v0 is a position relay --
-        # we send the player's ACTUAL rect.center (from Entity.move) so remotes
-        # render exactly where we are, not a server re-simulation that drifts.
+        # we send hitbox.center (world-position authority) so remotes plant
+        # from the same origin we simulate, not a per-frame planted rect.
         if getattr(self, "mp_client", None) is not None:
             # CS2: the SERVER owns the enemy sim now, so clients no longer relay
             # enemy state -- every client just reports its own player and renders
             # the server's enemies as puppets.
             # CS4: also relay health so the server's enemy aggro drops a downed player.
             self.mp_client.send_state(
-                self.player.rect.centerx,
-                self.player.rect.centery,
+                self.player.hitbox.centerx,
+                self.player.hitbox.centery,
                 self.player.direction.x,
                 self.player.direction.y,
                 self.player.attacking,
