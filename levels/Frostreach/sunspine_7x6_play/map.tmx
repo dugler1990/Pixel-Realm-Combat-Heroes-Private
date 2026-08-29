@@ -1,16 +1,16 @@
 <?xml version='1.0' encoding='utf-8'?>
-<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="33" height="18" tilewidth="256" tileheight="256" infinite="0" nextlayerid="8" nextobjectid="74">
+<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="33" height="18" tilewidth="150" tileheight="150" infinite="0" nextlayerid="4" nextobjectid="2">
  <tileset firstgid="1" source="frostreach_prototype_tiles.tsx" />
  <tileset firstgid="11" source="../../tmx/can_build_tiles.tsx" />
- <tileset firstgid="10" source="painted_chunks.tsx" />
+ <tileset firstgid="2" source="painted_chunks.tsx" />
  <layer id="1" name="Tile Layer 1" width="33" height="18">
   <data encoding="csv">
-4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-4,4,4,4,4,4,4,4,4,4,4,4,4,4,1,1,1,1,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
-1,1,3,3,1,1,1,3,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
-1,1,1,1,1,3,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
@@ -47,140 +47,7 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 </data>
  </layer>
- <objectgroup id="7" name="PaintedGround">
-  <object id="73" gid="10" x="0" y="12258" width="22473" height="12258" />
- </objectgroup>
- <objectgroup id="3" name="Object Layer 1">
-  <object id="1" gid="5" x="0" y="0" width="681" height="681" />
-  <object id="2" gid="5" x="0" y="681" width="681" height="681" />
-  <object id="3" gid="5" x="681" y="0" width="681" height="681" />
-  <object id="4" gid="5" x="681" y="681" width="681" height="681" />
-  <object id="5" gid="5" x="1362" y="0" width="681" height="681" />
-  <object id="6" gid="5" x="1362" y="681" width="681" height="681" />
-  <object id="7" gid="5" x="2043" y="0" width="681" height="681" />
-  <object id="8" gid="5" x="2043" y="681" width="681" height="681" />
-  <object id="9" gid="5" x="2724" y="0" width="681" height="681" />
-  <object id="10" gid="5" x="2724" y="681" width="681" height="681" />
-  <object id="11" gid="5" x="3405" y="0" width="681" height="681" />
-  <object id="12" gid="5" x="3405" y="681" width="681" height="681" />
-  <object id="13" gid="5" x="4086" y="0" width="681" height="681" />
-  <object id="14" gid="5" x="4086" y="681" width="681" height="681" />
-  <object id="15" gid="5" x="4767" y="0" width="681" height="681" />
-  <object id="16" gid="5" x="4767" y="681" width="681" height="681" />
-  <object id="17" gid="5" x="5448" y="0" width="681" height="681" />
-  <object id="18" gid="5" x="5448" y="681" width="681" height="681" />
-  <object id="19" gid="5" x="6129" y="0" width="681" height="681" />
-  <object id="20" gid="5" x="6129" y="681" width="681" height="681" />
-  <object id="21" gid="5" x="6810" y="0" width="681" height="681" />
-  <object id="22" gid="5" x="6810" y="681" width="681" height="681" />
-  <object id="23" gid="5" x="7491" y="0" width="681" height="681" />
-  <object id="24" gid="5" x="7491" y="681" width="681" height="681" />
-  <object id="25" gid="5" x="8172" y="0" width="681" height="681" />
-  <object id="26" gid="5" x="8172" y="681" width="681" height="681" />
-  <object id="27" gid="5" x="8853" y="0" width="681" height="681" />
-  <object id="28" gid="5" x="8853" y="681" width="681" height="681" />
-  <object id="29" gid="5" x="9534" y="0" width="681" height="681" />
-  <object id="30" gid="5" x="9534" y="681" width="681" height="681" />
-  <object id="31" gid="5" x="10215" y="0" width="681" height="681" />
-  <object id="32" gid="5" x="10215" y="681" width="681" height="681" />
-  <object id="33" gid="5" x="10896" y="0" width="681" height="681" />
-  <object id="34" gid="5" x="10896" y="681" width="681" height="681" />
-  <object id="35" gid="5" x="11577" y="0" width="681" height="681" />
-  <object id="36" gid="5" x="11577" y="681" width="681" height="681" />
-  <object id="37" gid="5" x="12258" y="0" width="681" height="681" />
-  <object id="38" gid="5" x="12258" y="681" width="681" height="681" />
-  <object id="39" gid="5" x="12939" y="0" width="681" height="681" />
-  <object id="40" gid="5" x="12939" y="681" width="681" height="681" />
-  <object id="41" gid="5" x="13620" y="0" width="681" height="681" />
-  <object id="42" gid="5" x="13620" y="681" width="681" height="681" />
-  <object id="43" gid="5" x="14301" y="0" width="681" height="681" />
-  <object id="44" gid="5" x="14301" y="681" width="681" height="681" />
-  <object id="45" gid="5" x="14982" y="0" width="681" height="681" />
-  <object id="46" gid="5" x="14982" y="681" width="681" height="681" />
-  <object id="47" gid="5" x="15663" y="0" width="681" height="681" />
-  <object id="48" gid="5" x="15663" y="681" width="681" height="681" />
-  <object id="49" gid="5" x="16344" y="0" width="681" height="681" />
-  <object id="50" gid="5" x="16344" y="681" width="681" height="681" />
-  <object id="51" gid="5" x="17025" y="0" width="681" height="681" />
-  <object id="52" gid="5" x="17025" y="681" width="681" height="681" />
-  <object id="53" gid="5" x="17706" y="0" width="681" height="681" />
-  <object id="54" gid="5" x="17706" y="681" width="681" height="681" />
-  <object id="55" gid="5" x="18387" y="0" width="681" height="681" />
-  <object id="56" gid="5" x="18387" y="681" width="681" height="681" />
-  <object id="57" gid="5" x="19068" y="0" width="681" height="681" />
-  <object id="58" gid="5" x="19068" y="681" width="681" height="681" />
-  <object id="59" gid="5" x="19749" y="0" width="681" height="681" />
-  <object id="60" gid="5" x="19749" y="681" width="681" height="681" />
-  <object id="61" gid="5" x="20430" y="0" width="681" height="681" />
-  <object id="62" gid="5" x="20430" y="681" width="681" height="681" />
-  <object id="63" gid="5" x="21111" y="0" width="681" height="681" />
-  <object id="64" gid="5" x="21111" y="681" width="681" height="681" />
-  <object id="65" gid="5" x="21792" y="0" width="681" height="681" />
-  <object id="66" gid="5" x="21792" y="681" width="681" height="681" />
-  <object id="67" gid="9" x="8853" y="1362" width="681" height="681" />
-  <object id="68" gid="9" x="12258" y="1362" width="681" height="681" />
-  <object id="69" gid="7" x="1362" y="2724" width="681" height="681" />
-  <object id="70" gid="7" x="2724" y="3405" width="681" height="681" />
-  <object id="71" gid="8" x="4767" y="3405" width="681" height="681" />
-  <object id="72" gid="7" x="5448" y="4086" width="681" height="681" />
- </objectgroup>
- <objectgroup id="4" name="grass1">
-  <object id="1" x="550" y="2200" width="1650" height="1100">
-   <properties>
-    <property name="grass_profile" value="snow_tufts" />
-   </properties>
-  </object>
-  <object id="2" x="2200" y="1100" width="1650" height="1100">
-   <properties>
-    <property name="grass_profile" value="tundra_sparse" />
-   </properties>
-  </object>
-  <object id="3" x="3300" y="3300" width="1650" height="880">
-   <properties>
-    <property name="grass_profile" value="snow_tufts" />
-   </properties>
-  </object>
- </objectgroup>
- <objectgroup id="5" name="Slippery Effect Layer">
-  <object id="1" x="440" y="880" width="1100" height="880">
-   <ellipse />
-   <properties>
-    <property name="slippery_factor" type="float" value="15.0" />
-   </properties>
-  </object>
-  <object id="2" x="2200" y="2200" width="1320" height="880">
-   <ellipse />
-   <properties>
-    <property name="slippery_factor" type="float" value="20.0" />
-   </properties>
-  </object>
-  <object id="3" x="4400" y="0" width="1100" height="12258">
-   <ellipse />
-   <properties>
-    <property name="slippery_factor" type="float" value="10.0" />
-   </properties>
-  </object>
- </objectgroup>
- <objectgroup id="6" name="spawner">
-  <object id="1" x="550" y="1100" width="1100" height="1100">
-   <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;ice_ghost&quot;:2,&quot;raccoon&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:8,&quot;spawn_number&quot;:2,&quot;spawn_limit&quot;:12,&quot;spawn_team_id&quot;:&quot;enemy_expanse_west&quot;}" />
-   </properties>
-  </object>
-  <object id="2" x="3300" y="2200" width="1100" height="1100">
-   <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;ice_ghost&quot;:3,&quot;ice_mage&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:10,&quot;spawn_number&quot;:1,&quot;spawn_limit&quot;:8,&quot;spawn_team_id&quot;:&quot;enemy_expanse_east&quot;}" />
-   </properties>
-  </object>
-  <object id="3" x="2200" y="550" width="1100" height="880">
-   <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;ice_mage&quot;:1,&quot;spirit&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:14,&quot;spawn_number&quot;:1,&quot;spawn_limit&quot;:4,&quot;spawn_team_id&quot;:&quot;enemy_expanse_gate&quot;}" />
-   </properties>
-  </object>
-  <object id="4" x="1650" y="3300" width="1650" height="1100">
-   <properties>
-    <property name="spawner_config" value="{&quot;enemy_spawn_weights&quot;:{&quot;ice_ghost&quot;:2,&quot;ice_mage&quot;:1,&quot;raccoon&quot;:1},&quot;spawn_type&quot;:&quot;random_weights&quot;,&quot;frequency&quot;:12,&quot;spawn_number&quot;:3,&quot;spawn_limit&quot;:15,&quot;spawn_team_id&quot;:&quot;enemy_expanse_center&quot;}" />
-   </properties>
-  </object>
+ <objectgroup id="3" name="PaintedGround">
+  <object id="1" gid="2" x="0" y="12258" width="22473" height="12258" />
  </objectgroup>
 </map>

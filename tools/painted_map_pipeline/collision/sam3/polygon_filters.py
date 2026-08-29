@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-CANOPY_CLASSES = frozenset({"tree"})
+CANOPY_CLASSES = frozenset({"tree", "ribcage"})
 
 
 def normalize_sam3_class(raw: Any) -> str:

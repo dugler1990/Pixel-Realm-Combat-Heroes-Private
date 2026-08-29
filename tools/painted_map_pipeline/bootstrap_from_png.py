@@ -52,6 +52,49 @@ def _make_tile_row(values: list[int], width: int) -> str:
     return ",".join(str(v) for v in row[:width])
 
 
+def build_bare_shell_tmx(
+    output_path: Path,
+    *,
+    width_tiles: int,
+    height_tiles: int,
+    tile_size: int,
+) -> Path:
+    """A shell with nothing in it but open ground, ready for PaintedGround to be inserted.
+
+    ``build_shell_tmx`` writes a Frostreach demo level -- ice walls across the north, a gate,
+    scattered rocks, snow-tuft grass zones, slippery ice patches and ice-ghost spawners -- at
+    coordinates hardcoded for a 10x7 world of 550px tiles. Dropped into a 33x18 desert none of
+    it belongs there or even lands where it was meant to, and it all has to be deleted by hand.
+
+    So a generated map gets this instead: the two tile layers the engine expects, every tile
+    open, and no object layers at all beyond the PaintedGround that ``insert_painted_chunks``
+    adds afterwards.
+    """
+    open_ground = ",\n".join(_make_tile_row([1] * width_tiles, width_tiles)
+                             for _ in range(height_tiles))
+    can_build = ",\n".join(_make_tile_row([0] * width_tiles, width_tiles)
+                           for _ in range(height_tiles))
+    xml = f"""<?xml version='1.0' encoding='utf-8'?>
+<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="{width_tiles}" height="{height_tiles}" tilewidth="{tile_size}" tileheight="{tile_size}" infinite="0" nextlayerid="3" nextobjectid="1">
+ <tileset firstgid="1" source="frostreach_prototype_tiles.tsx" />
+ <tileset firstgid="11" source="../../tmx/can_build_tiles.tsx" />
+ <layer id="1" name="Tile Layer 1" width="{width_tiles}" height="{height_tiles}">
+  <data encoding="csv">
+{open_ground}
+</data>
+ </layer>
+ <layer id="2" name="can_build_layer" width="{width_tiles}" height="{height_tiles}">
+  <data encoding="csv">
+{can_build}
+</data>
+ </layer>
+</map>
+"""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(xml, encoding="utf-8")
+    return output_path
+
+
 def build_shell_tmx(
     output_path: Path,
     *,
@@ -249,6 +292,7 @@ def bootstrap_level(
     height_tiles: int = 7,
     tile_size: int = 550,
     template_dir: Path | None = None,
+    bare: bool = True,
 ) -> dict:
     source_png = Path(source_png).resolve()
     level_dir = Path(level_dir).resolve()
@@ -283,7 +327,10 @@ def bootstrap_level(
         rgb = img.convert("RGB").resize((world_w, world_h), _resample_filter())
         rgb.save(background_path, optimize=True)
 
-    build_shell_tmx(shell_path, width_tiles=width_tiles, height_tiles=height_tiles, tile_size=tile_size)
+    # bare by default: the demo shell's walls, rocks, grass, ice and spawners are authored for
+    # a different world and have to be deleted by hand from every generated map.
+    shell = build_bare_shell_tmx if bare else build_shell_tmx
+    shell(shell_path, width_tiles=width_tiles, height_tiles=height_tiles, tile_size=tile_size)
 
     slice_chunks(
         background_path,

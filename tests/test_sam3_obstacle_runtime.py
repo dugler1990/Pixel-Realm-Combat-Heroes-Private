@@ -12,6 +12,10 @@ def test_collision_mode_defaults_tree_to_canopy():
     assert collision_mode_for_props({"sam3_class": "tree"}) == "canopy"
 
 
+def test_collision_mode_defaults_ribcage_to_canopy():
+    assert collision_mode_for_props({"sam3_class": "ribcage"}) == "canopy"
+
+
 def test_collision_mode_respects_explicit_property():
     assert collision_mode_for_props({"sam3_class": "tree", "collision_mode": "solid"}) == "solid"
 

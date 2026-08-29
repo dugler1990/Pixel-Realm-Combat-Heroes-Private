@@ -95,6 +95,26 @@ def write_thumbnail(repo: Path, slot: tuple[int, int], world_png: Path) -> Path:
     return destination
 
 
+def find_existing(repo: Path, slug: str, region: str = "Frostreach"):
+    """The number and slot this slug is already registered under, or None.
+
+    Without this, re-running against a level that already exists allocates a FRESH number and
+    slot: the per-file guards each ask "is my line already here?", and the answer for Main2 is
+    yes (so no level_N_layout_path is written) while for the menu it is no (so a new slot is).
+    The result is a menu entry pointing at a number nothing maps to, which falls through to the
+    default layout -- a second tile that silently opens a different level.
+    """
+    layout = f"../levels/{region}/{slug}"
+    main_text = (repo / MAIN).read_text(encoding="utf-8")
+    match = re.search(rf"^level_(\d+)_layout_path = '{re.escape(layout)}'", main_text, re.M)
+    if not match:
+        return None
+    number = int(match.group(1))
+    sel_text = (repo / SELECTION).read_text(encoding="utf-8")
+    slot = re.search(rf"\((\d+),\s*(\d+)\)\s*:\s*{number}\b", sel_text)
+    return number, (int(slot.group(1)), int(slot.group(2))) if slot else None
+
+
 def register(repo: Path, *, slug: str, number: int, slot: tuple[int, int],
              region: str = "Frostreach", world_png: Path | None = None) -> dict:
     """Add the level to Main2, Level4_tmxdev, the selection grid and the thumbnail folder."""

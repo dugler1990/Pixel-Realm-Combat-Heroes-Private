@@ -200,9 +200,11 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Also build a playable TMX level here, e.g. "
                                "levels/Frostreach/sunspine_7x6_play.")
     assemble.add_argument("--template-dir", default="levels/Frostreach/ice_wall_gate")
-    assemble.add_argument("--tile-size", type=int,
-                          help="Defaults to the run's own tile size, so the TMX matches the "
-                               "map 1:1 with no resample.")
+    assemble.add_argument("--tile-size", type=int, default=150,
+                          help="TMX tile size, which is what the game divides by: it scales "
+                               "the ground by TILESIZE/tile-size, so 150 draws the art at full "
+                               "size and anything larger shrinks it. NOT the world's render "
+                               "tile size -- passing that (681) renders the map at 0.22.")
     assemble.add_argument("--width-tiles", type=int)
     assemble.add_argument("--height-tiles", type=int)
     assemble.add_argument("--no-register", action="store_true",
@@ -226,11 +228,15 @@ def _build_and_register(args, root, world_png, world_size) -> dict:
     exactly the size it was handed and nothing is resampled.
     """
     from ..bootstrap_from_png import bootstrap_level
-    from .register_level import existing_levels, register, taken_slots
+    from .register_level import existing_levels, find_existing, register, taken_slots
 
-    tile = args.tile_size or _run_tile_size(root, world_size)
-    width_tiles = args.width_tiles or world_size[0] // tile
-    height_tiles = args.height_tiles or world_size[1] // tile
+    # 150 by default, matching the game's TILESIZE, so the ground draws unscaled. This used
+    # to default to the world's own tile size, which is a different quantity entirely and made
+    # every generated level render at 0.22 until the tmx was edited by hand.
+    tile = args.tile_size
+    # Round up: a short last row/column is better than cropping the map.
+    width_tiles = args.width_tiles or -(-world_size[0] // tile)
+    height_tiles = args.height_tiles or -(-world_size[1] // tile)
 
     level_dir = Path(args.level_dir).resolve()
     bootstrap_level(
@@ -244,11 +250,14 @@ def _build_and_register(args, root, world_png, world_size) -> dict:
         return result
 
     repo = Path(__file__).resolve().parents[3]
-    number = args.level_number
-    if number is None:
-        number = max(existing_levels(repo)) + 1
+    # Rebuilding an existing level must land on the number and slot it already has, never
+    # allocate new ones -- see find_existing.
+    already = find_existing(repo, level_dir.name)
+    number = args.level_number or (already[0] if already else max(existing_levels(repo)) + 1)
     if args.slot:
         row, col = (int(part) for part in args.slot.split(","))
+    elif already and already[1]:
+        row, col = already[1]
     else:
         taken = taken_slots(repo)
         row, col = next((r, c) for r in range(4) for c in range(4) if (r, c) not in taken)

@@ -1,0 +1,6 @@
+{
+  "_comment": "Per-category SAM3 filter for sunspine_7x6_play. No class is dropped yet — retune after the first probe. max_area is 50% of a 4495x3065 SAM chunk (6888176) so whole-tile frame-fillers die while a real pyramid can survive. ribcage is canopy (walk-under) and is never size-capped. Prompts to set in the Roboflow SAM3 workflow: pyramid, sphinx, obelisk, pillar, ruins, block, boulder, ribcage. Do not prompt sand/dune/geoglyph/riverbed/cliff.",
+  "drop_classes": [],
+  "min_confidence": {},
+  "max_area": 6888176
+}

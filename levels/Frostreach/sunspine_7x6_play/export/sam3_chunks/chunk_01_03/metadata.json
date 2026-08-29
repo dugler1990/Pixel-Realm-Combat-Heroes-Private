@@ -1,0 +1,32 @@
+{
+  "chunk_id": "chunk_01_03",
+  "grid": [
+    1,
+    3
+  ],
+  "world_rect": [
+    4495,
+    9195,
+    4495,
+    3063
+  ],
+  "source_rect_with_overlap": [
+    4495,
+    9195,
+    4495,
+    3063
+  ],
+  "source_image_size": [
+    4495,
+    3063
+  ],
+  "generation_max_size": null,
+  "overlap": 0,
+  "source_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/sunspine_7x6_play/export/sam3_chunks/chunk_01_03/source.png",
+  "painted_image": "/home/fresh/projects/Pixel-Realm-Combat-Heroes-public/levels/Frostreach/sunspine_7x6_play/export/sam3_chunks/chunk_01_03/painted.png",
+  "neighbors": {
+    "north": "chunk_01_02",
+    "west": "chunk_00_03",
+    "east": "chunk_02_03"
+  }
+}

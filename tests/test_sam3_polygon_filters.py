@@ -15,6 +15,12 @@ def test_tree_gets_canopy():
     assert tagged["collision_mode"] == "canopy"
 
 
+def test_ribcage_gets_canopy():
+    tagged = tag_polygon({"class": "ribcage", "points": [[0, 0], [1, 0], [1, 1]]})
+    assert tagged["sam3_class"] == "ribcage"
+    assert tagged["collision_mode"] == "canopy"
+
+
 def test_rock_gets_solid():
     tagged = tag_polygon({"class": "Rock", "points": [[0, 0], [1, 0], [1, 1]]})
     assert tagged["sam3_class"] == "rock"

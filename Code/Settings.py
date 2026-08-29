@@ -15,6 +15,12 @@ FPS = 30
 RENDER_BACKEND = os.environ.get("RENDER_BACKEND", "gpu")  # "cpu" | "gpu" — override via env for profiling
 DISPLAY_FLAGS = pygame.SRCALPHA
 TILESIZE =150#150
+# Ground is composited into ONE surface and uploaded as ONE GL texture, so the whole world has
+# to fit inside GL_MAX_TEXTURE_SIZE. The 7x6 sunspine map needs 22473x12258 at full scale and
+# fails with a glTexImage2D error; it only runs shrunk to 0.586, discarding two thirds of the
+# art. Setting this cuts the ground into textures of at most this size instead, which removes
+# the ceiling. 0 keeps the single-surface path, which is still the default.
+GROUND_CHUNK_SIZE = 4096
 # Fraction of window width and height (1–100) used for the grass subsurface; centered on the display.
 GRASS_VIEWPORT_PERCENT = 100
 # Grass wind mode (see YSortCameraGroup.custom_draw):

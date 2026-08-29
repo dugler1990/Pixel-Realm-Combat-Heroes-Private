@@ -6,7 +6,7 @@ import pygame
 
 from Settings import DEBUG_DRAW_OBSTACLE_TINT, SAM3_TREE_TRUNK_HEIGHT_RATIO
 
-CANOPY_CLASSES = frozenset({"tree"})
+CANOPY_CLASSES = frozenset({"tree", "ribcage"})
 
 # Semi-transparent debug hues per SAM3 class (RGBA).
 CLASS_TINT_RGBA: dict[str, tuple[int, int, int, int]] = {
@@ -19,6 +19,12 @@ CLASS_TINT_RGBA: dict[str, tuple[int, int, int, int]] = {
     "building": (220, 120, 80, 74),
     "boulder": (120, 120, 130, 76),
     "frozen lake": (90, 170, 230, 64),
+    "pyramid": (210, 160, 70, 74),
+    "sphinx": (200, 140, 90, 74),
+    "obelisk": (180, 150, 110, 76),
+    "pillar": (190, 170, 120, 74),
+    "block": (160, 145, 125, 72),
+    "ribcage": (220, 210, 190, 70),
     "?": (255, 90, 90, 58),
 }
 DEFAULT_TINT_RGBA = (255, 140, 60, 64)

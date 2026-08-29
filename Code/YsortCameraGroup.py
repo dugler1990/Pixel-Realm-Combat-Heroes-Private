@@ -4,6 +4,7 @@ import math
 import time
 from Settings import (
     TILESIZE,
+    GROUND_CHUNK_SIZE,
     GRASS_VIEWPORT_PERCENT,
     GRASS_WIND_MODE,
     GRASS_GPU_INSTANCED,
@@ -73,6 +74,9 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.grass_offset = pygame.math.Vector2()
         self.ground_sprites = ground_sprites
         self.ground_surface = None
+        # (col, row) -> surface, when GROUND_CHUNK_SIZE is set. Held for the lifetime of the
+        # level: the backend caches textures by id(surface), so these must not be collected.
+        self.ground_chunks = {}
         self.create_ground_surface()
         self.grass_manager = grass_manager
         self.update_grass_with_wind_frequency = 5000
@@ -179,12 +183,62 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.grass_grid = grass_grid
 
     def update_tile_on_ground_surface(self, tile):
+        if self.ground_chunks:
+            # Every chunk the tile touches, not just one: a tile on a boundary lives in both.
+            for surface, bounds in self.ground_chunks.values():
+                if not bounds.colliderect(tile.rect):
+                    continue
+                surface.blit(tile.image, tile.rect.move(-bounds.x, -bounds.y))
+                self.backend.invalidate_texture(surface)
+            return
         if not self.ground_surface:
             self.create_ground_surface()
         else:
             # Redraw only the area of the changed tile
             self.ground_surface.blit(tile.image, tile.rect.move(-self.min_x, -self.min_y))
             self.backend.invalidate_texture(self.ground_surface)
+
+    def _chunk_span(self, value):
+        """Which chunk column/row a world coordinate falls in, relative to the ground origin."""
+        return (value - self.min_x) // GROUND_CHUNK_SIZE, (value - self.min_y) // GROUND_CHUNK_SIZE
+
+    def create_ground_chunks(self):
+        """The ground cut into textures of at most GROUND_CHUNK_SIZE, instead of one.
+
+        Same compositing as create_ground_surface, but into a grid. A sprite is blitted into
+        every chunk it touches -- sprites do not align to the grid, and one straddling a
+        boundary has to appear in both or a seam opens up.
+
+        The chunks are then blitted once each, off screen, to force their upload. The backend
+        uploads a large surface the first time it is drawn, so without this each chunk would
+        upload the first time the player walked into it: a scatter of stalls through play
+        rather than one cost at load, which would be worse than the single surface it replaces.
+        """
+        columns = math.ceil((self.max_x - self.min_x) / GROUND_CHUNK_SIZE)
+        rows = math.ceil((self.max_y - self.min_y) / GROUND_CHUNK_SIZE)
+        self.ground_chunks = {}
+        for col in range(columns):
+            for row in range(rows):
+                left = self.min_x + col * GROUND_CHUNK_SIZE
+                top = self.min_y + row * GROUND_CHUNK_SIZE
+                width = min(GROUND_CHUNK_SIZE, self.max_x - left)
+                height = min(GROUND_CHUNK_SIZE, self.max_y - top)
+                if width <= 0 or height <= 0:
+                    continue
+                bounds = pygame.Rect(left, top, width, height)
+                members = [s for s in self.ground_sprites if bounds.colliderect(s.rect)]
+                if not members:
+                    continue                       # nothing here, so no texture for it
+                surface = pygame.Surface((width, height)).convert_alpha()
+                surface.fill((0, 0, 0, 0))
+                for sprite in members:
+                    surface.blit(sprite.image, sprite.rect.move(-left, -top))
+                self.ground_chunks[(col, row)] = (surface, bounds)
+
+        # Warm-up: draw each chunk somewhere off screen so the upload happens now.
+        for surface, _ in self.ground_chunks.values():
+            self.backend.blit(surface, (-surface.get_width() - 1, -surface.get_height() - 1),
+                              cache_key=id(surface))
 
     def create_ground_surface(self):
         if not self.ground_sprites:
@@ -197,6 +251,10 @@ class YSortCameraGroup(pygame.sprite.Group):
         width = self.max_x - self.min_x
         height = self.max_y - self.min_y
 
+        if GROUND_CHUNK_SIZE:
+            self.create_ground_chunks()
+            return
+
         self.ground_surface = pygame.Surface((width, height)).convert_alpha()
         self.ground_surface.fill((0, 0, 0, 0))
         for sprite in self.ground_sprites:
@@ -204,7 +262,7 @@ class YSortCameraGroup(pygame.sprite.Group):
     #@profile
     def custom_draw(self, player,dt, wind_intensity, light_intensity, camera_focus=None, shadow=None):
         
-        if self.ground_surface is None:
+        if self.ground_surface is None and not self.ground_chunks:
             self.create_ground_surface()
 
         W, H = self.backend.get_size()
@@ -220,7 +278,16 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.grass_offset.x = focus.rect.centerx - self.grass_half_width 
         self.grass_offset.y = focus.rect.centery - self.grass_half_height
 
-        if self.ground_surface is not None:
+        if self.ground_chunks:
+            # Only the chunks the camera can see. cache_key stays id(surface) to match
+            # backend.invalidate_texture, which looks the cache up that way.
+            view = pygame.Rect(self.offset.x, self.offset.y, self.window_width, self.window_height)
+            for surface, bounds in self.ground_chunks.values():
+                if not view.colliderect(bounds):
+                    continue
+                self.backend.blit(surface, (bounds.x - self.offset.x, bounds.y - self.offset.y),
+                                  cache_key=id(surface))
+        elif self.ground_surface is not None:
             ground_rect = self.ground_surface.get_rect(topleft=(-self.offset.x, -self.offset.y))
             self.backend.blit(self.ground_surface, ground_rect.topleft, cache_key=id(self.ground_surface))
             
