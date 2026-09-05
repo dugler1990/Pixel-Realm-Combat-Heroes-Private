@@ -42,6 +42,7 @@ class ScenarioResult:
     passed: bool
     details: str
     ms: float = 0.0
+    status: str = "pass"
 
 
 @dataclass
@@ -64,21 +65,42 @@ class RtsValidationRuntime:
         return self.visible_mode
 
     def wants_scenario(self, name: str) -> bool:
-        if not self.scenario_filter:
+        requested = [n for n in self.scenario_filter if n and n.lower() != "all"]
+        if not requested:
             return True
-        return name in self.scenario_filter
+        return name in requested
 
     def set_overlay(self, lines: List[str], phase: str = "RUNNING"):
         if not self.overlay_enabled:
             return
         self.overlay_state = {"lines": list(lines), "phase": phase}
 
-    def record(self, name: str, passed: bool, details: str, ms: float = 0.0):
+    def record(
+        self,
+        name: str,
+        passed: bool,
+        details: str,
+        ms: float = 0.0,
+        status: Optional[str] = None,
+    ):
+        if status is None:
+            status = "pass" if passed else "fail"
+        status = str(status).strip().lower()
+        if status == "probe":
+            passed = True
+        elif status == "pass":
+            passed = True
+        elif status == "fail":
+            passed = False
         self.scenarios.append(
-            ScenarioResult(name=name, passed=passed, details=details, ms=ms)
+            ScenarioResult(
+                name=name, passed=passed, details=details, ms=ms, status=status
+            )
         )
-        status = "PASS" if passed else "FAIL"
-        print(f"[RTS_VAL] {name}: {status} ({details})", flush=True)
+        label = {"pass": "PASS", "fail": "FAIL", "probe": "PROBE"}.get(
+            status, status.upper()
+        )
+        print(f"[RTS_VAL] {name}: {label} ({details})", flush=True)
 
     @property
     def all_passed(self) -> bool:
@@ -101,6 +123,7 @@ class RtsValidationRuntime:
                 {
                     "name": s.name,
                     "passed": s.passed,
+                    "status": s.status,
                     "details": s.details,
                     "ms": round(s.ms, 2),
                 }

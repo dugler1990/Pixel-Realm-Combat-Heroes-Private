@@ -18,6 +18,7 @@ from Entity import Entity
 from Support import sprite_feet_sort_y
 from AnimatedEnvironmentSprite import AnimatedEnvironmentSprite
 from Torch import Torch
+from Building import VIEW_DOOR, VIEW_IN, VIEW_OUT
 from benchmark_runtime import BENCHMARK_RUNTIME
 from game_logging import get_debug_logger
 
@@ -61,7 +62,8 @@ def _faction_outline_color(team_id):
 
 
 class YSortCameraGroup(pygame.sprite.Group):
-    def __init__(self, ground_sprites, grass_manager, overhead_areas, backend=None):
+    def __init__(self, ground_sprites, grass_manager, overhead_areas, backend=None,
+                 buildings=None):
         super().__init__()
         self.backend = backend
         self.window_width, self.window_height = self.backend.get_size()
@@ -91,10 +93,15 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.lock = Lock()
         
         self.overhead_areas = overhead_areas
+        # Authored buildings; held by reference so the layout manager can refill the
+        # same list on layout reload.
+        self.buildings = buildings if buildings is not None else []
         self.debug_effect_areas = []  # For debug visualization of effect collision rects
         self.runtime_debug_effect_rects = DEBUG_DRAW_EFFECT_RECTS
         self.runtime_debug_player_highlight = DEBUG_DRAW_MASKS
         self.runtime_debug_faction_outlines = DEBUG_DRAW_FACTION_OUTLINES
+        self.height_overlay = None
+        self.height_overlay_origin = (0, 0)
 
     def _grass_benchmark_active(self):
         return BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.grass_benchmark_enabled
@@ -296,6 +303,18 @@ class YSortCameraGroup(pygame.sprite.Group):
         elif self.ground_surface is not None:
             ground_rect = self.ground_surface.get_rect(topleft=(-self.offset.x, -self.offset.y))
             self.backend.blit(self.ground_surface, ground_rect.topleft, cache_key=id(self.ground_surface))
+
+        if self.height_overlay is not None:
+            ox, oy = self.height_overlay_origin
+            ow, oh = self.height_overlay.get_size()
+            bounds = pygame.Rect(ox, oy, ow, oh)
+            view = pygame.Rect(self.offset.x, self.offset.y, self.window_width, self.window_height)
+            if view.colliderect(bounds):
+                self.backend.blit(
+                    self.height_overlay,
+                    (ox - self.offset.x, oy - self.offset.y),
+                    cache_key=id(self.height_overlay),
+                )
             
         # Shared wind mode keeps one base sway angle for visible grass; legacy mode
         # preserves the current position-dependent wave across the field.
@@ -387,6 +406,9 @@ class YSortCameraGroup(pygame.sprite.Group):
                                                          self.grass_offset.y),
                                               rot_function=rot_function)
 
+        self._update_buildings(focus, dt)
+        self._draw_building_interiors()
+
         # Directional shadow pre-pass: dark sheared silhouettes on the ground, under all
         # sprites (drawn before them). shadow = (dir_x, dir_y, length_scale, strength).
         if shadow is not None and shadow[3] > 0 and hasattr(self.backend, "draw_shadow"):
@@ -437,6 +459,8 @@ class YSortCameraGroup(pygame.sprite.Group):
             #print(f"player pos : {player.rect.center}")
             if area.colliderect(player.rect):
                 self.backend.blit(image_section, (area.x - self.offset.x, area.y - self.offset.y))
+
+        self._draw_building_roofs(focus)
         
         # DEBUG: Draw effect collision rects in red to compare with visual circles
         if self.runtime_debug_effect_rects:
@@ -478,6 +502,104 @@ class YSortCameraGroup(pygame.sprite.Group):
     
     def set_overhead_areas(self, overhead_areas):
         self.overhead_areas = overhead_areas
+
+    def set_buildings(self, buildings):
+        self.buildings = buildings
+
+    def _update_buildings(self, focus, dt):
+        """Latch each building from the camera subject's feet.
+
+        The subject, not the player: with an RTS camera on a worker, probing the
+        player would open the building the hero happens to be standing in, off screen.
+        Hitbox rather than rect because a planted rect bobs with mask height (the same
+        reason camera focus reads the hitbox), and testing the rect would trip the
+        cutaway as soon as the sprite's head overlapped a wall.
+        """
+        if not self.buildings:
+            return
+        hitbox = getattr(focus, "hitbox", None)
+        feet = hitbox.midbottom if hitbox is not None else focus.rect.midbottom
+        for building in self.buildings:
+            building.update(dt, feet)
+
+    def _draw_building_interiors(self):
+        """Interior floors, under every sprite.
+
+        Sits after grass on purpose: grass blits straight to the backend further up, so
+        drawing this in the height_overlay slot would grow grass on the interior floor.
+        """
+        if not self.buildings:
+            return
+        view = pygame.Rect(self.offset.x, self.offset.y, self.window_width, self.window_height)
+        for building in self.buildings:
+            if building.view == VIEW_OUT or not view.colliderect(building.footprint):
+                continue
+            self.backend.blit(
+                building.interior,
+                (building.footprint.x - self.offset.x, building.footprint.y - self.offset.y),
+                cache_key=id(building.interior),
+            )
+
+    def _draw_building_roofs(self, focus):
+        """Roofs, over every sprite. Inside: baked chamber cutaway. Door: arch split.
+
+        Drawn whenever on screen — never gated on overlapping the player the way canopy
+        is — because a roof is simply how the building looks. The cutaway is the room.
+        """
+        if not self.buildings:
+            return
+        view = pygame.Rect(self.offset.x, self.offset.y, self.window_width, self.window_height)
+        for building in self.buildings:
+            if not view.colliderect(building.footprint):
+                continue
+            dest = (building.footprint.x - self.offset.x, building.footprint.y - self.offset.y)
+            if building.view == VIEW_IN:
+                self.backend.blit(
+                    building.roof_open, dest, cache_key=id(building.roof_open))
+            elif building.view == VIEW_DOOR:
+                self.backend.blit(building.roof, dest, cache_key=id(building.roof))
+                self.backend.blit(
+                    building.interior, dest, cache_key=id(building.interior))
+                self.backend.blit(
+                    building.roof_open, dest, cache_key=id(building.roof_open))
+                patch = building.far_arch_patch()
+                if patch is not None:
+                    surface, world_pos = patch
+                    self.backend.blit(
+                        surface,
+                        (world_pos[0] - self.offset.x, world_pos[1] - self.offset.y),
+                        cache_key=None,
+                    )
+            else:
+                self.backend.blit(building.roof, dest, cache_key=id(building.roof))
+        self._draw_sprites_over_roofs()
+
+    def _draw_sprites_over_roofs(self):
+        """Roofs draw after every sprite, so a body in a doorway would vanish under stone.
+
+        Re-blit anyone the roof would bury: standing in an open building, or in front
+        of one (higher world-Y, toward the camera). Behind the building they stay under.
+        """
+        if not self.buildings:
+            return
+        for sprite in self.sprites():
+            hitbox = getattr(sprite, "hitbox", None)
+            feet = hitbox.midbottom if hitbox is not None else sprite.rect.midbottom
+            if not self._roof_would_cover(sprite.rect, feet):
+                continue
+            offset_pos = sprite.rect.topleft - self.offset
+            cache_key = None if getattr(sprite, "_uncacheable_image", False) else id(sprite.image)
+            self.backend.blit(sprite.image, offset_pos, cache_key=cache_key)
+
+    def _roof_would_cover(self, sprite_rect, feet):
+        for building in self.buildings:
+            if not sprite_rect.colliderect(building.footprint):
+                continue
+            if building.view in (VIEW_IN, VIEW_DOOR):
+                return True
+            if feet[1] >= building.footprint.centery:
+                return True
+        return False
     
     def update(self, dt=None, weather=None, wind_force=(0, 0), *args, **kwargs):
         

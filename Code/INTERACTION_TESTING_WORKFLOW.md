@@ -106,6 +106,33 @@ Results are written to `logs/rts_validation_latest.json`. Exit code is 0 on full
 
 Requires `chiefs`, `resource_nodes`, and `dropoff_buildings` object layers on the TMX map.
 
+`--scenario` omitted (and a literal `--scenario all`) stay on the default gather/feet-plant list. Terrain scenarios are **not** in that set; name them explicitly.
+
+### Terrain visual tests (Sunspine `chunk_00_01`)
+
+Height sampling and slope probes on the painted Sunspine play map. Only this chunk has a heightmap. Contact shadow is not a terrain test.
+
+From the `Code` directory — **visible window** (HUD + 8s hold):
+
+```bash
+python rts_validation.py \
+  --layout-dir ../levels/Frostreach/sunspine_7x6_play \
+  --scenario terrain_height_sample
+```
+
+Headless JSON is the CI result for `terrain_height_sample` and the slope **multiplier** probe:
+
+```bash
+python rts_validation.py \
+  --layout-dir ../levels/Frostreach/sunspine_7x6_play \
+  --scenario terrain_height_sample \
+  --headless
+```
+
+Slope-speed, sprite-tilt, and shadow-from-slope stay `status: probe` (CI green) until those features land. Headless shadow asserts `Lighting.sun_shadow` params only — `CPUBackend.draw_shadow` is a no-op, so that JSON is not the visual test. Visible + GPU is the visual shadow run.
+
+`--scenario terrain_slope_speed`, `terrain_sprite_tilt`, and `terrain_shadow_slope` are the other explicit names. Overlay shows `h`, `slope` (with gradient step), `speed_mult`, `tilt_deg`, `shadow_len`, and feet XY.
+
 ### Eskimo build sites (tile properties)
 
 Ice Cutting Post pads are discovered from **tile-layer** custom properties (not object layers):

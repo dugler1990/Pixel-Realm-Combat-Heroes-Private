@@ -317,6 +317,19 @@ class OpenAIImageClient(ImageClient):
         return path
 
 
+def output_matches_source_size(output_path: str | Path, source_path: str | Path) -> bool:
+    """True when both files exist and share pixel size. OSError or missing → False."""
+    output = Path(output_path)
+    source = Path(source_path)
+    if not output.exists() or not source.exists():
+        return False
+    try:
+        with Image.open(output) as output_image, Image.open(source) as source_image:
+            return output_image.size == source_image.size
+    except OSError:
+        return False
+
+
 def make_image_client(config: dict):
     provider = str(config.get("provider") or "copy").strip().lower()
     if provider == "copy":
@@ -342,16 +355,11 @@ def generate_painted_chunks(context_manifest: dict, image_config: dict):
         output_path = Path(pack["painted_image"])
         refs = pack.get("references", {})
         source_ref = refs.get("source")
-        is_current_size = True
-        if output_path.exists() and source_ref and Path(source_ref).exists():
-            try:
-                from PIL import Image
-
-                with Image.open(output_path) as output_image, Image.open(source_ref) as source_image:
-                    is_current_size = output_image.size == source_image.size
-            except OSError:
-                is_current_size = False
-        if preserve_existing and output_path.exists() and is_current_size:
+        if preserve_existing and output_path.exists() and (
+            not source_ref
+            or not Path(source_ref).exists()
+            or output_matches_source_size(output_path, source_ref)
+        ):
             result_path = context_dir / "image_result.json"
             if result_path.exists():
                 try:

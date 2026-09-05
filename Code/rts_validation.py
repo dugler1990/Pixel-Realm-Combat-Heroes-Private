@@ -113,7 +113,11 @@ def main():
         mode = "headless" if headless else "visible"
         print(f"RTS validation results ({mode})")
         for row in result.get("scenarios", []):
-            status = "PASS" if row.get("passed") else "FAIL"
+            raw_status = str(row.get("status") or "").strip().lower()
+            if raw_status in {"pass", "fail", "probe"}:
+                status = raw_status.upper()
+            else:
+                status = "PASS" if row.get("passed") else "FAIL"
             print(f"- {row.get('name')}: {status} ({row.get('details', '')})")
         print(f"Overall: {'PASS' if result.get('ok') else 'FAIL'}")
         if result.get("error") and not result.get("scenarios"):

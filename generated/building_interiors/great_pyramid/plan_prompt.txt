@@ -1,0 +1,40 @@
+Repaint the masked region of this image as a FLAT COLOUR FLOOR PLAN.
+
+This is not a picture. It is a diagram: two solid colours, hard edges between them,
+no texture, no shading, no gradients, no outlines, no lighting. Think of a map key.
+Everything outside the mask is finished art and must be left exactly as it is.
+
+THE TWO COLOURS, AND NOTHING ELSE
+  MAGENTA RGB(200, 70, 210) -- FLOOR. Everywhere a person can walk: corridors, rooms, the space behind the doorway.
+  GREEN RGB(50, 200, 80) -- SOLID. Everything else: the mass of the building, and the walls between rooms.
+
+Use these two colours flat and unmixed. Do not blend them, do not shade them, do not
+draw a line between them -- where they meet is the wall face. Any pixel that is
+neither colour reads as unpainted and fails.
+
+WHAT THIS BUILDING IS
+  The image is a pyramid, seen from above with its roof lifted off.
+  Inside it: a crypt: long gallery, two side rooms, burial chamber at the end
+  Most of a solid building is solid. A plan that is mostly SOLID with floor
+  cut through it is correct; one that is mostly floor is not.
+
+THE ENTRANCE - THIS IS THE PART THAT MATTERS
+  There is one dark doorway with stone lintel, already painted, on the bottom-right edge. It is held out of
+  the mask: do not paint over it, do not move it, do not draw another one.
+  FLOOR must start immediately behind it and run inward. Not near it - AT it.
+  If the only thing you get right is that the floor meets that doorway, the plan is
+  usable. If you get everything else right and it does not, the plan is discarded.
+  Every room must be reachable on floor from that doorway.
+
+SCALE
+  The whole building is about 24 x 21 characters across.
+  A corridor is 1 to 2 characters wide. A room is 3 to 6 characters across.
+  The doorway is 2.7 characters wide; the corridor behind it should match.
+  Draw 3 rooms joined by corridors, and no more.
+
+DO NOT
+  Do not paint any colour but the two given.
+  Do not draw texture, stone courses, blocks, shadow, or a border line.
+  Do not paint outside the mask.
+  Do not leave any part of the mask unpainted.
+  No text, labels, keys, grid lines, characters or objects.

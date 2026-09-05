@@ -16,6 +16,7 @@ _log = get_tmx_layout_logger()
 
 class LayerRole(str, Enum):
     PAINTED_GROUND = "painted_ground"
+    BUILDINGS = "buildings"
     OBJECTS = "objects"
     EFFECT = "effect"
     SPAWNER = "spawner"
@@ -29,6 +30,7 @@ class LayerRole(str, Enum):
 # Exact Tiled objectgroup name → role (legacy names from existing maps included).
 LAYER_ROLES: dict[str, LayerRole] = {
     "PaintedGround": LayerRole.PAINTED_GROUND,
+    "Buildings": LayerRole.BUILDINGS,
     "Objects": LayerRole.OBJECTS,
     "ObstaclePolygons": LayerRole.OBJECTS,
     "PaintedCollision": LayerRole.OBJECTS,
@@ -62,6 +64,8 @@ def resolve_layer_role(layer_name: str) -> LayerRole:
 def dispatch_object_layer(manager: LayoutManager, layer: Any, role: LayerRole) -> None:
     if role is LayerRole.PAINTED_GROUND:
         manager.create_painted_ground_layer(layer)
+    elif role is LayerRole.BUILDINGS:
+        manager.create_building_layer(layer)
     elif role is LayerRole.SPAWNER:
         if hasattr(manager, "spawner"):
             manager.create_spawner_layer(layer)

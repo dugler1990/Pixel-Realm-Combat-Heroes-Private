@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="33" height="18" tilewidth="150" tileheight="150" infinite="0" nextlayerid="4" nextobjectid="2">
+<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="33" height="18" tilewidth="150" tileheight="150" infinite="0" nextlayerid="7" nextobjectid="47">
  <tileset firstgid="1" source="frostreach_prototype_tiles.tsx" />
  <tileset firstgid="11" source="../../tmx/can_build_tiles.tsx" />
  <tileset firstgid="2" source="painted_chunks.tsx" />
@@ -49,5 +49,159 @@
  </layer>
  <objectgroup id="3" name="PaintedGround">
   <object id="1" gid="2" x="0" y="12258" width="22473" height="12258" />
+ </objectgroup>
+ <objectgroup id="4" name="Buildings">
+  <object id="46" name="great_pyramid_chamber" x="6094" y="2904">
+   <polygon points="1520,0 3113,1497 1611,2716 0,1270"/>
+   <properties>
+    <property name="chamber_of" value="great_pyramid"/>
+   </properties>
+  </object>
+  <object id="47" name="great_pyramid_door" x="8350" y="4790" width="370" height="440">
+   <properties>
+    <property name="door_of" value="great_pyramid"/>
+   </properties>
+  </object>
+  <object id="2" name="great_pyramid" x="5850" y="2690">
+   <polygon points="1770,0 3600,1720 1850,3140 0,1480"/>
+   <properties>
+    <property name="roof_image" value="buildings/great_pyramid_roof.png"/>
+    <property name="interior_image" value="buildings/great_pyramid_interior.png"/>
+    <property name="door_x" value="8430"/>
+    <property name="door_y" value="4970"/>
+    <property name="door_depth" value="160"/>
+   </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="5" name="ObstaclePolygons">
+  <object id="3" name="great_pyramid_wall_00" x="7510" y="2690">
+   <polygon points="110,0 262,143 153,260 0,117"/>
+  </object>
+  <object id="4" name="great_pyramid_wall_01" x="7663" y="2833">
+   <polygon points="109,0 262,144 152,260 0,117"/>
+  </object>
+  <object id="5" name="great_pyramid_wall_02" x="7815" y="2977">
+   <polygon points="110,0 263,143 153,260 0,116"/>
+  </object>
+  <object id="6" name="great_pyramid_wall_03" x="7968" y="3120">
+   <polygon points="110,0 262,143 152,260 0,117"/>
+  </object>
+  <object id="7" name="great_pyramid_wall_04" x="8120" y="3263">
+   <polygon points="110,0 262,144 153,260 0,117"/>
+  </object>
+  <object id="8" name="great_pyramid_wall_05" x="8273" y="3407">
+   <polygon points="109,0 262,143 152,260 0,116"/>
+  </object>
+  <object id="9" name="great_pyramid_wall_06" x="8425" y="3550">
+   <polygon points="110,0 263,143 153,260 0,117"/>
+  </object>
+  <object id="10" name="great_pyramid_wall_07" x="8578" y="3693">
+   <polygon points="110,0 262,144 152,260 0,117"/>
+  </object>
+  <object id="11" name="great_pyramid_wall_08" x="8730" y="3837">
+   <polygon points="110,0 262,143 153,260 0,116"/>
+  </object>
+  <object id="12" name="great_pyramid_wall_09" x="8883" y="3980">
+   <polygon points="109,0 262,143 152,260 0,117"/>
+  </object>
+  <object id="13" name="great_pyramid_wall_10" x="9035" y="4123">
+   <polygon points="110,0 263,144 153,260 0,117"/>
+  </object>
+  <object id="14" name="great_pyramid_wall_11" x="9188" y="4267">
+   <polygon points="110,0 262,143 152,260 0,116"/>
+  </object>
+  <object id="15" name="great_pyramid_wall_12" x="9190" y="4286">
+   <polygon points="260,124 101,253 0,129 159,0"/>
+  </object>
+  <object id="16" name="great_pyramid_wall_13" x="9031" y="4415">
+   <polygon points="260,124 101,253 0,129 159,0"/>
+  </object>
+  <object id="17" name="great_pyramid_wall_14" x="8872" y="4544">
+   <polygon points="260,124 101,253 0,129 159,0"/>
+  </object>
+  <object id="18" name="great_pyramid_wall_15" x="8713" y="4673">
+   <polygon points="260,124 101,253 0,129 159,0"/>
+  </object>
+  <object id="19" name="great_pyramid_wall_16" x="8076" y="5189">
+   <polygon points="260,125 101,254 0,129 160,0"/>
+  </object>
+  <object id="20" name="great_pyramid_wall_17" x="7917" y="5318">
+   <polygon points="260,125 101,254 0,130 159,0"/>
+  </object>
+  <object id="21" name="great_pyramid_wall_18" x="7758" y="5448">
+   <polygon points="260,124 101,253 0,129 159,0"/>
+  </object>
+  <object id="22" name="great_pyramid_wall_19" x="7599" y="5577">
+   <polygon points="260,124 101,253 0,129 159,0"/>
+  </object>
+  <object id="23" name="great_pyramid_wall_20" x="7546" y="5573">
+   <polygon points="154,257 0,119 107,0 261,138"/>
+  </object>
+  <object id="24" name="great_pyramid_wall_21" x="7392" y="5434">
+   <polygon points="154,258 0,119 107,0 261,139"/>
+  </object>
+  <object id="25" name="great_pyramid_wall_22" x="7238" y="5296">
+   <polygon points="154,257 0,119 106,0 261,138"/>
+  </object>
+  <object id="26" name="great_pyramid_wall_23" x="7083" y="5158">
+   <polygon points="155,257 0,119 107,0 261,138"/>
+  </object>
+  <object id="27" name="great_pyramid_wall_24" x="6929" y="5019">
+   <polygon points="154,258 0,119 107,0 261,139"/>
+  </object>
+  <object id="28" name="great_pyramid_wall_25" x="6775" y="4881">
+   <polygon points="154,257 0,119 107,0 261,138"/>
+  </object>
+  <object id="29" name="great_pyramid_wall_26" x="6621" y="4743">
+   <polygon points="154,257 0,119 107,0 261,138"/>
+  </object>
+  <object id="30" name="great_pyramid_wall_27" x="6467" y="4604">
+   <polygon points="154,258 0,119 107,0 261,139"/>
+  </object>
+  <object id="31" name="great_pyramid_wall_28" x="6312" y="4466">
+   <polygon points="155,257 0,119 107,0 262,138"/>
+  </object>
+  <object id="32" name="great_pyramid_wall_29" x="6158" y="4328">
+   <polygon points="154,257 0,119 107,0 261,138"/>
+  </object>
+  <object id="33" name="great_pyramid_wall_30" x="6004" y="4189">
+   <polygon points="154,258 0,119 107,0 261,139"/>
+  </object>
+  <object id="34" name="great_pyramid_wall_31" x="5850" y="4051">
+   <polygon points="154,257 0,119 107,0 261,138"/>
+  </object>
+  <object id="35" name="great_pyramid_wall_32" x="5850" y="4035">
+   <polygon points="0,135 161,0 264,123 103,258"/>
+  </object>
+  <object id="36" name="great_pyramid_wall_33" x="6011" y="3901">
+   <polygon points="0,134 161,0 263,123 103,257"/>
+  </object>
+  <object id="37" name="great_pyramid_wall_34" x="6172" y="3766">
+   <polygon points="0,135 161,0 263,123 102,258"/>
+  </object>
+  <object id="38" name="great_pyramid_wall_35" x="6333" y="3632">
+   <polygon points="0,134 161,0 263,123 102,257"/>
+  </object>
+  <object id="39" name="great_pyramid_wall_36" x="6494" y="3497">
+   <polygon points="0,135 161,0 263,123 102,258"/>
+  </object>
+  <object id="40" name="great_pyramid_wall_37" x="6655" y="3363">
+   <polygon points="0,134 160,0 263,122 102,257"/>
+  </object>
+  <object id="41" name="great_pyramid_wall_38" x="6815" y="3228">
+   <polygon points="0,135 161,0 264,123 103,257"/>
+  </object>
+  <object id="42" name="great_pyramid_wall_39" x="6976" y="3094">
+   <polygon points="0,134 161,0 264,122 103,257"/>
+  </object>
+  <object id="43" name="great_pyramid_wall_40" x="7137" y="2959">
+   <polygon points="0,135 161,0 264,123 103,257"/>
+  </object>
+  <object id="44" name="great_pyramid_wall_41" x="7298" y="2825">
+   <polygon points="0,134 161,0 264,122 103,257"/>
+  </object>
+  <object id="45" name="great_pyramid_wall_42" x="7459" y="2690">
+   <polygon points="0,135 161,0 264,123 103,257"/>
+  </object>
  </objectgroup>
 </map>

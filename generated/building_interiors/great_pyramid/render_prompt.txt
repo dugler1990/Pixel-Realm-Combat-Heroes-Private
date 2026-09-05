@@ -1,0 +1,18 @@
+Repaint the masked region as finished game art, matching the building it is inside.
+
+The image is a pyramid seen from above with its roof lifted off. Everything outside the mask is finished art: continue its stonework inward with no jump in block size, colour, course spacing or perspective.
+
+IMAGE 2 IS THE FLOOR PLAN. FOLLOW IT EXACTLY.
+  MAGENTA areas are FLOOR: flat walkable ground, paved or sand-drifted. Nothing standing on it that a person could not walk past.
+  GREEN bands are WALLS: stone courses seen from above, with a visible top face and a clear edge either side.
+  DARK GREY is the solid mass of the building: plain unbroken courses of massive
+  blocks. Most of the picture is this, and that is correct.
+
+Do not move a wall, do not open a new gap, do not close one that is drawn, do not
+add a room. Where the plan says floor there is floor, to the pixel.
+
+LIGHTING AND FINISH
+  Even lighting throughout. No torch glow, light pools, directional light, vignette
+  or cast shadows -- the engine lights this and will light it twice otherwise.
+  Interior stone slightly cooler and darker than the sunlit exterior, never black.
+  No text, labels, grid lines, watermarks, UI, characters, creatures or loot.

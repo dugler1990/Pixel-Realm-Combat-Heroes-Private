@@ -1,0 +1,22 @@
+{
+  "provider": "leonardo",
+  "api_key_env": "LEONARDO_API_KEY",
+  "api_version": "v2",
+  "base_url": "https://cloud.leonardo.ai/api/rest/v2",
+  "upload_base_url": "https://cloud.leonardo.ai/api/rest/v1",
+  "model": "nano-banana-2",
+  "width": 5056,
+  "height": 3448,
+  "reference_strength": "HIGH",
+  "prompt_enhance": "OFF",
+  "preserve_native_resolution": true,
+  "max_upload_bytes": 10485760,
+  "reference_jpeg_quality": 90,
+  "poll_interval_seconds": 5,
+  "poll_timeout_seconds": 600,
+  "preserve_existing": true,
+  "qc_max_shift_px": 8,
+  "qc_min_response": 0.015,
+  "config_source": "heightmap.sunspine.json",
+  "prompt": "A pure grayscale terrain heightmap of the same top-down map as the reference, identical camera, identical layout, no color, no texture, no sand grain, no boulders, no ruins, no stone blocks, no labels, no UI. White is high ground, black is low ground, mid-grey is plateau or shelf. Keep off-map void exactly empty (pure black). The ridge or cliff is a bright-to-mid crease following the painted landform. Smooth soft gradients only, like a blurred DEM / displacement map. Ignore every object sitting on the ground. No photorealism, no shading of objects, just elevation."
+}

@@ -19,6 +19,8 @@ can't be hit and don't collide. C2 adds them to `attackable_sprites` so the
 joiner's attacks register; C3 syncs health/death authoritative on the host.
 """
 
+import math
+
 import pygame
 
 from combat_unit import CombatUnit
@@ -79,7 +81,13 @@ class EnemyPuppet(CombatUnit):
         # animate() derives facing from self.direction.x via
         # get_direction_as_string(); drive it from the relayed dir string.
         self.direction.x = -1.0 if self._net_dir == "left" else 1.0
+        # update() deliberately skips CombatUnit.update's move(), so nothing else would ever
+        # set distance_moved and the "move" cycle would sit frozen on one frame. The step
+        # between authoritative positions is exactly the ground this puppet covered.
+        previous_x, previous_y = self.hitbox.centerx, self.hitbox.centery
         self.hitbox.center = (self._net_x, self._net_y)
+        self.distance_moved = math.hypot(self.hitbox.centerx - previous_x,
+                                         self.hitbox.centery - previous_y)
         self.plant_sprite_on_hitbox()
 
     def update(self, *args, **kwargs):

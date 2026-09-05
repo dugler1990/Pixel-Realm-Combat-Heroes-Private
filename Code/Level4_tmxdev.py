@@ -407,6 +407,7 @@ class Level4:
             if self.layout_manager.lighting:
                 self.layout_manager.lighting.set_backend(self.backend)
             self.layout_manager.initialize_layout( initial_layout_dir ) # Convention: initial layout is defined by naming convention
+            self._bind_layout_heightmap()
         
         self.current_layout = initial_layout_dir
 
@@ -510,6 +511,34 @@ class Level4:
                 self.layout_manager.daytime_brightness_overlay.set_backend(self.backend) # TODO: done separately in both restart and not restart....terrible
             if self.layout_manager.lighting:
                 self.layout_manager.lighting.set_backend(self.backend)
+            self._bind_layout_heightmap()
+
+    def _bind_layout_heightmap(self):
+        from terrain_height import try_load_chunk_00_01, world_scale_for_layout
+
+        try:
+            scale = world_scale_for_layout(self.layout_manager)
+        except ValueError:
+            scale = 0.0
+        self.layout_manager.heightmap = try_load_chunk_00_01(
+            self.layouts_dir, world_scale=scale
+        )
+        visible = getattr(self.layout_manager, "visible_sprites", None)
+        if visible is None:
+            return
+        hm = self.layout_manager.heightmap
+        if hm is None:
+            visible.height_overlay = None
+            return
+        import numpy as np
+        import pygame
+
+        rgba = np.ascontiguousarray(hm.debug_overlay_rgba())
+        hh, ww = rgba.shape[:2]
+        visible.height_overlay = pygame.image.frombuffer(
+            rgba.tobytes(), (ww, hh), "RGBA"
+        ).convert_alpha()
+        visible.height_overlay_origin = (hm.origin_x, hm.origin_y)
 
     def _initialize_benchmark_mode(self):
         random.seed(self.benchmark_runtime.seed)
@@ -632,7 +661,14 @@ class Level4:
         padding = 8
         line_gap = 4
         phase = str(state.get("phase", "RUNNING")).upper()
-        phase_color = (80, 255, 120) if phase == "PASS" else (255, 80, 80) if phase == "FAIL" else (255, 255, 255)
+        if phase == "PASS":
+            phase_color = (80, 255, 120)
+        elif phase == "FAIL":
+            phase_color = (255, 80, 80)
+        elif phase == "PROBE":
+            phase_color = (255, 200, 80)
+        else:
+            phase_color = (255, 255, 255)
 
         surfaces = []
         for i, line in enumerate(lines):

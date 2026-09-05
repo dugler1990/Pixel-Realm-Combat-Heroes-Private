@@ -8,8 +8,21 @@ from rts.assets import normalize_faction_id
 from rts.categories import FOOD
 from rts.entities.worker import IDLE, WAITING_AT_NODE
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
+from Settings import TILESIZE
 from Support import mask_midbottom_world
 from hashRect import HashableRect
+from terrain_height import (
+    GOLDEN_HEIGHT_U8,
+    GOLDEN_RIDGE,
+    GOLDEN_SHELF,
+    GOLDEN_VOID,
+    GOLDEN_WASH,
+    HEIGHT_U8_TOLERANCE,
+    PHYSICS_GRADIENT_STEP,
+    TERRAIN_G,
+    load_chunk_00_01,
+    world_scale_for_layout,
+)
 
 
 def _press_key(input_manager, key):
@@ -67,6 +80,40 @@ def _apply_visible_pace(level):
 
 def _teleport_sprite(sprite, pos):
     sprite.rect.center = (int(pos[0]), int(pos[1]))
+
+
+def _teleport_player(player, pos):
+    player.hitbox.center = (int(pos[0]), int(pos[1]))
+    player.velocity = pygame.math.Vector2(0, 0)
+    player.direction.x = 0
+    player.direction.y = 0
+    if hasattr(player, "plant_sprite_on_hitbox"):
+        player.plant_sprite_on_hitbox()
+    else:
+        player.rect.center = player.hitbox.center
+
+
+def _unpack_runner_result(result):
+    if len(result) == 4:
+        done, passed, details, status = result
+        return done, passed, details, status
+    done, passed, details = result
+    return done, passed, details, ("pass" if passed else "fail")
+
+
+def _player_on_painted_ground(level, player):
+    grounds = getattr(level.layout_manager, "ground_sprites", None)
+    if not grounds:
+        return False
+    pt = player.hitbox.center
+    return any(sprite.rect.collidepoint(pt) for sprite in grounds)
+
+
+def _tile_grid_size(level):
+    tmx = getattr(level.layout_manager, "tmxdata", None)
+    if tmx is None:
+        return 0, 0
+    return int(tmx.width) * TILESIZE, int(tmx.height) * TILESIZE
 
 
 def _gather_update(session, level, dt, wallet=None):
@@ -141,7 +188,38 @@ class RtsValidationDriver:
         "non_depletable_stays_active": 12.0,
         "lost_without_dropoff": 28.0,
         "player_feet_plant": 10.0,
+        "terrain_height_sample": 14.0,
+        "terrain_slope_speed": 42.0,
+        "terrain_sprite_tilt": 14.0,
+        "terrain_shadow_slope": 14.0,
     }
+
+    DEFAULT_SCENARIO_NAMES = (
+        "map_entities_loaded",
+        "eskimo_chief_on_throne",
+        "jungle_chief_on_throne",
+        "chief_panel_spawn_despawn",
+        "chief_select_all_workers",
+        "assign_node_confirm",
+        "assign_nearest_food",
+        "eskimo_gather_delivers",
+        "jungle_gather_delivers",
+        "max_workers_queue",
+        "depletable_exhausts",
+        "depletable_respawns",
+        "non_depletable_stays_active",
+        "lost_without_dropoff",
+        "player_feet_plant",
+    )
+    TERRAIN_SCENARIO_NAMES = (
+        "terrain_height_sample",
+        "terrain_slope_speed",
+        "terrain_sprite_tilt",
+        "terrain_shadow_slope",
+    )
+    TERRAIN_WALK_FRAMES_FAST = 8
+    TERRAIN_WALK_FRAMES_VISIBLE = 70
+    TERRAIN_SLOPE_LAPS = 3
 
     def __init__(self):
         self._frame = 0
@@ -153,23 +231,18 @@ class RtsValidationDriver:
         self._last_dt = 0.05
         self._hold_started = None
         self._pending_result = None
-        self._scenario_names = [
-            "map_entities_loaded",
-            "eskimo_chief_on_throne",
-            "jungle_chief_on_throne",
-            "chief_panel_spawn_despawn",
-            "chief_select_all_workers",
-            "assign_node_confirm",
-            "assign_nearest_food",
-            "eskimo_gather_delivers",
-            "jungle_gather_delivers",
-            "max_workers_queue",
-            "depletable_exhausts",
-            "depletable_respawns",
-            "non_depletable_stays_active",
-            "lost_without_dropoff",
-            "player_feet_plant",
-        ]
+        self._scenario_names = list(self.DEFAULT_SCENARIO_NAMES)
+        self._heightmap = None
+        self._terrain_spawn = None
+        self._terrain_phase = None
+        self._terrain_walk_frames = 0
+        self._terrain_ridge_mult = None
+        self._terrain_shelf_mult = None
+        self._terrain_laps = 0
+        self._terrain_ridge_tilt = None
+        self._terrain_shelf_tilt = None
+        self._terrain_ridge_shadow = None
+        self._terrain_shelf_shadow = None
         self._feet_idle_y = None
         self._feet_start_hitbox = None
         self._feet_max_bob = 0
@@ -186,11 +259,15 @@ class RtsValidationDriver:
         self._feet_wall_axis = "x"
 
     def _filtered_names(self):
-        return [
+        requested = [
             n
-            for n in self._scenario_names
-            if RTS_VALIDATION_RUNTIME.wants_scenario(n)
+            for n in RTS_VALIDATION_RUNTIME.scenario_filter
+            if n and str(n).strip().lower() != "all"
         ]
+        known = list(self.DEFAULT_SCENARIO_NAMES) + list(self.TERRAIN_SCENARIO_NAMES)
+        if not requested:
+            return list(self.DEFAULT_SCENARIO_NAMES)
+        return [n for n in requested if n in known]
 
     def _max_seconds_for(self, name, runtime):
         if runtime.fast_mode:
@@ -234,6 +311,8 @@ class RtsValidationDriver:
                     f"wall={self._feet_wall_phase} contacted={int(self._feet_wall_contacted)} "
                     f"reversed={int(self._feet_wall_reversed)}"
                 )
+        if name.startswith("terrain_"):
+            lines.extend(self._terrain_hud_lines(level))
         runtime.set_overlay(lines, phase=phase)
 
     def tick(self, level, dt):
@@ -280,21 +359,35 @@ class RtsValidationDriver:
                 self._feet_wall_reverse_key = pygame.K_LEFT
                 self._feet_wall_sign = 1
                 self._feet_wall_axis = "x"
+            if name.startswith("terrain_"):
+                self._terrain_phase = None
+                self._terrain_walk_frames = 0
+                self._terrain_ridge_mult = None
+                self._terrain_shelf_mult = None
+                self._terrain_laps = 0
+                self._terrain_ridge_tilt = None
+                self._terrain_shelf_tilt = None
+                self._terrain_ridge_shadow = None
+                self._terrain_shelf_shadow = None
 
         elapsed = time.time() - self._scenario_started
         limit = self._max_seconds_for(name, runtime)
 
         # Complete post-pass hold even when runner returns done=False on later frames.
         if self._hold_started is not None and self._pending_result is not None:
-            hold_name, hold_passed, hold_details = self._pending_result
+            hold_name, hold_passed, hold_details, hold_status = self._pending_result
             if time.time() - self._hold_started < runtime.hold_seconds:
-                self._update_overlay(level, hold_name, "PASS", [hold_details])
+                phase = "PROBE" if hold_status == "probe" else (
+                    "PASS" if hold_passed else "FAIL"
+                )
+                self._update_overlay(level, hold_name, phase, [hold_details])
                 return False
             runtime.record(
                 hold_name,
                 hold_passed,
                 hold_details,
                 (time.time() - self._scenario_started) * 1000,
+                status=hold_status,
             )
             self._advance(level)
             return False
@@ -312,14 +405,22 @@ class RtsValidationDriver:
             return False
 
         self._update_overlay(level, name, "RUNNING")
-        done, passed, details = runner(level)
+        done, passed, details, status = _unpack_runner_result(runner(level))
         if done:
-            if passed and runtime.visible_mode and runtime.hold_seconds > 0:
+            hold_like_pass = passed or status == "probe"
+            if hold_like_pass and runtime.visible_mode and runtime.hold_seconds > 0:
                 self._hold_started = time.time()
-                self._pending_result = (name, passed, details)
-                self._update_overlay(level, name, "PASS", [details])
+                self._pending_result = (name, passed, details, status)
+                phase = "PROBE" if status == "probe" else "PASS"
+                self._update_overlay(level, name, phase, [details])
                 return False
-            runtime.record(name, passed, details, (time.time() - self._scenario_started) * 1000)
+            runtime.record(
+                name,
+                passed,
+                details,
+                (time.time() - self._scenario_started) * 1000,
+                status=status,
+            )
             self._advance(level)
         return False
 
@@ -341,12 +442,14 @@ class RtsValidationDriver:
             player.rect.center = player.hitbox.center
 
     def _advance(self, level=None):
+        self._release_move_keys(level)
         if level is not None and self._active == "player_feet_plant":
             self._restore_feet_plant_player(level)
         self._scenario_index += 1
         self._active = None
         self._hold_started = None
         self._pending_result = None
+        self._terrain_phase = None
         if level is not None:
             _reset_rts(level)
 
@@ -931,6 +1034,278 @@ class RtsValidationDriver:
             return self._feet_wall_phase == "done"
 
         return True
+
+
+    def _release_move_keys(self, level):
+        if level is None or getattr(level, "input_manager", None) is None:
+            return
+        for key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
+            _release_key(level.input_manager, key)
+
+    def _press_world_dir(self, level, dx, dy):
+        self._release_move_keys(level)
+        length = (dx * dx + dy * dy) ** 0.5
+        if length < 1e-12:
+            return
+        nx, ny = dx / length, dy / length
+        im = level.input_manager
+        if nx > 0.15:
+            _press_key(im, pygame.K_RIGHT)
+        elif nx < -0.15:
+            _press_key(im, pygame.K_LEFT)
+        if ny > 0.15:
+            _press_key(im, pygame.K_DOWN)
+        elif ny < -0.15:
+            _press_key(im, pygame.K_UP)
+
+    def _ensure_heightmap(self, level):
+        if self._heightmap is not None:
+            return self._heightmap
+        live = getattr(level.layout_manager, "heightmap", None)
+        if live is not None:
+            self._heightmap = live
+            return self._heightmap
+        scale = world_scale_for_layout(level.layout_manager)
+        self._heightmap = load_chunk_00_01(
+            RTS_VALIDATION_RUNTIME.layout_dir, world_scale=scale
+        )
+        return self._heightmap
+
+    def _player_feet_xy(self, player):
+        if getattr(player, "mask", None) and getattr(player, "rect", None):
+            return mask_midbottom_world(player.rect, player.mask)
+        return (player.hitbox.centerx, player.hitbox.bottom)
+
+    def _sun_shadow_params(self, level):
+        lighting = getattr(level.layout_manager, "lighting", None)
+        weather = getattr(level, "weather", None)
+        t = float(getattr(weather, "current_time", 12.0) or 12.0)
+        if lighting is None or not hasattr(lighting, "sun_shadow"):
+            return None
+        return lighting.sun_shadow(t)
+
+    def _terrain_hud_lines(self, level):
+        player = getattr(level, "player", None)
+        hm = self._heightmap
+        lines = []
+        if player is None:
+            return ["h=n/a (no player)"]
+        fx, fy = self._player_feet_xy(player)
+        h = hm.sample(fx, fy) if hm is not None else None
+        g = hm.gradient(fx, fy) if hm is not None else None
+        step = hm.gradient_step if hm is not None else None
+        tilt = float(getattr(player, "terrain_tilt_deg", 0.0))
+        grade_mag = float(getattr(player, "terrain_grade_mag", 0.0))
+        grade = getattr(player, "terrain_grade", None)
+        shadow = self._sun_shadow_params(level)
+        h_txt = "None" if h is None else f"{h:.3f}"
+        if g is None:
+            slope_txt = "None"
+        else:
+            slope_txt = f"{g[0]:+.5f},{g[1]:+.5f}"
+        step_txt = "n/a" if step is None else str(step)
+        if shadow is None:
+            shadow_txt = "n/a"
+        else:
+            shadow_txt = f"{shadow[2]:.3f}"
+        lines.append(f"h={h_txt} slope=({slope_txt}) step={step_txt}")
+        if grade is None:
+            grade_txt = "0,0"
+        else:
+            grade_txt = f"{grade.x:+.3f},{grade.y:+.3f}"
+        lines.append(
+            f"g={grade_txt} |g|={grade_mag:.3f} G={TERRAIN_G:g} step={PHYSICS_GRADIENT_STEP} "
+            f"tilt_deg={tilt:.2f} shadow_len={shadow_txt}"
+        )
+        lines.append(f"feet=({int(fx)},{int(fy)})")
+        if self._active == "terrain_slope_speed":
+            spd = getattr(player, "stats", {}).get("speed", "?")
+            lines.append(
+                f"lap={self._terrain_laps}/{self.TERRAIN_SLOPE_LAPS} phase={self._terrain_phase} "
+                f"base_speed={spd}"
+            )
+        return lines
+
+    def _run_terrain_height_sample(self, level):
+        player = getattr(level, "player", None)
+        if player is None or not hasattr(player, "hitbox"):
+            return True, False, "no player"
+        spawn = (int(player.hitbox.centerx), int(player.hitbox.centery))
+        self._terrain_spawn = spawn
+        on_map = _player_on_painted_ground(level, player)
+        if not on_map:
+            return True, False, f"spawn {spawn} is not on painted ground"
+        try:
+            hm = self._ensure_heightmap(level)
+        except Exception as exc:
+            return True, False, f"heightmap load failed: {exc}"
+
+        ridge_u8 = hm.sample_u8(*GOLDEN_RIDGE)
+        wash_u8 = hm.sample_u8(*GOLDEN_WASH)
+        void_s = hm.sample(*GOLDEN_VOID)
+        ridge_ok = (
+            ridge_u8 is not None
+            and abs(ridge_u8 - GOLDEN_HEIGHT_U8[GOLDEN_RIDGE]) <= HEIGHT_U8_TOLERANCE
+        )
+        wash_ok = (
+            wash_u8 is not None
+            and abs(wash_u8 - GOLDEN_HEIGHT_U8[GOLDEN_WASH]) <= HEIGHT_U8_TOLERANCE
+        )
+        void_ok = void_s is None
+        _teleport_player(player, GOLDEN_RIDGE)
+        gx, gy = _tile_grid_size(level)
+        off_grid = not (0 <= GOLDEN_RIDGE[0] < gx and 0 <= GOLDEN_RIDGE[1] < gy)
+        details = (
+            f"spawn={spawn} on_map={int(on_map)} off_grid_teleport={int(off_grid)} "
+            f"ridge_u8={ridge_u8} wash_u8={wash_u8} void={void_s} "
+            f"scale={world_scale_for_layout(level.layout_manager):.3f} "
+            f"step={hm.gradient_step}"
+        )
+        ok = ridge_ok and wash_ok and void_ok
+        return True, ok, details
+
+    def _terrain_walk_budget(self):
+        if RTS_VALIDATION_RUNTIME.fast_mode:
+            return self.TERRAIN_WALK_FRAMES_FAST
+        return self.TERRAIN_WALK_FRAMES_VISIBLE
+
+    def _note_slope_mult(self, player, which):
+        # Tick runs before player.update, so this is last frame's grade force.
+        m = float(getattr(player, "terrain_grade_mag", 0.0))
+        if which == "ridge":
+            if m > 1e-6:
+                self._terrain_ridge_mult = m
+            return
+        if self._terrain_walk_frames >= 2:
+            self._terrain_shelf_mult = m
+
+    def _run_terrain_slope_speed(self, level):
+        player = getattr(level, "player", None)
+        if player is None:
+            return True, False, "no player"
+        try:
+            hm = self._ensure_heightmap(level)
+        except Exception as exc:
+            return True, False, f"heightmap load failed: {exc}"
+        g = hm.gradient(*GOLDEN_RIDGE)
+        if g is None:
+            return True, False, "no gradient at ridge"
+        budget = self._terrain_walk_budget()
+        if self._terrain_phase is None:
+            _teleport_player(player, GOLDEN_RIDGE)
+            self._terrain_phase = "up"
+            self._terrain_walk_frames = 0
+            self._terrain_laps = 0
+            return False, False, ""
+        if self._terrain_phase == "up":
+            self._press_world_dir(level, g[0], g[1])
+            self._terrain_walk_frames += 1
+            self._note_slope_mult(player, "ridge")
+            if self._terrain_walk_frames >= budget:
+                self._terrain_phase = "down"
+                self._terrain_walk_frames = 0
+            return False, False, ""
+        if self._terrain_phase == "down":
+            self._press_world_dir(level, -g[0], -g[1])
+            self._terrain_walk_frames += 1
+            if self._terrain_walk_frames >= budget:
+                self._terrain_laps += 1
+                if self._terrain_laps < self.TERRAIN_SLOPE_LAPS:
+                    self._terrain_phase = "up"
+                    self._terrain_walk_frames = 0
+                    return False, False, ""
+                _teleport_player(player, GOLDEN_SHELF)
+                self._terrain_phase = "shelf"
+                self._terrain_walk_frames = 0
+            return False, False, ""
+        if self._terrain_phase == "shelf":
+            g_shelf = hm.gradient(*GOLDEN_SHELF)
+            if g_shelf is None:
+                along = (1.0, 0.0)
+            else:
+                along = (-g_shelf[1], g_shelf[0])
+            self._press_world_dir(level, along[0], along[1])
+            self._terrain_walk_frames += 1
+            self._note_slope_mult(player, "shelf")
+            if self._terrain_walk_frames >= budget:
+                self._terrain_phase = "shelf_hold"
+            return False, False, ""
+        self._note_slope_mult(player, "shelf")
+        self._release_move_keys(level)
+        ridge_g = hm.gradient(*GOLDEN_RIDGE)
+        ridge_mag = 0.0 if ridge_g is None else (ridge_g[0] ** 2 + ridge_g[1] ** 2) ** 0.5
+        ridge_mult = self._terrain_ridge_mult
+        shelf_mult = self._terrain_shelf_mult
+        details = (
+            f"grade={ridge_mult} shelf_grade={shelf_mult} "
+            f"ridge_grad_mag={ridge_mag:.5f} step={PHYSICS_GRADIENT_STEP} G={TERRAIN_G:g}"
+        )
+        ok = (
+            ridge_mult is not None
+            and shelf_mult is not None
+            and float(ridge_mult) > 1e-3
+            and float(ridge_mult) > float(shelf_mult) + 1e-3
+        )
+        return True, ok, details
+
+    def _run_terrain_sprite_tilt(self, level):
+        player = getattr(level, "player", None)
+        if player is None:
+            return True, False, "no player"
+        try:
+            hm = self._ensure_heightmap(level)
+        except Exception as exc:
+            return True, False, f"heightmap load failed: {exc}"
+        if self._terrain_phase is None:
+            _teleport_player(player, GOLDEN_RIDGE)
+            self._terrain_phase = "ridge"
+            return False, False, ""
+        if self._terrain_phase == "ridge":
+            self._terrain_ridge_tilt = float(getattr(player, "terrain_tilt_deg", 0.0))
+            _teleport_player(player, GOLDEN_SHELF)
+            self._terrain_phase = "shelf"
+            return False, False, ""
+        self._terrain_shelf_tilt = float(getattr(player, "terrain_tilt_deg", 0.0))
+        ridge_g = hm.gradient(*GOLDEN_RIDGE)
+        ridge_mag = 0.0 if ridge_g is None else (ridge_g[0] ** 2 + ridge_g[1] ** 2) ** 0.5
+        ridge_tilt = self._terrain_ridge_tilt
+        shelf_tilt = self._terrain_shelf_tilt
+        details = (
+            f"still unimplemented, tilt_deg={ridge_tilt} shelf_tilt={shelf_tilt} "
+            f"ridge_grad_mag={ridge_mag:.5f} step={hm.gradient_step}"
+        )
+        return True, True, details, "probe"
+
+    def _run_terrain_shadow_slope(self, level):
+        player = getattr(level, "player", None)
+        if player is None:
+            return True, False, "no player"
+        try:
+            hm = self._ensure_heightmap(level)
+        except Exception as exc:
+            return True, False, f"heightmap load failed: {exc}"
+        backend = getattr(level, "backend", None)
+        backend_kind = type(backend).__name__ if backend is not None else "unknown"
+        drawn = backend_kind != "CPUBackend"
+        if self._terrain_phase is None:
+            _teleport_player(player, GOLDEN_RIDGE)
+            self._terrain_phase = "ridge"
+            return False, False, ""
+        if self._terrain_phase == "ridge":
+            self._terrain_ridge_shadow = self._sun_shadow_params(level)
+            _teleport_player(player, GOLDEN_SHELF)
+            self._terrain_phase = "shelf"
+            return False, False, ""
+        ridge_s = self._sun_shadow_params(level)
+        ridge_g = hm.gradient(*GOLDEN_RIDGE)
+        shelf_g = hm.gradient(*GOLDEN_SHELF)
+        drawn_txt = "drawn" if drawn else "not drawn"
+        details = (
+            f"still unimplemented, time-only sun_shadow params={ridge_s} "
+            f"backend={backend_kind} {drawn_txt} "
+            f"ridge_g={ridge_g} shelf_g={shelf_g} step={hm.gradient_step}"
+        )
+        return True, True, details, "probe"
 
 
 def _find_depletable_node(registry, faction_id):

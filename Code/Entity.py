@@ -10,6 +10,7 @@ from Support import print_mask, position_surface_mask_midbottom_at, mask_midbott
 from Effect import EFFECT_REGISTRY, SlipperyEffect
 from benchmark_runtime import BENCHMARK_RUNTIME
 from Interaction import InteractionContext
+from terrain_height import GRADE_SMOOTH, PHYSICS_GRADIENT_STEP, grade_acceleration
 # This is for file (images specifically) importing (This line changes the directory to where the project is saved)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 MAX_DISPLACEMENT = 5.5
@@ -35,7 +36,7 @@ LOW_SPEED_MOMENTUM_EPS = 0.1  # Use input axis as momentum axis below this speed
 # (180 px/s at 30fps) is ~0.95 cycles/sec -- about the cadence of a real walk. Anatomically
 # the stride should be ~1.6 body heights, i.e. 83px per cycle and a value near 4, but at
 # these speeds that reads as frantic. Lower this for shorter, faster steps.
-PIXELS_PER_ANIM_FRAME = 10.0
+PIXELS_PER_ANIM_FRAME = 15.0
 
 # A single tick that covers more ground than this was not walking: a spawn, a respawn, a
 # level entry, or a remote puppet snapping to its first authoritative position. Those have no
@@ -72,6 +73,10 @@ class Entity(pygame.sprite.Sprite):
         self.max_collision_distance = 10
         self.mask = None
         self.anchor_offset = None  # idle feet_y - hitbox.midbottom; captured once at first plant
+        # Gravity along the painted slope. Added to velocity after input/friction.
+        self.terrain_grade = pygame.math.Vector2(0, 0)
+        self.terrain_grade_mag = 0.0
+        self.terrain_tilt_deg = 0.0
         self._collision_probe_rect = pygame.Rect(0, 0, 1, 1)
         # Flag to track whether move method has been called before
         self.move_not_called_before = True
@@ -223,6 +228,8 @@ class Entity(pygame.sprite.Sprite):
             # Stop very small velocities to prevent jitter
             if (self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y) < 0.01:
                 self.velocity = pygame.math.Vector2(0, 0)
+
+        self._apply_terrain_grade()
         
         # Apply velocity to position
         self.hitbox.x += self.velocity.x
@@ -244,6 +251,33 @@ class Entity(pygame.sprite.Sprite):
                                          self.hitbox.y - move_origin_y)
         self.plant_sprite_on_hitbox()
 
+    def _apply_terrain_grade(self):
+        """Add downhill gravity from the heightmap. Walk accel already fights it."""
+        ax, ay = 0.0, 0.0
+        level = getattr(self, "level", None)
+        hm = getattr(getattr(level, "layout_manager", None), "heightmap", None)
+        if hm is not None:
+            sample_xy = None
+            if getattr(self, "rect", None) is not None and getattr(self, "mask", None) is not None:
+                fx, fy = mask_midbottom_world(self.rect, self.mask)
+                if hm.sample(fx, fy) is not None:
+                    sample_xy = (fx, fy)
+            if sample_xy is None and getattr(self, "hitbox", None) is not None:
+                cx, cy = self.hitbox.center
+                if hm.sample(cx, cy) is not None:
+                    sample_xy = (cx, cy)
+            if sample_xy is not None:
+                g = hm.gradient(sample_xy[0], sample_xy[1], step=PHYSICS_GRADIENT_STEP)
+                ax, ay = grade_acceleration(g)
+        s = GRADE_SMOOTH
+        self.terrain_grade.x += s * (ax - self.terrain_grade.x)
+        self.terrain_grade.y += s * (ay - self.terrain_grade.y)
+        self.terrain_grade_mag = (
+            self.terrain_grade.x * self.terrain_grade.x
+            + self.terrain_grade.y * self.terrain_grade.y
+        ) ** 0.5
+        self.velocity.x += self.terrain_grade.x
+        self.velocity.y += self.terrain_grade.y
 
     def advance_frame(self):
         """Frames to advance this tick: distance-phased while walking, time-based otherwise.

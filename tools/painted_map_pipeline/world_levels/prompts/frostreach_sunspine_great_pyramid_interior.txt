@@ -1,0 +1,142 @@
+TASK: paint the interior of the great pyramid in the Frostreach "sunspine" desert
+level, and drop it in as a finished asset. Art only — no code or TMX changes are
+needed; the engine already loads this file.
+
+This is the INSIDE of a STEP PYRAMID with the roof lifted off. It must read as a
+pyramid, not as a temple, palace, or square tomb with furniture in it.
+
+────────────────────────────────────────────────────────────────────────
+1. CONTEXT — what this is
+────────────────────────────────────────────────────────────────────────
+The level is levels/Frostreach/sunspine_7x6_play: a large hand-painted desert map
+(22473 x 12258 px) of dunes, dry riverbeds, ruins, obelisks, a sphinx, scattered
+giant ribcages, and four pyramids. This is the biggest of them. The exterior
+(buildings/great_pyramid_roof.png) is a stepped pyramid of ~10–12 sandstone
+tiers with a doorway on the lower-right face.
+
+House style (match it):
+
+  "top-down / slightly 2.5D painted RPG ground background, modern high-end
+   pixel-art / painted hybrid, finished game-art quality... Top-down, even
+   lighting, no cast shadows. No text, labels, UI, grid lines, characters,
+   or creatures."
+
+The game renders the map 1:1 — one image pixel is one world pixel, no zoom.
+
+WHERE THE PYRAMID IS
+  World rect (5850, 2690) to (9450, 5830), i.e. 3600 x 3140 px.
+  Silhouette is a diamond; entrance on the lower-right face at world (8430, 4970).
+
+AUTHROED HOLLOW (walkable interior — the rest of the diamond is solid pyramid)
+  TMX object great_pyramid_chamber: the silhouette inset by the wall thickness
+  (~160 px). Collision is a wall ring with a 400 px door gap at world (8430, 4970),
+  which is local (2580, 2280) on this canvas. TILESIZE = 150 px = one character.
+
+TO SEE IT
+  Do NOT open the full map (242 MB PNG). Use buildings/great_pyramid_roof.png.
+
+────────────────────────────────────────────────────────────────────────
+2. DELIVERABLE
+────────────────────────────────────────────────────────────────────────
+  Path:  levels/Frostreach/sunspine_7x6_play/buildings/great_pyramid_interior.png
+  Size:  EXACTLY 3600 x 3140 px, RGBA. Paint the ENTIRE diamond, not one room
+         floating in the middle.
+
+The size is non-negotiable — composited 1:1, no scaling.
+
+Image models will not output 3600 x 3140. Two steps:
+
+  STEP 1 — generate at native resolution, LANDSCAPE ~1.15 : 1 (3600:3140).
+           Do not generate square and stretch.
+
+  STEP 2 — fit to canvas and cut the silhouette (perspective-warp the generated
+           diamond onto these corners if the source is not already that quad):
+
+    python3 -c "
+    from PIL import Image, ImageDraw
+    src = Image.open('<your generated file>').convert('RGBA').resize((3600,3140))
+    mask = Image.new('L',(3600,3140),0)
+    ImageDraw.Draw(mask).polygon([(1770,0),(3600,1720),(1850,3140),(0,1480)],fill=255)
+    src.putalpha(mask)
+    src.save('levels/Frostreach/sunspine_7x6_play/buildings/great_pyramid_interior.png')"
+
+────────────────────────────────────────────────────────────────────────
+3. GEOMETRY — coordinates in the 3600 x 3140 image
+────────────────────────────────────────────────────────────────────────
+  Outer diamond:  top (1770, 0) · right (3600, 1720) · bottom (1850, 3140) ·
+                  left (0, 1480)
+  Entrance:       (2580, 2280), on the lower-right edge — same pixel as the
+                  doorway in great_pyramid_roof.png.
+  Chamber:        diamond listed in section 1, just inside that doorway.
+  Outside the outer diamond: transparent.
+
+────────────────────────────────────────────────────────────────────────
+4. WHAT A PYRAMID IS (this is the whole job)
+────────────────────────────────────────────────────────────────────────
+A pyramid is mostly SOLID STONE. Looking down with the roof off, you see the
+INNER FACES of the stepped tiers — concentric diamond terraces of massive
+sandstone blocks, getting smaller toward the centre, like a stepped well.
+That stepped funnel IS the pyramid. It must fill the entire outer diamond.
+
+Cut into that mass, and only that:
+
+  - A processional walkway from the lower-right doorway at (2580, 2280), about
+    400 px wide (the collision door gap), running inward toward the centre.
+    Sand drifted in at the threshold. Heavy stone jambs. The corridor MUST
+    meet the outer diamond at that doorway — misalignment with the exterior
+    door is a fail.
+  - Two small side chambers opening off that walkway, one on each side.
+  - A large burial chamber at the inner end of the walkway: slab floor,
+    a stone sarcophagus, inner wall faces with reliefs.
+  - The rest of the diamond is stepped masonry, not more rooms. Stairs down
+    to a deeper dungeon come later; do not invent them yet.
+
+Large parts of the image should be "not a room" — just the stepped interior
+of the pyramid. That is correct.
+
+────────────────────────────────────────────────────────────────────────
+5. SCALE
+────────────────────────────────────────────────────────────────────────
+  Character / tile = 150 px.
+  Exterior step blocks are huge (roughly half a character). Interior terraces
+  and corridor walls use the SAME block scale. Floor slabs in the chamber are
+  ~80–150 px — a person stands on one or two slabs, not a dozen.
+
+  Do not generate a miniature building and stretch it. Do not fill the diamond
+  with one square hall.
+
+────────────────────────────────────────────────────────────────────────
+6. DO NOT
+────────────────────────────────────────────────────────────────────────
+  - NO COLUMNS. No colonnade, no hypostyle hall, no circular court of pillars.
+    That is a temple. This is a pyramid.
+  - No square "room in a frame" that just happens to be diamond-cropped.
+  - No baked lighting: no torch glow, light pools, directional light, vignette,
+    or cast shadows. Even lighting. Engine applies day/night on top.
+  - No drop shadow or glow outside the diamond.
+  - No text, labels, grid lines, watermarks or UI.
+  - No characters, enemies, items, loot chests or creatures.
+  - Do not change the perspective. Match the roof reference.
+
+  Interior stone: slightly cooler and darker than the sunlit exterior, still
+  legible — not near-black.
+
+────────────────────────────────────────────────────────────────────────
+7. HOW IT IS USED
+────────────────────────────────────────────────────────────────────────
+Draw order: world ground → THIS interior over the pyramid footprint →
+characters → exterior roof on top (chamber punched out while inside).
+Characters in a doorway are drawn again over the roof so they do not vanish
+under the stone. The corridor in this painting must start at the same
+doorway as the exterior roof.
+
+────────────────────────────────────────────────────────────────────────
+8. VERIFY BEFORE FINISHING
+────────────────────────────────────────────────────────────────────────
+    python3 -c "
+    from PIL import Image
+    im = Image.open('levels/Frostreach/sunspine_7x6_play/buildings/great_pyramid_interior.png')
+    print('size', im.size, '(must be (3600, 3140))')
+    print('mode', im.mode, '(must be RGBA)')
+    print('corner alpha', im.getpixel((20,20))[3], '(must be 0 - outside the diamond)')
+    print('centre alpha', im.getpixel((1800,1570))[3], '(must be 255 - inside)')"

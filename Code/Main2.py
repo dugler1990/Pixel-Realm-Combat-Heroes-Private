@@ -115,8 +115,13 @@ class Game:
     def _bootstrap_rts_validation_run(self):
         if not unlocked_player_directory:
             raise RuntimeError("RTS validation requires at least one selectable player.")
-        self.player_selection.selected_player_info_dir = unlocked_player_directory[0]
-        base = unlocked_player_base_stats[0].copy()
+        idx = 0
+        for i, path in enumerate(unlocked_player_directory):
+            if str(path).rstrip("/").endswith("barb"):
+                idx = i
+                break
+        self.player_selection.selected_player_info_dir = unlocked_player_directory[idx]
+        base = unlocked_player_base_stats[idx].copy()
         self.player_configuration = PlayerConfiguration(
             input_manager=self.input_manager,
             base_stats=base,
@@ -283,7 +288,9 @@ class Game:
         else:
             player_info_dir = self.player_selection.selected_player_info_dir
             player_stats = self.player_configuration.final_stats
-            if BENCHMARK_RUNTIME.enabled:
+            if RTS_VALIDATION_RUNTIME.enabled:
+                layouts_dir = RTS_VALIDATION_RUNTIME.layout_dir
+            elif BENCHMARK_RUNTIME.enabled:
                 layouts_dir = BENCHMARK_RUNTIME.layout_dir
             else:
                 layouts_dir = LEVEL_TO_LAYOUT.get(level_number, level_10_layout_path)

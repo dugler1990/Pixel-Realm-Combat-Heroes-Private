@@ -50,3 +50,8 @@ levels/*/*/export/**/*.png
 # Scratch renders that collect in the repo root while iterating.
 /*.png
 
+
+# Shadow level folders the interior pipeline writes plans into. Symlinks to the real
+# level's art plus a map.tmx carrying the traced geometry; the shipped map is only
+# written on accept.
+levels/*/*.plan/

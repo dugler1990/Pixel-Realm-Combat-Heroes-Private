@@ -1,0 +1,90 @@
+Repaint ONLY the masked region of this image. Everything outside the mask is finished
+art and must continue unchanged into what you paint.
+
+The image is a great step pyramid seen from above, top-down / slightly 2.5D painted RPG
+style. The mask is its inside with the cap lifted off. You are painting the crypt inside
+it, seen from above.
+
+THE ONE ENTRANCE
+There is a single doorway, already painted, on the LOWER-RIGHT face of the pyramid. It is
+held out of the mask - do not paint over it, do not move it, do not redraw it.
+The pyramid has EXACTLY ONE entrance. Do not draw another doorway, arch, stair or opening
+anywhere in the outer ring. If you are about to draw a second entrance, do not.
+
+BUILD IT IN THIS ORDER. THE ORDER MATTERS.
+
+STEP 1 - THE FLOOR, AS ONE SINGLE CONNECTED SHAPE
+Before any walls, decide the walkable floor. Picture it as ONE piece of paper laid flat
+on the ground, all in one piece, nothing detached:
+
+    behind the door  ->  entrance corridor  ->  long gallery  ->  burial chamber
+                                             \-> side room     (joined to the gallery)
+                                             \-> side room     (joined to the gallery)
+
+  - It STARTS as open floor directly behind the painted doorway and runs inward from
+    there for at least 600 px. The door must open onto floor, never onto stone.
+  - Every part touches every other part. You can walk from the door to any room without
+    crossing stone.
+  - If any piece of floor is not joined to the rest, the picture is wrong.
+
+STEP 2 - WALLS AROUND THE EDGE OF THAT FLOOR
+Now lay stone walls along the outline of that floor shape, about 120 px thick, the same
+thickness everywhere.
+
+  - Where a room meets the corridor, the wall STOPS: leave a clean gap 250 px wide with a
+    jamb block each side. The floor runs through that gap unbroken - you can see straight
+    from corridor into room.
+  - Everywhere else the wall is continuous and closed.
+  - A room drawn as a complete unbroken rectangle of wall is WRONG. Every room has at
+    least one gap.
+  - Walls are stone courses seen from above, with a visible top face and a clear edge on
+    both sides. Never a change of colour on flat ground.
+
+STEP 3 - ALL REMAINING SPACE IS SOLID
+Everything in the mask that is not floor or wall is the solid mass of the pyramid: plain
+unbroken courses of massive blocks. Most of the picture is this. That is correct.
+
+SCALE - READ THIS BEFORE COMPOSING
+A character is 150 px. The whole space is about 21 x 18 characters - one small crypt, the
+size of a Diablo 2 dungeon level.
+  - Entrance corridor: 2 characters wide (300 px), 4-5 long.
+  - Gallery: 3 characters wide (450 px), 8-10 long. The spine of the level.
+  - Burial chamber: about 8 x 6 characters. The biggest space.
+  - Side rooms: about 4 x 4 characters each.
+  - The gallery must not swallow the level. Rooms are the point; the gallery joins them.
+
+MAKE IT GRAND - THIS IS THE GREAT PYRAMID
+It should look like the payoff at the end of a desert, not a basement:
+  - The GALLERY is CORBELLED: its walls step inward course over course as they rise,
+    narrowing toward a slot above. Run it dead straight for a long sight line.
+  - COLOSSAL SEATED STATUES in stone flank the gallery where it meets the burial chamber,
+    facing each other across it.
+  - The BURIAL CHAMBER is DARK RED GRANITE against pale limestone everywhere else: huge
+    polished blocks, a raised dais, a lidless granite sarcophagus on it, dense columns of
+    carved hieroglyphs covering the walls.
+  - Side rooms are plain limestone with a few stacked offering slabs. Sparse by contrast.
+  - Sand has drifted in through the door and lies across the entrance corridor floor.
+
+FINISH AND CONTINUITY
+Stonework at the mask edge carries on inward with no jump in block size, colour, course
+spacing or perspective. Even lighting - no torch glow, light pools, directional light,
+vignette or cast shadows; the engine lights this. Interior stone slightly cooler and
+darker than the sunlit exterior, still legible, never black.
+
+DO NOT
+  - No second entrance. One door, the one already painted.
+  - No sealed room. No unbroken rectangle of wall.
+  - No stone directly behind the painted door.
+  - No concentric terraces filling the diamond like a stepped bowl or amphitheatre.
+  - No columns or colonnade halls, no round rooms, no curved or diagonal walls, no maze
+    of narrow passages, no second storey.
+  - No text, labels, grid lines, watermarks, UI, characters, creatures or loot.
+  - Do not repaint, restyle or improve anything outside the mask.
+
+CHECK BEFORE YOU FINISH
+  1. Is there open floor immediately behind the painted door, leading inward?
+  2. Is there exactly one entrance in the whole pyramid?
+  3. Can you trace a path on floor from that door into every single room?
+  4. Does every room have a gap in its wall, with jambs?
+  5. Is most of the picture solid stone?
+If any answer is no, fix it before finishing.

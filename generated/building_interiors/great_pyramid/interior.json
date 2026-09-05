@@ -1,0 +1,102 @@
+{
+  "building": "great_pyramid",
+  "map_path": "levels/Frostreach/sunspine_7x6_play/map.tmx",
+  "origin": [
+    5850,
+    2690
+  ],
+  "size": [
+    3600,
+    3140
+  ],
+  "silhouette": [
+    [
+      1770.0,
+      0.0
+    ],
+    [
+      3600.0,
+      1720.0
+    ],
+    [
+      1850.0,
+      3140.0
+    ],
+    [
+      0.0,
+      1480.0
+    ]
+  ],
+  "chamber": [
+    [
+      1764.0,
+      214.0
+    ],
+    [
+      3357.0,
+      1711.0
+    ],
+    [
+      1855.0,
+      2930.0
+    ],
+    [
+      244.0,
+      1484.0
+    ]
+  ],
+  "doors": [
+    [
+      [
+        2500.0,
+        2100.0
+      ],
+      [
+        2870.0,
+        2100.0
+      ],
+      [
+        2870.0,
+        2540.0
+      ],
+      [
+        2500.0,
+        2540.0
+      ]
+    ]
+  ],
+  "roof_image": "levels/Frostreach/sunspine_7x6_play/buildings/great_pyramid_roof.png",
+  "interior_image": "levels/Frostreach/sunspine_7x6_play/buildings/great_pyramid_interior.png",
+  "door_origin": [
+    2710.9590659394753,
+    2441.3932150662545
+  ],
+  "door_inward": [
+    -0.63009134392979,
+    -0.7765210224486849
+  ],
+  "arch_quad": [
+    [
+      2866.2632704292123,
+      2315.3749462802966
+    ],
+    [
+      2555.6548614497383,
+      2567.4114838522123
+    ],
+    [
+      2454.840246420972,
+      2443.1681202604227
+    ],
+    [
+      2765.448655400446,
+      2191.131582688507
+    ]
+  ],
+  "object_prompt": "pyramid",
+  "entrance_prompt": "dark doorway with stone lintel",
+  "intent": "a crypt",
+  "rooms": 3,
+  "tile": 150,
+  "schema_version": 1
+}

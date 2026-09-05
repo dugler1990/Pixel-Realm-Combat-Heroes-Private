@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="22" nextobjectid="590">
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="550" tileheight="550" infinite="0" nextlayerid="24" nextobjectid="592">
  <tileset firstgid="1" source="iceobjects1.tsx"/>
  <tileset firstgid="26" source="snow_on_ice_brush_proper1.tsx"/>
  <tileset firstgid="134" source="ROCKLAVA.tsx"/>
@@ -1507,6 +1507,15 @@
     <property name="rts_type" value="dropoff_building"/>
     <property name="sprite" value="building_carving_lodge"/>
    </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="22" name="ObstaclePolygons">
+  <object id="590" name="test_building_walls" x="9000" y="12650">
+   <polygon points="0,1325 0,1850 2200,1850 2200,0 0,0 0,525 250,525 250,250 1950,250 1950,1600 250,1600 250,1325"/>
+  </object>
+ </objectgroup>
+ <objectgroup id="23" name="Buildings">
+  <object id="591" name="test_building" x="9000" y="12650" width="2200" height="1850">
   </object>
  </objectgroup>
 </map>
