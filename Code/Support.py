@@ -346,6 +346,21 @@ def _animation_frame_sort_key(filename):
     return (1, filename.lower())
 
 
+def load_sprite_manifest(monster_name):
+    """manifest.json written by tools/boss_sprite_pipeline next to a monster's frames, or None.
+
+    Its presence is what switches a monster to N-direction sprites: frames live in
+    <action>/<dir>/, `anchor_px` is the ground-contact pixel, `actions.<a>.fps` the
+    playback rate.
+    """
+    path = os.path.normpath(f"../Graphics/Monsters/{monster_name}/manifest.json")
+    if not os.path.exists(path):
+        return None
+    import json
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
 def import_folder(path, scale=None):
     norm = os.path.normpath(path)
     cache_key = ImageCache.folder_cache_key(norm, scale)

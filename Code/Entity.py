@@ -96,6 +96,9 @@ class Entity(pygame.sprite.Sprite):
         if not hasattr(self, "hitbox") or getattr(self, "image", None) is None:
             self.anchor_offset = 0
             return
+        if getattr(self, "sprite_anchor_px", None) is not None:
+            self.anchor_offset = 0  # the manifest anchor *is* the ground contact point
+            return
         mask = getattr(self, "mask", None)
         if mask is None:
             mask = pygame.mask.from_surface(self.image)
@@ -111,6 +114,15 @@ class Entity(pygame.sprite.Sprite):
             return
         if self.anchor_offset is None:
             self.capture_feet_anchor()
+        anchor = getattr(self, "sprite_anchor_px", None)
+        if anchor is not None:
+            # Pre-rendered N-direction sprites: every frame shares one ground pixel, so
+            # plant that instead of the mask's lowest row (which the ground shadow moves).
+            self.rect = self.image.get_rect(topleft=(
+                self.hitbox.midbottom[0] - int(round(anchor[0])),
+                self.hitbox.midbottom[1] - int(round(anchor[1])),
+            ))
+            return
         mask = getattr(self, "mask", None)
         target = (
             self.hitbox.midbottom[0],

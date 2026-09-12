@@ -78,9 +78,16 @@ class EnemyPuppet(CombatUnit):
 
     def _sync_from_snapshot(self):
         self.status = self._net_status
-        # animate() derives facing from self.direction.x via
-        # get_direction_as_string(); drive it from the relayed dir string.
-        self.direction.x = -1.0 if self._net_dir == "left" else 1.0
+        # animate() derives facing from self.direction via get_direction_as_string();
+        # drive it from the relayed dir string. N-direction monsters relay compass
+        # keys ("s", "ne", ...): point self.direction at that heading so the same
+        # key comes back out of get_compass_direction().
+        if self.eight_dir:
+            if self._net_dir in self.direction_keys:
+                self.direction_string = self._net_dir
+                self.direction = pygame.math.Vector2(1, 0).rotate(self.COMPASS_DEG[self._net_dir])
+        else:
+            self.direction.x = -1.0 if self._net_dir == "left" else 1.0
         # update() deliberately skips CombatUnit.update's move(), so nothing else would ever
         # set distance_moved and the "move" cycle would sit frozen on one frame. The step
         # between authoritative positions is exactly the ground this puppet covered.

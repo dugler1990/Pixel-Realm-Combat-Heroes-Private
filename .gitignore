@@ -55,3 +55,15 @@ levels/*/*/export/**/*.png
 # level's art plus a map.tmx carrying the traced geometry; the shipped map is only
 # written on accept.
 levels/*/*.plan/
+
+# boss_sprite_pipeline: bpy venv, GPU-box tool checkouts, bulky rendered frames
+tools/boss_sprite_pipeline/.venv-bpy/
+tools/boss_sprite_pipeline/gpu_box/vendor/
+generated/bosses/**
+!generated/bosses/**/
+!generated/bosses/**/state.json
+!generated/bosses/**/manifest.json
+!generated/bosses/**/*.png
+!generated/bosses/**/bones.json
+generated/bosses/**/frames/
+Graphics/Monsters/_test_*/

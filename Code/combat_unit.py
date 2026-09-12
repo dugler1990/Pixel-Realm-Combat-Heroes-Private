@@ -96,9 +96,21 @@ class CombatUnit(Entity):
         if item_drop_info:
             self.item_drop_info = item_drop_info
         self.animations_left_right_indicator = animations_left_right_indicator
-        
+
+        # Pre-rendered N-direction sprites (tools/boss_sprite_pipeline) ship a
+        # manifest.json; its presence switches this monster to the N-way loader,
+        # the manifest's ground anchor and per-action playback rate.
+        self.sprite_manifest = load_sprite_manifest(monster_name)
+        self.eight_dir = self.sprite_manifest is not None
+        self.direction_keys = None
+        self.sprite_anchor_px = None
+        self._status_fps = None
+
         # Graphics Setup
-        if animations_left_right_indicator:
+        if self.eight_dir:
+            self.animations_left_right_indicator = True  # frames are dict-of-dict, like left/right
+            self.import_graphics_8dir(monster_name)
+        elif animations_left_right_indicator:
             self.import_graphics_left_right(monster_name)
         else:
             self.import_graphics(monster_name)
@@ -108,7 +120,7 @@ class CombatUnit(Entity):
             self.scale_animations(random_scale)
 
         self.status = "idle"
-        self.direction_string = "right"
+        self.direction_string = "s" if self.eight_dir else "right"
         if self.animations_left_right_indicator:
             self.image = self.animations[self.status][self.direction_string][self.frame_index]
         else:
@@ -260,6 +272,8 @@ class CombatUnit(Entity):
                     self.animations[status][direction] = [pygame.transform.scale(frame, (int(frame.get_width() * scale_factor), int(frame.get_height() * scale_factor))) for frame in frames]
             else:
                 self.animations[status] = [pygame.transform.scale(frame, (int(frame.get_width() * scale_factor), int(frame.get_height() * scale_factor))) for frame in animations]
+        if self.sprite_anchor_px is not None:
+            self.sprite_anchor_px = (self.sprite_anchor_px[0] * scale_factor, self.sprite_anchor_px[1] * scale_factor)
 
     
     def freeze(self, duration=3000):
@@ -289,8 +303,34 @@ class CombatUnit(Entity):
         return frozen_image
 
 
+    # Screen angle (degrees, y grows downward) of each compass facing key.
+    COMPASS_DEG = {
+        "e": 0, "ese": 22.5, "se": 45, "sse": 67.5, "s": 90, "ssw": 112.5, "sw": 135, "wsw": 157.5,
+        "w": 180, "wnw": 202.5, "nw": 225, "nnw": 247.5, "n": 270, "nne": 292.5, "ne": 315, "ene": 337.5,
+    }
+    FACING_HYSTERESIS_DEG = 8.0
+
     def get_direction_as_string(self):
+        if self.eight_dir:
+            return self.get_compass_direction()
         return "right" if self.direction.x >= 0 else "left"
+
+    def get_compass_direction(self):
+        """Nearest manifest facing key to self.direction, with hysteresis so a heading
+        that sits on a sector edge doesn't flicker between two sprites."""
+        if self.direction.length_squared() == 0:
+            return self.direction_string
+        angle = math.degrees(math.atan2(self.direction.y, self.direction.x)) % 360
+        half_sector = 180.0 / len(self.direction_keys)
+
+        def distance(key):
+            return abs((angle - self.COMPASS_DEG[key] + 180) % 360 - 180)
+
+        if self.direction_string in self.direction_keys and \
+                distance(self.direction_string) <= half_sector + self.FACING_HYSTERESIS_DEG:
+            return self.direction_string
+        self.direction_string = min(self.direction_keys, key=distance)
+        return self.direction_string
 
     
      
@@ -317,6 +357,18 @@ class CombatUnit(Entity):
 
     
     
+    def import_graphics_8dir(self, name):
+        """Load <action>/<dir>/ frames laid out by tools/boss_sprite_pipeline per manifest.json."""
+        manifest = self.sprite_manifest
+        main_path = f"../Graphics/Monsters/{name}/"
+        self.direction_keys = list(manifest["directions"])
+        self.animations = {
+            action: {key: import_folder(main_path + f"{action}/{key}") for key in self.direction_keys}
+            for action in manifest["actions"]
+        }
+        self.sprite_anchor_px = tuple(manifest["anchor_px"])
+        self._status_fps = {action: float(spec.get("fps", 15)) for action, spec in manifest["actions"].items()}
+
     def import_graphics_left_right(self, name):
         from ImageCache import ImageCache
         self.animations = {
@@ -564,7 +616,10 @@ class CombatUnit(Entity):
             else:
                 animation = self.animations[self.status]
                 masks = self.masks[self.status]
-            
+
+            if self._status_fps:
+                # manifest playback rate → frames per game tick (walk stays distance-phased)
+                self.animation_speed = self._status_fps.get(self.status, 15.0) / FPS
             self.frame_index += self.advance_frame()
             if self.frame_index >= len(animation):
                 if self.status == "attack":
