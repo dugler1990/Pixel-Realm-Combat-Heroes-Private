@@ -5,6 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from . import bpy_python
 from .backends import get_backend
 from .review import direction_row
 
@@ -15,7 +16,7 @@ def run(cfg: dict, workdir: Path, gpu) -> Path:
     stage = cfg.get("stages", {}).get("mesh", {})
     backend = get_backend("mesh", stage.get("backend", "hunyuan3d"))
     glb = backend.run(workdir / "concept", workdir / "mesh", stage, gpu)
-    print("  mesh →", glb)
+    print("  mesh ->", glb)
     turntable(cfg, workdir, glb)
     return glb
 
@@ -33,10 +34,10 @@ def turntable(cfg: dict, workdir: Path, glb: Path) -> Path:
     tt_dir.mkdir(parents=True, exist_ok=True)
     (tt_dir / "render_config.json").write_text(json.dumps(tt_cfg, indent=2), encoding="utf-8")
     subprocess.run(
-        [str(HERE / ".venv-bpy" / "bin" / "python"), str(HERE / "render_frames.py"),
+        [str(bpy_python(HERE)), str(HERE / "render_frames.py"),
          str(tt_dir / "render_config.json"), str(workdir), "--frames-dir", str(tt_dir / "frames")],
         check=True,
     )
     out = direction_row(tt_dir / "frames", "turntable", workdir / "mesh" / "turntable.png")
-    print("  Gate A sheet →", out)
+    print("  Gate A sheet ->", out)
     return out

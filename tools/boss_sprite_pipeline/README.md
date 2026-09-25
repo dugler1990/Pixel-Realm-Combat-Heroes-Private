@@ -17,6 +17,12 @@ uv pip install --python tools/boss_sprite_pipeline/.venv-bpy/bin/python "bpy==4.
 GPU box (open-weight ML stages): `bash tools/boss_sprite_pipeline/gpu_box/setup.sh`
 — see the header of that script; it has not been run on the box yet.
 
+For this EU-based commercial project, mesh generation uses Stable Fast 3D:
+`bash tools/boss_sprite_pipeline/gpu_box/setup.sh stable_fast_3d`. It requires
+accepting the gated model terms on Hugging Face. See
+[`gpu_box/RUNPOD.md`](gpu_box/RUNPOD.md) and the repository's
+[`LEGAL_LIABILITY.md`](../../LEGAL_LIABILITY.md).
+
 ## Run
 
 ```bash
@@ -64,7 +70,7 @@ drawn by the real engine code path.
 | `render.ground_shadow` | Cycles shadow catcher → contact shadow baked into alpha |
 | `render.samples`, `render.denoise`, `render.device` | Cycles cost/quality; `GPU` on the box |
 | `pack.alpha_floor` | alpha below this is cleared (denoiser veil); default 10 |
-| `stages.concept/mesh/rig.backend` | `sam3`/`rembg`/`none`; `hunyuan3d`/`trellis`/`none`; `unirig`/`none` |
+| `stages.concept/mesh/rig.backend` | `sam3`/`rembg`/`none`; `stable_fast_3d`/`hunyuan3d`/`trellis`/`none`; `unirig`/`none` |
 | `stages.animate.mode` | `passthrough` (clips already in the file) or `procedural` (Phase 2) |
 
 ## Gates
