@@ -407,6 +407,13 @@ class GPUBackend(RenderBackend):
         glViewport(0, 0, width, height)
         self._mesh_shader = None
         self._mesh_skin_shader = None
+        renderer = glGetString(GL_RENDERER)
+        vendor = glGetString(GL_VENDOR)
+        if isinstance(renderer, bytes):
+            renderer = renderer.decode("utf-8", "replace")
+        if isinstance(vendor, bytes):
+            vendor = vendor.decode("utf-8", "replace")
+        print(f"[GL] VENDOR={vendor} RENDERER={renderer}", flush=True)
 
     @staticmethod
     def _make_texture(pixels=None, width=1, height=1):
@@ -1013,6 +1020,9 @@ class GPUBackend(RenderBackend):
 
     def shutdown(self):
         texture_ids = [self._texture, self._white_texture]
+        texture_ids.extend(st["tex"] for st in getattr(self, "_mesh_state", {}).values())
+        for st in getattr(self, "_skin_state", {}).values():
+            texture_ids.extend((st["tex"], st["bones"]))
         if self._atlas_texture is not None:
             texture_ids.append(self._atlas_texture)
         if getattr(self, "_grass_atlas_texture", None) is not None:

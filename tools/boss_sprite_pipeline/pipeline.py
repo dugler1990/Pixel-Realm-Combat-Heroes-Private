@@ -15,6 +15,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from . import bpy_python
 from . import animate, concept, mesh, pack_frames, rig
 from .backends.gpu_exec import GpuExec
 
@@ -47,7 +48,7 @@ def run_render(cfg: dict, workdir: Path, state: dict) -> Path:
     cfg_path = workdir / "render_config.json"
     cfg_path.write_text(json.dumps(render_cfg, indent=2), encoding="utf-8")
     subprocess.run(
-        [str(HERE / ".venv-bpy" / "bin" / "python"), str(HERE / "render_frames.py"), str(cfg_path), str(workdir)],
+        [str(bpy_python(HERE)), str(HERE / "render_frames.py"), str(cfg_path), str(workdir)],
         check=True,
     )
     return workdir / "frames"
@@ -79,14 +80,15 @@ def run_pipeline(config_path: Path, *, start: str = "concept", stop: str = "pack
             out = run_render(cfg, workdir, state)
         elif stage == "pack":
             out = pack_frames.pack(workdir, (REPO_ROOT / cfg["install_root"]).resolve(), name=cfg["name"],
-                                   alpha_floor=int(cfg.get("pack", {}).get("alpha_floor", pack_frames.ALPHA_FLOOR)))
+                                   alpha_floor=int(cfg.get("pack", {}).get("alpha_floor", pack_frames.ALPHA_FLOOR)),
+                                   trim=str(cfg.get("pack", {}).get("trim", "union")))
         state["stages"][stage] = {
             "output": str(out), "seconds": round(time.time() - t0, 1),
             "finished": time.strftime("%Y-%m-%d %H:%M:%S"),
             "backend": (cfg.get("stages", {}).get(stage, {}) or {}).get("backend"),
         }
         save_state(workdir, state)
-        print(f"   {stage} done in {time.time() - t0:.0f}s → {out}")
+        print(f"   {stage} done in {time.time() - t0:.0f}s -> {out}")
 
 
 def main() -> None:

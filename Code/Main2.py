@@ -466,8 +466,64 @@ class Game:
                 self.settings_menu.draw(overlay)
                 self.backend.blit(overlay, (0, 0))
 
+            self._maybe_save_shot()
             self.backend.present()
-            dt = self.clock.tick(self.settings.fps_cap) /1000
+            frame_ms = self.clock.tick(self.settings.fps_cap)
+            self._maybe_log_frames(frame_ms)
+            dt = frame_ms / 1000
+
+    def _maybe_log_frames(self, frame_ms):
+        """Overlay-off frame times (PRCH_FRAME_LOG=1). Median after a warmup, then exit."""
+        if os.environ.get("PRCH_FRAME_LOG", "0") == "0":
+            return
+        if self.state != "level":
+            return
+        warmup = int(os.environ.get("PRCH_FRAME_LOG_WARMUP", "30"))
+        count = int(os.environ.get("PRCH_FRAME_LOG_COUNT", "60"))
+        seen = getattr(self, "_flog_seen", 0) + 1
+        self._flog_seen = seen
+        if seen <= warmup:
+            return
+        samples = getattr(self, "_flog", None)
+        if samples is None:
+            samples = []
+            self._flog = samples
+        samples.append(frame_ms)
+        if len(samples) < count:
+            return
+        ordered = sorted(samples)
+        median = ordered[len(ordered) // 2]
+        mean = sum(ordered) / len(ordered)
+        rss = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+        print(
+            f"[FRAME] n={len(ordered)} median_ms={median:.1f} mean_ms={mean:.1f} rss_mb={rss:.0f}",
+            flush=True,
+        )
+        pygame.quit()
+        sys.exit(0)
+
+    def _maybe_save_shot(self):
+        """One-shot framebuffer dump for mesh/sprite A/B (PRCH_SHOT_PATH + PRCH_SHOT_FRAME)."""
+        path = os.environ.get("PRCH_SHOT_PATH")
+        if not path or getattr(self, "_shot_done", False):
+            return
+        self._shot_frames = getattr(self, "_shot_frames", 0) + 1
+        want = int(os.environ.get("PRCH_SHOT_FRAME", "45"))
+        if self._shot_frames < want or self.state != "level":
+            return
+        from OpenGL.GL import GL_RGBA, GL_UNSIGNED_BYTE, glFinish, glReadPixels
+        import numpy as np
+        glFinish()
+        w, h = self.backend.get_size()
+        pixels = glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE)
+        arr = np.flipud(np.frombuffer(pixels, dtype=np.uint8).reshape(h, w, 4))
+        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+        pygame.image.save(pygame.image.frombytes(arr.tobytes(), (w, h), "RGBA"), path)
+        self._shot_done = True
+        print(f"[shot] wrote {path} at frame {self._shot_frames}", flush=True)
+        if os.environ.get("PRCH_SHOT_EXIT", "0") != "0":
+            pygame.quit()
+            sys.exit(0)
 
 
     def update_debug_info(self):

@@ -18,6 +18,8 @@ MESH_BOSS_HEIGHT_PX = int(os.environ.get("PRCH_MESH_BOSS_HEIGHT", "650"))
 # Orthographic camera tilt used by the mesh skin shader and ground-frame contact.
 VIEW_ELEVATION_DEG = 45.0
 RENDER_BACKEND = os.environ.get("RENDER_BACKEND", "gpu")  # "cpu" | "gpu" — override via env for profiling
+# Point the camera at the first enemy (boss close-up / A/B shots).
+CAMERA_ENEMY = os.environ.get("PRCH_CAMERA_ENEMY", "0") != "0"
 DISPLAY_FLAGS = pygame.SRCALPHA
 TILESIZE =150#150
 # Interior sight: the chamber mask is walkable (light passes); everything else is a wall.
@@ -91,7 +93,7 @@ ENTITY_BROADPHASE_BACKEND = "grid"  # "quadtree" | "grid"
 ENTITY_BROADPHASE_GRID_CELL_SIZE = 450
 
 # Debug settings
-SHOW_DEBUG_OVERLAY = True  # FPS / memory overlay in Main2 (separate from GameSettings.debug_mode)
+SHOW_DEBUG_OVERLAY = os.environ.get("PRCH_DEBUG_OVERLAY", "1") != "0"
 DEBUG_DRAW_MASKS = False  # Draw collision masks for all entities and objects
 DEBUG_DRAW_OBSTACLE_TINT = True  # Semi-transparent class hue on SAM3 / shape obstacle tiles
 DEBUG_DRAW_EFFECT_RECTS = False  # Draw effect collision rects in red

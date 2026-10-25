@@ -1,0 +1,67 @@
+{
+  "name": "demon",
+  "concept_image": "image_assets/bosses/demon_concept.png",
+  "workdir": "generated/bosses/demon",
+  "install_root": "Graphics/Monsters",
+  "gpu_host": null,
+  "remote_root": "~/Pixel-Realm-Combat-Heroes-Boss",
+  "source": "animate/animated.blend",
+  "forward_axis": "-Y",
+  "directions": 8,
+  "actions": {
+    "idle": {
+      "fps_out": 6
+    },
+    "move": {
+      "fps_out": 8
+    },
+    "attack": {
+      "fps_out": 10
+    },
+    "attack2": {
+      "fps_out": 10
+    },
+    "attack3": {
+      "fps_out": 10
+    }
+  },
+  "camera": {
+    "elevation_deg": 45,
+    "margin": 1.1
+  },
+  "light": {
+    "elevation_deg": 50,
+    "azimuth_deg": -35,
+    "energy": 3.0,
+    "ambient": 0.35
+  },
+  "render": {
+    "engine": "BLENDER_EEVEE_NEXT",
+    "samples": 16,
+    "denoise": false,
+    "target_height_px": 650,
+    "shading": "raw",
+    "ground_shadow": true
+  },
+  "stages": {
+    "concept": {
+      "backend": "none"
+    },
+    "mesh": {
+      "backend": "none"
+    },
+    "rig": {
+      "backend": "unirig",
+      "seed": 12345,
+      "_note": "run by hand on a pod 2026-09-22 (NOTES_rig_jaw_sam3.md); wing bones + SAM3 jaw added locally"
+    },
+    "animate": {
+      "mode": "procedural",
+      "rigged": "rig/jaw/rigged_jaw.glb",
+      "roles": "rig/jaw/bone_roles.json"
+    }
+  },
+  "pack": {
+    "trim": "per_frame"
+  }
+}

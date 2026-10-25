@@ -687,9 +687,7 @@ class Spawner:
             config.get('_spawn_source_object_id'),
             getattr(enemy, "team_id", None),
         )
-        
-
- 
+        return enemy
 
     def spawn_neutral(self, config, pos=None):
         #print(f"neutral spawn attempt {config}, {pos}")

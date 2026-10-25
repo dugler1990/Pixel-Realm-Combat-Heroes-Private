@@ -1,0 +1,56 @@
+[
+ {
+  "name": "M3_RPv1_haymaker_s11",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0",
+  "seed": 11
+ },
+ {
+  "name": "M3_RPv1_haymaker_s22",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0",
+  "seed": 22
+ },
+ {
+  "name": "M3_RPv1_haymaker_s33",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0",
+  "seed": 33
+ },
+ {
+  "name": "M3_RPv1_groundsmash_s11",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0",
+  "seed": 11
+ },
+ {
+  "name": "M3_RPv1_groundsmash_s22",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0",
+  "seed": 22
+ },
+ {
+  "name": "M3_RPv1_groundsmash_s33",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0",
+  "seed": 33
+ },
+ {
+  "name": "M3_RPv1_jump_s11",
+  "prompt": "A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance.",
+  "duration": "4.0",
+  "seed": 11
+ },
+ {
+  "name": "M3_RPv1_jump_s22",
+  "prompt": "A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance.",
+  "duration": "4.0",
+  "seed": 22
+ },
+ {
+  "name": "M3_RPv1_jump_s33",
+  "prompt": "A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance.",
+  "duration": "4.0",
+  "seed": 33
+ }
+]

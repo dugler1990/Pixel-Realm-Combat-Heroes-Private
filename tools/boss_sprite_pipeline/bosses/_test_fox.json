@@ -10,7 +10,7 @@
     "attack": {"source": "Run",    "fps_out": 12}
   },
   "camera": {"elevation_deg": 45, "margin": 1.1},
-  "render": {"engine": "CYCLES", "device": "CPU", "samples": 8, "denoise": true,
+  "render": {"engine": "CYCLES", "device": "GPU", "samples": 8, "denoise": true,
              "resolution": 192, "shading": "raw", "ground_shadow": true},
   "stages": {
     "concept": {"backend": "none"},

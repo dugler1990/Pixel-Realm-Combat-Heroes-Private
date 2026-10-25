@@ -75,6 +75,12 @@ def load_source(path: Path) -> None:
         bpy.ops.import_scene.fbx(filepath=str(path))
     else:
         raise SystemExit(f"unsupported source {path}")
+    # glTF bone display shapes (an Icosphere in "glTF_not_exported") are real meshes: they would
+    # be measured into the frame bounds and cast a shadow. Never part of the character.
+    for coll in [c for c in bpy.data.collections if c.name.startswith("glTF_not_exported")]:
+        for o in list(coll.objects):
+            bpy.data.objects.remove(o, do_unlink=True)
+        bpy.data.collections.remove(coll)
 
 
 def collect_action_bindings() -> dict[str, list[tuple[bpy.types.ID, bpy.types.Action]]]:
@@ -301,6 +307,14 @@ def build_lights(scene, light_cfg):
 
 
 def build_shadow_catcher(scene, bounds, side):
+    """A ground plane that shows only the shadow and stays transparent everywhere else.
+
+    ``is_shadow_catcher`` is Cycles-only: under EEVEE that flag does nothing and the plane
+    renders as a solid lit quad, which fills the frame with opaque grey -- no alpha, so nothing
+    trims and every sprite is the full canvas. EEVEE gets a shader instead: Transparent BSDF
+    mixed toward black by ``Shader to RGB`` of a white diffuse, i.e. alpha only where the light
+    is blocked.
+    """
     mesh = bpy.data.meshes.new("ground")
     size = side * 20
     mesh.from_pydata(
@@ -309,7 +323,38 @@ def build_shadow_catcher(scene, bounds, side):
     ground = bpy.data.objects.new("ground", mesh)
     scene.collection.objects.link(ground)
     ground.location = (bounds["pivot"].x, bounds["pivot"].y, bounds["pivot"].z)
-    ground.is_shadow_catcher = True
+    if scene.render.engine.startswith("BLENDER_EEVEE"):
+        mat = bpy.data.materials.new("shadow_catcher_eevee")
+        mat.use_nodes = True
+        nt = mat.node_tree
+        for n in list(nt.nodes):
+            nt.nodes.remove(n)
+        out = nt.nodes.new("ShaderNodeOutputMaterial")
+        diff = nt.nodes.new("ShaderNodeBsdfDiffuse")
+        diff.inputs["Color"].default_value = (1, 1, 1, 1)
+        s2rgb = nt.nodes.new("ShaderNodeShaderToRGB")          # how lit this point is
+        inv = nt.nodes.new("ShaderNodeInvert")                  # 1 = fully shadowed
+        ramp = nt.nodes.new("ShaderNodeValToRGB")               # tighten + soften the edge
+        ramp.color_ramp.elements[0].position = 0.35
+        ramp.color_ramp.elements[1].position = 0.9
+        mul = nt.nodes.new("ShaderNodeMath"); mul.operation = "MULTIPLY"
+        mul.inputs[1].default_value = 0.55                      # shadow opacity
+        transp = nt.nodes.new("ShaderNodeBsdfTransparent")
+        black = nt.nodes.new("ShaderNodeBsdfDiffuse")
+        black.inputs["Color"].default_value = (0, 0, 0, 1)
+        mix = nt.nodes.new("ShaderNodeMixShader")
+        nt.links.new(diff.outputs[0], s2rgb.inputs[0])
+        nt.links.new(s2rgb.outputs["Color"], inv.inputs["Color"])
+        nt.links.new(inv.outputs["Color"], ramp.inputs["Fac"])
+        nt.links.new(ramp.outputs["Color"], mul.inputs[0])
+        nt.links.new(transp.outputs[0], mix.inputs[1])
+        nt.links.new(black.outputs[0], mix.inputs[2])
+        nt.links.new(mul.outputs[0], mix.inputs["Fac"])
+        nt.links.new(mix.outputs[0], out.inputs["Surface"])
+        mat.blend_method = "BLEND" if hasattr(mat, "blend_method") else mat.blend_method
+        ground.data.materials.append(mat)
+    else:
+        ground.is_shadow_catcher = True
     return ground
 
 
@@ -363,6 +408,9 @@ def configure_render(scene, render_cfg):
     scene.render.image_settings.color_mode = "RGBA"
     scene.render.image_settings.color_depth = "8"
     scene.view_settings.view_transform = "Standard"
+    if render_cfg["engine"].startswith("BLENDER_EEVEE"):
+        scene.eevee.taa_render_samples = int(render_cfg["samples"])
+        scene.eevee.use_shadows = True
     if render_cfg["engine"] == "CYCLES":
         scene.cycles.samples = render_cfg["samples"]
         scene.cycles.use_denoising = render_cfg["denoise"]
@@ -410,7 +458,7 @@ def main(config_path: Path, workdir: Path, frames_dir: Path | None = None) -> No
         unbind_actions(pairs)
         frames = sample_frames(start, end, fps_src, float(spec.get("fps_out", 15)))
         action_plan[name] = (pairs, frames)
-        log(f"action {name}: clip {src_name!r} frames {start:.0f}-{end:.0f} @ {fps_src:.0f}fps → {len(frames)} out @ {spec.get('fps_out', 15)}fps")
+        log(f"action {name}: clip {src_name!r} frames {start:.0f}-{end:.0f} @ {fps_src:.0f}fps -> {len(frames)} out @ {spec.get('fps_out', 15)}fps")
 
     yaw0 = forward_yaw(cfg["forward_axis"])
     yaws = [yaw0 + d * 2 * math.pi / directions for d in range(directions)]
@@ -422,7 +470,7 @@ def main(config_path: Path, workdir: Path, frames_dir: Path | None = None) -> No
     turntable = build_turntable(scene, bounds["pivot"])
     cam, side, res = build_camera(scene, bounds, cam_cfg, int(render_cfg["resolution"]),
                                   render_cfg.get("target_height_px"))
-    log(f"frame {res}px, ortho side {side:.1f} units → model height ≈ "
+    log(f"frame {res}px, ortho side {side:.1f} units -> model height ~ "
         f"{bounds['height'] * math.cos(math.radians(cam_cfg['elevation_deg'])) / side * res:.0f}px")
     build_lights(scene, light_cfg)
     if render_cfg["ground_shadow"]:

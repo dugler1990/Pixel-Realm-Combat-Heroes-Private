@@ -63,7 +63,8 @@ generated/bosses/**
 !generated/bosses/**/
 !generated/bosses/**/state.json
 !generated/bosses/**/manifest.json
-!generated/bosses/**/*.png
+# Render tests are local; the shipped frames are packed into Graphics/Monsters/<boss>/.
+generated/bosses/**/*.png
 !generated/bosses/**/bones.json
 generated/bosses/**/frames/
 Graphics/Monsters/_test_*/
@@ -93,3 +94,13 @@ levels/*/*/export/**/polygons.json
 /%s/
 /0.05
 /ersDouglas*
+
+# Mesh vertex caches: 100 MB - 2.7 GB each, over GitHub's 100 MB file limit. Keep outside git.
+Graphics/Meshes/**/mesh.npz
+
+# Root-level one-off scripts from pod/mesh/paint sessions, and their upload bundles
+/_*.py
+/_*.sh
+/_pod_upload/
+/pod_upload.zip
+tools/pipe.tgz

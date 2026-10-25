@@ -110,6 +110,21 @@ class Entity(pygame.sprite.Sprite):
         feet_y = mask_midbottom_world(self.rect, mask)[1]
         self.anchor_offset = feet_y - self.hitbox.midbottom[1]
 
+    def _frame_anchor_px(self):
+        """The ground pixel of the frame being drawn.
+
+        With ``trim: per_frame`` packs every frame is cropped to its own bbox and carries its own
+        anchor; otherwise one anchor serves the whole set.
+        """
+        per_frame = getattr(self, "sprite_frame_anchors", None)
+        if per_frame:
+            try:
+                entry = per_frame[self.status][self.direction_string][int(self.frame_index)]
+                return entry["anchor"]
+            except (KeyError, IndexError, TypeError, AttributeError):
+                pass
+        return getattr(self, "sprite_anchor_px", None)
+
     def plant_sprite_on_hitbox(self):
         """Hang the sprite so opaque feet sit on hitbox.midbottom + anchor_offset.
 
@@ -119,9 +134,9 @@ class Entity(pygame.sprite.Sprite):
             return
         if self.anchor_offset is None:
             self.capture_feet_anchor()
-        anchor = getattr(self, "sprite_anchor_px", None)
+        anchor = self._frame_anchor_px()
         if anchor is not None:
-            # Pre-rendered N-direction sprites: every frame shares one ground pixel, so
+            # Pre-rendered N-direction sprites: the manifest gives the ground pixel directly, so
             # plant that instead of the mask's lowest row (which the ground shadow moves).
             self.rect = self.image.get_rect(topleft=(
                 self.hitbox.midbottom[0] - int(round(anchor[0])),

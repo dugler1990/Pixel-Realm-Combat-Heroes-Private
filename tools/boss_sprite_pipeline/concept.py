@@ -88,5 +88,5 @@ def run(cfg: dict, workdir: Path, repo_root: Path) -> Path:
     for view, path in views.items():
         cut = BACKENDS[backend](path, stage.get(backend, {}))
         cut.save(concept_dir / f"{view}.png")
-        print(f"  {view}: {cut.size} ← {path.name}")
+        print(f"  {view}: {cut.size} <- {path.name}")
     return front

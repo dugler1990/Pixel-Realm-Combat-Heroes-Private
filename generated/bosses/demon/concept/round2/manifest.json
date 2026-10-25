@@ -1,0 +1,36 @@
+{
+  "round": 2,
+  "source": "Downloads 2026-09-18 19:44",
+  "images": [
+    {
+      "file": "gpt2_front_paint.jpg",
+      "model": "gpt-image-2",
+      "note": "painted illustration, facing camera"
+    },
+    {
+      "file": "gpt2_front_ink.jpg",
+      "model": "gpt-image-2",
+      "note": "inkier / lined variant"
+    },
+    {
+      "file": "gpt2_front_sculpt.jpg",
+      "model": "gpt-image-2",
+      "note": "more sculpted / 3D-lit"
+    },
+    {
+      "file": "nano2_concept_art.jpg",
+      "model": "nano-banana-2",
+      "note": "concept-art style, roaring, red eyes"
+    },
+    {
+      "file": "nano2_2d_illustration.jpg",
+      "model": "nano-banana-2",
+      "note": "flat 2D game illustration, white teeth"
+    },
+    {
+      "file": "nano2_3d_render.jpg",
+      "model": "nano-banana-2",
+      "note": "3D render look"
+    }
+  ]
+}
