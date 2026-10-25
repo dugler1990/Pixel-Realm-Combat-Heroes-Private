@@ -577,6 +577,53 @@ Pull each GLB (hex, §7), rename `<stem>_from_front.glb` → `variants/<stem>/me
 
 ---
 
+## §6b — Anunnaki run, 2026-09-26: corrections to §4/§6 and the one-pod variant
+
+Four characters, one 48 GB A6000 with 200 GB disk, mesh→paint→bake→rig all on the same box.
+Everything below is a place where following §4/§6 literally does **not** work.
+
+**Cut the reference to real alpha first.** The gpt-image references are opaque black-background
+JPGs. §6 says a black opaque background gets built into the mesh, and it does. `scratchpad/
+cutout.py` flood-fills from the four corners (not a global threshold — he is mostly dark, a
+threshold eats him) and writes RGBA. Unexpected bonus: cutting the gaps between arm and torso
+gave TRELLIS **separated arms**, so these rigs need no `ARM_ELEV_CAP` at all — arms go fully
+overhead with no armpit web. That single defect drove a week of demon workarounds.
+
+**DINOv3 401 is an env problem, not an access problem.** The token lives at `/workspace/hf/token`
+(Kimodo's `HF_HOME`), but §6's generate block sets `HF_HOME=/workspace/.cache/huggingface`, so
+TRELLIS never sees it. Add `export HF_TOKEN=$(cat /workspace/hf/token)`. Check access with
+`curl -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $T" <repo>/resolve/main/config.json`
+before blaming the gate — ours was already approved and returned 200.
+
+**§4 P3's EXR patch must be applied verbatim, including its two path variables.** Upstream
+inlines the paths and never defines `exr_p`/`png_p`; a fallback that references them raises
+`NameError` on the first failed read, and you get the identical symptom the patch exists to fix —
+`depth/000.exr` only, `GATE_B9_FAIL 001`. Define both. Then `EXR_BPY_FALLBACK` prints for
+**every** view (0–5), which is the real state of things: OpenCV never reads these EXRs at all.
+
+**§5's `RAST_OK` line is wrong in two ways.**
+* `import custom_rasterizer` before `import torch` → `ImportError: libc10.so`. Import torch first.
+* `differentiable_renderer` is the *directory*; setup.py installs the module as **`mesh_processor`**.
+  So the check is `import torch, custom_rasterizer, mesh_processor, cupy, xatlas`. A
+  `ModuleNotFoundError` here means the verification line is wrong, not that the build failed —
+  check `copying build/.../mesh_processor*.so` in the log before rebuilding anything.
+
+**UniRig: `generate_skin.sh --input` is the SKELETON fbx, not the mesh.** Feeding it the raw GLB
+leaves `asset.joints` None and it dies in `vertex_group.py` with `unsupported operand type(s)
+for -: 'NoneType' and 'float'`. The raw mesh is `merge.sh --target`. Pipeline the stages against
+the mesh loop so each model rigs as soon as TRELLIS drops it. ~2.5 min/model after ~5 min/mesh.
+
+**Do not hand-map UniRig bones.** Bone counts differed per model (28/40/28/46) and arm/leg
+numbering with them, so a table copied from one model is wrong for the next. `rigfix/anun_roles.py`
+walks the skeleton instead — root fan gives legs vs torso, the first bone with three children is
+the chest (neck + both clavicles hang off it), +X is his left. These rigs have a fourth torso
+bone and a real neck, so `SOURCE=anunaki` drives **22 bones vs the demon's 20**, using the SOMA
+source's `Spine2` and `Neck1` — both of which the demon silently dropped.
+
+**Bake on the box you already rented.** §5 says never rent 40 GB for bake, which is about not
+*renting* one — if paint just finished on it, bake there. 96 cores ran all four stems in
+parallel; `UV_REUSE` fired on each (682k–742k verts), so the 1 h 10 m xatlas never happened.
+
 ## §7 — SSH & file transfer
 
 | Item | Value |

@@ -416,6 +416,8 @@ class YSortCameraGroup(pygame.sprite.Group):
             for sprite in self.sprites():
                 if not getattr(sprite, "casts_shadow", False):
                     continue
+                if getattr(sprite, "mesh_boss", None) is not None:
+                    continue  # mesh has no baked silhouette; sprite shadow would be the stale pose
                 if getattr(sprite, "_uncacheable_image", False):
                     continue  # per-frame recolored frame -> no stable texture, skip
                 img = sprite.image
@@ -438,11 +440,7 @@ class YSortCameraGroup(pygame.sprite.Group):
             #print(sprite)
             #print(dir(sprite))
             offset_pos = sprite.rect.topleft - self.offset
-            # Sprites that rebuild self.image as a brand-new Surface on transitions
-            # (lighting recolor, freeze/thaw) have no stable identity to cache against —
-            # route them through the always-upload path, same as grass/overlays.
-            cache_key = None if getattr(sprite, "_uncacheable_image", False) else id(sprite.image)
-            self.backend.blit(sprite.image, offset_pos, cache_key=cache_key)
+            self._draw_sorted_sprite(sprite, offset_pos)
             if self._grass_disturbance_enabled() and hasattr(sprite, "monster_name"):
                 if sprite.monster_name == 'raccoon':
                     self._apply_grass_force( sprite.rect.center , 110 , 40)
@@ -588,8 +586,26 @@ class YSortCameraGroup(pygame.sprite.Group):
             if not self._roof_would_cover(sprite.rect, feet):
                 continue
             offset_pos = sprite.rect.topleft - self.offset
-            cache_key = None if getattr(sprite, "_uncacheable_image", False) else id(sprite.image)
-            self.backend.blit(sprite.image, offset_pos, cache_key=cache_key)
+            self._draw_sorted_sprite(sprite, offset_pos)
+
+    def _draw_sorted_sprite(self, sprite, offset_pos):
+        """Y-sorted entity draw: mesh boss when present, otherwise the sprite blit.
+
+        Sprites stay loaded for masks, hitbox size and y-sort. The mesh is drawn at the
+        hitbox feet (the ground-contact pixel) with the continuous heading.
+        """
+        boss = getattr(sprite, "mesh_boss", None)
+        if boss is not None:
+            hitbox = getattr(sprite, "hitbox", None)
+            feet = hitbox.midbottom if hitbox is not None else sprite.rect.midbottom
+            screen_pos = (feet[0] - self.offset.x, feet[1] - self.offset.y)
+            facing = getattr(sprite, "get_facing_deg", None)
+            facing_deg = facing() if callable(facing) else 0.0
+            height_px = getattr(sprite, "mesh_height_px", 650)
+            if boss.draw(self.backend, screen_pos, facing_deg, height_px):
+                return
+        cache_key = None if getattr(sprite, "_uncacheable_image", False) else id(sprite.image)
+        self.backend.blit(sprite.image, offset_pos, cache_key=cache_key)
 
     def _roof_would_cover(self, sprite_rect, feet):
         for building in self.buildings:

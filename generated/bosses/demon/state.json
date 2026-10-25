@@ -1,0 +1,28 @@
+{
+  "stages": {
+    "concept": {
+      "output": "C:\\Users\\Douglas\\Pixel-Realm-Combat-Heroes-Boss\\generated\\bosses\\demon\\concept\\front.png",
+      "seconds": 94.2,
+      "finished": "2026-09-13 11:05:49",
+      "backend": "rembg"
+    },
+    "mesh": {
+      "output": "C:\\Users\\Douglas\\Pixel-Realm-Combat-Heroes-Boss\\generated\\bosses\\demon\\mesh\\raw.glb",
+      "seconds": 183.9,
+      "finished": "2026-09-13 22:44:10",
+      "backend": "stable_fast_3d"
+    },
+    "render": {
+      "output": "C:\\Users\\Douglas\\Pixel-Realm-Combat-Heroes-Boss\\generated\\bosses\\demon\\frames",
+      "seconds": 5639.1,
+      "finished": "2026-09-22 15:04:35",
+      "backend": null
+    },
+    "pack": {
+      "output": "C:\\Users\\Douglas\\Pixel-Realm-Combat-Heroes-Boss\\Graphics\\Monsters\\demon",
+      "seconds": 178.0,
+      "finished": "2026-09-22 15:07:33",
+      "backend": null
+    }
+  }
+}

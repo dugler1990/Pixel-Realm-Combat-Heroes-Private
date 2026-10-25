@@ -1,0 +1,23 @@
+{
+  "stages": {
+    "animate": {
+      "output": "C:\\Users\\Douglas\\Pixel-Realm-Combat-Heroes-Boss\\generated\\bosses\\_test_fox\\anim\\Fox.glb",
+      "seconds": 0.0,
+      "finished": "2026-09-12 13:03:48",
+      "backend": null
+    },
+    "render": {
+      "output": "C:\\Users\\Douglas\\Pixel-Realm-Combat-Heroes-Boss\\generated\\bosses\\_test_fox\\frames",
+      "seconds": 371.4,
+      "finished": "2026-09-12 13:09:59",
+      "backend": null
+    },
+    "pack": {
+      "output": "C:\\Users\\Douglas\\Pixel-Realm-Combat-Heroes-Boss\\Graphics\\Monsters\\_test_fox",
+      "seconds": 6.9,
+      "finished": "2026-09-12 13:10:06",
+      "backend": null
+    }
+  },
+  "anim_source": "anim/Fox.glb"
+}

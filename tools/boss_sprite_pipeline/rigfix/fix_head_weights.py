@@ -26,7 +26,15 @@ import bpy
 RIG = r"C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Boss\generated\bosses\demon\rig\jaw\rigged_jaw_wingweights.glb"
 ROLES = r"C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Boss\generated\bosses\demon\rig\jaw\bone_roles.json"
 OUT = os.path.dirname(RIG)
-LOW, HIGH = 0.170, 0.205          # all chest below, all head above; the jaw hinge is z 0.207
+# The cut must sit BELOW the jaw, not through it. At 0.170/0.205 it ran straight across the
+# mouth: the jaw stayed on the head while the skin under it moved to the chest, so every head
+# turn pried them apart and the mouth aperture swung 52% (mouth_gap.py). The jaw geometry tops
+# out at z 0.193, so the transfer has to finish under that.
+LOW, HIGH = 0.140, 0.175
+# The pivot is a SEPARATE number from the weight cut and must not be tied to it. The cut has to
+# finish below the jaw (0.193); the pivot belongs at the base of the skull, near the jaw hinge.
+# Deriving one from the other silently cancelled the pivot raise when the cut was lowered.
+PIVOT_Z = 0.205
 
 R = json.load(open(ROLES))
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -45,9 +53,21 @@ if chest not in vg:
 gi = {g.index: g.name for g in mesh.vertex_groups}
 mw = mesh.matrix_world
 
+# anything the jaw owns stays with the head whatever its height - so the mouth cannot be
+# split by a height rule again
+jaw = R.get("jaw")
+jaw_owned = set()
+if jaw:
+    for v in mesh.data.vertices:
+        if any(gi.get(g.group) == jaw and g.weight > 0.05 for g in v.groups):
+            jaw_owned.add(v.index)
+print("protecting %d jaw vertices from the transfer" % len(jaw_owned), flush=True)
+
 moved = 0.0
 n = 0
 for v in mesh.data.vertices:
+    if v.index in jaw_owned:
+        continue
     w = next((g.weight for g in v.groups if gi.get(g.group) == head), 0.0)
     if w <= 0.0:
         continue
@@ -72,7 +92,7 @@ eb = arm.data.edit_bones[head]
 eb.use_connect = False                     # before moving, or it would drag the chest's tail
 amw = arm.matrix_world
 hz, tz = (amw @ eb.head).z, (amw @ eb.tail).z
-f = max(0.0, min(0.9, (HIGH - hz) / max(tz - hz, 1e-6)))
+f = max(0.0, min(0.9, (PIVOT_Z - hz) / max(tz - hz, 1e-6)))
 eb.head = eb.head.lerp(eb.tail, f)
 print("head pivot world z %.3f -> %.3f (%.0f%% along the bone)" % (
     hz, (amw @ eb.head).z, f * 100), flush=True)

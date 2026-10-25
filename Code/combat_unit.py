@@ -14,6 +14,55 @@ from Interaction import InteractionContext
 # This is for file importing but is in Main.py anyways
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+class _LazyDirFrames(dict):
+    """{direction: [Surface]} for one action of an N-direction pre-rendered monster.
+
+    A direction's folder is loaded the first time it is looked up, not at spawn. A giant boss
+    (tools/boss_sprite_pipeline, ~650 px tall) is 5 actions x 8 directions x ~12 frames of
+    ~1600 px PNGs; loading all of it up front is seconds of stall and well over a gigabyte of
+    surfaces, of which a fight touches a handful of directions. Nothing is evicted (the GPU
+    large-texture cache is keyed by surface id, so freeing surfaces would need backend
+    invalidation) -- resident memory grows only with the directions actually used.
+    """
+
+    def __init__(self, folder, direction_keys):
+        super().__init__()
+        self._folder = folder
+        self._keys = list(direction_keys)
+
+    def __missing__(self, key):
+        if key not in self._keys:
+            raise KeyError(key)
+        frames = import_folder(f"{self._folder}/{key}")
+        dict.__setitem__(self, key, frames)
+        return frames
+
+    def __contains__(self, key):
+        return key in self._keys
+
+    def keys(self):
+        return list(self._keys)
+
+    def loaded_keys(self):
+        return list(dict.keys(self))
+
+    def items(self):  # only what is resident; iterating must never force-load every direction
+        return [(k, dict.__getitem__(self, k)) for k in dict.keys(self)]
+
+
+class _LazyDirMasks(dict):
+    """{direction: [Mask]} built from a _LazyDirFrames on first access, one direction at a time."""
+
+    def __init__(self, frames):
+        super().__init__()
+        self._frames = frames
+
+    def __missing__(self, key):
+        masks = frames_to_masks(self._frames[key])
+        dict.__setitem__(self, key, masks)
+        return masks
+
+
 class CombatUnit(Entity):
     _AGGRO_CACHE_TTL = 60
     # "move" is the walk cycle; "idle" and "attack" stay time-based.
@@ -37,7 +86,8 @@ class CombatUnit(Entity):
                  item_drop_info=None,
                  combat_config=None,
                  team_id="enemy",
-                 sprite_type=None):
+                 sprite_type=None,
+                 mesh=True):
         
         
         #                  monster_name=config['type'], 
@@ -107,7 +157,19 @@ class CombatUnit(Entity):
         self._status_fps = None
 
         # Graphics Setup
-        if self.eight_dir:
+        self.mesh_boss = None
+        self.mesh_only = False
+        self.mesh_height_px = MESH_BOSS_HEIGHT_PX
+        if self.eight_dir and mesh and USE_MESH_BOSS:
+            from mesh_boss import MeshBoss, MeshBossPack
+            if MeshBossPack.exists(monster_name):
+                self.mesh_boss = MeshBoss(monster_name)
+                self.mesh_only = True
+                self.animations_left_right_indicator = True
+                self.direction_keys = list(self.sprite_manifest["directions"])
+        if self.mesh_only:
+            pass
+        elif self.eight_dir:
             self.animations_left_right_indicator = True  # frames are dict-of-dict, like left/right
             self.import_graphics_8dir(monster_name)
         elif animations_left_right_indicator:
@@ -121,7 +183,17 @@ class CombatUnit(Entity):
 
         self.status = "idle"
         self.direction_string = "s" if self.eight_dir else "right"
-        if self.animations_left_right_indicator:
+        if self.mesh_only:
+            scale = self.mesh_height_px / max(self.mesh_boss.pack.height_units, 1e-6)
+            span = self.mesh_boss.pack.bbox_hi - self.mesh_boss.pack.bbox_lo
+            w = max(8, int(float(span[0]) * scale))
+            h = max(8, int(self.mesh_boss.pack.height_units * scale))
+            self.image = pygame.Surface((w, h), pygame.SRCALPHA)
+            # Feet at the bottom centre of this stand-in. The mesh is drawn at hitbox.midbottom.
+            # A box, not the sprite's pixel mask: he collides differently from a classic demon.
+            self.sprite_anchor_px = (w * 0.5, h - 1)
+            self.sprite_frame_anchors = None
+        elif self.animations_left_right_indicator:
             self.image = self.animations[self.status][self.direction_string][self.frame_index]
         else:
             self.image = self.animations[self.status][self.frame_index]
@@ -170,12 +242,19 @@ class CombatUnit(Entity):
 
         #### 
 
-        self.masks = get_or_build_entity_masks(
-            self.monster_name,
-            self.animations,
-            self.animations_left_right_indicator,
-            skip_disk=(self.monster_name == "tribey_snake"),
-        )
+        if self.mesh_only:
+            self.masks = None
+            self.mask = None
+        elif self.eight_dir:
+            # per-direction, built on first use; see _LazyDirFrames for why not up front
+            self.masks = {action: _LazyDirMasks(frames) for action, frames in self.animations.items()}
+        else:
+            self.masks = get_or_build_entity_masks(
+                self.monster_name,
+                self.animations,
+                self.animations_left_right_indicator,
+                skip_disk=(self.monster_name == "tribey_snake"),
+            )
         self.mask = None
 
         # Player Interaction
@@ -332,9 +411,12 @@ class CombatUnit(Entity):
         self.direction_string = min(self.direction_keys, key=distance)
         return self.direction_string
 
-    
-     
-    
+    def get_facing_deg(self):
+        """Continuous heading in screen degrees (y grows downward). Mesh draw uses this."""
+        if self.direction.length_squared() == 0:
+            return float(self.COMPASS_DEG.get(self.direction_string, 90))
+        return math.degrees(math.atan2(self.direction.y, self.direction.x)) % 360
+
     def thaw(self):
         """Thaw the enemy, resuming normal behavior."""
         #print('THAWED')
@@ -343,6 +425,9 @@ class CombatUnit(Entity):
         #print(self.animations[self.status])
         #print(self.direction_string  )
         #print(self.animations_left_right_indicator)
+        if getattr(self, "mesh_only", False):
+            self.plant_sprite_on_hitbox()
+            return
         if self.animations_left_right_indicator:            
             self.image = self.animations[self.status][self.direction_string][int(self.frame_index)]
         else:
@@ -363,10 +448,14 @@ class CombatUnit(Entity):
         main_path = f"../Graphics/Monsters/{name}/"
         self.direction_keys = list(manifest["directions"])
         self.animations = {
-            action: {key: import_folder(main_path + f"{action}/{key}") for key in self.direction_keys}
+            action: _LazyDirFrames(main_path + action, self.direction_keys)
             for action in manifest["actions"]
         }
         self.sprite_anchor_px = tuple(manifest["anchor_px"])
+        # per_frame trim: each frame carries its own size and anchor (pack_frames --trim per_frame).
+        # Without it every frame is padded to the widest pose in any direction, which on a 650 px
+        # boss is ~4x the pixels for no visible gain.
+        self.sprite_frame_anchors = manifest.get("frames")
         self._status_fps = {action: float(spec.get("fps", 15)) for action, spec in manifest["actions"].items()}
 
     def import_graphics_left_right(self, name):
@@ -592,6 +681,12 @@ class CombatUnit(Entity):
 
     #@profile
     def animate(self):
+        if self.mesh_only:
+            if not self.frozen:
+                self.mesh_boss.set_action(self.status)
+                self.mesh_boss.advance(1.0 / FPS)
+            self.plant_sprite_on_hitbox()
+            return
         
        # print(self.status)
        # print(self.frame_index)
@@ -639,6 +734,9 @@ class CombatUnit(Entity):
             self.image = animation[int(self.frame_index)]
             self.mask = masks[int(self.frame_index)]
             self.plant_sprite_on_hitbox()
+            if self.mesh_boss is not None:
+                self.mesh_boss.set_action(self.status)
+                self.mesh_boss.advance(1.0 / FPS)
     
             if not self.vulnerable:
                 alpha = self.wave_value()

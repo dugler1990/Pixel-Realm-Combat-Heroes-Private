@@ -854,9 +854,18 @@ class Level4:
             positions = (positions * repeats)[:target_count]
 
         mix_types = self.benchmark_runtime.expanded_enemy_type_list(target_count)
+        classic_count = int(os.environ.get("PRCH_BENCHMARK_CLASSIC_COUNT", "0"))
         for i, pos in enumerate(positions[:target_count]):
             et = mix_types[i] if mix_types else self.benchmark_runtime.enemy_type
-            self.spawner.spawn_enemy({"type": et, "pos": pos})
+            cfg = {"type": et, "pos": pos}
+            if i < classic_count:
+                cfg["mesh"] = False
+            enemy = self.spawner.spawn_enemy(cfg)
+            print(
+                "[BENCH] spawn %d mesh_only=%s"
+                % (i, bool(getattr(enemy, "mesh_only", False))),
+                flush=True,
+            )
 
     def _toggle_benchmark_backend(self):
         if self.benchmark_runtime.broadphase_backend == "quadtree":
@@ -2443,6 +2452,10 @@ class Level4:
             if getattr(self, "rts_session", None) is not None and self.rts_session.is_active()
             else self.player
         )
+        if CAMERA_ENEMY:
+            enemies = list(getattr(self.layout_manager.spawner, "enemies", []) or [])
+            if enemies:
+                camera_focus = enemies[0]
         #print(f"\n\n after layout update {self.player.rect.x}\n\n")
         #self.layout_manager.visible_sprites.custom_draw(self.player,dt, self.weather.weather_intensity, self.weather.light_level)
        #print(f"\n\n after after custom draw {self.player.rect.x}\n\n")

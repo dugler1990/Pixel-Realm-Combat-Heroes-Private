@@ -1871,6 +1871,11 @@ class LayoutManager:
             spawn_cfg["pos"] = pos
 
             if spawn_cfg["kind"] == "enemy":
+                print(
+                    "[placed] %s mesh=%s pos=%s"
+                    % (spawn_cfg.get("type"), spawn_cfg.get("mesh", True), spawn_cfg.get("pos")),
+                    flush=True,
+                )
                 # CS2 (server-authoritative co-op): record every placed-enemy
                 # spawn config so a multiplayer client can upload the map's enemy
                 # spec to the server, which owns the enemy sim. Collected

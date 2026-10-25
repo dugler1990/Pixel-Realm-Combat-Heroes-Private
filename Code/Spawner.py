@@ -595,6 +595,7 @@ class Spawner:
             persistent=persistent,
             item_drop_info=item_drop_info,
             team_id=team_id,
+            mesh=config.get("mesh", True),
         )
 
     def _mp_local_enemies_suppressed(self):
@@ -683,9 +684,7 @@ class Spawner:
             config.get('_spawn_source_object_id'),
             getattr(enemy, "team_id", None),
         )
-        
-
- 
+        return enemy
 
     def spawn_neutral(self, config, pos=None):
         #print(f"neutral spawn attempt {config}, {pos}")

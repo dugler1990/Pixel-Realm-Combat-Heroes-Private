@@ -1,0 +1,715 @@
+[
+ {
+  "name": "P_V1_haymaker",
+  "prompt": "A person throws a heavy punch with their right arm, then stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_V2_haymaker",
+  "prompt": "An angry person throws a heavy punch with their right arm, then stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_V3_haymaker",
+  "prompt": "A person swings their right arm forcefully across their body at chest height, then stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_K1_haymaker",
+  "prompt": "A person stands still in a combat stance. A person throws a heavy punch with their right arm. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "P_K2_haymaker",
+  "prompt": "A person stands still in a combat stance. A person throws a heavy punch with their right arm. A person stands still in a combat stance.",
+  "duration": "1.0 4.0 1.0"
+ },
+ {
+  "name": "P_K3_haymaker",
+  "prompt": "A person stands still in a combat stance. A person winds up, shifting their weight onto their right leg. A person throws a heavy punch with their right arm. A person recovers their balance. A person stands still in a combat stance.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "P_K4_haymaker",
+  "prompt": "A person stands still in a combat stance. A person winds up, shifting their weight onto their right leg. An angry person throws a heavy punch with their right arm. A person recovers their balance. A person stands still in a combat stance.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "P_K5_haymaker",
+  "prompt": "A person winds up, shifting their weight onto their right leg. A person throws a heavy punch with their right arm. A person recovers their balance and stands idle.",
+  "duration": "1.0 2.0 1.5"
+ },
+ {
+  "name": "P_V1_groundsmash",
+  "prompt": "A person slams both fists down onto the ground, then stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_V2_groundsmash",
+  "prompt": "An angry person slams both fists down onto the ground, then stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_V3_groundsmash",
+  "prompt": "A person raises both arms overhead and strikes downward heavily onto the ground, then stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_K1_groundsmash",
+  "prompt": "A person stands still in a combat stance. A person slams both fists down onto the ground. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "P_K2_groundsmash",
+  "prompt": "A person stands still in a combat stance. A person slams both fists down onto the ground. A person stands still in a combat stance.",
+  "duration": "1.0 4.0 1.0"
+ },
+ {
+  "name": "P_K3_groundsmash",
+  "prompt": "A person stands still in a combat stance. A person raises both arms high above their head. A person slams both fists down onto the ground. A person recovers their balance. A person stands still in a combat stance.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "P_K4_groundsmash",
+  "prompt": "A person stands still in a combat stance. A person raises both arms high above their head. An angry person slams both fists down onto the ground. A person recovers their balance. A person stands still in a combat stance.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "P_K5_groundsmash",
+  "prompt": "A person raises both arms high above their head. A person slams both fists down onto the ground. A person recovers their balance and stands idle.",
+  "duration": "1.0 2.0 1.5"
+ },
+ {
+  "name": "P_V1_jump",
+  "prompt": "A person jumps straight up as high as they can, then lands and stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_V2_jump",
+  "prompt": "An angry person jumps straight up as high as they can, then lands and stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_V3_jump",
+  "prompt": "A person crouches deeply and jumps powerfully straight upward, then lands and stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_K1_jump",
+  "prompt": "A person stands still in a combat stance. A person jumps straight up as high as they can. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "P_K2_jump",
+  "prompt": "A person stands still in a combat stance. A person jumps straight up as high as they can. A person stands still in a combat stance.",
+  "duration": "1.0 4.0 1.0"
+ },
+ {
+  "name": "P_K3_jump",
+  "prompt": "A person stands still in a combat stance. A person crouches deeply with both knees bent. A person jumps straight up as high as they can. A person recovers their balance. A person stands still in a combat stance.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "P_K4_jump",
+  "prompt": "A person stands still in a combat stance. A person crouches deeply with both knees bent. An angry person jumps straight up as high as they can. A person recovers their balance. A person stands still in a combat stance.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "P_K5_jump",
+  "prompt": "A person crouches deeply with both knees bent. A person jumps straight up as high as they can. A person recovers their balance and stands idle.",
+  "duration": "1.0 2.0 1.5"
+ },
+ {
+  "name": "P_V1_damage",
+  "prompt": "A person is struck in the chest and staggers backward, then stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_V2_damage",
+  "prompt": "An injured person is struck in the chest and staggers backward, then stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_V3_damage",
+  "prompt": "A person recoils sharply backward from a heavy impact to their chest, catching themselves on their right leg, then stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_K1_damage",
+  "prompt": "A person stands still in a combat stance. A person is struck in the chest and staggers backward. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "P_K2_damage",
+  "prompt": "A person stands still in a combat stance. A person is struck in the chest and staggers backward. A person stands still in a combat stance.",
+  "duration": "1.0 4.0 1.0"
+ },
+ {
+  "name": "P_K3_damage",
+  "prompt": "A person stands still in a combat stance. A person braces themselves in a combat stance. A person is struck in the chest and staggers backward. A person recovers their balance. A person stands still in a combat stance.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "P_K4_damage",
+  "prompt": "A person stands still in a combat stance. A person braces themselves in a combat stance. An angry person is struck in the chest and staggers backward. A person recovers their balance. A person stands still in a combat stance.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "P_K5_damage",
+  "prompt": "A person braces themselves in a combat stance. A person is struck in the chest and staggers backward. A person recovers their balance and stands idle.",
+  "duration": "1.0 2.0 1.5"
+ },
+ {
+  "name": "P_V1_slap",
+  "prompt": "A person swings their open right hand sideways in a wide slap, then stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_V2_slap",
+  "prompt": "An angry person swings their open right hand sideways in a wide slap, then stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_V3_slap",
+  "prompt": "A person sweeps their open right hand horizontally across their body at shoulder height, then stands idle.",
+  "duration": "4.0"
+ },
+ {
+  "name": "P_K1_slap",
+  "prompt": "A person stands still in a combat stance. A person swings their open right hand sideways in a wide slap. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "P_K2_slap",
+  "prompt": "A person stands still in a combat stance. A person swings their open right hand sideways in a wide slap. A person stands still in a combat stance.",
+  "duration": "1.0 4.0 1.0"
+ },
+ {
+  "name": "P_K3_slap",
+  "prompt": "A person stands still in a combat stance. A person twists their torso to the right, drawing their arm back. A person swings their open right hand sideways in a wide slap. A person recovers their balance. A person stands still in a combat stance.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "P_K4_slap",
+  "prompt": "A person stands still in a combat stance. A person twists their torso to the right, drawing their arm back. An angry person swings their open right hand sideways in a wide slap. A person recovers their balance. A person stands still in a combat stance.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "P_K5_slap",
+  "prompt": "A person twists their torso to the right, drawing their arm back. A person swings their open right hand sideways in a wide slap. A person recovers their balance and stands idle.",
+  "duration": "1.0 2.0 1.5"
+ },
+ {
+  "name": "W_heavy_haymaker",
+  "prompt": "A giant gorilla loads all its weight onto its right side, then swings one massive arm in a single wide bear swipe across to the left, following through with its whole body.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_single_haymaker",
+  "prompt": "A huge brute throws a haymaker punch.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_nocre_haymaker",
+  "prompt": "A big heavy man throws a wild haymaker punch, swinging his whole body around and stumbling off balance.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_heavy_groundsmash",
+  "prompt": "A giant gorilla raises both fists high above its head and smashes them straight down into the ground with enormous force, staying planted and heavy.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_single_groundsmash",
+  "prompt": "A huge brute slams both arms into the ground.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_nocre_groundsmash",
+  "prompt": "A big heavy man raises both arms high and slams them down into the ground, lurching after the blow.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_heavy_jump",
+  "prompt": "A huge heavy monster crouches deep then explodes upward off both legs as high as it can, hangs at the top, and crashes back down.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_single_jump",
+  "prompt": "A huge brute jumps as high as it can.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_nocre_jump",
+  "prompt": "A big heavy man crouches then launches himself upward off both legs, flailing, and crashes back down.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_heavy_damage",
+  "prompt": "A massive heavy creature is struck in the chest and steps back, absorbing the impact.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_single_damage",
+  "prompt": "A huge brute is hit and staggers back.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_nocre_damage",
+  "prompt": "A big heavy man takes a hard hit to the chest, staggering backwards and nearly falling over.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_heavy_slap",
+  "prompt": "A huge heavy creature swings one open hand across in a single clear sideways slap, arm fully extended away from its body.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_single_slap",
+  "prompt": "A huge brute slaps sideways with an open hand.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_nocre_slap",
+  "prompt": "A big heavy man swings an open hand in a violent sideways slap, his bulk lurching after it.",
+  "duration": "4.0"
+ },
+ {
+  "name": "B1_none_2s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "2.0"
+ },
+ {
+  "name": "B1_fit_2s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "2.0",
+  "constraints": "/workspace/cons/full_60.json"
+ },
+ {
+  "name": "B1_none_3s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "3.0"
+ },
+ {
+  "name": "B1_fit_3s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "3.0",
+  "constraints": "/workspace/cons/full_90.json"
+ },
+ {
+  "name": "B1_none_4s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0"
+ },
+ {
+  "name": "B1_fit_4s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/full_120.json"
+ },
+ {
+  "name": "B1_none_5s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "5.0"
+ },
+ {
+  "name": "B1_fit_5s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "5.0",
+  "constraints": "/workspace/cons/full_150.json"
+ },
+ {
+  "name": "B1_none_6s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "6.0"
+ },
+ {
+  "name": "B1_fit_6s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "6.0",
+  "constraints": "/workspace/cons/full_180.json"
+ },
+ {
+  "name": "B1_none_8s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "8.0"
+ },
+ {
+  "name": "B1_fit_8s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "8.0",
+  "constraints": "/workspace/cons/full_240.json"
+ },
+ {
+  "name": "B1b_stale_8s_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "8.0",
+  "constraints": "/workspace/cons/full_150.json"
+ },
+ {
+  "name": "B1_none_2s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "2.0"
+ },
+ {
+  "name": "B1_fit_2s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "2.0",
+  "constraints": "/workspace/cons/full_60.json"
+ },
+ {
+  "name": "B1_none_3s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "3.0"
+ },
+ {
+  "name": "B1_fit_3s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "3.0",
+  "constraints": "/workspace/cons/full_90.json"
+ },
+ {
+  "name": "B1_none_4s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0"
+ },
+ {
+  "name": "B1_fit_4s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/full_120.json"
+ },
+ {
+  "name": "B1_none_5s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "5.0"
+ },
+ {
+  "name": "B1_fit_5s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "5.0",
+  "constraints": "/workspace/cons/full_150.json"
+ },
+ {
+  "name": "B1_none_6s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "6.0"
+ },
+ {
+  "name": "B1_fit_6s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "6.0",
+  "constraints": "/workspace/cons/full_180.json"
+ },
+ {
+  "name": "B1_none_8s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "8.0"
+ },
+ {
+  "name": "B1_fit_8s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "8.0",
+  "constraints": "/workspace/cons/full_240.json"
+ },
+ {
+  "name": "B1b_stale_8s_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "8.0",
+  "constraints": "/workspace/cons/full_150.json"
+ },
+ {
+  "name": "N1_full_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/full_120.json"
+ },
+ {
+  "name": "N2_root2d_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/root2d_120.json"
+ },
+ {
+  "name": "N3_endeff_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/endeff_120.json"
+ },
+ {
+  "name": "N4_hands_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/hands_120.json"
+ },
+ {
+  "name": "N1_full_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/full_120.json"
+ },
+ {
+  "name": "N2_root2d_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/root2d_120.json"
+ },
+ {
+  "name": "N3_endeff_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/endeff_120.json"
+ },
+ {
+  "name": "N4_hands_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/hands_120.json"
+ },
+ {
+  "name": "N1_full_jump",
+  "prompt": "A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/full_120.json"
+ },
+ {
+  "name": "N2_root2d_jump",
+  "prompt": "A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/root2d_120.json"
+ },
+ {
+  "name": "N3_endeff_jump",
+  "prompt": "A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/endeff_120.json"
+ },
+ {
+  "name": "N4_hands_jump",
+  "prompt": "A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance.",
+  "duration": "4.0",
+  "constraints": "/workspace/cons/hands_120.json"
+ },
+ {
+  "name": "C1_bal_haymaker",
+  "prompt": "A huge heavy brute stands ready. A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance. It returns to standing.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "C2_longact_haymaker",
+  "prompt": "A huge heavy brute stands ready. A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance. It returns to standing.",
+  "duration": "1.0 4.0 1.0"
+ },
+ {
+  "name": "C3_even_haymaker",
+  "prompt": "A huge heavy brute stands ready. A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance. It returns to standing.",
+  "duration": "2.0 2.0 2.0"
+ },
+ {
+  "name": "C5_trans_haymaker",
+  "prompt": "A huge heavy brute stands ready. A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance. It returns to standing.",
+  "duration": "1.0 2.5 1.0",
+  "transition": 15
+ },
+ {
+  "name": "C7_nochain_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.5"
+ },
+ {
+  "name": "Cp_5chunk_haymaker",
+  "prompt": "A huge heavy brute stands ready. It winds up. A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance. It recovers. It stands ready again.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "CW_heavy_haymaker",
+  "prompt": "A huge heavy brute stands ready. A giant gorilla loads all its weight onto its right side, then swings one massive arm in a single wide bear swipe across to the left, following through with its whole body. It returns to standing.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "C1_bal_groundsmash",
+  "prompt": "A huge heavy brute stands ready. A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow. It returns to standing.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "C2_longact_groundsmash",
+  "prompt": "A huge heavy brute stands ready. A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow. It returns to standing.",
+  "duration": "1.0 4.0 1.0"
+ },
+ {
+  "name": "C3_even_groundsmash",
+  "prompt": "A huge heavy brute stands ready. A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow. It returns to standing.",
+  "duration": "2.0 2.0 2.0"
+ },
+ {
+  "name": "C5_trans_groundsmash",
+  "prompt": "A huge heavy brute stands ready. A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow. It returns to standing.",
+  "duration": "1.0 2.5 1.0",
+  "transition": 15
+ },
+ {
+  "name": "C7_nochain_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.5"
+ },
+ {
+  "name": "Cp_5chunk_groundsmash",
+  "prompt": "A huge heavy brute stands ready. It winds up. A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow. It recovers. It stands ready again.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "CW_heavy_groundsmash",
+  "prompt": "A huge heavy brute stands ready. A giant gorilla raises both fists high above its head and smashes them straight down into the ground with enormous force, staying planted and heavy. It returns to standing.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "C1_bal_jump",
+  "prompt": "A huge heavy brute stands ready. A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance. It returns to standing.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "C2_longact_jump",
+  "prompt": "A huge heavy brute stands ready. A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance. It returns to standing.",
+  "duration": "1.0 4.0 1.0"
+ },
+ {
+  "name": "C3_even_jump",
+  "prompt": "A huge heavy brute stands ready. A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance. It returns to standing.",
+  "duration": "2.0 2.0 2.0"
+ },
+ {
+  "name": "C5_trans_jump",
+  "prompt": "A huge heavy brute stands ready. A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance. It returns to standing.",
+  "duration": "1.0 2.5 1.0",
+  "transition": 15
+ },
+ {
+  "name": "C7_nochain_jump",
+  "prompt": "A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance.",
+  "duration": "4.5"
+ },
+ {
+  "name": "Cp_5chunk_jump",
+  "prompt": "A huge heavy brute stands ready. It winds up. A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance. It recovers. It stands ready again.",
+  "duration": "1.0 1.0 2.0 1.0 1.0"
+ },
+ {
+  "name": "CW_heavy_jump",
+  "prompt": "A huge heavy brute stands ready. A huge heavy monster crouches deep then explodes upward off both legs as high as it can, hangs at the top, and crashes back down. It returns to standing.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "G_nocfg_haymaker",
+  "prompt": "A person stands still in a combat stance. A person throws a heavy punch with their right arm. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0",
+  "cfg_type": "nocfg"
+ },
+ {
+  "name": "G_regular_haymaker",
+  "prompt": "A person stands still in a combat stance. A person throws a heavy punch with their right arm. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0",
+  "cfg_type": "regular",
+  "cfg_weight": [
+   3.0
+  ]
+ },
+ {
+  "name": "G_sep6_haymaker",
+  "prompt": "A person stands still in a combat stance. A person throws a heavy punch with their right arm. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0",
+  "cfg_weight": [
+   3.0,
+   6.0
+  ]
+ },
+ {
+  "name": "G_sep1_haymaker",
+  "prompt": "A person stands still in a combat stance. A person throws a heavy punch with their right arm. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0",
+  "cfg_weight": [
+   3.0,
+   1.0
+  ]
+ },
+ {
+  "name": "G_nocfg_groundsmash",
+  "prompt": "A person stands still in a combat stance. A person slams both fists down onto the ground. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0",
+  "cfg_type": "nocfg"
+ },
+ {
+  "name": "G_regular_groundsmash",
+  "prompt": "A person stands still in a combat stance. A person slams both fists down onto the ground. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0",
+  "cfg_type": "regular",
+  "cfg_weight": [
+   3.0
+  ]
+ },
+ {
+  "name": "G_sep6_groundsmash",
+  "prompt": "A person stands still in a combat stance. A person slams both fists down onto the ground. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0",
+  "cfg_weight": [
+   3.0,
+   6.0
+  ]
+ },
+ {
+  "name": "G_sep1_groundsmash",
+  "prompt": "A person stands still in a combat stance. A person slams both fists down onto the ground. A person stands still in a combat stance.",
+  "duration": "1.0 2.5 1.0",
+  "cfg_weight": [
+   3.0,
+   1.0
+  ]
+ },
+ {
+  "name": "O_nopost_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0",
+  "no_post": true
+ },
+ {
+  "name": "O_tpose_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0",
+  "tpose": true
+ },
+ {
+  "name": "O_steps250_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0",
+  "steps": 250
+ },
+ {
+  "name": "O_steps50_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0",
+  "steps": 50
+ },
+ {
+  "name": "O_nopost_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0",
+  "no_post": true
+ },
+ {
+  "name": "O_tpose_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0",
+  "tpose": true
+ },
+ {
+  "name": "O_steps250_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0",
+  "steps": 250
+ },
+ {
+  "name": "O_steps50_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0",
+  "steps": 50
+ }
+]

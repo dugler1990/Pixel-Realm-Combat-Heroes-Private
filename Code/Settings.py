@@ -13,6 +13,16 @@ WINDOW_WIDTH_RATIO = 0.6
 WINDOW_HEIGHT_RATIO = 0.6
 FPS = 30
 RENDER_BACKEND = os.environ.get("RENDER_BACKEND", "gpu")  # "cpu" | "gpu" — override via env for profiling
+# Method B: draw Graphics/Meshes/<name> when a pack exists. PRCH_MESH_BOSS=0 forces sprites.
+USE_MESH_BOSS = os.environ.get("PRCH_MESH_BOSS", "1") != "0"
+MESH_BOSS_HEIGHT_PX = int(os.environ.get("PRCH_MESH_BOSS_HEIGHT", "650"))
+# Absolute pack frame. Pins every demon so the shared VBO is not rewritten.
+_pin = os.environ.get("PRCH_MESH_PIN_FRAME", "")
+MESH_PIN_FRAME = int(_pin) if _pin != "" else None
+# Keep the upload, flush, and depth clear, but do not rasterize. Premise split.
+MESH_SKIP_DRAW = os.environ.get("PRCH_MESH_SKIP_DRAW", "0") != "0"
+# Point the camera at the first enemy (boss close-up / A/B shots).
+CAMERA_ENEMY = os.environ.get("PRCH_CAMERA_ENEMY", "0") != "0"
 DISPLAY_FLAGS = pygame.SRCALPHA
 TILESIZE =150#150
 # Ground is composited into ONE surface and uploaded as ONE GL texture, so the whole world has
@@ -81,7 +91,7 @@ ENTITY_BROADPHASE_BACKEND = "grid"  # "quadtree" | "grid"
 ENTITY_BROADPHASE_GRID_CELL_SIZE = 450
 
 # Debug settings
-SHOW_DEBUG_OVERLAY = True  # FPS / memory overlay in Main2 (separate from GameSettings.debug_mode)
+SHOW_DEBUG_OVERLAY = os.environ.get("PRCH_DEBUG_OVERLAY", "1") != "0"
 DEBUG_DRAW_MASKS = False  # Draw collision masks for all entities and objects
 DEBUG_DRAW_OBSTACLE_TINT = True  # Semi-transparent class hue on SAM3 / shape obstacle tiles
 DEBUG_DRAW_EFFECT_RECTS = False  # Draw effect collision rects in red
@@ -381,6 +391,32 @@ monster_data = {
             'combat_context':{
                 'damage_player': True,
                 'fire_projectile': True,
+                'trigger_death_particles': True,
+                'add_exp': True,
+                'update_quad_tree': True
+                }
+            }
+        },
+        # Giant boss: pre-rendered 8-direction sprites from tools/boss_sprite_pipeline
+        # (Graphics/Monsters/demon/manifest.json). ~650 px tall on screen, so the melee reach
+        # and notice radius are sized for that, not for a normal monster.
+        "demon": {
+            "health": 2500,
+            "exp": 5000,
+            "attack_type": "melee",
+            "attack_sound": "../Audio/Attack/Slash.wav",
+            "speed": 3,
+            "resistance": 8,
+            "combat_config":{
+            "melee_attack_radius": 260,
+            "notice_radius": 1600,
+            "melee_attacks": [{"damage": 40, "cooldown": 2200}],
+            "melee_parry_chance": 0.0,
+            "projectile_parry_chance": 0.0,
+            "parry_cooldown": 0,
+
+            'combat_context':{
+                'damage_player': True,
                 'trigger_death_particles': True,
                 'add_exp': True,
                 'update_quad_tree': True

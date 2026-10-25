@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="33" height="18" tilewidth="150" tileheight="150" infinite="0" nextlayerid="7" nextobjectid="47">
+<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="33" height="18" tilewidth="150" tileheight="150" infinite="0" nextlayerid="8" nextobjectid="58">
  <tileset firstgid="1" source="frostreach_prototype_tiles.tsx" />
  <tileset firstgid="11" source="../../tmx/can_build_tiles.tsx" />
  <tileset firstgid="2" source="painted_chunks.tsx" />
@@ -202,6 +202,58 @@
   </object>
   <object id="45" name="great_pyramid_wall_42" x="7459" y="2690">
    <polygon points="0,135 161,0 264,123 103,257"/>
+  </object>
+ </objectgroup>
+ <objectgroup id="7" name="placed_entities">
+  <object id="48" name="demon_mesh_1" x="2400" y="3750">
+   <properties>
+    <property name="entity_spawn_config" value="{&quot;kind&quot;:&quot;enemy&quot;,&quot;type&quot;:&quot;demon&quot;}"/>
+   </properties>
+  </object>
+  <object id="49" name="demon_mesh_2" x="1800" y="7000">
+   <properties>
+    <property name="entity_spawn_config" value="{&quot;kind&quot;:&quot;enemy&quot;,&quot;type&quot;:&quot;demon&quot;}"/>
+   </properties>
+  </object>
+  <object id="50" name="demon_mesh_3" x="11000" y="1500">
+   <properties>
+    <property name="entity_spawn_config" value="{&quot;kind&quot;:&quot;enemy&quot;,&quot;type&quot;:&quot;demon&quot;}"/>
+   </properties>
+  </object>
+  <object id="51" name="demon_mesh_4" x="15000" y="6000">
+   <properties>
+    <property name="entity_spawn_config" value="{&quot;kind&quot;:&quot;enemy&quot;,&quot;type&quot;:&quot;demon&quot;}"/>
+   </properties>
+  </object>
+  <object id="52" name="demon_mesh_5" x="12000" y="10000">
+   <properties>
+    <property name="entity_spawn_config" value="{&quot;kind&quot;:&quot;enemy&quot;,&quot;type&quot;:&quot;demon&quot;}"/>
+   </properties>
+  </object>
+  <object id="53" name="demon_classic_1" x="2250" y="3900">
+   <properties>
+    <property name="entity_spawn_config" value="{&quot;kind&quot;:&quot;enemy&quot;,&quot;type&quot;:&quot;demon&quot;,&quot;mesh&quot;:false}"/>
+   </properties>
+  </object>
+  <object id="54" name="demon_classic_2" x="4200" y="7500">
+   <properties>
+    <property name="entity_spawn_config" value="{&quot;kind&quot;:&quot;enemy&quot;,&quot;type&quot;:&quot;demon&quot;,&quot;mesh&quot;:false}"/>
+   </properties>
+  </object>
+  <object id="55" name="demon_classic_3" x="11000" y="4500">
+   <properties>
+    <property name="entity_spawn_config" value="{&quot;kind&quot;:&quot;enemy&quot;,&quot;type&quot;:&quot;demon&quot;,&quot;mesh&quot;:false}"/>
+   </properties>
+  </object>
+  <object id="56" name="demon_classic_4" x="17000" y="2500">
+   <properties>
+    <property name="entity_spawn_config" value="{&quot;kind&quot;:&quot;enemy&quot;,&quot;type&quot;:&quot;demon&quot;,&quot;mesh&quot;:false}"/>
+   </properties>
+  </object>
+  <object id="57" name="demon_classic_5" x="8000" y="9500">
+   <properties>
+    <property name="entity_spawn_config" value="{&quot;kind&quot;:&quot;enemy&quot;,&quot;type&quot;:&quot;demon&quot;,&quot;mesh&quot;:false}"/>
+   </properties>
   </object>
  </objectgroup>
 </map>

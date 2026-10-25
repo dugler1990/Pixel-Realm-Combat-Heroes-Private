@@ -1,0 +1,255 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Clip Viewer</title>
+<!--
+  Play baked clips in the browser. retarget_bvh.py outputs glTF and a browser plays glTF in real
+  time, so looking at a clip never needs a render.
+
+      python tools/boss_sprite_pipeline/viewer/serve.py 8777
+
+  Two layouts:
+
+    ?glb=<file>     one file holding mesh + every animation
+    ?base=<dir>     a split export: the mesh once as <dir>/../_base.glb (or <dir>/base.glb),
+                    the clip list in <dir>/clips.json, one glb per clip in <dir>/clips/
+
+  **Each clip glb contains every action, not just its own** - Blender's exporter writes all of
+  them in ACTIONS mode - so a clip is selected by NAME, never by index. Taking animations[0]
+  makes every entry play the first clip, which is exactly what it looked like: five rows, one
+  animation.
+
+  glTF carries no CORRECTIVE_SMOOTH, so the armpit deforms worse here than in an EEVEE render.
+  The motion is identical; judge motion here and deformation from a render.
+-->
+<style>
+  :root { --bg:#14141a; --panel:#1d1d26; --line:#32323f; --txt:#e4e4ec; --dim:#8d8d9e; --hi:#46e1ff; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--txt);
+              font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; overflow:hidden; }
+  #wrap { display:flex; height:100%; }
+  #side { width:268px; flex:0 0 268px; background:var(--panel); border-right:1px solid var(--line);
+          display:flex; flex-direction:column; }
+  #side h1 { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim);
+             margin:0; padding:14px 14px 10px; border-bottom:1px solid var(--line); font-weight:600;
+             display:flex; align-items:center; gap:8px; }
+  #reload { margin-left:auto; background:#2c2c38; color:var(--txt); border:1px solid var(--line);
+            border-radius:4px; padding:3px 9px; cursor:pointer; font:inherit; font-size:10px;
+            text-transform:none; letter-spacing:.06em; }
+  #reload:hover { background:#3a3a48; color:var(--hi); }
+  #clips { overflow-y:auto; flex:1; }
+  .clip { padding:7px 14px; cursor:pointer; border-bottom:1px solid #26262f;
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .clip:hover { background:#262632; }
+  .clip.on { background:#2b3f49; color:var(--hi); box-shadow:inset 3px 0 0 var(--hi); }
+  .clip.pending { color:var(--dim); }
+  .clip small { color:var(--dim); margin-left:6px; }
+  #main { flex:1; position:relative; min-width:0; }
+  canvas { display:block; }
+  #bar { position:absolute; left:0; right:0; bottom:0; background:rgba(22,22,28,.93);
+         border-top:1px solid var(--line); padding:9px 14px; display:flex; gap:12px; align-items:center; }
+  #bar button { background:#2c2c38; color:var(--txt); border:1px solid var(--line); border-radius:4px;
+                padding:4px 11px; cursor:pointer; font:inherit; }
+  #scrub { flex:1; }
+  #name { position:absolute; top:12px; left:16px; font-size:15px; color:var(--hi);
+          text-shadow:0 1px 3px #000; pointer-events:none; }
+  #stat { position:absolute; top:34px; left:16px; font-size:11px; color:var(--dim);
+          text-shadow:0 1px 3px #000; pointer-events:none; }
+  label { color:var(--dim); display:flex; gap:5px; align-items:center; white-space:nowrap; }
+  #msg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+         color:var(--dim); text-align:center; padding:30px; }
+</style>
+<div id="wrap">
+  <div id="side">
+    <h1>Clips <span id="count"></span><button id="reload">reload</button></h1>
+    <div id="clips"></div>
+  </div>
+  <div id="main">
+    <div id="name"></div>
+    <div id="stat"></div>
+    <div id="msg">loading&hellip;</div>
+    <div id="bar">
+      <button id="play">pause</button>
+      <input id="scrub" type="range" min="0" max="1000" value="0">
+      <label>speed <input id="speed" type="range" min="10" max="200" value="100" style="width:80px"></label>
+      <span id="sv">1.00x</span>
+      <label><input id="loop" type="checkbox" checked> loop</label>
+    </div>
+  </div>
+</div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const Q = new URLSearchParams(location.search);
+const BASE = Q.get("base");
+const GLB = Q.get("glb");
+const $ = (id) => document.getElementById(id);
+const loader = new GLTFLoader();
+const bust = () => "?t=" + Date.now();
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14141a);
+const main = $("main");
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+main.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 4000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xaac4ff, 0x30281f, 1.5));
+const sun = new THREE.DirectionalLight(0xfff2dd, 2.4);
+sun.position.set(3, 6, 4);
+scene.add(sun);
+const rim = new THREE.DirectionalLight(0x88bbff, 0.8);
+rim.position.set(-4, 2, -5);
+scene.add(rim);
+
+function resize() {
+  const w = main.clientWidth, h = main.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+
+let root = null, mixer = null, action = null, playing = true;
+let entries = [];
+const clock = new THREE.Clock();
+
+function frameOn(obj) {
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  const mid = box.getCenter(new THREE.Vector3());
+  const span = Math.max(size.x, size.y, size.z) || 1;
+  controls.target.copy(mid);
+  camera.position.set(mid.x + span * 0.9, mid.y + span * 0.25, mid.z + span * 1.9);
+  camera.near = span / 200; camera.far = span * 40;
+  camera.updateProjectionMatrix();
+  const grid = new THREE.GridHelper(span * 3, 24, 0x3a3a48, 0x25252f);
+  grid.position.y = box.min.y;
+  scene.add(grid);
+}
+
+function addRow(e, i) {
+  const el = document.createElement("div");
+  el.className = "clip" + (e.clip ? "" : " pending");
+  el.innerHTML = "<span></span><small>" + (e.clip ? e.clip.duration.toFixed(1) + "s" : "") + "</small>";
+  el.firstChild.textContent = e.name;
+  el.onclick = () => pick(i);
+  $("clips").appendChild(el);
+}
+
+async function pick(i) {
+  const e = entries[i];
+  if (!e.clip && e.url) {
+    $("stat").textContent = "fetching " + e.name + "…";
+    const g = await loader.loadAsync(e.url);
+    // every clip file holds all the actions; take the one this row is for, BY NAME
+    e.clip = g.animations.find((a) => a.name === e.name) || g.animations[0];
+    if (!e.clip) { $("stat").textContent = "no animation in " + e.url; return; }
+    const rows = document.querySelectorAll(".clip");
+    rows[i].classList.remove("pending");
+    rows[i].querySelector("small").textContent = e.clip.duration.toFixed(1) + "s";
+  }
+  if (action) action.stop();
+  action = mixer.clipAction(e.clip);
+  action.reset();
+  action.setLoop($("loop").checked ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+  action.clampWhenFinished = true;
+  action.play();
+  playing = true;
+  $("play").textContent = "pause";
+  $("name").textContent = e.name;
+  $("stat").textContent = e.clip.duration.toFixed(2) + "s  " + e.clip.tracks.length + " tracks";
+  const rows = [...document.querySelectorAll(".clip")];
+  rows.forEach((x, k) => x.classList.toggle("on", k === i));
+  rows[i].scrollIntoView({ block: "nearest" });
+}
+
+async function head(u) {
+  try { return (await fetch(u, { method: "HEAD" })).ok; } catch { return false; }
+}
+
+async function boot() {
+  try {
+    if (BASE) {
+      const dir = BASE.replace(/\/$/, "");
+      // Each character's own mesh, in its own directory. The fallback one level up is for
+      // several bakes of ONE rig (every demon dir); four DIFFERENT rigs sharing it is what made
+      // three of the four anunaki play hip rotation into finger bones - see check_layout.py.
+      let mesh = dir + "/base.glb";
+      if (!(await head(mesh))) mesh = dir + "/../_base.glb";
+      // One cache-buster for the whole page load. Re-baking rewrites clips/<name>.glb at the
+      // same URL, so without this a reload serves the previous bake and the fix looks like it
+      // did nothing.
+      const b = bust();
+      const g = await loader.loadAsync(mesh + b);
+      root = g.scene; scene.add(root);
+      const names = await (await fetch(dir + "/clips.json" + b, { cache: "no-store" })).json();
+      entries = names.map((n) => ({ name: n, clip: null, url: dir + "/clips/" + n + ".glb" + b }));
+    } else {
+      const g = await loader.loadAsync(GLB || "/generated/bosses/demon/viewer/current/../_base.glb");
+      root = g.scene; scene.add(root);
+      entries = g.animations.slice().sort((a, b) => a.name.localeCompare(b.name))
+                 .map((c) => ({ name: c.name, clip: c, url: null }));
+    }
+    const m = $("msg"); if (m) m.remove();
+    frameOn(root);
+    mixer = new THREE.AnimationMixer(root);
+    $("count").textContent = "(" + entries.length + ")";
+    entries.forEach(addRow);
+    // ?clip=<name> opens straight on one clip, so a single clip can have its own link
+    const want = Q.get("clip");
+    const start = want ? Math.max(0, entries.findIndex((e) => e.name === want)) : 0;
+    if (entries.length) await pick(start);
+    resize();
+  } catch (err) {
+    const m = $("msg"); if (m) m.textContent = "load failed: " + err;
+    console.error(err);
+  }
+}
+boot();
+
+$("reload").onclick = () => location.reload();
+$("play").onclick = () => { playing = !playing; $("play").textContent = playing ? "pause" : "play"; };
+$("scrub").oninput = (e) => {
+  if (!action) return;
+  action.time = (e.target.value / 1000) * action.getClip().duration;
+  mixer.update(0);
+};
+$("speed").oninput = (e) => {
+  const v = e.target.value / 100;
+  if (mixer) mixer.timeScale = v;
+  $("sv").textContent = v.toFixed(2) + "x";
+};
+$("loop").onchange = (e) => {
+  if (action) action.setLoop(e.target.checked ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+};
+addEventListener("keydown", (e) => {
+  if (e.key === " ") { e.preventDefault(); $("play").click(); }
+  const rows = [...document.querySelectorAll(".clip")];
+  const on = rows.findIndex((x) => x.classList.contains("on"));
+  if (e.key === "ArrowDown" && on < entries.length - 1) pick(on + 1);
+  if (e.key === "ArrowUp" && on > 0) pick(on - 1);
+});
+
+(function tick() {
+  requestAnimationFrame(tick);
+  const dt = clock.getDelta();
+  if (mixer && playing) mixer.update(dt);
+  if (action && playing) {
+    const d = action.getClip().duration;
+    $("scrub").value = Math.round(((action.time % d) / d) * 1000);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+})();
+</script>

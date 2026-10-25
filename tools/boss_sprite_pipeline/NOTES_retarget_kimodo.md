@@ -6,12 +6,30 @@ human motion onto it. Written 2026-09-25.
 ## Run it
 
 ```
-.venv-bpy/Scripts/python.exe retarget_bvh.py \
-    generated/bosses/demon/rig/jaw/rigged_jaw_smoothw.glb \
-    generated/bosses/demon/rig/jaw/bone_roles.json \
+.venv-bpy/Scripts/python.exe retarget_bvh.py --source soma --target demon \
     generated/bosses/demon/kimodo_keep \
     generated/bosses/demon/animate_km
 ```
+
+**Do not pass knobs.** `--source` and `--target` resolve everything from the profile tables
+at the top of the script. The old positional form (`<rig> <roles> <in> <out>`) still works.
+
+Sources: `soma` (default), `gargoyle`, `anunaki`, `g1`.  Targets: `demon`, `anunaki`.
+
+Where a setting lives is the whole point of the layout:
+
+| A fact about | Lives in | Examples |
+|---|---|---|
+| the source skeleton | `SOURCES` | its bone map, whether it needs converting to BVH first, how many bones it can drive |
+| the target character | `TARGETS` | rig and roles paths, `arm_elev_cap` (his armpit is fused), `jaw_closed`, digitigrade |
+| the **combination** | `PAIRS` | `("g1","demon")` bind-skips the feet - a flat-footed source onto a digitigrade target |
+| this one run | an env var | a deliberate override, recorded as such |
+
+`run.json` records every resolved value **and which layer supplied it**, so a bake explains
+itself instead of depending on whoever typed the command.
+
+Adding a source is one entry in `SOURCES` plus a converter in `rigfix/` if it is not already
+BVH; `expect_bones` then makes a half-applied map warn rather than quietly look plausible.
 
 Then videos (two steps because cv2 is not in `.venv-bpy` and bpy is not in the cv2 venv):
 
@@ -159,3 +177,48 @@ All in `rigfix/`, all cheap, all of them found something a guess had got wrong:
 - Re-parenting fixes hierarchy, never weight. Three separate fixes here were weight.
 - When a fix does not move the number, the diagnosis was wrong — go back and measure again
   rather than tuning the fix.
+
+## The four anunaki are four different rigs
+
+They look like one character in four skins, and that is the trap. UniRig was run on each mesh
+separately, so each has its own bone count and its own index for the same role:
+
+| | bones | arm_r.shoulder | leg_l.hip |
+|---|---|---|---|
+| anun0 | 28 | bone_13 | bone_20 |
+| anun1 | 40 | bone_19 | bone_32 |
+| anun2 | 28 | bone_13 | bone_20 |
+| anun3 | 46 | bone_22 | bone_38 |
+
+`anun*_roles.json` carries the mapping, the retargeter reads it per target, and the bake is
+correct for all four. Nothing downstream may assume the four skeletons are interchangeable.
+
+## The viewer layout: never share a base mesh between two rigs
+
+`index.html` loads `<dir>/base.glb` and **falls back to `<dir>/../_base.glb`** when a clip
+directory has none. That fallback is there on purpose: every demon directory is the same rig, so
+one 55 MB mesh serves `current`, `gargoyle`, `robot` and `g1_bindskip`.
+
+Applied to the anunaki it produced the worst-shaped bug in this pipeline so far. A bake loop that
+moved each variant's `base.glb` up to the shared `_base.glb` left **one** body for four different
+skeletons. three.js binds animation tracks to nodes by name, so three of the four variants played
+hip rotation into finger bones, and **whichever variant baked last looked perfect** - the bake
+order was anun1, anun0, anun2, anun3, anun3 was last, and anun3 was the one that looked right.
+
+Why it cost a session: the `.blend` files were all correct, so every render, `dir_check` and
+pose metric said the retarget was fine - because it was. The fault was in the layout, and the
+symptom was a mangled character, which is the same symptom as a bad bind. Hours went into
+re-measuring bind settings on data that had nothing wrong with it.
+
+- `viewer/bake_all.sh` is now the only way to run a batch. It keeps `base.glb` in its own
+  directory and never moves it.
+- `viewer/check_layout.py <dir>` asserts the invariant - every node a clip animates exists in the
+  base that the viewer would actually load - and prints a warning when the base is shared. It runs
+  after every bake. One command, and this class of bug cannot ship silently.
+- A directory holding several *different* rigs must have no `_base.glb` at all, so a missing
+  per-dir base fails loudly instead of showing the wrong body.
+
+## Lesson added by it
+
+- When a character looks mangled, check that the viewer is showing **that character's body**
+  before touching a single retarget knob. Measure the delivery path, not just the data.

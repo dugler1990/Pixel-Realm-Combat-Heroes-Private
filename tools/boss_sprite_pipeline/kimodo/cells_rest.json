@@ -1,0 +1,117 @@
+[
+ {
+  "name": "C6_conschain_haymaker",
+  "prompt": "A huge heavy brute stands ready. A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance. It returns to standing.",
+  "duration": "1.0 2.5 1.0",
+  "constraints": "/workspace/cons/full_135.json"
+ },
+ {
+  "name": "CW_C2_drunk_haymaker",
+  "prompt": "A huge heavy brute stands ready. A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance. It returns to standing.",
+  "duration": "0.5 4.0 0.5"
+ },
+ {
+  "name": "CW_C2_heavy_haymaker",
+  "prompt": "A huge heavy brute stands ready. A giant gorilla loads all its weight onto its right side, then swings one massive arm in a single wide bear swipe across to the left, following through with its whole body. It returns to standing.",
+  "duration": "0.5 4.0 0.5"
+ },
+ {
+  "name": "CW_C4_drunk_haymaker",
+  "prompt": "A huge heavy brute crouches low in a fighting stance. A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance. It settles back into the fighting stance.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "CW_C4_heavy_haymaker",
+  "prompt": "A huge heavy brute crouches low in a fighting stance. A giant gorilla loads all its weight onto its right side, then swings one massive arm in a single wide bear swipe across to the left, following through with its whole body. It settles back into the fighting stance.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "C6_conschain_groundsmash",
+  "prompt": "A huge heavy brute stands ready. A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow. It returns to standing.",
+  "duration": "1.0 2.5 1.0",
+  "constraints": "/workspace/cons/full_135.json"
+ },
+ {
+  "name": "CW_C2_drunk_groundsmash",
+  "prompt": "A huge heavy brute stands ready. A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow. It returns to standing.",
+  "duration": "0.5 4.0 0.5"
+ },
+ {
+  "name": "CW_C2_heavy_groundsmash",
+  "prompt": "A huge heavy brute stands ready. A giant gorilla raises both fists high above its head and smashes them straight down into the ground with enormous force, staying planted and heavy. It returns to standing.",
+  "duration": "0.5 4.0 0.5"
+ },
+ {
+  "name": "CW_C4_drunk_groundsmash",
+  "prompt": "A huge heavy brute crouches low in a fighting stance. A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow. It settles back into the fighting stance.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "CW_C4_heavy_groundsmash",
+  "prompt": "A huge heavy brute crouches low in a fighting stance. A giant gorilla raises both fists high above its head and smashes them straight down into the ground with enormous force, staying planted and heavy. It settles back into the fighting stance.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "C6_conschain_jump",
+  "prompt": "A huge heavy brute stands ready. A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance. It returns to standing.",
+  "duration": "1.0 2.5 1.0",
+  "constraints": "/workspace/cons/full_135.json"
+ },
+ {
+  "name": "CW_C2_drunk_jump",
+  "prompt": "A huge heavy brute stands ready. A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance. It returns to standing.",
+  "duration": "0.5 4.0 0.5"
+ },
+ {
+  "name": "CW_C2_heavy_jump",
+  "prompt": "A huge heavy brute stands ready. A huge heavy monster crouches deep then explodes upward off both legs as high as it can, hangs at the top, and crashes back down. It returns to standing.",
+  "duration": "0.5 4.0 0.5"
+ },
+ {
+  "name": "CW_C4_drunk_jump",
+  "prompt": "A huge heavy brute crouches low in a fighting stance. A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance. It settles back into the fighting stance.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "CW_C4_heavy_jump",
+  "prompt": "A huge heavy brute crouches low in a fighting stance. A huge heavy monster crouches deep then explodes upward off both legs as high as it can, hangs at the top, and crashes back down. It settles back into the fighting stance.",
+  "duration": "1.0 2.5 1.0"
+ },
+ {
+  "name": "W_drunk_haymaker",
+  "prompt": "A huge fat drunk brute throws a wild haymaker punch, swinging his whole heavy body around and stumbling off balance.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_drunk_groundsmash",
+  "prompt": "A huge drunken brute raises both arms high and slams them down into the ground, its whole body lurching after the blow.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_drunk_jump",
+  "prompt": "A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_drunk_damage",
+  "prompt": "A huge fat drunk brute takes a hard hit to the chest, staggering backwards and nearly falling over.",
+  "duration": "4.0"
+ },
+ {
+  "name": "W_drunk_slap",
+  "prompt": "A massive obese ogre swings a giant open hand in a sloppy violent sideways slap, his whole bulk lurching after it.",
+  "duration": "4.0"
+ },
+ {
+  "name": "B1b_stale_8s_jump",
+  "prompt": "A massive clumsy creature crouches then launches itself upward off both legs, flailing, and crashes back down off balance.",
+  "duration": "8.0",
+  "constraints": "/workspace/cons/full_150.json"
+ },
+ {
+  "name": "B1b_stale_8s_damage",
+  "prompt": "A huge fat drunk brute takes a hard hit to the chest, staggering backwards and nearly falling over.",
+  "duration": "8.0",
+  "constraints": "/workspace/cons/full_150.json"
+ }
+]

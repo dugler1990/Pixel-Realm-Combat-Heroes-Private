@@ -1,4 +1,6 @@
+import math
 import ctypes
+import os
 
 import numpy as np
 import pygame
@@ -104,6 +106,9 @@ class CPUBackend(RenderBackend):
     def draw_grass_instances(self, *args, **kwargs):
         pass
 
+    def draw_mesh_boss(self, *args, **kwargs):
+        return False  # method B needs the GL context; sprite route is the CPU fallback
+
     def build_grass_atlas(self, *args, **kwargs):
         pass
 
@@ -149,6 +154,136 @@ out vec4 frag_color;
 void main()
 {
     frag_color = texture(u_tex, v_texcoord) * v_tint;
+}
+"""
+
+
+# --- Mesh-boss pipeline (method B) -----------------------------------------
+# A real 3D pass inside the 2D engine: one boss mesh, posed on the CPU only in the
+# sense that the frame's baked vertex positions are uploaded; the projection, rotation
+# and lighting happen here. Orthographic, matching the sprite route's camera so a mesh
+# boss and a sprite boss sit in the same world: elevation tilt, yaw for facing, and a
+# scale that maps model height to pixels. Depth-tested against itself only (own depth
+# buffer region), so it composites into the sprite stream like one big sprite.
+_MESH_VERTEX_SHADER = """
+#version 330 core
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec2 a_texcoord;
+
+uniform vec2  u_screen_size;
+uniform vec2  u_origin;       // ground-contact pixel on screen
+uniform vec3  u_pivot;        // model-space point that lands on u_origin
+uniform float u_scale;        // pixels per model unit
+uniform float u_yaw;          // facing, radians
+uniform float u_elev;         // camera elevation, radians
+
+out vec2 v_texcoord;
+out vec3 v_normal;
+
+void main()
+{
+    float cy = cos(u_yaw), sy = sin(u_yaw);
+    vec3 p = a_position - u_pivot;
+    p = vec3(p.x * cy - p.y * sy, p.x * sy + p.y * cy, p.z);       // spin about up axis
+    vec3 n = a_normal;
+    n = vec3(n.x * cy - n.y * sy, n.x * sy + n.y * cy, n.z);
+
+    float ce = cos(u_elev), se = sin(u_elev);
+    // orthographic: screen x = model x, screen y = -(z*cos + y*sin) — the 45-degree tilt
+    float sx = p.x * u_scale;
+    float sy_ = -(p.z * ce + p.y * se) * u_scale;
+    float depth = (p.y * ce - p.z * se);
+
+    vec2 pix = u_origin + vec2(sx, sy_);
+    vec2 ndc = vec2(pix.x / u_screen_size.x * 2.0 - 1.0,
+                    1.0 - pix.y / u_screen_size.y * 2.0);
+    gl_Position = vec4(ndc, clamp(depth * 0.25, -0.99, 0.99), 1.0);
+    v_texcoord = a_texcoord;
+    v_normal = n;
+}
+"""
+
+_MESH_FRAGMENT_SHADER = """
+#version 330 core
+in vec2 v_texcoord;
+in vec3 v_normal;
+
+uniform sampler2D u_tex;
+uniform vec3  u_light_dir;
+uniform float u_ambient;
+uniform vec4  u_tint;
+
+out vec4 frag_color;
+
+void main()
+{
+    vec4 base = texture(u_tex, v_texcoord);
+    if (base.a < 0.01) discard;
+    float lam = max(dot(normalize(v_normal), normalize(u_light_dir)), 0.0);
+    float lit = u_ambient + (1.0 - u_ambient) * lam;
+    frag_color = vec4(base.rgb * lit, base.a) * u_tint;
+}
+"""
+
+# Same camera as the baked mesh shader. The pose comes from a bone texture:
+# RGBA32F, 4 texels per bone (the matrix columns), one row per frame.
+_MESH_SKIN_VERTEX_SHADER = """
+#version 330 core
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec2 a_texcoord;
+layout(location = 3) in vec4 a_weights;
+layout(location = 4) in uvec4 a_joints;
+
+uniform vec2  u_screen_size;
+uniform vec2  u_origin;
+uniform vec3  u_pivot;
+uniform float u_scale;
+uniform float u_yaw;
+uniform float u_elev;
+uniform sampler2D u_bones;
+uniform int u_frame;
+
+out vec2 v_texcoord;
+out vec3 v_normal;
+
+mat4 bone_at(int id) {
+    int x = id * 4;
+    return mat4(
+        texelFetch(u_bones, ivec2(x,     u_frame), 0),
+        texelFetch(u_bones, ivec2(x + 1, u_frame), 0),
+        texelFetch(u_bones, ivec2(x + 2, u_frame), 0),
+        texelFetch(u_bones, ivec2(x + 3, u_frame), 0)
+    );
+}
+
+void main()
+{
+    mat4 skin = bone_at(int(a_joints.x)) * a_weights.x
+              + bone_at(int(a_joints.y)) * a_weights.y
+              + bone_at(int(a_joints.z)) * a_weights.z
+              + bone_at(int(a_joints.w)) * a_weights.w;
+    vec3 skinned = (skin * vec4(a_position, 1.0)).xyz;
+    vec3 sn = mat3(skin) * a_normal;
+
+    float cy = cos(u_yaw), sy = sin(u_yaw);
+    vec3 p = skinned - u_pivot;
+    p = vec3(p.x * cy - p.y * sy, p.x * sy + p.y * cy, p.z);
+    vec3 n = sn;
+    n = vec3(n.x * cy - n.y * sy, n.x * sy + n.y * cy, n.z);
+
+    float ce = cos(u_elev), se = sin(u_elev);
+    float sx = p.x * u_scale;
+    float sy_ = -(p.z * ce + p.y * se) * u_scale;
+    float depth = (p.y * ce - p.z * se);
+
+    vec2 pix = u_origin + vec2(sx, sy_);
+    vec2 ndc = vec2(pix.x / u_screen_size.x * 2.0 - 1.0,
+                    1.0 - pix.y / u_screen_size.y * 2.0);
+    gl_Position = vec4(ndc, clamp(depth * 0.25, -0.99, 0.99), 1.0);
+    v_texcoord = a_texcoord;
+    v_normal = n;
 }
 """
 
@@ -249,6 +384,8 @@ class GPUBackend(RenderBackend):
         self._atlas_texture = None
         self._atlas_uv = {}
         self._large_cache: dict[int, int] = {}  # id(surface) → GL texture handle
+        self._mesh_shader = None                # method B: built on first draw_mesh_boss
+        self._mesh_skin_shader = None
 
         # Batch state
         self._batch_verts = np.zeros(_BATCH_BUF_FLOATS, dtype=np.float32)
@@ -270,6 +407,13 @@ class GPUBackend(RenderBackend):
         glEnable(GL_BLEND)
         glBlendFunc(*_DEFAULT_BLEND_FUNC)
         glViewport(0, 0, width, height)
+        renderer = glGetString(GL_RENDERER)
+        vendor = glGetString(GL_VENDOR)
+        if isinstance(renderer, bytes):
+            renderer = renderer.decode("utf-8", "replace")
+        if isinstance(vendor, bytes):
+            vendor = vendor.decode("utf-8", "replace")
+        print(f"[GL] VENDOR={vendor} RENDERER={renderer}", flush=True)
 
     @staticmethod
     def _make_texture(pixels=None, width=1, height=1):
@@ -551,6 +695,255 @@ class GPUBackend(RenderBackend):
         if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
             BENCHMARK_RUNTIME.metrics.record_gpu_draw_call()
 
+
+    # --- mesh boss (method B) ----------------------------------------------
+    def _init_mesh_pipeline(self):
+        self._mesh_shader = compileProgram(
+            compileShader(_MESH_VERTEX_SHADER, GL_VERTEX_SHADER),
+            compileShader(_MESH_FRAGMENT_SHADER, GL_FRAGMENT_SHADER),
+        )
+        u = lambda n: glGetUniformLocation(self._mesh_shader, n)  # noqa: E731
+        self._u_mesh = {n: u("u_" + n) for n in
+                        ("screen_size", "origin", "pivot", "scale", "yaw", "elev",
+                         "tex", "light_dir", "ambient", "tint")}
+        self._mesh_vao = glGenVertexArrays(1)
+        self._mesh_vbo = glGenBuffers(1)      # interleaved pos(3) nrm(3) uv(2), rewritten per frame
+        self._mesh_ebo = glGenBuffers(1)
+        self._mesh_state = {}                 # pack name -> dict(tex, n_idx, uploaded_frame, capacity)
+        self._mesh_depth_rbo = None
+
+    def _mesh_pack_state(self, pack):
+        st = self._mesh_state.get(pack.name)
+        if st is not None:
+            return st
+        tex = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, tex)
+        surf = pygame.image.load(pack.albedo_path).convert_alpha()
+        w, h = surf.get_size()
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                     pygame.image.tobytes(surf, "RGBA", True))
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        # indices never change -> upload once
+        idx = np.ascontiguousarray(pack.indices, dtype=np.uint32)
+        glBindVertexArray(self._mesh_vao)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self._mesh_ebo)
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx.nbytes, idx, GL_STATIC_DRAW)
+        glBindVertexArray(0)
+        st = self._mesh_state[pack.name] = {"tex": tex, "n_idx": idx.size, "frame": -1, "cap": 0}
+        return st
+
+    def _init_skin_pipeline(self):
+        self._mesh_skin_shader = compileProgram(
+            compileShader(_MESH_SKIN_VERTEX_SHADER, GL_VERTEX_SHADER),
+            compileShader(_MESH_FRAGMENT_SHADER, GL_FRAGMENT_SHADER),
+        )
+        u = lambda n: glGetUniformLocation(self._mesh_skin_shader, n)  # noqa: E731
+        self._u_skin = {n: u("u_" + n) for n in
+                        ("screen_size", "origin", "pivot", "scale", "yaw", "elev",
+                         "tex", "light_dir", "ambient", "tint", "bones", "frame")}
+        self._skin_vao = glGenVertexArrays(1)
+        self._skin_vbo = glGenBuffers(1)
+        self._skin_jbo = glGenBuffers(1)
+        self._skin_ebo = glGenBuffers(1)
+        self._skin_state = {}
+
+    def _skin_pack_state(self, pack):
+        st = self._skin_state.get(pack.name)
+        if st is not None:
+            return st
+        if self._mesh_skin_shader is None:
+            self._init_skin_pipeline()
+        tex = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, tex)
+        surf = pygame.image.load(pack.albedo_path).convert_alpha()
+        w, h = surf.get_size()
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                     pygame.image.tobytes(surf, "RGBA", True))
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+
+        # Columns of each bone matrix, 4 RGBA32F texels wide, one row per frame.
+        mats = np.asarray(pack.skin_mats, dtype=np.float32)
+        cols = np.transpose(mats, (0, 1, 3, 2))
+        frames, bones = cols.shape[0], cols.shape[1]
+        image = np.ascontiguousarray(cols.reshape(frames, bones * 4, 4))
+        bones_tex = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, bones_tex)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, bones * 4, frames, 0,
+                     GL_RGBA, GL_FLOAT, image)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glBindTexture(GL_TEXTURE_2D, 0)
+
+        pos = np.asarray(pack.rest_pos, dtype=np.float32)
+        nrm = np.asarray(pack.rest_nrm, dtype=np.float32) / 127.0
+        uv = np.asarray(pack.uv, dtype=np.float32)
+        wts = np.asarray(pack.weights, dtype=np.float32)
+        interleaved = np.ascontiguousarray(np.concatenate([pos, nrm, uv, wts], axis=1))
+        joints = np.ascontiguousarray(np.asarray(pack.joints, dtype=np.uint32))
+        idx = np.ascontiguousarray(pack.indices, dtype=np.uint32)
+
+        glBindVertexArray(self._skin_vao)
+        glBindBuffer(GL_ARRAY_BUFFER, self._skin_vbo)
+        glBufferData(GL_ARRAY_BUFFER, interleaved.nbytes, interleaved, GL_STATIC_DRAW)
+        stride = 12 * 4
+        for loc, size, off in ((0, 3, 0), (1, 3, 12), (2, 2, 24), (3, 4, 32)):
+            glEnableVertexAttribArray(loc)
+            glVertexAttribPointer(loc, size, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(off))
+        glBindBuffer(GL_ARRAY_BUFFER, self._skin_jbo)
+        glBufferData(GL_ARRAY_BUFFER, joints.nbytes, joints, GL_STATIC_DRAW)
+        glEnableVertexAttribArray(4)
+        glVertexAttribIPointer(4, 4, GL_UNSIGNED_INT, 16, ctypes.c_void_p(0))
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self._skin_ebo)
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx.nbytes, idx, GL_STATIC_DRAW)
+        glBindVertexArray(0)
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+
+        st = self._skin_state[pack.name] = {
+            "tex": tex, "bones": bones_tex, "n_idx": int(idx.size),
+        }
+        return st
+
+    def _mesh_screen_rect(self, pack, screen_pos, facing_deg, scale, elevation_deg):
+        """Pixel rectangle of the posed bbox, for a scissored depth clear."""
+        lo = np.asarray(pack.bbox_lo, dtype=np.float64)
+        hi = np.asarray(pack.bbox_hi, dtype=np.float64)
+        corners = np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])])
+        pivot = np.asarray(pack.pivot, dtype=np.float64)
+        yaw = math.radians(float(facing_deg))
+        cy, sy = math.cos(yaw), math.sin(yaw)
+        elev = math.radians(float(elevation_deg))
+        ce, se = math.cos(elev), math.sin(elev)
+        p = corners - pivot
+        xr = p[:, 0] * cy - p[:, 1] * sy
+        yr = p[:, 0] * sy + p[:, 1] * cy
+        sx = screen_pos[0] + xr * scale
+        sy = screen_pos[1] + (-(p[:, 2] * ce + yr * se) * scale)
+        pad = 2
+        x0 = max(0, int(math.floor(sx.min())) - pad)
+        y0 = max(0, int(math.floor(sy.min())) - pad)
+        x1 = min(self._width, int(math.ceil(sx.max())) + pad)
+        y1 = min(self._height, int(math.ceil(sy.max())) + pad)
+        return x0, y0, max(0, x1 - x0), max(0, y1 - y0)
+
+    def _scissor_depth_clear(self, pack, screen_pos, facing_deg, scale, elevation_deg):
+        x, y_top, w, h = self._mesh_screen_rect(pack, screen_pos, facing_deg, scale, elevation_deg)
+        if w <= 0 or h <= 0:
+            return
+        # Window origin is the bottom; the mesh shader's y grows downward.
+        glEnable(GL_SCISSOR_TEST)
+        glScissor(x, self._height - (y_top + h), w, h)
+        glClear(GL_DEPTH_BUFFER_BIT)
+        glDisable(GL_SCISSOR_TEST)
+
+    def draw_mesh_boss(self, pack, frame_index, screen_pos, facing_deg, scale,
+                       elevation_deg, light_dir, ambient, tint=(1.0, 1.0, 1.0, 1.0)):
+        """Draw one posed mesh. Returns True if it drew."""
+        if getattr(pack, "skinned", False):
+            return self._draw_skinned_boss(
+                pack, frame_index, screen_pos, facing_deg, scale,
+                elevation_deg, light_dir, ambient, tint)
+        if getattr(self, "_mesh_shader", None) is None:
+            self._init_mesh_pipeline()
+        st = self._mesh_pack_state(pack)
+
+        self._flush_batch()   # everything queued so far goes under the boss
+        glUseProgram(self._mesh_shader)
+        glBindVertexArray(self._mesh_vao)
+
+        if st["frame"] != frame_index:
+            pos = pack.positions[frame_index].astype(np.float32)
+            nrm = pack.normals[frame_index].astype(np.float32) / 127.0
+            data = np.concatenate([pos, nrm, pack.uv], axis=1).astype(np.float32).reshape(-1)
+            glBindBuffer(GL_ARRAY_BUFFER, self._mesh_vbo)
+            if data.nbytes > st["cap"]:
+                glBufferData(GL_ARRAY_BUFFER, data.nbytes, None, GL_DYNAMIC_DRAW)
+                st["cap"] = data.nbytes
+            glBufferSubData(GL_ARRAY_BUFFER, 0, data.nbytes, data)
+            stride = 8 * 4
+            for loc, size, off in ((0, 3, 0), (1, 3, 12), (2, 2, 24)):
+                glEnableVertexAttribArray(loc)
+                glVertexAttribPointer(loc, size, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(off))
+            st["frame"] = frame_index
+        else:
+            glBindBuffer(GL_ARRAY_BUFFER, self._mesh_vbo)
+
+        glUniform2f(self._u_mesh["screen_size"], float(self._width), float(self._height))
+        glUniform2f(self._u_mesh["origin"], float(screen_pos[0]), float(screen_pos[1]))
+        glUniform3f(self._u_mesh["pivot"], *[float(v) for v in pack.pivot])
+        glUniform1f(self._u_mesh["scale"], float(scale))
+        glUniform1f(self._u_mesh["yaw"], math.radians(float(facing_deg)))
+        glUniform1f(self._u_mesh["elev"], math.radians(float(elevation_deg)))
+        glUniform3f(self._u_mesh["light_dir"], *[float(v) for v in light_dir])
+        glUniform1f(self._u_mesh["ambient"], float(ambient))
+        glUniform4f(self._u_mesh["tint"], *[float(v) for v in tint])
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, st["tex"])
+        glUniform1i(self._u_mesh["tex"], 0)
+
+        glEnable(GL_DEPTH_TEST)
+        glDepthFunc(GL_LEQUAL)
+        self._scissor_depth_clear(pack, screen_pos, facing_deg, scale, elevation_deg)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self._mesh_ebo)
+        # PRCH_MESH_SKIP_DRAW keeps the upload, flush, and depth clear.
+        if os.environ.get("PRCH_MESH_SKIP_DRAW", "0") == "0":
+            glDrawElements(GL_TRIANGLES, st["n_idx"], GL_UNSIGNED_INT, None)
+        glDisable(GL_DEPTH_TEST)
+        glBindVertexArray(0)
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        glUseProgram(0)
+        if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
+            BENCHMARK_RUNTIME.metrics.record_gpu_draw_call()
+        return True
+
+    def _draw_skinned_boss(self, pack, frame_index, screen_pos, facing_deg, scale,
+                           elevation_deg, light_dir, ambient, tint):
+        if self._mesh_skin_shader is None:
+            self._init_skin_pipeline()
+        st = self._skin_pack_state(pack)
+        self._flush_batch()
+        glUseProgram(self._mesh_skin_shader)
+        glBindVertexArray(self._skin_vao)
+        glUniform2f(self._u_skin["screen_size"], float(self._width), float(self._height))
+        glUniform2f(self._u_skin["origin"], float(screen_pos[0]), float(screen_pos[1]))
+        glUniform3f(self._u_skin["pivot"], *[float(v) for v in pack.pivot])
+        glUniform1f(self._u_skin["scale"], float(scale))
+        glUniform1f(self._u_skin["yaw"], math.radians(float(facing_deg)))
+        glUniform1f(self._u_skin["elev"], math.radians(float(elevation_deg)))
+        glUniform3f(self._u_skin["light_dir"], *[float(v) for v in light_dir])
+        glUniform1f(self._u_skin["ambient"], float(ambient))
+        glUniform4f(self._u_skin["tint"], *[float(v) for v in tint])
+        glUniform1i(self._u_skin["frame"], int(frame_index))
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, st["tex"])
+        glUniform1i(self._u_skin["tex"], 0)
+        glActiveTexture(GL_TEXTURE1)
+        glBindTexture(GL_TEXTURE_2D, st["bones"])
+        glUniform1i(self._u_skin["bones"], 1)
+        glActiveTexture(GL_TEXTURE0)
+        glEnable(GL_DEPTH_TEST)
+        glDepthFunc(GL_LEQUAL)
+        self._scissor_depth_clear(pack, screen_pos, facing_deg, scale, elevation_deg)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self._skin_ebo)
+        if os.environ.get("PRCH_MESH_SKIP_DRAW", "0") == "0":
+            glDrawElements(GL_TRIANGLES, st["n_idx"], GL_UNSIGNED_INT, None)
+        glDisable(GL_DEPTH_TEST)
+        glBindVertexArray(0)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        glUseProgram(0)
+        if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
+            BENCHMARK_RUNTIME.metrics.record_gpu_draw_call()
+        return True
+
     # --- day/night light-map (Phase L) -------------------------------------
     # An offscreen FBO is cleared to a time-of-day ambient, lights are drawn into
     # it additively (radial brush), then the whole scene is multiplied by it.
@@ -778,6 +1171,7 @@ class GPUBackend(RenderBackend):
 
     def shutdown(self):
         texture_ids = [self._texture, self._white_texture]
+        texture_ids.extend(st["tex"] for st in getattr(self, "_mesh_state", {}).values())
         if self._atlas_texture is not None:
             texture_ids.append(self._atlas_texture)
         if getattr(self, "_grass_atlas_texture", None) is not None:
@@ -855,6 +1249,9 @@ class StubBackend(RenderBackend):
     def draw_grass_instances(self, *args, **kwargs):
         pass
 
+    def draw_mesh_boss(self, *args, **kwargs):
+        return False  # method B needs the GL context; sprite route is the CPU fallback
+
     def build_grass_atlas(self, *args, **kwargs):
         pass
 
@@ -878,6 +1275,7 @@ def create_backend(width: int, height: int) -> RenderBackend:
         surface = pygame.display.set_mode((width, height), DISPLAY_FLAGS)
         return CPUBackend(surface)
     if RENDER_BACKEND == "gpu":
+        pygame.display.gl_set_attribute(pygame.GL_DEPTH_SIZE, 24)
         pygame.display.set_mode((width, height), pygame.OPENGL | pygame.DOUBLEBUF)
         return GPUBackend(width, height)
     raise ValueError(f"unknown RENDER_BACKEND {RENDER_BACKEND!r}")
