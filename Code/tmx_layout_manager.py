@@ -146,11 +146,15 @@ class LayoutManager:
         # Authored buildings (roof / interior cutaway). Passed to the camera group by
         # reference and mutated in place from here on — see initialize_layout.
         self.buildings = []
-    
+        # Door frames, as (rect, surface, building): drawn over a body that has passed under
+        # them. Apart from overhead_areas because they carry their building, and older camera
+        # classes unpack that list as pairs.
+        self.door_covers = []
+
         # Initialize camera group for sorting sprites
         self.visible_sprites = YSortCameraGroup(
             self.ground_sprites, self.grass_manager, self.overhead_areas, backend=backend,
-            buildings=self.buildings,
+            buildings=self.buildings, door_covers=self.door_covers,
         )
         self.environment_interactables = []
         self._env_interactable_profiles = {}
@@ -274,6 +278,13 @@ class LayoutManager:
     def set_player(self, player):
         """Sets the player object for layout interaction."""
         self.player = player
+        # placed_entities is read while the map loads, before Level4 creates the player.
+        pending = getattr(self, "_pending_placed_enemies", None)
+        if pending and hasattr(self, "spawner"):
+            queued = list(pending)
+            pending.clear()
+            for cfg in queued:
+                self.spawner.spawn_enemy(cfg)
 
     def trigger_animation(self, frames, position, speed, on_complete=None):
         AnimationSprite(frames, position, speed, [self.visible_sprites], on_complete=on_complete)
@@ -876,7 +887,13 @@ class LayoutManager:
             scaled_h = max(1, int(round(object_.height * height_scaling_factor)))
             x_pos = (object_.x * TILESIZE) / tiled_tile_width
             y_pos = (object_.y * TILESIZE) / tiled_tile_height
-            image = pygame.transform.scale(image, (scaled_w, scaled_h))
+            # The painted ground is ~1 GB decoded, so a copy is never free. Only resample
+            # when the size actually changes, and either way drop pytmx's own reference:
+            # the Tile owns the surface from here, and nothing reads it back off tmxdata.
+            if (scaled_w, scaled_h) != image.get_size():
+                image = pygame.transform.scale(image, (scaled_w, scaled_h))
+            if getattr(object_, "gid", None):
+                self.tmxdata.images[object_.gid] = None
             Tile(
                 (x_pos, y_pos),
                 [self.ground_sprites],
@@ -884,114 +901,192 @@ class LayoutManager:
                 surface=image,
             )
 
+    def create_props_layer(self, tmx_object_layer):
+        """Placed props (statues, braziers, banners): depth-sorted, solid only at the base.
+
+        Art comes from an image-collection tileset made by tools/sprite_assets
+        (extract-props); pytmx copies the tile's properties onto each placed object. The
+        art joins the y-sorted sprites, so you can walk behind a statue, and a separate
+        invisible obstacle covers just its footprint (prop_base_mask), so you bump into
+        the plinth, not the head. mount=wall props (sconces, banners) block nothing.
+
+        Furnished interiors (tools/painted_map_pipeline/interiors, `furnish`) write several
+        variants per building, each object tagged `building` and `variant`; one variant per
+        building is loaded (`_props_variants`). An object without a variant always loads.
+        """
+        from Support import prop_base_mask
+
+        sx = TILESIZE / self.tmxdata.tilewidth
+        sy = TILESIZE / self.tmxdata.tileheight
+        chosen = self._props_variants(tmx_object_layer)
+        for object_ in tmx_object_layer:
+            tags = getattr(object_, "properties", None) or {}
+            variant = str(tags.get("variant", "")).strip()
+            if variant and chosen.get(str(tags.get("building", "")).strip()) != variant:
+                continue
+            image = getattr(object_, "image", None)
+            if image is None:
+                _tmx_layout_log.warning(
+                    "Props layer object %r has no image (place props from the props tileset); skipped",
+                    object_.name or object_.id,
+                )
+                continue
+            size = (max(1, round(object_.width * sx)), max(1, round(object_.height * sy)))
+            if size != image.get_size():
+                image = pygame.transform.scale(image, size)
+            pos = (object_.x * sx, object_.y * sy)
+            mask = pygame.mask.from_surface(image)
+            Tile(pos, [self.visible_sprites], "ground", surface=image, mask=mask)
+
+            props = getattr(object_, "properties", None) or {}
+            if str(props.get("mount", "floor")).strip().lower() == "wall":
+                continue
+            base = prop_base_mask(mask)
+            if base is None:
+                continue
+            top, base_mask = base
+            Tile(
+                (pos[0], pos[1] + top),
+                [self.obstacle_sprites],
+                "ground",
+                surface=pygame.Surface(base_mask.get_size(), pygame.SRCALPHA),
+                mask=base_mask,
+            )
+
+    @staticmethod
+    def _props_variants(objects):
+        """building -> the furnishing variant to load this time: one of its variants at random,
+        or Settings.DEBUG_PROPS_VARIANT where that building has a variant by that tag."""
+        from Settings import DEBUG_PROPS_VARIANT
+
+        variants = {}
+        for object_ in objects:
+            tags = getattr(object_, "properties", None) or {}
+            variant = str(tags.get("variant", "")).strip()
+            if variant:
+                variants.setdefault(str(tags.get("building", "")).strip(), set()).add(variant)
+        return {
+            building: (DEBUG_PROPS_VARIANT if DEBUG_PROPS_VARIANT in found
+                       else random.choice(sorted(found)))
+            for building, found in variants.items()
+        }
+
     def create_building_layer(self, tmx_object_layer):
         """Authored buildings: a footprint plus roof and interior art.
 
-        The object's shape is the building's exterior — both the art bounds and the
-        cutaway trigger. Triggering on the exterior is right because the walls are
-        solid, so the only way to get feet inside it is through the door gap.
+        The object's shape is the building's exterior: the art bounds, and what the roof
+        is clipped to. Three tags describe the rest, each an object carrying `<tag>=<name>`:
+          chamber_of -- the room you can stand in. The trigger for the cutaway and the
+            hole in the roof. What the interior pipeline traced from the painting.
+            InteriorSight rasterizes this mask: floor passes light, the rest is a wall.
+          door_of    -- the painted door. Its exterior pixels become an overhead area, so
+            a body walking in goes under the door the way it goes under a tree canopy.
+          room_of    -- a room, for spawning. Not a visibility region (eroded cores,
+            too small). Sight is line-of-sight on the chamber, see interior_visibility.
+        Anything carrying one of those tags is geometry OF a building, never a building:
+        `room_of` once fell through, became a second building with no art, and drew its
+        placeholder roof -- flat tan -- over the real room.
 
         Buildings join NEITHER ground_sprites — create_ground_surface composites those
         into one static texture, which would put the roof permanently beyond reach of
-        any toggle — NOR obstacle_sprites: walls are authored separately as a C-shaped
-        polygon on the obstacle layer, and the door is the gap in it.
+        any toggle — NOR obstacle_sprites: walls are written to the obstacle layer by the
+        pipeline, and the door is the gap in them.
         """
         from Building import (
-            Building,
+            DOOR_MODE_WEDGE,
             PLACEHOLDER_INTERIOR_RGBA,
             PLACEHOLDER_ROOF_RGBA,
+            assemble,
+            clip_surface,
+            door_cover,
         )
 
         tmx_folder = getattr(self, "tmx_folder", None)
 
-        # Pass 1: chambers. An object carrying `chamber_of` is the room you can stand
-        # in, not a building of its own.
-        chambers = {}
+        # Pass 1: the shapes that belong to a building, keyed by its name.
+        chambers, doors = {}, {}
         for object_ in tmx_object_layer:
             props = getattr(object_, "properties", None) or {}
-            owner = str(props.get("chamber_of", "")).strip()
-            if not owner:
-                continue
-            rect, mask, _pts = self._mask_and_rect_for_tmx_shape(object_)
-            if mask is None or mask.count() == 0:
-                _tmx_layout_log.warning("Buildings: chamber for %r has no usable shape", owner)
-                continue
-            chambers[owner] = (rect, mask)
+            for key, into in (("chamber_of", chambers), ("door_of", doors)):
+                owner = str(props.get(key, "")).strip()
+                if not owner:
+                    continue
+                rect, mask, _pts = self._mask_and_rect_for_tmx_shape(object_)
+                if mask is None or mask.count() == 0:
+                    _tmx_layout_log.warning("Buildings: %s for %r has no usable shape", key, owner)
+                    continue
+                if key == "door_of":
+                    # A door frame can come in pieces (a map polygon has no holes).
+                    into.setdefault(owner, []).append((rect, mask))
+                else:
+                    into[owner] = (rect, mask)
 
         for object_ in tmx_object_layer:
             props = getattr(object_, "properties", None) or {}
-            if str(props.get("chamber_of", "")).strip():
+            if any(str(props.get(key, "")).strip()
+                   for key in ("chamber_of", "hole_of", "room_of", "door_of")):
                 continue
+            name = str(getattr(object_, "name", ""))
             footprint, mask, _draw_pts = self._mask_and_rect_for_tmx_shape(object_)
             if mask is None or mask.count() == 0:
-                _tmx_layout_log.warning("Buildings: object %r has no usable shape; skipped",
-                                 getattr(object_, "name", "?"))
+                _tmx_layout_log.warning("Buildings: object %r has no usable shape; skipped", name or "?")
                 continue
 
-            chamber_rect, chamber_mask = chambers.get(str(getattr(object_, "name", "")), (None, None))
-
-            door_origin, door_inward, arch_quad, door_depth = self._door_plane_from_props(
-                props, footprint, _draw_pts)
+            door_origin, door_inward, arch_quad, door_depth =                 self._door_plane_from_props(props, footprint, _draw_pts)
+            door_mode = str(props.get("door_mode") or "").strip().lower() or None
+            if door_mode not in (None, DOOR_MODE_WEDGE):
+                _tmx_layout_log.warning(
+                    "Buildings: %r has door_mode=%r; only %r is a mode, using the default",
+                    name or "?", door_mode, DOOR_MODE_WEDGE)
+                door_mode = None
 
             # An image object's own art is the natural roof; interior is a property.
+            silhouette = clip_surface(footprint, footprint, mask)
             roof = self._building_surface(
                 props.get("roof_image"), getattr(object_, "image", None),
-                footprint, self._clip_surface(footprint, footprint, mask),
-                tmx_folder, PLACEHOLDER_ROOF_RGBA,
+                footprint, silhouette, tmx_folder, PLACEHOLDER_ROOF_RGBA,
             )
-            # Interior is clipped to chamber ∪ arch so the doorway has floor pixels.
-            # roof_open still punches only the chamber, so jambs and outer walls stay.
-            chamber_clip = self._clip_surface(
-                footprint,
-                chamber_rect if chamber_rect is not None else footprint,
-                chamber_mask if chamber_rect is not None else mask,
-            )
-            interior_clip = chamber_clip
-            if arch_quad is not None:
-                interior_clip = chamber_clip.copy()
-                self._or_polygon_into_clip(interior_clip, footprint, arch_quad)
             interior = self._building_surface(
                 props.get("interior_image"), None,
-                footprint, interior_clip,
-                tmx_folder, PLACEHOLDER_INTERIOR_RGBA,
+                footprint, silhouette, tmx_folder, PLACEHOLDER_INTERIOR_RGBA,
             )
-            roof_open = self._roof_with_chamber_punched(roof, chamber_clip)
+            self.buildings.append(assemble(
+                footprint, mask, roof, interior,
+                chamber=chambers.get(name), arch_quad=arch_quad,
+                door_origin=door_origin, door_inward=door_inward,
+                door_depth=door_depth, door_mode=door_mode,
+            ))
 
-            self.buildings.append(
-                Building(footprint, roof, interior, mask=mask,
-                         chamber_rect=chamber_rect, chamber_mask=chamber_mask,
-                         roof_open=roof_open,
-                         door_origin=door_origin, door_inward=door_inward,
-                         door_depth=door_depth, arch_quad=arch_quad)
-            )
-
-    def _clip_surface(self, footprint, shape_rect, shape_mask):
-        """Footprint-sized alpha stencil: opaque where `shape_mask` covers, else clear."""
-        clip = pygame.Surface(footprint.size, pygame.SRCALPHA)
-        if shape_mask is None:
-            clip.fill((255, 255, 255, 255))
-            return clip
-        shape = shape_mask.to_surface(setcolor=(255, 255, 255, 255), unsetcolor=(0, 0, 0, 0))
-        clip.blit(shape, (shape_rect.x - footprint.x, shape_rect.y - footprint.y))
-        return clip
-
-    def _or_polygon_into_clip(self, clip, footprint, world_verts):
-        """Make `clip` also opaque inside `world_verts` (footprint-local polygon)."""
-        pts = [(int(round(x - footprint.x)), int(round(y - footprint.y))) for x, y in world_verts]
-        if len(pts) >= 3:
-            pygame.draw.polygon(clip, (255, 255, 255, 255), pts)
+            # The door's frame, cut from the roof art: drawn over a body once his feet are
+            # past the door line (YSortCameraGroup), so it needs its building with it.
+            for door_rect, door_mask in doors.get(name, ()):
+                cover = door_cover(footprint, roof, door_rect, door_mask)
+                if cover is None:
+                    _tmx_layout_log.warning(
+                        "Buildings: a door_of polygon for %r lies outside its silhouette", name)
+                    continue
+                self.door_covers.append((*cover, self.buildings[-1]))
 
     def _door_plane_from_props(self, props, footprint, draw_pts):
-        """Optional door_x/door_y: origin on the nearest footprint edge, not the raw point."""
+        """Optional door_x/door_y: origin on the nearest footprint edge, not the raw point.
+
+        Returns (origin, inward, arch quad, door_depth). Only the arch is used by default,
+        to keep the doorway's floor pixels in the interior art; wedge mode uses all of it.
+        """
         from Building import DEFAULT_DOOR_DEPTH, DEFAULT_DOOR_GAP, door_plane_from_polygon
 
         raw_x, raw_y = props.get("door_x"), props.get("door_y")
         if raw_x in (None, "") or raw_y in (None, "") or not draw_pts:
             return None, None, None, DEFAULT_DOOR_DEPTH
+        # Authored in TMX pixels like the polygon; scale them by the same factor the
+        # polygon got in _mask_and_rect_for_tmx_shape or the door drifts off the wall.
+        sx = self.TILESIZE / self.tmxdata.tilewidth
+        sy = self.TILESIZE / self.tmxdata.tileheight
         try:
-            door_point = (float(raw_x), float(raw_y))
-            door_depth = float(props.get("door_depth") or DEFAULT_DOOR_DEPTH)
-            door_gap = float(props.get("door_gap") or DEFAULT_DOOR_GAP)
+            door_point = (float(raw_x) * sx, float(raw_y) * sy)
+            # Defaults are engine constants already in world px; only authored values scale.
+            door_depth = float(props["door_depth"]) * sy if props.get("door_depth") else DEFAULT_DOOR_DEPTH
+            door_gap = float(props["door_gap"]) * sx if props.get("door_gap") else DEFAULT_DOOR_GAP
         except (TypeError, ValueError):
             _tmx_layout_log.warning("Buildings: invalid door_x/door_y/door_depth; ignoring door plane")
             return None, None, None, DEFAULT_DOOR_DEPTH
@@ -999,15 +1094,6 @@ class LayoutManager:
         origin, inward, quad = door_plane_from_polygon(
             corners, door_point, door_depth, door_gap)
         return origin, inward, quad, door_depth
-
-    def _roof_with_chamber_punched(self, roof, chamber_clip):
-        """Copy of `roof` with chamber alpha zeroed. Outer walls stay."""
-        inverted = pygame.Surface(roof.get_size(), pygame.SRCALPHA)
-        inverted.fill((255, 255, 255, 255))
-        inverted.blit(chamber_clip, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
-        roof_open = roof.copy()
-        roof_open.blit(inverted, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-        return roof_open
 
     def _building_surface(self, raw_path, fallback_image, footprint, clip, tmx_folder,
                           placeholder_rgba):
@@ -1855,6 +1941,8 @@ class LayoutManager:
             return
         if not hasattr(self, "placed_enemy_spawns"):
             self.placed_enemy_spawns = []
+        if not hasattr(self, "_pending_placed_enemies"):
+            self._pending_placed_enemies = []
         tiled_tile_width = self.tmxdata.tilewidth
         tiled_tile_height = self.tmxdata.tileheight
 
@@ -1877,7 +1965,10 @@ class LayoutManager:
                 # regardless of spawning (the spawner is suppressed in MP, so
                 # spawn_enemy is a no-op there -- but the spec is still needed).
                 self.placed_enemy_spawns.append(spawn_cfg)
-                self.spawner.spawn_enemy(spawn_cfg)
+                if getattr(self, "player", None) is None:
+                    self._pending_placed_enemies.append(spawn_cfg)
+                else:
+                    self.spawner.spawn_enemy(spawn_cfg)
             else:
                 self.spawner.spawn_neutral(spawn_cfg)
     
@@ -1950,9 +2041,13 @@ class LayoutManager:
         self.visible_sprites.empty()
         self.trigger_sprites.empty()
         self.obstacle_sprites.empty()
-        # In place: the camera group holds this exact list. Rebinding it here would
+        # In place: the camera group holds these exact lists. Rebinding either here would
         # silently detach the renderer and leave the previous layout's buildings drawn.
+        # overhead_areas was never cleared, so tree canopies (and now door covers)
+        # accumulated across every reload.
         self.buildings.clear()
+        self.overhead_areas.clear()
+        self.door_covers.clear()
         self.last_trigger_time = None
 
         self.effect_quad_trees = {}         
@@ -2095,6 +2190,7 @@ class LayoutManager:
                         sprite.direction,
                         getattr(sprite, "sprite_type", None),
                         getattr(sprite, "mask", None),
+                        owner=sprite,
                     )
                 )
         self.entity_quad_tree.set_backend(

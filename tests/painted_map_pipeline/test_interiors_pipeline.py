@@ -123,20 +123,36 @@ def test_the_plan_pass_runs_far_below_the_size_cap():
     assert width * height < 3_000_000
 
 
-def test_art_classes_cover_the_chamber_and_the_wall_band_is_the_emitter_thickness(plan):
-    covered = plan.classes["floor"] | plan.classes["wall"] | plan.classes["solid"]
+def test_art_classes_cover_the_chamber_and_are_disjoint(plan):
+    """Every chamber pixel is floor, a partition, or the building's solid mass -- and only
+    one of them. `solid` is a kept-but-empty key: interior stone that is not a partition is
+    `outer` now, so the render prompt has a name for every colour it is shown."""
+    c = plan.classes
+    covered = c["floor"] | c["wall"] | (c["outer"] & plan.chamber)
 
     assert (covered == plan.chamber).all()
-    assert plan.classes["wall"].any()
+    assert not (c["floor"] & c["wall"]).any()
+    assert not (c["floor"] & c["outer"]).any()
+    assert not (c["wall"] & c["outer"]).any()
+    assert not c["solid"].any()
+    assert c["wall"].any(), "the synthetic crypt has corridor corners that read as partitions"
 
 
-def test_the_control_image_is_three_flat_colours_inside_the_chamber(plan):
+def test_the_control_image_is_flat_named_colours_only(plan):
     """Flat and unmixed, so the render pass has no ambiguity about what a pixel means.
-    Outside the chamber it is black -- that region is the exterior's own art, not a class."""
-    image = np.asarray(plan_mod.control_image(plan))
 
-    assert len(np.unique(image[plan.chamber], axis=0)) == 3
-    assert not image[~plan.chamber].any()
+    Inside the chamber: floor, partition, or solid mass. Outside it: the shell in the same
+    solid-mass blue, or black where the exterior's own art is. Nothing else, anywhere -- every
+    colour on the picture is one the prompt names."""
+    from tools.painted_map_pipeline.interiors.trace import CLASS_COLOURS, OUTER_RGB
+
+    image = np.asarray(plan_mod.control_image(plan))
+    named = {CLASS_COLOURS["floor"], CLASS_COLOURS["solid"], OUTER_RGB, (0, 0, 0)}
+
+    inside = {tuple(int(v) for v in row) for row in np.unique(image[plan.chamber], axis=0)}
+    outside = {tuple(int(v) for v in row) for row in np.unique(image[~plan.chamber], axis=0)}
+    assert inside <= named and len(inside) <= 3
+    assert outside <= {OUTER_RGB, (0, 0, 0)}
 
 
 # ---------------------------------------------------------------- emit
@@ -162,21 +178,11 @@ def test_the_chamber_stays_inside_the_silhouette(plan, spec):
 
 def test_the_emitter_handles_a_non_convex_floor(plan):
     """`wall_segments` tiles one convex ring with one gap; a corridor with rooms off it is
-    neither, which is why this walks traced boundaries instead."""
-    quads = emit_mod.wall_quads(plan)
+    neither, which is why the walls are the strip round the floor instead."""
+    pieces = emit_mod.wall_pieces(plan)
 
-    assert len(quads) > 20
-    assert all(len(quad) == 4 for quad in quads)
-
-
-def test_wall_segments_stay_short_so_push_out_stays_local(plan):
-    """Push-out direction comes from the obstacle AABB centre, not the contact point, so a
-    long segment ejects anyone touching its end sideways instead of away."""
-    import math
-
-    for quad in emit_mod.wall_quads(plan):
-        length = math.hypot(quad[1][0] - quad[0][0], quad[1][1] - quad[0][1])
-        assert length <= emit_mod.SEGMENT_LENGTH + 1.0
+    assert pieces
+    assert all(len(piece) >= 3 for piece in pieces)
 
 
 def test_rooms_match_what_the_check_counted(plan):
@@ -200,15 +206,22 @@ def _names(map_path):
             for o in group.findall("object") if o.get("name")]
 
 
+def _ids(map_path, prefix):
+    root = ET.parse(map_path).getroot()
+    return {int(o.get("id")) for group in root.iter("objectgroup")
+            for o in group.findall("object") if (o.get("name") or "").startswith(prefix)}
+
+
 def test_writing_a_plan_replaces_the_generated_geometry(plan, tmp_path):
     target = _map_copy(tmp_path)
-    before = [n for n in _names(target) if n.startswith("great_pyramid_wall")]
+    before = _ids(target, "great_pyramid_wall")
     assert before, "the fixture map should already carry generated walls"
 
     result = emit_mod.write_plan(plan, target)
-    after = [n for n in _names(target) if n.startswith("great_pyramid_wall")]
+    after = _ids(target, "great_pyramid_wall")
 
-    assert len(after) == result["walls"] != len(before)
+    assert len(after) == result["walls"]
+    assert not (before & after), "the old walls are gone, not stacked under new ones"
 
 
 def test_writing_is_idempotent(plan, tmp_path):

@@ -24,6 +24,42 @@ from .trace import to_world
 SCHEMA_VERSION = 1
 TILE = 150
 
+# A partition between two rooms, as a fraction of the building's own outer shell. Derived
+# rather than typed, because there is one measured wall -- `ask_model` reading the building's
+# art -- and everything about the interior's shape should follow from it.
+#
+# Thinner than the shell, which is the right way round and was not what the code did: the
+# constant this replaces made partitions 160 px against a 70 px shell, so the wall band
+# dilated across the whole chamber and the plan overlay read as a solid sheet.
+INNER_WALL_FRACTION = 0.6
+MIN_INNER_WALL = 24
+
+_WORLD_SCALE_CACHE: dict = {}
+
+
+def world_scale_of(map_path) -> float:
+    """`TILESIZE / tilewidth` for a TMX, the factor the engine draws it at. 1.0 if unreadable.
+
+    Read from the <map> tag directly rather than through pytmx, which would decode every
+    image the map references (the painted ground is ~1 GB) just to get one attribute.
+    """
+    import re
+
+    key = str(map_path)
+    cached = _WORLD_SCALE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    scale = 1.0
+    try:
+        head = Path(map_path).read_text(encoding="utf-8")[:4096]
+        found = re.search(r'<map\b[^>]*\btilewidth="(\d+(?:\.\d+)?)"', head)
+        if found and float(found.group(1)) > 0:
+            scale = TILE / float(found.group(1))
+    except OSError:
+        pass
+    _WORLD_SCALE_CACHE[key] = scale
+    return scale
+
 
 @dataclass
 class InteriorSpec:
@@ -43,6 +79,13 @@ class InteriorSpec:
     entrance_prompt: str = ""    # "dark doorway with stone lintel"
     intent: str = ""             # what is inside, free text, steers the plan pass
     rooms: int = None            # expected room count, checkable after the trace
+    wall: int = None             # px of wall the chamber was inset by, when it was derived
+    inner_wall: int = None       # partition between rooms; None means derive it from `wall`
+    door_gap: float = None       # the opening along the wall; None means the game's default
+    corridor_players: tuple = None   # how many players wide a corridor should be, when set
+    room_players: tuple = None       # how many players across a room should be, when set
+    scale_character: str = ""        # who stands in the room while it is decorated; "" = barb
+    scale_at: tuple = None           # canvas px of his feet; None = the floor farthest from a wall
     tile: int = TILE
     schema_version: int = SCHEMA_VERSION
 
@@ -51,6 +94,30 @@ class InteriorSpec:
     @property
     def tiles(self) -> tuple:
         return (round(self.size[0] / self.tile, 1), round(self.size[1] / self.tile, 1))
+
+    @property
+    def world_scale(self) -> float:
+        """How much bigger the game draws this level's painted art than it is on disk.
+
+        The engine scales everything from a TMX by `TILESIZE / tmx.tilewidth` at load, so a
+        map authored at tilewidth 120 draws at 1.25x. This canvas is in painted px, and the
+        player is measured in game px, so anything comparing the two -- the figure pasted for
+        scale, the corridor checks, "a person is N px" in the prompt -- divides by this.
+        """
+        return world_scale_of(self.map_path)
+
+    @property
+    def partition(self) -> int:
+        """Thickness of a wall between rooms, in px.
+
+        The one number the control image's wall band and the collision quads both read, so
+        what you are shown and what you walk into cannot drift apart.
+        """
+        if self.inner_wall:
+            return int(self.inner_wall)
+        if not self.wall:
+            return MIN_INNER_WALL
+        return int(max(MIN_INNER_WALL, INNER_WALL_FRACTION * self.wall))
 
     @property
     def door_width(self) -> float:
@@ -77,7 +144,10 @@ class InteriorSpec:
             raise ValueError(
                 f"{path} was written by schema {raw.get('schema_version')}, this is "
                 f"{SCHEMA_VERSION}; re-run the interview rather than guessing at the gap")
-        for key in ("origin", "size", "door_origin", "door_inward"):
+        for key in ("corridor_players", "room_players"):
+            if raw.get(key) is not None:
+                raw[key] = tuple(raw[key])
+        for key in ("origin", "size", "door_origin", "door_inward", "scale_at"):
             if raw.get(key) is not None:
                 raw[key] = tuple(raw[key])
         for key in ("silhouette", "chamber", "doors", "arch_quad"):
@@ -99,9 +169,18 @@ def from_building(art: BuildingArt, map_path: Path, **answers) -> InteriorSpec:
     """
     door_origin = door_inward = None
     arch = ()
+    door_gap = getattr(art, "door_gap", None)
     if art.door_point is not None:
-        door_origin, door_inward, arch = building_geometry().door_plane_from_polygon(
-            art.footprint, art.door_point)
+        if door_gap:
+            door_origin, door_inward, arch = building_geometry().door_plane_from_polygon(
+                art.footprint, art.door_point, door_gap=door_gap)
+        else:
+            # Nothing measured the opening, so the game's DEFAULT_DOOR_GAP stands in. Said out
+            # loud: it is a fixed 400 px whatever the building, which is 11% of a large
+            # pyramid's frontage and 40% of a small one's.
+            print(f"  {art.name}: no measured doorway; falling back to the game's default gap")
+            door_origin, door_inward, arch = building_geometry().door_plane_from_polygon(
+                art.footprint, art.door_point)
     return InteriorSpec(
         building=art.name,
         map_path=str(map_path),
@@ -115,6 +194,7 @@ def from_building(art: BuildingArt, map_path: Path, **answers) -> InteriorSpec:
         door_origin=tuple(door_origin) if door_origin else None,
         door_inward=tuple(door_inward) if door_inward else None,
         arch_quad=_tuples(arch),
+        door_gap=door_gap,
         **answers,
     )
 

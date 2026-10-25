@@ -6,7 +6,12 @@ import math
 import collision_core
 from hashRect import HashableRect
 from game_logging import get_collision_mask_logger
-from Support import print_mask, position_surface_mask_midbottom_at, mask_midbottom_world
+from Support import (
+    print_mask,
+    position_surface_mask_midbottom_at,
+    mask_midbottom_world,
+    _mask_opaque_bounds,
+)
 from Effect import EFFECT_REGISTRY, SlipperyEffect
 from benchmark_runtime import BENCHMARK_RUNTIME
 from Interaction import InteractionContext
@@ -96,6 +101,9 @@ class Entity(pygame.sprite.Sprite):
         if not hasattr(self, "hitbox") or getattr(self, "image", None) is None:
             self.anchor_offset = 0
             return
+        if getattr(self, "sprite_anchor_px", None) is not None:
+            self.anchor_offset = 0  # the manifest anchor *is* the ground contact point
+            return
         mask = getattr(self, "mask", None)
         if mask is None:
             mask = pygame.mask.from_surface(self.image)
@@ -111,12 +119,81 @@ class Entity(pygame.sprite.Sprite):
             return
         if self.anchor_offset is None:
             self.capture_feet_anchor()
+        anchor = getattr(self, "sprite_anchor_px", None)
+        if anchor is not None:
+            # Pre-rendered N-direction sprites: every frame shares one ground pixel, so
+            # plant that instead of the mask's lowest row (which the ground shadow moves).
+            self.rect = self.image.get_rect(topleft=(
+                self.hitbox.midbottom[0] - int(round(anchor[0])),
+                self.hitbox.midbottom[1] - int(round(anchor[1])),
+            ))
+            self.refresh_collision_reach_px()
+            return
         mask = getattr(self, "mask", None)
         target = (
             self.hitbox.midbottom[0],
             self.hitbox.midbottom[1] + int(self.anchor_offset or 0),
         )
         self.rect = position_surface_mask_midbottom_at(self.image, mask, target)
+        self.refresh_collision_reach_px()
+
+    def refresh_collision_reach_px(self):
+        """How tall this body stands above its feet, in screen pixels.
+
+        Also refreshes collision_ground_radius_px for upright sprite capsules.
+        """
+        mask = getattr(self, "mask", None)
+        hitbox = getattr(self, "hitbox", None)
+        rect = getattr(self, "rect", None)
+        if mask is None or hitbox is None or rect is None:
+            self.collision_reach_px = float(getattr(rect, "height", 0) or 0)
+        else:
+            bounds = _mask_opaque_bounds(mask)
+            if bounds is None:
+                self.collision_reach_px = float(rect.height)
+            else:
+                world_top = rect.y + bounds.top
+                feet_y = hitbox.midbottom[1]
+                self.collision_reach_px = max(0.0, float(feet_y - world_top))
+
+        cfg = getattr(self, "combat_config", None) or {}
+        override = cfg.get("collision_ground_radius_px")
+        if override is not None:
+            self.collision_ground_radius_px = float(override)
+            self._ground_radius_src = mask
+            return
+
+        if mask is getattr(self, "_ground_radius_src", object()) and hasattr(
+            self, "collision_ground_radius_px"
+        ):
+            return
+
+        if mask is None or rect is None:
+            self.collision_ground_radius_px = float(getattr(rect, "width", 0) or 0) / 4.0
+            self._ground_radius_src = mask
+            return
+
+        bounds = _mask_opaque_bounds(mask)
+        if bounds is None:
+            self.collision_ground_radius_px = float(rect.width) / 4.0
+        else:
+            h = max(1, bounds.height // 4)
+            band = pygame.Mask((bounds.width, h), fill=True)
+            overlap = mask.overlap_mask(band, (bounds.left, bounds.bottom - h))
+            rects = overlap.get_bounding_rects()
+            width = max((r.width for r in rects), default=0)
+            if width > 0:
+                self.collision_ground_radius_px = float(width) / 2.0
+            else:
+                self.collision_ground_radius_px = float(rect.width) / 4.0
+        self._ground_radius_src = mask
+
+    def get_collision_reach_px(self):
+        reach = getattr(self, "collision_reach_px", None)
+        if reach is None:
+            self.refresh_collision_reach_px()
+            reach = getattr(self, "collision_reach_px", 0.0)
+        return float(reach or 0.0)
 
     #@profile
     def move(self, speed, QuadTree,entity_quad_tree, update_quad_tree = True):
@@ -140,16 +217,19 @@ class Entity(pygame.sprite.Sprite):
                 mask = self.mask
             else:
                 mask = None
-        
-        
-        
-            self.layout_callback_update_quad_tree(HashableRect(self.rect,
-                                                               self.id,
-                                                               self.direction,
-                                                               sprite_type,
-                                                               mask),
-                                                  alive = True,
-                                                  remove_existing = remove_existing)
+
+            self.layout_callback_update_quad_tree(
+                HashableRect(
+                    self.rect,
+                    self.id,
+                    self.direction,
+                    sprite_type,
+                    mask,
+                    owner=self,
+                ),
+                alive=True,
+                remove_existing=remove_existing,
+            )
             # Update flag after the first call
             self.move_not_called_before = False
         # if hasattr(self, "type" ): 
@@ -558,7 +638,22 @@ class Entity(pygame.sprite.Sprite):
     ):
         do_colision = True
         normal = None
-        if self_mask and entity.mask:
+        from Settings import VIEW_ELEVATION_DEG
+        import body_contact
+        E = VIEW_ELEVATION_DEG
+        if body_contact.is_mesh(self) or body_contact.is_mesh(entity):
+            c = body_contact.mesh_contact(
+                body_contact.collision_body(self, E),
+                body_contact.collision_body(entity, E),
+                E,
+            )
+            do_colision = c.touching
+            normal = (
+                self._apply_mask_collision_min_deflect(*c.normal)
+                if c.normal
+                else None
+            )
+        elif self_mask and entity.mask:
             entity_rect = entity.rect
             dx = entity_rect.x - self_rect.x
             dy = entity_rect.y - self_rect.y

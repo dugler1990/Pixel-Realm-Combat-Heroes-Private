@@ -1,4 +1,4 @@
-"""Building cutaway logic: containment, door plane, and doorway hysteresis."""
+"""Building cutaway logic: containment, the door cover, and the opt-in wedge reveal."""
 
 import os
 import sys
@@ -11,11 +11,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from Building import (  # noqa: E402
     DEFAULT_DOOR_DEPTH,
+    DOOR_MODE_WEDGE,
     VIEW_DOOR,
     VIEW_IN,
     VIEW_OUT,
     Building,
     arch_quad,
+    assemble,
+    door_cover,
     door_plane_from_polygon,
 )
 
@@ -39,6 +42,9 @@ def _south_door_building(chamber_bottom=61, **kwargs):
     chamber = kwargs.pop("chamber_rect", pygame.Rect(10, 0, 60, chamber_bottom))
     kwargs.setdefault("chamber_mask", pygame.Mask(chamber.size, fill=True))
     kwargs.setdefault("door_lip_jitter", 8)
+    # The three-state tests below were written for the sliding reveal, which is the
+    # opt-in; the default ignores the door plane entirely. Pin it.
+    kwargs.setdefault("door_mode", DOOR_MODE_WEDGE)
     return Building(
         footprint, _surf(80, 80), _surf(80, 80),
         door_origin=origin, door_inward=inward, door_depth=door_depth,
@@ -228,22 +234,99 @@ def test_no_door_plane_keeps_tilesize_hysteresis():
     assert b.view != VIEW_DOOR
 
 
-def test_sunspine_pyramid_door_depth_meets_chamber():
-    """Load-bearing TMX invariant: origin + door_depth * inward is inside the chamber."""
-    corners = [(7620, 2690), (9450, 4410), (7700, 5830), (5850, 4170)]
-    origin, inward, _quad = door_plane_from_polygon(corners, (8430, 4970), DEFAULT_DOOR_DEPTH)
-    inner = (origin[0] + inward[0] * DEFAULT_DOOR_DEPTH,
-             origin[1] + inward[1] * DEFAULT_DOOR_DEPTH)
-    chamber_origin = (6094, 2904)
-    rel = [(1520, 0), (3113, 1497), (1611, 2716), (0, 1270)]
-    world = [(chamber_origin[0] + x, chamber_origin[1] + y) for x, y in rel]
-    xs = [p[0] for p in world]
-    ys = [p[1] for p in world]
-    left, top = int(min(xs)), int(min(ys))
-    surf = pygame.Surface((int(max(xs)) - left + 2, int(max(ys)) - top + 2), pygame.SRCALPHA)
-    pygame.draw.polygon(surf, (255, 255, 255, 255),
-                        [(int(x - left), int(y - top)) for x, y in world])
-    mask = pygame.mask.from_surface(surf)
-    local = (int(round(inner[0])) - left, int(round(inner[1])) - top)
-    assert 0 <= local[0] < mask.get_size()[0] and 0 <= local[1] < mask.get_size()[1]
-    assert mask.get_at(local), "door_depth %s does not meet the chamber inset" % DEFAULT_DOOR_DEPTH
+def test_wedge_mode_still_available_per_building():
+    b = _south_door_building(door_mode=DOOR_MODE_WEDGE)
+    b.update(0.016, (40, 70))
+    assert b.view == VIEW_DOOR
+    assert b.far_arch_patch() is not None
+
+
+# ---------------------------------------------------------------- the default: feet in the chamber
+
+def test_default_mode_is_feet_in_the_chamber():
+    """With a door plane authored and no door_mode, the plane is ignored: feet in the arch
+    but short of the chamber are OUT, feet in the chamber are IN, and nothing is ever DOOR."""
+    b = _south_door_building(door_mode=None)
+    seen = []
+    for y in (90, 79, 70, 61, 30):          # outside -> lip -> arch -> chamber edge -> chamber
+        b.update(0.016, (40, y))
+        seen.append(b.view)
+        assert b.far_arch_patch() is None, "the default must never yield a wedge"
+    assert VIEW_DOOR not in seen
+    assert seen[:3] == [VIEW_OUT, VIEW_OUT, VIEW_OUT], "the arch is not the room"
+    assert seen[-1] == VIEW_IN
+    assert b.door_mode is None
+
+
+def test_invalid_door_mode_is_rejected():
+    import pytest
+
+    with pytest.raises(ValueError):
+        _south_door_building(door_mode="threshold")
+
+
+def _shaped_roof(footprint, mask):
+    roof = pygame.Surface(footprint.size, pygame.SRCALPHA)
+    roof.fill((200, 100, 50, 255))
+    roof.blit(mask.to_surface(setcolor=(255, 255, 255, 255), unsetcolor=(0, 0, 0, 0)),
+              (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    return roof
+
+
+def test_door_cover_is_the_roofs_pixels_inside_the_polygon():
+    """A triangular door straddling the silhouette's bottom edge: roof pixels inside the
+    polygon and the silhouette, transparent on the overhang and outside the polygon."""
+    footprint = pygame.Rect(100, 100, 80, 60)
+    silhouette = pygame.Mask((80, 60), fill=True)
+    for x in range(80):                      # bottom 10 rows are outside the building
+        for y in range(50, 60):
+            silhouette.set_at((x, y), 0)
+    roof = _shaped_roof(footprint, silhouette)
+    # Door polygon: a triangle from (130,140)-(150,140) up to (140,120), then hanging down
+    # to y=158 -- the bottom 8 px of it are on the sand.
+    door_rect = pygame.Rect(130, 120, 20, 38)
+    door_surf = pygame.Surface(door_rect.size, pygame.SRCALPHA)
+    pygame.draw.polygon(door_surf, (255, 255, 255, 255), [(10, 0), (20, 20), (20, 38), (0, 38), (0, 20)])
+    door_mask = pygame.mask.from_surface(door_surf)
+
+    rect, cover = door_cover(footprint, roof, door_rect, door_mask)
+
+    assert rect == door_rect, "cropped to the door, not the footprint"
+    assert cover.get_at((10, 15))[3] == 255, "inside the polygon and the building"
+    assert cover.get_at((10, 34))[3] == 0, "the overhang onto the sand is transparent"
+    assert cover.get_at((1, 2))[3] == 0, "outside the polygon is transparent"
+    assert cover.get_at((10, 15))[:3] == (200, 100, 50), "the roof's own pixels"
+
+
+def test_door_cover_is_none_when_the_door_misses_the_building():
+    footprint = pygame.Rect(100, 100, 80, 60)
+    roof = _shaped_roof(footprint, pygame.Mask((80, 60), fill=True))
+    door_rect = pygame.Rect(300, 300, 20, 20)
+    assert door_cover(footprint, roof, door_rect, pygame.Mask((20, 20), fill=True)) is None
+
+
+def test_assemble_punches_the_chamber_and_clips_the_interior():
+    footprint = pygame.Rect(0, 0, 80, 80)
+    mask = pygame.Mask((80, 80), fill=True)
+    roof = _shaped_roof(footprint, mask)
+    interior = pygame.Surface(footprint.size, pygame.SRCALPHA)
+    interior.fill((30, 80, 180, 255))
+    chamber = (pygame.Rect(20, 20, 30, 30), pygame.Mask((30, 30), fill=True))
+
+    b = assemble(footprint, mask, roof, interior, chamber=chamber)
+
+    assert b.roof_open.get_at((5, 5))[3] == 255, "the face around the room stays roof"
+    assert b.roof_open.get_at((35, 35))[3] == 0, "the room is punched"
+    assert b.interior.get_at((35, 35))[3] == 255, "interior shows in the room"
+    assert b.interior.get_at((5, 5))[3] == 0, "and nowhere else"
+    assert b.contains((35, 35)) and not b.contains((5, 5))
+    assert b.door_mode is None
+
+
+def test_assemble_without_a_chamber_uses_the_footprint():
+    footprint = pygame.Rect(0, 0, 80, 80)
+    mask = pygame.Mask((80, 80), fill=True)
+    b = assemble(footprint, mask, _shaped_roof(footprint, mask),
+                 pygame.Surface(footprint.size, pygame.SRCALPHA))
+    assert b.roof_open.get_at((5, 5))[3] == 0, "no chamber: the whole footprint is the room"
+    assert b.contains((5, 5))

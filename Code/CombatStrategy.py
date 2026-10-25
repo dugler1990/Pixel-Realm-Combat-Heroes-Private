@@ -66,23 +66,29 @@ class CombatStrategy:
         #print(f"Checking for special attacks {self.special_attacks}")
         random.shuffle(self.special_attacks)
         current_time = pygame.time.get_ticks()
-        # Check for ongoing casting first
+        locked = False
+        # Tick ongoing casts first (MeteorShower keeps raining without locking AI).
         for attack in self.special_attacks:
-            #print(f"checking summoning :{attack}")
-            if attack.name == "SummonIceGhosts" and attack.is_casting:
-                #print("SUMMONNING AND READY TO UPDATE")
+            if getattr(attack, "is_casting", False):
                 attack.update(enemy, player, self.combat_context)
-                #print(f"SUMMONNING AND READY TO UPDATE post status {enemy.status}")
-                return True  # Skip other actions if SummonIceGhosts is casting
+                if getattr(attack, "lock_actions", True):
+                    locked = True
+        if locked:
+            return True
 
         # Execute special attacks if ready and conditions are met
         for attack in self.special_attacks:
+            if getattr(attack, "is_casting", False):
+                continue
             if attack.is_ready(current_time) and attack.can_trigger(enemy, player):
                 #print(f"Executing special attack: {attack.name}")
                 attack.execute(enemy, player, self.combat_context)
-                if attack.name == "SummonIceGhosts":
+                if getattr(attack, "is_casting", False):
                     attack.update(enemy, player, self.combat_context)
-                    return True  # Skip other actions if SummonIceGhosts is casting
+                    if getattr(attack, "lock_actions", True):
+                        return True
+                    # Non-locking cast (MeteorShower): continue into normal combat this frame.
+                    return False
                 return True  # Skip other actions if a special attack is used
 
         return False

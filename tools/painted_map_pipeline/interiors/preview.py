@@ -39,13 +39,18 @@ class Waypoint:
 
 
 # Sampled along the door's inward normal, so they mean the same thing for any building
-# whatever direction its entrance faces.
+# whatever direction its entrance faces. Dense round the door line, because that is where
+# the player was being hidden: walking up to the door, standing in it, passing the lintel.
 WALK = (
     Waypoint("1_outside", -2.5, "outside: roof intact"),
-    Waypoint("2_approach", -0.6, "at the threshold"),
-    Waypoint("3_doorway", 0.4, "in the arch: split at the feet"),
-    Waypoint("4_inside", 2.0, "inside: roof lifted, interior under"),
-    Waypoint("5_deep", 5.0, "deep inside"),
+    Waypoint("2_approach", -1.0, "walking up to the door"),
+    Waypoint("3_close", -0.3, "just in front of the door"),
+    Waypoint("4_threshold", 0.0, "on the door line"),
+    Waypoint("5_doorway", 0.2, "in the doorway"),
+    Waypoint("6_lintel", 0.5, "under the lintel"),
+    Waypoint("7_through", 1.0, "through the door"),
+    Waypoint("8_inside", 2.0, "inside: roof lifted, interior under"),
+    Waypoint("9_deep", 5.0, "deep inside"),
 )
 
 
@@ -120,16 +125,21 @@ def _teleport(level, position):
                 pass
 
 
-def waypoints(spec):
-    """The walk, in world px, along the entrance's inward normal."""
+def waypoints(spec, scale: float = 1.0):
+    """The walk, in the game's world px, along the entrance's inward normal.
+
+    `scale` is the map's `world_scale`: the game draws a map with tilewidth 120 at 1.25x, so
+    a point in map px is at 1.25x that in the world. Without it the walk on sunspine landed
+    inside the wrong pyramid.
+    """
     if not spec.door_origin or not spec.door_inward:
         raise ValueError(f"{spec.building} has no door plane; nothing to walk through")
     ox = spec.origin[0] + spec.door_origin[0]
     oy = spec.origin[1] + spec.door_origin[1]
     for point in WALK:
         distance = point.tiles_inward * spec.tile
-        yield point, (ox + spec.door_inward[0] * distance,
-                      oy + spec.door_inward[1] * distance)
+        yield point, ((ox + spec.door_inward[0] * distance) * scale,
+                      (oy + spec.door_inward[1] * distance) * scale)
 
 
 def filmstrip(spec, layouts_dir: Path, out_dir: Path, size=(1280, 720)) -> list:
@@ -137,6 +147,9 @@ def filmstrip(spec, layouts_dir: Path, out_dir: Path, size=(1280, 720)) -> list:
     out_dir = Path(out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     layouts_dir = Path(layouts_dir).resolve()
+    # Before the engine boots: importing Settings changes folder to Code/, after which the
+    # map's relative path no longer opens and `world_scale` falls back to 1.
+    scale = spec.world_scale
 
     global pygame
     pygame = _boot(size)
@@ -144,7 +157,7 @@ def filmstrip(spec, layouts_dir: Path, out_dir: Path, size=(1280, 720)) -> list:
     try:
         level = _level(pygame, layouts_dir)
         written = []
-        for point, position in waypoints(spec):
+        for point, position in waypoints(spec, scale):
             _teleport(level, position)
             for _ in range(SETTLE_TICKS):
                 level.run(DT)

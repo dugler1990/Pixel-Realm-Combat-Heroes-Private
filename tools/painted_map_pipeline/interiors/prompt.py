@@ -91,33 +91,101 @@ def threshold_block(spec) -> Block:
         "THE ENTRANCE - THIS IS THE PART THAT MATTERS",
         f"  There is one {entrance}, already painted, on the {where} edge. It is held out of",
         "  the mask: do not paint over it, do not move it, do not draw another one.",
-        "  FLOOR must start immediately behind it and run inward. Not near it - AT it.",
+        "  \"Inside\" means towards the middle of the building, not further from the camera.",
+        "  FLOOR must start ON THE INSIDE FACE of that doorway and run into the building.",
         "  If the only thing you get right is that the floor meets that doorway, the plan is",
         "  usable. If you get everything else right and it does not, the plan is discarded.",
         "  Every room must be reachable on floor from that doorway.",
     ]
 
 
-def scale_block(spec) -> Block:
-    """Scale in characters, computed from the building. Never typed by a person."""
-    width, height = spec.tiles
+# How wide a corridor should be, and how big a room, in PLAYERS. The old prompt said "1 to 2
+# characters wide" and "3 to 6 characters across" -- fixed text, sent whether the building was
+# 25 characters or 5, and a character is 2.8 players. So a 7-character pyramid was asked for
+# rooms it could not hold, and the model resolved the contradiction by shrinking everything
+# until nothing was walkable.
+# The narrowest anything walkable may be, in players. Not 1.0: a gap exactly one person wide
+# is one you get stuck in, and it leaves nothing for the collision band's rounding. Nothing --
+# corridor, doorway, or a value typed at the menu -- may go below this, and anything that does
+# is reported rather than accepted.
+MIN_CORRIDOR_PLAYERS = 1.25
+CORRIDOR_PLAYERS = (1.5, 2.5)
+ROOM_PLAYERS = (4.0, 8.0)
+
+# Below this many rooms' worth of chamber, there is no plan with rooms AND corridors that
+# fits, and asking for one produces a miniature of a real dungeon rather than a small dungeon.
+SINGLE_CHAMBER_BELOW = 2.5
+
+
+def _players(spec, player_width: float) -> tuple:
+    """The chamber measured in players -- the unit that decides what can fit in it."""
+    return (spec.size[0] / player_width, spec.size[1] / player_width)
+
+
+def scale_block(spec, player_width: float = None, player_height: float = None,
+                corridor_players: tuple = CORRIDOR_PLAYERS,
+                room_players: tuple = ROOM_PLAYERS) -> Block:
+    """Scale in players, computed from the building and the character. Never typed.
+
+    In players rather than characters because the player is the thing that has to fit, and a
+    tile is nearly three of him. Everything here is derived: the only judgement is how many
+    players wide a corridor should be, and that is a constant above with a name.
+    """
+    from .player_size import player_size
+
+    if player_width is None or player_height is None:
+        measured = player_size(scale=spec.world_scale)
+        player_width = player_width or measured.width
+        player_height = player_height or measured.height
+
+    corridor_players = getattr(spec, "corridor_players", None) or corridor_players
+    room_players = getattr(spec, "room_players", None) or room_players
+    across, down = _players(spec, player_width)
     lines = [
         "SCALE",
-        f"  The whole building is about {width:.0f} x {height:.0f} characters across.",
-        "  A corridor is 1 to 2 characters wide. A room is 3 to 6 characters across.",
+        f"  A person is one unit wide. The whole building is about {across:.0f} x {down:.0f} "
+        f"people across.",
     ]
+
+    # One chamber for two different reasons, said once. Either you asked for a single room,
+    # or two rooms and a corridor between them do not fit -- and the prompt should not tell
+    # you the building is small when you simply asked for one room.
+    asked_for_one = spec.rooms == 1
+    too_small = min(across, down) < SINGLE_CHAMBER_BELOW * room_players[0]
+    single = asked_for_one or too_small
+
+    if single:
+        if too_small and not asked_for_one:
+            lines.append("  This building is SMALL: rooms joined by corridors do not fit in "
+                         "it and would come out too narrow to walk down.")
+        lines.append("  Draw ONE chamber. A single open floor filling most of the inside and "
+                     "reaching the doorway -- no corridors, no side chambers, nothing "
+                     "branching.")
+    else:
+        lines.append(f"  A corridor is {corridor_players[0]:g} to {corridor_players[1]:g} "
+                     f"people wide. A room is {room_players[0]:g} to {room_players[1]:g} "
+                     f"people across.")
+        if spec.rooms:
+            lines.append(f"  Draw {spec.rooms} rooms joined by corridors, and no more.")
+        lines.append(f"  A wall between two rooms is about "
+                     f"{spec.partition / player_width:.1f} people thick.")
+
     if spec.door_width:
-        lines.append(f"  The doorway is {spec.door_width / spec.tile:.1f} characters wide; the "
-                     f"corridor behind it should match.")
-    if spec.rooms:
-        lines.append(f"  Draw {spec.rooms} rooms joined by corridors, and no more.")
+        lines.append(f"  The doorway is {spec.door_width / player_width:.1f} people wide; the "
+                     f"floor behind it must be at least that wide.")
+    # The ruler is in the picture because the numbers alone were not enough: given only
+    # "1.5 people wide", the width has to be derived from the frame, and a plan came back with
+    # corridors half the size asked for. A thing to match is not a sum.
+    lines.append("  THE FIGURE AND THE BAR drawn on the image are one person. Nothing walkable "
+                 "may be narrower than that bar. Paint over both -- they are a ruler, not part "
+                 "of the building.")
     return lines
 
 
 def rules_block(spec) -> Block:
     return [
         "DO NOT",
-        "  Do not paint any colour but the two given.",
+        "  Do not paint any colour but the colours given.",
         "  Do not draw texture, stone courses, blocks, shadow, or a border line.",
         "  Do not paint outside the mask.",
         "  Do not leave any part of the mask unpainted.",
@@ -134,3 +202,34 @@ def plan_prompt(spec) -> str:
         scale_block(spec),
         rules_block(spec),
     )
+
+
+def with_criticism(prompt: str, criticism: str = "", attach=(), first_index: int = 2) -> str:
+    """The prompt, plus what was wrong with the last try and what the extra images are.
+
+    Same construction as ``world_levels.job_builder._with_retry_context``: everything the
+    first attempt was given is kept and the criticism goes on the end, because a retry that
+    drops the original instructions trades one failure for another.
+
+    `first_index` is what the first attachment is called, and it is not always 2. The plan
+    pass sends one image, so an attachment is image 2; the render pass already sends the
+    control plan as image 2 and says so in its own prompt, so an attachment there is image 3.
+    Numbering them from 2 regardless would have the prompt call two different pictures "image
+    2", which is worse than not numbering them at all.
+
+    Non-ASCII is stripped rather than rejected: a smart quote pasted into the review prompt
+    would otherwise fail the whole call in `openai_api.edit_image`, after the draw was paid
+    for and while the person is looking at a menu.
+    """
+    from pathlib import Path as _Path
+
+    criticism = (criticism or "").strip()
+    if not criticism and not attach:
+        return prompt
+    lines = [prompt.rstrip(), ""]
+    for position, path in enumerate(attach, start=first_index):
+        lines.append(f"IMAGE {position} IS {_Path(path).name}.")
+    if criticism:
+        lines.append(criticism)
+    text = "\n".join(lines).rstrip() + "\n"
+    return text.encode("ascii", "ignore").decode("ascii")

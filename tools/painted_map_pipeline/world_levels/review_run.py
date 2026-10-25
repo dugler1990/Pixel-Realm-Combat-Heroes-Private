@@ -37,6 +37,7 @@ from .checks import (
     format_report,
     run_checks,
 )
+from .retry import shape_retry, split_retry
 
 CLI = [sys.executable, "-m", "tools.painted_map_pipeline.world_levels.orchestrate"]
 
@@ -129,28 +130,10 @@ def parse_retry(line: str, root: Path, level_id: str) -> tuple[str, Path | None,
             raise FileNotFoundError(
                 report.get("error") or "no shape overlay for this attempt (nothing to point at)"
             )
-        extra = line[2:].strip()
-        note = f"{FOOTPRINT_OVERLAY_NOTE}. {FOOTPRINT_OVERLAY_DIRECTIVE}"
-        if extra:
-            note = f"{note} {extra}"
-        return "", Path(overlay), note.encode("ascii", "ignore").decode("ascii")
+        return shape_retry(line, Path(overlay), FOOTPRINT_OVERLAY_NOTE,
+                           FOOTPRINT_OVERLAY_DIRECTIVE)
 
-    body = line[1:]
-    body, _, tail = body.partition("@@")
-    reason, _, token = body.partition("@")
-    parts = token.split(None, 1)
-    token = parts[0] if parts else ""
-    note = " ".join(part.strip() for part in (parts[1] if len(parts) > 1 else "", tail) if part.strip())
-    if not token:
-        # A note with nothing to attach it to is still criticism; keep it as the reason rather
-        # than dropping it silently.
-        return " ".join(part for part in (reason.strip(), note) if part), None, ""
-
-    path = Path(token).expanduser()
-    if not path.is_file():
-        raise FileNotFoundError(f"no such image: {path}")
-    # A stray non-ASCII character from a paste would make ascii_prompt reject the whole job.
-    return reason.strip(), path, note.encode("ascii", "ignore").decode("ascii")
+    return split_retry(line)
 
 
 def main(argv=None) -> int:

@@ -1,4 +1,6 @@
 import hashlib
+import os
+import random
 import pygame
 import math
 import time
@@ -15,7 +17,7 @@ from Settings import (
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from Entity import Entity
-from Support import sprite_feet_sort_y
+from Support import mask_midbottom_world, sprite_feet_sort_y
 from AnimatedEnvironmentSprite import AnimatedEnvironmentSprite
 from Torch import Torch
 from Building import VIEW_DOOR, VIEW_IN, VIEW_OUT
@@ -63,7 +65,7 @@ def _faction_outline_color(team_id):
 
 class YSortCameraGroup(pygame.sprite.Group):
     def __init__(self, ground_sprites, grass_manager, overhead_areas, backend=None,
-                 buildings=None):
+                 buildings=None, door_covers=None):
         super().__init__()
         self.backend = backend
         self.window_width, self.window_height = self.backend.get_size()
@@ -75,6 +77,10 @@ class YSortCameraGroup(pygame.sprite.Group):
         
         self.offset = pygame.math.Vector2()
         self.grass_offset = pygame.math.Vector2()
+        # Brief camera shake (meteor impacts, etc.) — applied on top of focus offset.
+        self._shake_until_ms = 0
+        self._shake_start_ms = 0
+        self._shake_amp = 0.0
         self.ground_sprites = ground_sprites
         self.ground_surface = None
         # (col, row) -> surface, when GROUND_CHUNK_SIZE is set. Held for the lifetime of the
@@ -96,6 +102,8 @@ class YSortCameraGroup(pygame.sprite.Group):
         # Authored buildings; held by reference so the layout manager can refill the
         # same list on layout reload.
         self.buildings = buildings if buildings is not None else []
+        # Door frames as (rect, surface, building), held by reference like buildings.
+        self.door_covers = door_covers if door_covers is not None else []
         self.debug_effect_areas = []  # For debug visualization of effect collision rects
         self.runtime_debug_effect_rects = DEBUG_DRAW_EFFECT_RECTS
         self.runtime_debug_player_highlight = DEBUG_DRAW_MASKS
@@ -120,6 +128,35 @@ class YSortCameraGroup(pygame.sprite.Group):
         if self._grass_benchmark_active():
             return BENCHMARK_RUNTIME.grass_viewport_percent
         return GRASS_VIEWPORT_PERCENT
+
+    def add_screen_shake(self, amplitude=18.0, duration_ms=420):
+        """Kick a short camera shake; overlapping kicks keep the stronger amp."""
+        now = pygame.time.get_ticks()
+        amp = float(amplitude)
+        duration_ms = max(1, int(duration_ms))
+        until = now + duration_ms
+        if amp >= self._shake_amp or until >= self._shake_until_ms:
+            self._shake_amp = max(self._shake_amp, amp)
+            self._shake_start_ms = now
+            self._shake_until_ms = max(self._shake_until_ms, until)
+
+    def _apply_screen_shake(self):
+        now = pygame.time.get_ticks()
+        if now >= self._shake_until_ms or self._shake_amp <= 0:
+            self._shake_amp = 0.0
+            return
+        span = max(1, self._shake_until_ms - self._shake_start_ms)
+        elapsed = now - self._shake_start_ms
+        decay = 1.0 - elapsed / float(span)
+        amp = self._shake_amp * max(0.0, decay)
+        # Sine kick reads clearer than pure noise at low amplitudes.
+        phase = elapsed * 0.055
+        ox = math.sin(phase * 2.1) * amp
+        oy = math.cos(phase * 2.7) * amp * 0.75
+        self.offset.x += ox
+        self.offset.y += oy
+        self.grass_offset.x += ox
+        self.grass_offset.y += oy
 
     def _apply_grass_force(self, location, radius, dropoff):
         self.grass_manager.apply_force(location, radius, dropoff)
@@ -248,6 +285,29 @@ class YSortCameraGroup(pygame.sprite.Group):
             self.backend.blit(surface, (-surface.get_width() - 1, -surface.get_height() - 1),
                               cache_key=id(surface))
 
+        # The chunks are now the ground. A painted background is ~1 GB decoded and its
+        # Tile was holding a second full copy for nothing: nothing reads it back -- chunks
+        # are never rebuilt, and update_tile_on_ground_surface blits the changed tile's own
+        # image. Keep the rect (already derived) and drop only the big ones; a 150 px tile
+        # is cheap and may be re-blitted.
+        self._release_composited_ground_images()
+
+    # Anything at or above this is a painted map, not a tile.
+    _RELEASE_GROUND_IMAGE_ABOVE_PX = 4 * 1024 * 1024
+
+    def _release_composited_ground_images(self):
+        placeholder = None
+        for sprite in self.ground_sprites:
+            image = getattr(sprite, "image", None)
+            if image is None:
+                continue
+            w, h = image.get_size()
+            if w * h < self._RELEASE_GROUND_IMAGE_ABOVE_PX:
+                continue
+            if placeholder is None:
+                placeholder = pygame.Surface((1, 1), pygame.SRCALPHA)
+            sprite.image = placeholder
+
     def create_ground_surface(self):
         if not self.ground_sprites:
             return
@@ -268,8 +328,8 @@ class YSortCameraGroup(pygame.sprite.Group):
         for sprite in self.ground_sprites:
             self.ground_surface.blit(sprite.image, sprite.rect.move(-self.min_x, -self.min_y))
     #@profile
-    def custom_draw(self, player,dt, wind_intensity, light_intensity, camera_focus=None, shadow=None):
-        
+    def custom_draw(self, player,dt, wind_intensity, light_intensity, camera_focus=None, shadow=None, mid_fx_draw=None):
+        self._draw_player = player
         if self.ground_surface is None and not self.ground_chunks:
             self.create_ground_surface()
 
@@ -290,6 +350,7 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.offset.y = fy - self.half_height
         self.grass_offset.x = fx - self.grass_half_width
         self.grass_offset.y = fy - self.grass_half_height
+        self._apply_screen_shake()
 
         if self.ground_chunks:
             # Only the chunks the camera can see. cache_key stays id(surface) to match
@@ -416,6 +477,8 @@ class YSortCameraGroup(pygame.sprite.Group):
             for sprite in self.sprites():
                 if not getattr(sprite, "casts_shadow", False):
                     continue
+                if getattr(sprite, "mesh_boss", None) is not None:
+                    continue
                 if getattr(sprite, "_uncacheable_image", False):
                     continue  # per-frame recolored frame -> no stable texture, skip
                 img = sprite.image
@@ -434,34 +497,52 @@ class YSortCameraGroup(pygame.sprite.Group):
                 self.backend.draw_shadow(img, corners, id(img), sstr)
 
         player_drawn = False
+        aerial_sprites = []
         for sprite in sorted(self.sprites(), key=sprite_feet_sort_y):
             #print(sprite)
             #print(dir(sprite))
+            # Airborne VFX (e.g. descending meteors) skip ground Y-sort until late approach.
+            if getattr(sprite, "draws_above_y_sort", False):
+                aerial_sprites.append(sprite)
+                continue
             offset_pos = sprite.rect.topleft - self.offset
-            # Sprites that rebuild self.image as a brand-new Surface on transitions
-            # (lighting recolor, freeze/thaw) have no stable identity to cache against —
-            # route them through the always-upload path, same as grass/overlays.
-            cache_key = None if getattr(sprite, "_uncacheable_image", False) else id(sprite.image)
-            self.backend.blit(sprite.image, offset_pos, cache_key=cache_key)
+            self._draw_sorted_sprite(sprite, offset_pos)
             if self._grass_disturbance_enabled() and hasattr(sprite, "monster_name"):
                 if sprite.monster_name == 'raccoon':
                     self._apply_grass_force( sprite.rect.center , 110 , 40)
-                    
-            # if hasattr(sprite, "type") and sprite.type == "player":
-            #     player_drawn = True
-            #     # Draw overhead areas if the player is within one
-        # Draw overhead areas if the player is within one
-        #if player_drawn:
-        #print("overhead")
-        #print(self.overhead_areas)
+        from mesh_boss import flush_body_mask_log
+        flush_body_mask_log(pygame.time.get_ticks())
+
+        if callable(mid_fx_draw):
+            mid_fx_draw()
+
+        # After sprites: unseen floor (and props standing on it) go black. Before
+        # roofs: the chamber hole is the window that shows this fog.
+        self._draw_interior_fog()
+        self._draw_building_roofs(focus)
+
+        # Overhead areas -- tree canopies and building doors -- over the player when he
+        # is under one. After the roofs, not before: a roof drew over the canopy and the
+        # roof pass then put the player back on top of it, so nothing could ever hide him
+        # in a doorway. A canopy is above a roof anyway.
         for area, image_section in self.overhead_areas:
-            #print(f"area : {area}")
-            #print(f"player pos : {player.rect.center}")
             if area.colliderect(player.rect):
                 self.backend.blit(image_section, (area.x - self.offset.x, area.y - self.offset.y))
 
-        self._draw_building_roofs(focus)
-        
+        # Door frames: over the player only once his feet are past the door line. Before
+        # that he is in front of the door and is drawn over it -- covering him whenever his
+        # box touched the frame's box hid his head while he was still walking up to it.
+        hitbox = getattr(player, "hitbox", None)
+        feet = hitbox.midbottom if hitbox is not None else player.rect.midbottom
+        for area, image_section, building in self.door_covers:
+            if area.colliderect(player.rect) and building.depth(feet) >= 0:
+                self.backend.blit(image_section, (area.x - self.offset.x, area.y - self.offset.y))
+
+        # Sky layer: descending rocks (and similar) over units / roofs while still high.
+        for sprite in aerial_sprites:
+            offset_pos = sprite.rect.topleft - self.offset
+            self._draw_sorted_sprite(sprite, offset_pos)
+
         # DEBUG: Draw effect collision rects in red to compare with visual circles
         if self.runtime_debug_effect_rects:
             for effect_area in self.debug_effect_areas:
@@ -540,6 +621,33 @@ class YSortCameraGroup(pygame.sprite.Group):
                 cache_key=id(building.interior),
             )
 
+    def _draw_interior_fog(self):
+        """Black out chamber floor the subject cannot see.
+
+        Interior art is still the full painting (drawn earlier). This pass is the
+        shutter: transparent on visible cells, black on the rest, so a corridor
+        does not show the rooms off it. Drawn after sprites so a statue around
+        the corner does not float in the dark.
+        """
+        if not self.buildings:
+            return
+        view = pygame.Rect(self.offset.x, self.offset.y, self.window_width, self.window_height)
+        for building in self.buildings:
+            if building.view != VIEW_IN:
+                continue
+            sight = getattr(building, "sight", None)
+            if sight is None or not sight.active:
+                continue
+            if not view.colliderect(sight.fog_rect):
+                continue
+            if sight.consume_dirty():
+                self.backend.invalidate_texture(sight.fog)
+            self.backend.blit(
+                sight.fog,
+                (sight.fog_rect.x - self.offset.x, sight.fog_rect.y - self.offset.y),
+                cache_key=id(sight.fog),
+            )
+
     def _draw_building_roofs(self, focus):
         """Roofs, over every sprite. Inside: baked chamber cutaway. Door: arch split.
 
@@ -575,10 +683,12 @@ class YSortCameraGroup(pygame.sprite.Group):
         self._draw_sprites_over_roofs()
 
     def _draw_sprites_over_roofs(self):
-        """Roofs draw after every sprite, so a body in a doorway would vanish under stone.
+        """Roofs draw after every sprite, so a body in front of one would vanish under stone.
 
-        Re-blit anyone the roof would bury: standing in an open building, or in front
-        of one (higher world-Y, toward the camera). Behind the building they stay under.
+        Re-blit anyone standing in front of a building (higher world-Y, toward the
+        camera). Anyone on a building's floor is NOT re-blitted: the hole in the roof is
+        their window, and the roof around it -- the pyramid's own face -- hides whatever
+        of them sticks out past the room. Behind the building they stay under.
         """
         if not self.buildings:
             return
@@ -588,18 +698,170 @@ class YSortCameraGroup(pygame.sprite.Group):
             if not self._roof_would_cover(sprite.rect, feet):
                 continue
             offset_pos = sprite.rect.topleft - self.offset
-            cache_key = None if getattr(sprite, "_uncacheable_image", False) else id(sprite.image)
-            self.backend.blit(sprite.image, offset_pos, cache_key=cache_key)
+            self._draw_sorted_sprite(sprite, offset_pos)
+
+    def _draw_sorted_sprite(self, sprite, offset_pos):
+        """Mesh boss when present, otherwise the sprite blit. Mesh is drawn at the feet."""
+        boss = getattr(sprite, "mesh_boss", None)
+        if boss is not None:
+            hitbox = getattr(sprite, "hitbox", None)
+            if getattr(sprite, "sprite_anchor_px", None) is not None and hitbox is not None:
+                feet = hitbox.midbottom
+            elif getattr(sprite, "mask", None) is not None:
+                feet = mask_midbottom_world(sprite.rect, sprite.mask)
+            elif hitbox is not None:
+                feet = hitbox.midbottom
+            else:
+                feet = sprite.rect.midbottom
+            screen_pos = (feet[0] - self.offset.x, feet[1] - self.offset.y)
+            facing = getattr(sprite, "get_facing_deg", None)
+            facing_deg = facing() if callable(facing) else 0.0
+            height_px = getattr(sprite, "mesh_height_px", 650)
+            if boss.draw(self.backend, screen_pos, facing_deg, height_px):
+                if os.environ.get("PRCH_SHOW_BODY", "0") == "1":
+                    self._draw_body_outline(sprite, screen_pos)
+                return
+        cache_key = None if getattr(sprite, "_uncacheable_image", False) else id(sprite.image)
+        self.backend.blit(sprite.image, offset_pos, cache_key=cache_key)
+
+    def _draw_body_outline(self, sprite, screen_pos):
+        """Stroke ground-frame capsules when PRCH_SHOW_BODY=1.
+
+        Green: not touching the local player. Red: capsules in a_hits.
+        Also draws the local player's upright capsule.
+        """
+        import math
+        import numpy as np
+        from Settings import VIEW_ELEVATION_DEG
+        import body_contact
+        from body_contact import ground_to_screen, model_to_ground
+
+        boss = getattr(sprite, "mesh_boss", None)
+        if boss is None:
+            return
+        E = VIEW_ELEVATION_DEG
+        height_px = float(getattr(sprite, "mesh_height_px", 650) or 650)
+        scale = height_px / max(boss.pack.height_units, 1e-6)
+        get_facing = getattr(sprite, "get_facing_deg", None)
+        facing = float(get_facing()) if callable(get_facing) else 0.0
+        A_m, B_m = boss.pack.posed_capsule_ends(boss.frame_index)
+        Ag = model_to_ground(A_m, boss.pack.pivot, facing, scale)
+        Bg = model_to_ground(B_m, boss.pack.pivot, facing, scale)
+        radii = boss.pack.capsule_radii * scale
+
+        a_hits = None
+        player = getattr(self, "_draw_player", None)
+        if player is not None:
+            c = body_contact.mesh_contact(
+                body_contact.collision_body(sprite, E),
+                body_contact.collision_body(player, E),
+                E,
+            )
+            a_hits = c.a_hits
+
+        def _stadium_outline(surf, a, b, radius, rgba):
+            ax, ay = float(a[0]), float(a[1])
+            bx, by = float(b[0]), float(b[1])
+            r = max(1, int(round(float(radius))))
+            pygame.draw.circle(surf, rgba, (int(round(ax)), int(round(ay))), r, 1)
+            pygame.draw.circle(surf, rgba, (int(round(bx)), int(round(by))), r, 1)
+            dx = bx - ax
+            dy = by - ay
+            length = math.hypot(dx, dy)
+            if length < 1e-6:
+                return
+            nx = -dy / length * float(radius)
+            ny = dx / length * float(radius)
+            pygame.draw.line(
+                surf, rgba,
+                (int(round(ax + nx)), int(round(ay + ny))),
+                (int(round(bx + nx)), int(round(by + ny))),
+                1,
+            )
+            pygame.draw.line(
+                surf, rgba,
+                (int(round(ax - nx)), int(round(ay - ny))),
+                (int(round(bx - nx)), int(round(by - ny))),
+                1,
+            )
+
+        sa = ground_to_screen(Ag, E)
+        sb = ground_to_screen(Bg, E)
+        pad = int(math.ceil(float(radii.max()) + 2.0)) if radii.size else 2
+        xs = np.concatenate([sa[:, 0], sb[:, 0]])
+        ys = np.concatenate([sa[:, 1], sb[:, 1]])
+        x0 = float(xs.min()) - pad
+        y0 = float(ys.min()) - pad
+        w = max(1, int(math.ceil(xs.max() - x0 + pad)))
+        h = max(1, int(math.ceil(ys.max() - y0 + pad)))
+        surf = pygame.Surface((w, h), flags=pygame.SRCALPHA)
+        for i in range(len(radii)):
+            hit = bool(a_hits[i]) if a_hits is not None and i < len(a_hits) else False
+            rgba = (255, 40, 40, 220) if hit else (0, 255, 80, 220)
+            _stadium_outline(
+                surf,
+                (sa[i, 0] - x0, sa[i, 1] - y0),
+                (sb[i, 0] - x0, sb[i, 1] - y0),
+                radii[i],
+                rgba,
+            )
+        dest = (int(screen_pos[0] + x0), int(screen_pos[1] + y0))
+        self.backend.blit(surf, dest, cache_key=None)
+
+        if player is None:
+            return
+        pb = body_contact.collision_body(player, E)
+        # Player feet screen = player hitbox midbottom minus camera offset
+        p_feet = player.hitbox.midbottom
+        p_screen = (p_feet[0] - self.offset.x, p_feet[1] - self.offset.y)
+        # Capsules are absolute ground; convert relative to player feet ground
+        rel_a = pb.A.copy()
+        rel_b = pb.B.copy()
+        rel_a[:, 0] -= pb.feet[0]
+        rel_a[:, 1] -= pb.feet[1]
+        rel_b[:, 0] -= pb.feet[0]
+        rel_b[:, 1] -= pb.feet[1]
+        psa = ground_to_screen(rel_a, E)
+        psb = ground_to_screen(rel_b, E)
+        pr = float(pb.R[0]) if pb.R.size else 8.0
+        pad = int(math.ceil(pr + 2.0))
+        xs = np.concatenate([psa[:, 0], psb[:, 0]])
+        ys = np.concatenate([psa[:, 1], psb[:, 1]])
+        x0 = float(xs.min()) - pad
+        y0 = float(ys.min()) - pad
+        w = max(1, int(math.ceil(xs.max() - x0 + pad)))
+        h = max(1, int(math.ceil(ys.max() - y0 + pad)))
+        surf = pygame.Surface((w, h), flags=pygame.SRCALPHA)
+        _stadium_outline(
+            surf,
+            (psa[0, 0] - x0, psa[0, 1] - y0),
+            (psb[0, 0] - x0, psb[0, 1] - y0),
+            pr,
+            (0, 220, 255, 220),
+        )
+        dest = (int(p_screen[0] + x0), int(p_screen[1] + y0))
+        self.backend.blit(surf, dest, cache_key=None)
+
 
     def _roof_would_cover(self, sprite_rect, feet):
+        """Should this body be drawn again on top of the roofs?
+
+        Under wins over in-front: the re-blit draws the body over EVERY roof, so one
+        building that wants it under its roof vetoes, whatever a neighbouring footprint
+        the rect also touches would say. "In front" is feet below the building's centre
+        -- right for south-facing doors; approaching a north door you are behind the face.
+        """
+        in_front = False
         for building in self.buildings:
             if not sprite_rect.colliderect(building.footprint):
                 continue
-            if building.view in (VIEW_IN, VIEW_DOOR):
-                return True
+            if building.view == VIEW_DOOR:
+                return True                      # wedge: the sliver reveals the body
+            if building.contains(feet):
+                return False                     # on the floor: seen through the hole only
             if feet[1] >= building.footprint.centery:
-                return True
-        return False
+                in_front = True
+        return in_front
     
     def update(self, dt=None, weather=None, wind_force=(0, 0), *args, **kwargs):
         

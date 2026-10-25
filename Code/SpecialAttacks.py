@@ -66,6 +66,8 @@ def create_special_attack(attack_config):
                                chance)
     elif name == 'Dash':
         return DashAttack(cooldown, cooldown_variability, trigger_conditions, attack_config, chance)
+    elif name == 'MeteorShower':
+        return MeteorShower(cooldown, cooldown_variability, trigger_conditions, attack_config, chance)
     else:
         raise ValueError(f"Unknown special attack name: {name}")
 
@@ -242,3 +244,91 @@ class SummonIceGhosts(SpecialAttack):
         offset_x = math.cos(angle) * distance
         offset_y = math.sin(angle) * distance
         return (center[0]/TILESIZE + offset_x, center[1]/TILESIZE + offset_y)
+
+
+class MeteorShower(SpecialAttack):
+    """Spend mana, play cast1_swift once, keep fighting while meteors rain."""
+
+    # Shower ticks in the background; does not lock melee/move (cast is a oneshot mesh).
+    lock_actions = False
+
+    def __init__(self, cooldown, cooldown_variability, trigger_conditions, attack_config, chance):
+        super().__init__("MeteorShower", cooldown, cooldown_variability, trigger_conditions)
+        self.chance = chance
+        self.duration_ms = int(attack_config.get("duration_ms", 20000))
+        self.spawn_interval_ms = int(attack_config.get("spawn_interval_ms", 450))
+        self.scatter_radius = float(attack_config.get("scatter_radius", 420))
+        self.scale_min = float(attack_config.get("scale_min", 0.35))
+        self.scale_max = float(attack_config.get("scale_max", 1.6))
+        self.burst_damage = int(attack_config.get("burst_damage", 75))
+        self.dot_damage = int(attack_config.get("dot_damage", 8))
+        self.dot_interval_ms = int(attack_config.get("dot_interval_ms", 500))
+        self.linger_ms = int(attack_config.get("linger_ms", 3000))
+        self.impact_radius = float(attack_config.get("impact_radius", 90))
+        self.knockback = float(attack_config.get("knockback", 252))
+        self.knockback_follow_through = float(attack_config.get("knockback_follow_through", 0.55))
+        # Uniform size dist: shake when scale >= mean + 1σ.
+        span = max(1e-6, self.scale_max - self.scale_min)
+        mean = 0.5 * (self.scale_min + self.scale_max)
+        std = span / math.sqrt(12.0)
+        self.shake_scale_threshold = float(
+            attack_config.get("shake_scale_threshold", mean + std)
+        )
+        self.mana_cost = float(attack_config.get("mana_cost", attack_config.get("energy_cost", 80)))
+        self.cast_action = str(attack_config.get("cast_action", "cast1_swift"))
+        self.is_casting = False
+        self.cast_start_time = None
+        self.last_spawn_time = None
+
+    def execute(self, enemy, player, context):
+        if random.random() >= self.chance:
+            return
+        energy = float(getattr(enemy, "energy", 0) or 0)
+        if energy < self.mana_cost:
+            return
+        enemy.energy = energy - self.mana_cost
+        self.is_casting = True
+        now = pygame.time.get_ticks()
+        self.cast_start_time = now
+        self.last_spawn_time = now - self.spawn_interval_ms  # spawn first immediately
+        # One-shot cast pose; AI resumes immediately while shower updates in background.
+        if hasattr(enemy, "start_mesh_oneshot"):
+            enemy.start_mesh_oneshot(self.cast_action)
+
+    def update(self, enemy, player, context):
+        if not self.is_casting:
+            return
+        now = pygame.time.get_ticks()
+        if now - self.cast_start_time >= self.duration_ms:
+            self.is_casting = False
+            self.last_used_time = now
+            return
+
+        if now - self.last_spawn_time < self.spawn_interval_ms:
+            return
+        self.last_spawn_time = now
+
+        spawn_fn = context.get("spawn_meteor")
+        if spawn_fn is None:
+            return
+
+        anchor = getattr(player, "rect", None)
+        center = anchor.center if anchor is not None else enemy.rect.center
+        angle = random.uniform(0, 2 * math.pi)
+        dist = random.uniform(0, self.scatter_radius)
+        pos = (center[0] + math.cos(angle) * dist, center[1] + math.sin(angle) * dist)
+        scale = random.uniform(self.scale_min, self.scale_max)
+        spawn_fn(
+            pos,
+            scale=scale,
+            owner=enemy,
+            source_team=getattr(enemy, "team_id", "enemy"),
+            burst_damage=self.burst_damage,
+            dot_damage=self.dot_damage,
+            dot_interval_ms=self.dot_interval_ms,
+            linger_ms=self.linger_ms,
+            impact_radius=self.impact_radius,
+            knockback=self.knockback,
+            knockback_follow_through=self.knockback_follow_through,
+            shake_scale_threshold=self.shake_scale_threshold,
+        )

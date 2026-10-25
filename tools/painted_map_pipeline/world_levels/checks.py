@@ -122,30 +122,43 @@ OVERLAY_SPILLED = (60, 255, 255)
 OVERLAY_STRENGTH = 0.55
 
 
-def footprint_overlay(image: Image.Image, generation_mask: Image.Image) -> Image.Image:
+def footprint_overlay(image: Image.Image, generation_mask: Image.Image,
+                      *, content_luma_threshold: int | None = None,
+                      missing_luma_threshold: int | None = None) -> Image.Image:
     """The generation with its footprint error painted on.
 
     An IoU is a single number for an error that is always a rim, and where the rim sits is the
-    part worth seeing. Marked with the same content threshold ``footprint_iou`` counts with, so
-    the picture and the score cannot disagree.
-    """
-    from .land_fit import CONTENT_LUMA_THRESHOLD
+    part worth seeing. Marked with the same content thresholds the scores count with, so the
+    picture and the numbers cannot disagree.
 
+    The two thresholds exist for callers whose art is legitimately dark. A level sits on black,
+    so one number at 40 answers both questions. A building interior does not: stone in shadow
+    sums below 40, so asking "is this pixel unpainted" at 40 marks correct floor as missing,
+    while asking "did paint land outside the mask" at 0 counts the model's own near-black
+    background as spill. Shortfall wants the low number, spill wants the normal one. Left
+    unset, ``missing_luma_threshold`` follows ``content_luma_threshold`` and nothing changes.
+    """
+    from .footprint import CONTENT_LUMA_THRESHOLD
+
+    limit = CONTENT_LUMA_THRESHOLD if content_luma_threshold is None else content_luma_threshold
+    missing_limit = limit if missing_luma_threshold is None else missing_luma_threshold
     rgb = image.convert("RGB")
-    drawn = np.asarray(rgb).sum(axis=2) > CONTENT_LUMA_THRESHOLD
+    summed = np.asarray(rgb).sum(axis=2)
     mask = np.asarray(generation_mask.convert("L")) > 0
     marked = np.asarray(rgb).copy()
-    marked[mask & ~drawn] = OVERLAY_MISSING
-    marked[drawn & ~mask] = OVERLAY_SPILLED
+    marked[mask & ~(summed > missing_limit)] = OVERLAY_MISSING
+    marked[(summed > limit) & ~mask] = OVERLAY_SPILLED
     return Image.blend(rgb, Image.fromarray(marked), OVERLAY_STRENGTH)
 
 
-def footprint(image: Image.Image, generation_mask: Image.Image, *, minimum: float) -> dict:
+def footprint(image: Image.Image, generation_mask: Image.Image, *, minimum: float,
+              content_luma_threshold: int | None = None) -> dict:
     """Whether the paint landed inside the shape it was given."""
-    from .land_fit import CONTENT_LUMA_THRESHOLD, footprint_iou
+    from .footprint import CONTENT_LUMA_THRESHOLD, footprint_iou
 
-    value = float(footprint_iou(image, generation_mask))
-    drawn = np.asarray(image.convert("RGB")).sum(axis=2) > CONTENT_LUMA_THRESHOLD
+    limit = CONTENT_LUMA_THRESHOLD if content_luma_threshold is None else content_luma_threshold
+    value = float(footprint_iou(image, generation_mask, content_luma_threshold=limit))
+    drawn = np.asarray(image.convert("RGB")).sum(axis=2) > limit
     mask = np.asarray(generation_mask.convert("L")) > 0
     missing = int((mask & ~drawn).sum())
     # What the IoU becomes if the spill is simply cut off at the polygon. A cut removes
@@ -175,16 +188,18 @@ def footprint(image: Image.Image, generation_mask: Image.Image, *, minimum: floa
 MAX_MISSING_PX = 0
 
 
-def coverage(image: Image.Image, generation_mask: Image.Image, *, maximum: int = MAX_MISSING_PX) -> dict:
+def coverage(image: Image.Image, generation_mask: Image.Image, *, maximum: int = MAX_MISSING_PX,
+             content_luma_threshold: int | None = None) -> dict:
     """Whether the paint reaches every pixel of the polygon.
 
     Deliberately separate from ``footprint``. That reports a single IoU, in which spill and
     shortfall cancel each other out and a level can score 0.9998 while still being too small.
     They need different answers: spill is trimmed by a cut, shortfall needs regenerating.
     """
-    from .land_fit import CONTENT_LUMA_THRESHOLD
+    from .footprint import CONTENT_LUMA_THRESHOLD
 
-    drawn = np.asarray(image.convert("RGB")).sum(axis=2) > CONTENT_LUMA_THRESHOLD
+    limit = CONTENT_LUMA_THRESHOLD if content_luma_threshold is None else content_luma_threshold
+    drawn = np.asarray(image.convert("RGB")).sum(axis=2) > limit
     mask = np.asarray(generation_mask.convert("L")) > 0
     missing = int((mask & ~drawn).sum())
     total = int(mask.sum())

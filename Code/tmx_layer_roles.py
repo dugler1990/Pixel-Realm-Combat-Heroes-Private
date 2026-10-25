@@ -22,6 +22,7 @@ class LayerRole(str, Enum):
     SPAWNER = "spawner"
     GRASS_OBJECTS = "grass_objects"
     INTERACTABLES = "interactables"
+    PROPS = "props"
     RTS_CHIEFS = "rts_chiefs"
     RTS_RESOURCE_NODES = "rts_resource_nodes"
     RTS_DROPOFF = "rts_dropoff"
@@ -42,6 +43,7 @@ LAYER_ROLES: dict[str, LayerRole] = {
     "grass1": LayerRole.GRASS_OBJECTS,
     "GrassObjects": LayerRole.GRASS_OBJECTS,
     "Interactables": LayerRole.INTERACTABLES,
+    "Props": LayerRole.PROPS,
     "chiefs": LayerRole.RTS_CHIEFS,
     "resource_nodes": LayerRole.RTS_RESOURCE_NODES,
     "rts_resource_nodes": LayerRole.RTS_RESOURCE_NODES,
@@ -77,6 +79,8 @@ def dispatch_object_layer(manager: LayoutManager, layer: Any, role: LayerRole) -
         manager.create_grass_object_layer(layer)
     elif role is LayerRole.INTERACTABLES:
         manager.create_object_layer(layer)
+    elif role is LayerRole.PROPS:
+        manager.create_props_layer(layer)
     elif role is LayerRole.RTS_CHIEFS:
         from rts.tmx_spawn import spawn_chiefs_layer
 

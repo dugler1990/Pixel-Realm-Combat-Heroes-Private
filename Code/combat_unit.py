@@ -10,6 +10,9 @@ import random
 import os
 import cv2
 from Interaction import InteractionContext
+from game_logging import get_debug_logger
+
+_mesh_log = get_debug_logger("mesh")
     
 # This is for file importing but is in Main.py anyways
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -37,7 +40,9 @@ class CombatUnit(Entity):
                  item_drop_info=None,
                  combat_config=None,
                  team_id="enemy",
-                 sprite_type=None):
+                 sprite_type=None,
+                 mesh=True,
+                 mesh_height_px=None):
         
         
         #                  monster_name=config['type'], 
@@ -96,9 +101,35 @@ class CombatUnit(Entity):
         if item_drop_info:
             self.item_drop_info = item_drop_info
         self.animations_left_right_indicator = animations_left_right_indicator
-        
+
+        # Pre-rendered N-direction sprites (tools/boss_sprite_pipeline) ship a
+        # manifest.json; its presence switches this monster to the N-way loader,
+        # the manifest's ground anchor and per-action playback rate.
+        self.sprite_manifest = load_sprite_manifest(monster_name)
+        self.eight_dir = self.sprite_manifest is not None
+        self.direction_keys = None
+        self.sprite_anchor_px = None
+        self._status_fps = None
+
         # Graphics Setup
-        if animations_left_right_indicator:
+        self.mesh_boss = None
+        self._body_bounds = None  # (dx, dy, w, h, ground_radius_px) from feet, or None
+        self._mesh_layout_key = None
+        self.mesh_only = False
+        self.mesh_height_px = MESH_BOSS_HEIGHT_PX
+        if self.eight_dir and mesh and USE_MESH_BOSS:
+            from mesh_boss import MeshBoss, MeshBossPack
+            if MeshBossPack.exists(monster_name):
+                self.mesh_boss = MeshBoss(monster_name)
+                ppu = float(self.sprite_manifest.get("pixels_per_unit") or 0)
+                if ppu > 0:
+                    self.mesh_height_px = ppu * float(self.mesh_boss.pack.height_units)
+                if mesh_height_px is not None:
+                    self.mesh_height_px = float(mesh_height_px)
+        if self.eight_dir:
+            self.animations_left_right_indicator = True  # frames are dict-of-dict, like left/right
+            self.import_graphics_8dir(monster_name)
+        elif animations_left_right_indicator:
             self.import_graphics_left_right(monster_name)
         else:
             self.import_graphics(monster_name)
@@ -108,12 +139,13 @@ class CombatUnit(Entity):
             self.scale_animations(random_scale)
 
         self.status = "idle"
-        self.direction_string = "right"
+        self.direction_string = "s" if self.eight_dir else "right"
+        # Visual yaw for mesh draw/collision; chases move intent at MESH_TURN_RATE_DEG_S.
+        self._facing_deg = float(self.COMPASS_DEG.get(self.direction_string, 90))
         if self.animations_left_right_indicator:
             self.image = self.animations[self.status][self.direction_string][self.frame_index]
         else:
             self.image = self.animations[self.status][self.frame_index]
-
         # Movement
         self.rect = self.image.get_rect(topleft=pos)
         self.hitbox = self.rect.inflate(0, -10)
@@ -129,6 +161,10 @@ class CombatUnit(Entity):
         self.exp = monster_info["exp"]
         self.speed = monster_info["speed"]
         self.resistance = monster_info["resistance"]
+        # Enemy mana (player uses energy). Default 0 = specials with mana_cost never fire.
+        self.max_energy = float(monster_info.get("energy", monster_info.get("mana", 0)))
+        self.energy = self.max_energy
+        self._mesh_oneshot = None  # pack action name; plays once then clears
         
         #### All in combat config now
         self.combat_config = monster_info["combat_config"]
@@ -164,7 +200,15 @@ class CombatUnit(Entity):
             self.animations_left_right_indicator,
             skip_disk=(self.monster_name == "tribey_snake"),
         )
-        self.mask = None
+        if self.animations_left_right_indicator:
+            self.mask = self.masks[self.status][self.direction_string][self.frame_index]
+        else:
+            self.mask = self.masks[self.status][self.frame_index]
+        self._apply_frame_anchor()
+        if self.sprite_anchor_px is None:
+            self.anchor_offset = None
+            self.capture_feet_anchor()
+        self.plant_sprite_on_hitbox()
 
         # Player Interaction
         self.can_attack = True
@@ -260,6 +304,8 @@ class CombatUnit(Entity):
                     self.animations[status][direction] = [pygame.transform.scale(frame, (int(frame.get_width() * scale_factor), int(frame.get_height() * scale_factor))) for frame in frames]
             else:
                 self.animations[status] = [pygame.transform.scale(frame, (int(frame.get_width() * scale_factor), int(frame.get_height() * scale_factor))) for frame in animations]
+        if self.sprite_anchor_px is not None:
+            self.sprite_anchor_px = (self.sprite_anchor_px[0] * scale_factor, self.sprite_anchor_px[1] * scale_factor)
 
     
     def freeze(self, duration=3000):
@@ -289,8 +335,74 @@ class CombatUnit(Entity):
         return frozen_image
 
 
+    # Screen angle (degrees, y grows downward) of each compass facing key.
+    COMPASS_DEG = {
+        "e": 0, "ese": 22.5, "se": 45, "sse": 67.5, "s": 90, "ssw": 112.5, "sw": 135, "wsw": 157.5,
+        "w": 180, "wnw": 202.5, "nw": 225, "nnw": 247.5, "n": 270, "nne": 292.5, "ne": 315, "ene": 337.5,
+    }
+    FACING_HYSTERESIS_DEG = 8.0
+    # Mesh only: visual yaw chase rate. Sprites stay on discrete compass sectors.
+    MESH_TURN_RATE_DEG_S = 270.0
+
     def get_direction_as_string(self):
+        if self.eight_dir:
+            return self.get_compass_direction()
         return "right" if self.direction.x >= 0 else "left"
+
+    def get_compass_direction(self):
+        """Nearest manifest facing key to self.direction, with hysteresis so a heading
+        that sits on a sector edge doesn't flicker between two sprites."""
+        if self.direction.length_squared() == 0:
+            return self.direction_string
+        angle = math.degrees(math.atan2(self.direction.y, self.direction.x)) % 360
+        half_sector = 180.0 / len(self.direction_keys)
+
+        def distance(key):
+            return abs((angle - self.COMPASS_DEG[key] + 180) % 360 - 180)
+
+        if self.direction_string in self.direction_keys and \
+                distance(self.direction_string) <= half_sector + self.FACING_HYSTERESIS_DEG:
+            return self.direction_string
+        self.direction_string = min(self.direction_keys, key=distance)
+        return self.direction_string
+
+    def _desired_facing_deg(self):
+        """Instant heading from move intent. Hold last facing when stopped."""
+        if self.direction.length_squared() == 0:
+            return float(getattr(self, "_facing_deg", 90.0))
+        return math.degrees(math.atan2(self.direction.y, self.direction.x)) % 360
+
+    def _update_mesh_facing(self, dt):
+        """Step visual yaw toward desired heading (shortest arc), mesh bodies only."""
+        if getattr(self, "mesh_boss", None) is None:
+            return
+        if dt is None or dt <= 0:
+            dt = 1.0 / float(FPS)
+        cfg = getattr(self, "combat_config", None) or {}
+        rate = float(cfg.get("mesh_turn_rate_deg_s", self.MESH_TURN_RATE_DEG_S))
+        if rate <= 0:
+            self._facing_deg = self._desired_facing_deg()
+            return
+        cur = float(getattr(self, "_facing_deg", 90.0))
+        desired = self._desired_facing_deg()
+        delta = (desired - cur + 180.0) % 360.0 - 180.0
+        max_step = rate * float(dt)
+        if abs(delta) <= max_step:
+            self._facing_deg = desired % 360.0
+        else:
+            self._facing_deg = (cur + math.copysign(max_step, delta)) % 360.0
+
+    def get_facing_deg(self):
+        """Continuous heading in screen degrees (y grows downward). Mesh draw uses this.
+
+        Mesh bodies return the turn-rate-smoothed visual yaw. Sprites / non-mesh keep
+        the instantaneous move heading (8-dir sprites still use get_compass_direction).
+        """
+        if getattr(self, "mesh_boss", None) is not None:
+            return float(getattr(self, "_facing_deg", 90.0))
+        if self.direction.length_squared() == 0:
+            return float(self.COMPASS_DEG.get(self.direction_string, 90))
+        return math.degrees(math.atan2(self.direction.y, self.direction.x)) % 360
 
     
      
@@ -303,6 +415,9 @@ class CombatUnit(Entity):
         #print(self.animations[self.status])
         #print(self.direction_string  )
         #print(self.animations_left_right_indicator)
+        if getattr(self, "mesh_only", False):
+            self.plant_sprite_on_hitbox()
+            return
         if self.animations_left_right_indicator:            
             self.image = self.animations[self.status][self.direction_string][int(self.frame_index)]
         else:
@@ -317,6 +432,18 @@ class CombatUnit(Entity):
 
     
     
+    def import_graphics_8dir(self, name):
+        """Load <action>/<dir>/ frames laid out by tools/boss_sprite_pipeline per manifest.json."""
+        manifest = self.sprite_manifest
+        main_path = f"../Graphics/Monsters/{name}/"
+        self.direction_keys = list(manifest["directions"])
+        self.animations = {
+            action: {key: import_folder(main_path + f"{action}/{key}") for key in self.direction_keys}
+            for action in manifest["actions"]
+        }
+        self.sprite_anchor_px = tuple(manifest["anchor_px"])
+        self._status_fps = {action: float(spec.get("fps", 15)) for action, spec in manifest["actions"].items()}
+
     def import_graphics_left_right(self, name):
         from ImageCache import ImageCache
         self.animations = {
@@ -516,7 +643,10 @@ class CombatUnit(Entity):
     def actions(self, player, quadtree=None):
         if self.is_dash_active():
             return
-        if self.status != "Summoning":  # TODO: Only perform actions if not summoning - should be if casting, need logic here 
+        # Specials (MeteorShower, SummonIceGhosts, …) can start outside melee range.
+        if self.combat_strategy.handle_special_attacks(self, player):
+            return
+        if self.status != "Summoning":
             self.combat_strategy.decide_action(self, player)
             self.combat_strategy.move(self, player)
             if self.status == "attack":
@@ -539,7 +669,83 @@ class CombatUnit(Entity):
 
 
     #@profile
+    def _is_simple_swarm_enemy(self, entity=None):
+        """Demons keep the mask overlap test. The swarm circle is 0.35 of the frame, and a
+        demon frame is ~1400px, so that circle is a bounding box around the picture."""
+        target = self if entity is None else entity
+        if getattr(target, "monster_name", None) == "demon":
+            return False
+        return super()._is_simple_swarm_enemy(entity)
+
+    def _apply_frame_anchor(self):
+        """Use the cropped-frame ground pixel the sprite pipeline already stored."""
+        manifest = getattr(self, "sprite_manifest", None)
+        frames = (manifest or {}).get("frames") or {}
+        row = (frames.get(self._anim_status()) or {}).get(getattr(self, "direction_string", None))
+        anchor = None
+        if row:
+            raw = row[int(self.frame_index) % len(row)].get("anchor")
+            if raw:
+                anchor = (float(raw[0]), float(raw[1]))
+        if self.eight_dir:
+            self.sprite_anchor_px = anchor
+
+    def _anim_status(self):
+        """Status used for sprite/mesh playback. Cast/special labels without clips → idle."""
+        status = self.status
+        if status in self.animations:
+            return status
+        return "idle"
+
+    def start_mesh_oneshot(self, action: str):
+        """Play a mesh clip once (e.g. cast1_swift) without locking combat AI."""
+        boss = getattr(self, "mesh_boss", None)
+        if boss is None:
+            return
+        if boss.resolve_action(action) is None:
+            _mesh_log.debug("oneshot skipped; missing action=%s", action)
+            return
+        self._mesh_oneshot = action
+        boss.set_action(action)
+        boss.frame = 0.0
+        boss._clip_finished = False
+
+    def _advance_mesh_clip(self):
+        """Play the mesh clip. Walk is the pack's walk range at its own fps.
+
+        The sprite walk is ~11 frames. The mesh walk is 150. Stepping the mesh by the
+        sprite's 15px-per-frame rule makes one stride take ~25s, which reads as no legs.
+        """
+        boss = getattr(self, "mesh_boss", None)
+        if boss is None or self.frozen:
+            return
+        oneshot = getattr(self, "_mesh_oneshot", None)
+        if oneshot:
+            boss.set_action(oneshot)
+            boss.advance(1.0 / FPS, loop=False)
+            if boss.clip_finished:
+                self._mesh_oneshot = None
+            anim_status = oneshot
+        else:
+            anim_status = self._anim_status()
+            boss.set_action(anim_status)
+            boss.advance(1.0 / FPS)
+        # Throttle: log on status/action change, or about once a second while moving.
+        sig = (self.status, oneshot, boss.action, int(boss.frame_index) // 24)
+        if sig != getattr(self, "_mesh_log_sig", None):
+            self._mesh_log_sig = sig
+            _mesh_log.debug(
+                "id=%s name=%s status=%s oneshot=%s action=%s frame=%s",
+                getattr(self, "id", "?"),
+                getattr(self, "monster_name", "?"),
+                self.status,
+                oneshot,
+                boss.action,
+                boss.frame_index,
+            )
+
     def animate(self):
+        self._advance_mesh_clip()
         
        # print(self.status)
        # print(self.frame_index)
@@ -551,38 +757,47 @@ class CombatUnit(Entity):
         if self.frozen:
             #print("FROZEN")
             self.image = self.frozen_image
+            if self.mesh_boss is not None:
+                self._sync_mesh_layout()
             self.plant_sprite_on_hitbox()
         else:
-        
+            anim_status = self._anim_status()
             if self.animations_left_right_indicator:
                 direction_string = self.get_direction_as_string()
-                animation = self.animations[self.status][direction_string]  
+                animation = self.animations[anim_status][direction_string]  
                 #print(self.sprite_type)
                 #print(self.monster_name)
                 #print(self.masks)
-                masks = self.masks[self.status][direction_string]
+                masks = self.masks[anim_status][direction_string]
             else:
-                animation = self.animations[self.status]
-                masks = self.masks[self.status]
-            
+                animation = self.animations[anim_status]
+                masks = self.masks[anim_status]
+
+            if self._status_fps:
+                # manifest playback rate → frames per game tick (walk stays distance-phased)
+                self.animation_speed = self._status_fps.get(anim_status, 15.0) / FPS
             self.frame_index += self.advance_frame()
             if self.frame_index >= len(animation):
                 if self.status == "attack":
                     self.can_attack = False
                     self.status = "idle"
+                    anim_status = "idle"
                     ## TODO: THIS BEING HERE AGAIN IS A MESS ITS TO FORCE CHANGE IN ANIMATION RIGHT NOW, NOT EVEN SURE IT HELPS ( WAS STUK IN ATTACK ANIMATION TOO LONG )
                     if self.animations_left_right_indicator:
                         direction_string = self.get_direction_as_string()
-                        animation = self.animations[self.status][direction_string]   
-                        masks = self.masks[self.status][direction_string]
+                        animation = self.animations[anim_status][direction_string]   
+                        masks = self.masks[anim_status][direction_string]
                     else:
-                        animation = self.animations[self.status]
-                        masks = self.masks[self.status]
+                        animation = self.animations[anim_status]
+                        masks = self.masks[anim_status]
                     
                 self.frame_index = 0
     
             self.image = animation[int(self.frame_index)]
             self.mask = masks[int(self.frame_index)]
+            self._apply_frame_anchor()
+            if self.mesh_boss is not None:
+                self._sync_mesh_layout()
             self.plant_sprite_on_hitbox()
     
             if not self.vulnerable:
@@ -690,8 +905,38 @@ class CombatUnit(Entity):
     def hit_reaction(self):
         if not self.vulnerable:
             self.direction *= -self.resistance
-    #@profile
-    def update(self, QuadTree , entity_quad_tree, dt = None):   
+
+    def _sync_mesh_layout(self):
+        """Refresh capsule AABB when frame / facing / height change. Clears sheet mask."""
+        if self.mesh_boss is None:
+            return
+        facing = self.get_facing_deg() if hasattr(self, "get_facing_deg") else 0.0
+        key = (self.mesh_boss.frame_index, float(facing), float(self.mesh_height_px))
+        if key != getattr(self, "_mesh_layout_key", None) or self._body_bounds is None:
+            self._body_bounds = self.mesh_boss.body_bounds(facing, self.mesh_height_px)
+            self._mesh_layout_key = key
+        # animate() may have just assigned the sprite-sheet mask; clear it every tick.
+        self.mask = None
+
+    def plant_sprite_on_hitbox(self):
+        if self.mesh_boss is None:
+            super().plant_sprite_on_hitbox()
+            return
+        self._sync_mesh_layout()
+        bounds = getattr(self, "_body_bounds", None)
+        if bounds is None:
+            super().plant_sprite_on_hitbox()
+            return
+        dx, dy, w, h, ground_radius_px = bounds
+        mx, my = self.hitbox.midbottom
+        self.mask = None
+        self.rect = pygame.Rect(int(mx + dx), int(my + dy), int(w), int(h))
+        # Reach = how far the AABB top sits above the feet (same meaning as mask reach).
+        self.collision_reach_px = max(0.0, float(-dy))
+        self.collision_ground_radius_px = float(ground_radius_px)
+        self._ground_radius_src = None
+
+    def update(self, QuadTree , entity_quad_tree, dt = None):
         current_time = pygame.time.get_ticks()
         if self.frozen and current_time - self.freeze_time > self.freeze_duration:
             self.thaw()
@@ -713,8 +958,15 @@ class CombatUnit(Entity):
                       QuadTree = QuadTree ,
                       entity_quad_tree = entity_quad_tree)
             self.hit_reaction()
+        self._update_mesh_facing(dt)
         self.animate()
         self.cooldowns()
+        # Slow mana regen so big casts can eventually re-fire.
+        max_e = float(getattr(self, "max_energy", 0) or 0)
+        if max_e > 0:
+            energy = float(getattr(self, "energy", 0) or 0)
+            if energy < max_e:
+                self.energy = min(max_e, energy + max_e * 0.0008)
         self.check_death()
 
 

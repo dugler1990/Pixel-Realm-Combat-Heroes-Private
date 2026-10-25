@@ -1,0 +1,14 @@
+{
+  "cast1_swift": {
+    "source_action": "kneepunch",
+    "source_bake": "C:\\Users\\Douglas\\Pixel-Realm-Combat-Heroes-Boss\\tmp\\cast1_swift_bake",
+    "frames": 120,
+    "range": [
+      273,
+      392
+    ],
+    "used_by": [
+      "MeteorShower/Summoning"
+    ]
+  }
+}

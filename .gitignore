@@ -55,3 +55,41 @@ levels/*/*/export/**/*.png
 # level's art plus a map.tmx carrying the traced geometry; the shipped map is only
 # written on accept.
 levels/*/*.plan/
+
+# boss_sprite_pipeline: bpy venv, GPU-box tool checkouts, bulky rendered frames
+tools/boss_sprite_pipeline/.venv-bpy/
+tools/boss_sprite_pipeline/gpu_box/vendor/
+generated/bosses/**
+!generated/bosses/**/
+!generated/bosses/**/state.json
+!generated/bosses/**/manifest.json
+!generated/bosses/**/*.png
+!generated/bosses/**/bones.json
+generated/bosses/**/frames/
+Graphics/Monsters/_test_*/
+
+# Interiors backups: whole work dirs (renders, pickles) kept per version for comparison.
+# Hundreds of MB each; the index that says which belongs to which commit is
+# generated/building_interiors/BACKUPS.md, and that IS tracked.
+generated/building_interiors/_backups/
+
+# ── Keys: never commit ─────────────────────────────────
+/ppp
+/ppp.pub
+
+# ── Interiors pipeline output and concept art: working state, not deliverables ──
+# The accepted interior/roof PNGs are copied into levels/*/*/buildings/ on accept;
+# that is what ships. Plans (.pickle), discovery renders and old/ backups stay local.
+generated/building_interiors/
+generated/concepts/
+levels/*/*/buildings/old_*/
+
+# SAM3 obstacle polygons: 10-20 MB of JSON per chunk, regenerable.
+levels/*/*/export/**/polygons.json
+
+# Scratch and stray-command output
+/tmp/
+/scratchpad/
+/%s/
+/0.05
+/ersDouglas*

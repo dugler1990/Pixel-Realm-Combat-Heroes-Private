@@ -74,6 +74,7 @@ def _polygon_to_tmx_object(
     chunk_id: str,
     sam3_class: str,
     sam3_confidence: float | None = None,
+    review_id: str | None = None,
     collision_mode: str,
 ) -> ET.Element | None:
     if len(points) < 3:
@@ -99,6 +100,8 @@ def _polygon_to_tmx_object(
     _add_property(props, "sam3_class", sam3_class)
     if sam3_confidence is not None:
         _add_property(props, "sam3_confidence", sam3_confidence, prop_type="float")
+    if review_id:
+        _add_property(props, "review_id", review_id)
     _add_property(props, "collision_mode", collision_mode)
     return obj
 
@@ -147,6 +150,7 @@ def merge_polygon_obstacles(
     chunk_cull_stats: dict[str, dict[str, Any]] = {}
     class_filter_totals: dict[str, int] = {}
     containment_totals: dict[str, int] = {"input": 0, "kept": 0, "dropped": 0}
+    human_reviewed_chunks: list[str] = []
 
     for chunk in manifest.get("chunks", []):
         chunk_id = chunk.get("chunk_id") or Path(chunk["painted_image"]).stem
@@ -160,16 +164,20 @@ def merge_polygon_obstacles(
         raw_polygons = data.get("polygons") or []
         tagged = [tag_polygon(poly) for poly in raw_polygons]
         input_polygons += len(tagged)
+        review = data.get("review") or {}
+        human_accepted = review.get("accepted") is True
+        if human_accepted:
+            human_reviewed_chunks.append(chunk_id)
 
         image_size = tuple(data.get("image_size") or chunk.get("image_size") or (5056, 3392))
 
-        if class_filter is not None and class_filter.is_active() and tagged:
+        if not human_accepted and class_filter is not None and class_filter.is_active() and tagged:
             tagged, cf_stats = filter_polygons_by_class(tagged, class_filter)
             for cls, n in cf_stats["dropped_by_class"].items():
                 class_filter_totals[cls] = class_filter_totals.get(cls, 0) + n
 
         survivors = tagged
-        if speck_cull and tagged:
+        if not human_accepted and speck_cull and tagged:
             survivors, chunk_stats = filter_specks_by_size_openness(
                 tagged,
                 image_size=image_size,
@@ -179,7 +187,7 @@ def merge_polygon_obstacles(
             for key in cull_totals:
                 cull_totals[key] += int(chunk_stats.get(key, 0))
 
-        if containment_cull and survivors:
+        if not human_accepted and containment_cull and survivors:
             survivors, ct_stats = filter_contained_polygons(
                 survivors,
                 image_size=image_size,
@@ -198,6 +206,59 @@ def merge_polygon_obstacles(
                 chunk_id=chunk_id,
                 sam3_class=tagged_poly["sam3_class"],
                 sam3_confidence=poly.get("confidence"),
+                review_id=poly.get("review_id"),
+                collision_mode=tagged_poly["collision_mode"],
+            )
+            if obj is None:
+                skipped_invalid_geometry += 1
+                continue
+            layer.append(obj)
+            object_id += 1
+            inserted += 1
+
+    extra = sam3_root / "full_map" / "polygons.json"
+    if extra.exists() and "full_map" not in {c.get("chunk_id") for c in manifest.get("chunks", [])}:
+        extra_data = json.loads(extra.read_text(encoding="utf-8"))
+        extra_polys = extra_data.get("polygons") or []
+        extra_tagged = [tag_polygon(poly) for poly in extra_polys]
+        input_polygons += len(extra_tagged)
+        extra_review = extra_data.get("review") or {}
+        extra_accepted = extra_review.get("accepted") is True
+        if extra_accepted:
+            human_reviewed_chunks.append("full_map")
+        extra_size = tuple(extra_data.get("image_size") or (5056, 3392))
+        extra_survivors = extra_tagged
+        if not extra_accepted and class_filter is not None and class_filter.is_active() and extra_tagged:
+            extra_survivors, extra_stats = filter_polygons_by_class(extra_tagged, class_filter)
+            for cls, n in extra_stats["dropped_by_class"].items():
+                class_filter_totals[cls] = class_filter_totals.get(cls, 0) + n
+        if not extra_accepted and speck_cull and extra_survivors:
+            extra_survivors, extra_chunk_stats = filter_specks_by_size_openness(
+                extra_survivors,
+                image_size=extra_size,
+                config=cull_config,
+            )
+            for key in cull_totals:
+                cull_totals[key] += int(extra_chunk_stats.get(key, 0))
+        if not extra_accepted and containment_cull and extra_survivors:
+            extra_survivors, extra_ct = filter_contained_polygons(
+                extra_survivors,
+                image_size=extra_size,
+                config=containment_config,
+            )
+            for key in containment_totals:
+                containment_totals[key] += int(extra_ct.get(key, 0))
+        for poly in extra_survivors:
+            tagged_poly = poly
+            obj = _polygon_to_tmx_object(
+                poly.get("points") or [],
+                world_x=0.0,
+                world_y=0.0,
+                object_id=object_id,
+                chunk_id="full_map",
+                sam3_class=tagged_poly["sam3_class"],
+                sam3_confidence=poly.get("confidence"),
+                review_id=poly.get("review_id"),
                 collision_mode=tagged_poly["collision_mode"],
             )
             if obj is None:
@@ -239,6 +300,8 @@ def merge_polygon_obstacles(
         "class_filter_dropped": class_filter_totals,
         "containment_cull_enabled": containment_cull,
         "containment_cull_totals": containment_totals,
+        "human_reviewed_chunks": human_reviewed_chunks,
+        "human_reviewed_count": len(human_reviewed_chunks),
     }
 
 

@@ -88,5 +88,11 @@
     "level": "DEBUG",
     "file": "logs/network.log",
     "console": true
+  },
+  "mesh": {
+    "enabled": true,
+    "level": "DEBUG",
+    "file": "logs/mesh.log",
+    "console": true
   }
 }

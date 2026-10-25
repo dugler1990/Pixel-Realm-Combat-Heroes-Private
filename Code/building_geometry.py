@@ -85,16 +85,41 @@ def arch_quad(origin, inward, tangent, door_gap, door_depth):
 
 def door_plane_from_polygon(corners, door_point, door_depth=DEFAULT_DOOR_DEPTH,
                             door_gap=DEFAULT_DOOR_GAP):
-    """Project `door_point` onto the nearest edge (perpendicular distance).
+    """Project `door_point` onto the nearest edge, and face it at the middle of the building.
 
     Returns (origin on that edge, inward unit normal, arch quad in world px).
+
+    `inward` is simply the direction from the door to the centroid. It used to be the
+    perpendicular of whichever edge the door landed nearest, which is fine on a hand-drawn
+    polygon -- that edge is a whole wall -- and meaningless on a SAM-traced outline, where
+    it is a six-pixel jagged step pointing wherever the trace wobbled. On pyramid_01 it came
+    out 33 degrees off, running ALONG the face rather than into the building, and the carved
+    passage, `floor_behind_door` and the arch all inherited that with nothing to catch it.
+
+    Walking at the middle cannot produce a direction that fails to enter the building, which
+    is the only property the three callers need. It is not the face normal, so the shortest
+    route in from a door near a corner is longer than `door_depth` -- that only bounds how
+    deep wedge mode's arch reaches, and wedge is opt-in and unused.
     """
     centre = centroid(corners)
     index, projection = nearest_edge(corners, door_point)
-    p, q = corners[index], corners[(index + 1) % len(corners)]
-    inward = inward_normal(p, q, centre)
-    return projection.closest, inward, arch_quad(
-        projection.closest, inward, projection.tangent, door_gap, door_depth)
+    origin = projection.closest
+    inward = _toward(origin, centre)
+    if inward is None:                      # door sits on the centroid: nothing to face
+        p, q = corners[index], corners[(index + 1) % len(corners)]
+        inward = inward_normal(p, q, centre)
+    # The arch lies across the way in, so its tangent is square to the normal.
+    tangent = (-inward[1], inward[0])
+    return origin, inward, arch_quad(origin, inward, tangent, door_gap, door_depth)
+
+
+def _toward(point, centre):
+    """Unit vector from `point` to `centre`, or None if they coincide."""
+    dx, dy = centre[0] - point[0], centre[1] - point[1]
+    length = math.hypot(dx, dy)
+    if length < 1e-9:
+        return None
+    return (dx / length, dy / length)
 
 
 def depth_along(point, origin, inward):

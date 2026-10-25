@@ -74,6 +74,13 @@ class AnimationPlayer:
 			"thunder": import_folder("../Graphics/Particles/Thunder"),
             'demon_dog_projectile': import_folder("../Graphics/Particles/Ice_Ball_Right_/frames" ),
 
+            # Meteor shower phases (Graphics/Particles/Meteor/)
+            "meteor_targeting": import_folder("../Graphics/Particles/Meteor/targeting"),
+            "meteor_descent": import_folder("../Graphics/Particles/Meteor/descent"),
+            "meteor_impact": import_folder("../Graphics/Particles/Meteor/impact"),
+            "meteor_residual": import_folder("../Graphics/Particles/Meteor/residual"),
+            "meteor_residual_v": import_folder("../Graphics/Particles/Meteor/residual_v"),
+            "meteor_smoke": import_folder("../Graphics/Particles/Meteor/smoke"),
 
 			# Monster Deaths
 			"squid": import_folder("../Graphics/Particles/smoke_orange"),

@@ -19,6 +19,9 @@ Edit [`debug_logging.json`](debug_logging.json) next to this file. Paths under `
 | `quadtree` | `game.quadtree` | Quadtree `print_all` traversal ([`QuadTree.py`](QuadTree.py)). |
 | `effect_environmental` | `game.effect.environmental` | Environmental damage effects (e.g. heat) ([`Effect.py`](Effect.py)). |
 | `rts` | `game.rts` | Worker spawn, gather assign, state transitions, wallet delivery ([`rts/session.py`](rts/session.py), [`rts/gather/controller.py`](rts/gather/controller.py)). |
+| `mesh` | `game.mesh` | Mesh boss clip playback: engine status, pack action, frame ([`combat_unit.py`](combat_unit.py)). |
+| `grass` | `game.grass` | Grass wind / GPU path diagnostics ([`YsortCameraGroup.py`](YsortCameraGroup.py), [`GrassManager.py`](GrassManager.py)). |
+| `network` | `game.network` | Co-op / multiplayer join and state ([`Level4_tmxdev.py`](Level4_tmxdev.py)). |
 
 ## Fields per channel
 

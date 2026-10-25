@@ -7,7 +7,6 @@
   "use_cache": false,
   "output_dir": "levels/Frostreach/sunspine_7x6_play/export/sam3_obstacle",
   "sam3_prompts": [
-    "pyramid",
     "sphinx",
     "obelisk",
     "pillar",

@@ -20,3 +20,7 @@ def test_effect_substring_fallback():
 def test_interactables_not_item_layer():
     assert "Interactables" in LAYER_ROLES
     assert resolve_layer_role("Interactables") is LayerRole.INTERACTABLES
+
+
+def test_props_layer_has_its_own_role():
+    assert resolve_layer_role("Props") is LayerRole.PROPS

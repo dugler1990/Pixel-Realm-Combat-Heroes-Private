@@ -9,9 +9,12 @@ offline default so the whole command surface runs with no API key:
 
   tmx    read the polygon and door already authored on the map. The calibration case, and
          the right answer whenever a building has been drawn by hand in Tiled.
-  sam3   segment them out of the exterior art with the two text prompts, through the
-         Roboflow workflow the collision pass already uses -- `sam3_prompts` in
-         `sam3.<level>.json` already carries "pyramid".
+  sam3   segment them out of the art with the two text prompts, through the local SAM3 at
+         `sam3local/` (see `sam_local.py`). The prompts are the two you typed, written to a
+         file per run -- nothing has to be added to a level's config first.
+
+         Over a whole level image this is `discover.py`, which keeps every match. `from_sam3`
+         below is the single-building crop case and keeps only the largest.
 
 SAM3's own gate is the interesting part. Where the collision pass has already run, every
 building it caught is a polygon on the map carrying `sam3_class`, so a new silhouette can be
@@ -147,24 +150,30 @@ def polygon_iou(a, polygons, scale=8) -> float:
 
 
 def from_sam3(roof_path: Path, origin, object_prompt: str, entrance_prompt: str,
-              config: dict, work: Path) -> Identified:
-    """Segment the silhouette and the entrance out of the exterior art.
+              config: dict = None, work: Path = None) -> Identified:
+    """Segment the silhouette and the entrance out of one building's exterior art.
 
-    The workflow is prompt-driven and its prompt list lives in the level's sam3 config, so
-    adding an entrance is a config line rather than code. What comes back is masks; the
-    silhouette is the largest component of the object's, and the entrance is the centroid of
-    its own -- a point, because the caller projects it onto the silhouette edge to get a
-    threshold, and a blob cannot be projected.
+    What comes back is polygons; the silhouette is the largest match for the object prompt,
+    and the entrance is the centroid of its own -- a point, because the caller projects it
+    onto the silhouette edge to get a threshold, and a blob cannot be projected.
+
+    Keeping the largest and the first is only defensible because the input here is a crop of
+    one known building. Over a whole level it silently returns one building and somebody
+    else's door, which is what `discover.py` exists to do properly.
+
+    `config` is the image-backend config the rest of the pipeline passes around; SAM3 is
+    local and takes none of it. It stays in the signature so the caller need not special-case
+    this provider.
     """
-    from ..collision.sam3.roboflow_workflow import extract_polygons, run_workflow
+    from . import sam_local
 
     notes = []
-    result = run_workflow(Path(roof_path), config)
-    polygons = extract_polygons(result)
+    prompts = [object_prompt] + ([entrance_prompt] if entrance_prompt else [])
+    polygons = sam_local.segment(Path(roof_path), prompts, Path(work or "."))
     if not polygons:
         raise ValueError(
-            f"SAM3 returned no polygons for {roof_path.name}. Check that {object_prompt!r} "
-            f"is in this level's sam3_prompts.")
+            f"SAM3 returned no polygons for {Path(roof_path).name} from {prompts}. "
+            f"The prompts are what you typed, so try wording the object differently.")
 
     def _for(prompt):
         return [p for p in polygons

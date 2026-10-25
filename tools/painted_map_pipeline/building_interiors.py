@@ -67,6 +67,9 @@ class BuildingArt:
     roof_path: Path
     interior_path: Path
     door_point: tuple = None         # canvas-local door_x/door_y, or None if unauthored
+    # The opening measured along the wall, when it was measured. None means nothing measured
+    # it and the game's default applies -- which is a fallback, not the normal case.
+    door_gap: float = None
 
 
 # ---------------------------------------------------------------- TMX
@@ -88,14 +91,29 @@ def _world_polygon(obj: ET.Element) -> tuple:
     return ((ox, oy), (ox + width, oy), (ox + width, oy + height), (ox, oy + height))
 
 
+def _objects(map_path: Path) -> list:
+    root = ET.parse(map_path).getroot()
+    return [obj for group in root.iter("objectgroup") for obj in group.findall("object")]
+
+
+def door_polygons(map_path: Path, name: str) -> tuple:
+    """World polygons of every object carrying `door_of=<name>`: the painted door.
+
+    The one door polygon the engine reads too (it becomes the overhead area that hides a
+    body walking in), so the pipeline reads it from the same place -- the map -- rather
+    than keeping its own. A building that is not on the map yet simply has none here.
+    """
+    return tuple(_world_polygon(o) for o in _objects(map_path)
+                 if _properties(o).get("door_of", "").strip() == name)
+
+
 def load_building(map_path: Path, name: str) -> BuildingArt:
     """Footprint, chamber and art paths for one building, straight out of the TMX.
 
     Deliberately parses the XML rather than importing the game's layout manager: that pulls
     in pygame and a display, and this runs headless in the pipeline.
     """
-    root = ET.parse(map_path).getroot()
-    objects = [obj for group in root.iter("objectgroup") for obj in group.findall("object")]
+    objects = _objects(map_path)
 
     building = next((o for o in objects if o.get("name") == name), None)
     if building is None:
@@ -133,10 +151,7 @@ def load_building(map_path: Path, name: str) -> BuildingArt:
         size=size,
         footprint=to_local(footprint_world),
         chamber=to_local(_world_polygon(chamber)),
-        doors=tuple(
-            to_local(_world_polygon(o)) for o in objects
-            if _properties(o).get("door_of", "").strip() == name
-        ),
+        doors=tuple(to_local(door) for door in door_polygons(map_path, name)),
         roof_path=folder / props["roof_image"],
         interior_path=folder / props["interior_image"],
         door_point=door_point,
@@ -205,12 +220,34 @@ def cut_alpha(image: Image.Image, footprint: np.ndarray) -> Image.Image:
 
 # ---------------------------------------------------------------- generation
 
+def snap_uniform(size: tuple[int, int], scale: float, cap: int) -> tuple[int, int]:
+    """Scale by `scale` and snap both edges to `EDGE_MULTIPLE`, keeping the aspect.
+
+    Rounds to the NEAREST multiple rather than down. Flooring each axis independently is only
+    uniform by luck: 1027x814 floored to 1024x800, 0.3% off on x and 1.7% on y, so the model
+    was shown the building squashed 1.45% against the mask and the control image it had to
+    line up with, and every proportion in the prompt was measured on the wrong picture.
+
+    Rounding up can cross the provider's pixel cap, which flooring could not, so the larger
+    edge steps back down until it fits. That is one step at most in practice, and it keeps
+    `validate_size` a check on a mistake rather than something the caller routinely trips.
+    """
+    snap = lambda v: max(  # noqa: E731
+        EDGE_MULTIPLE, int(round(v * scale / EDGE_MULTIPLE)) * EDGE_MULTIPLE)
+    width, height = snap(size[0]), snap(size[1])
+    while width * height > cap and max(width, height) > EDGE_MULTIPLE:
+        if width >= height:
+            width -= EDGE_MULTIPLE
+        else:
+            height -= EDGE_MULTIPLE
+    return width, height
+
+
 def layout_size(size: tuple[int, int]) -> tuple[int, int]:
     """Largest legal uniform downscale of `size` for a single edit call."""
     width, height = size
     scale = min(1.0, (LAYOUT_MAX_PIXELS / float(width * height)) ** 0.5)
-    fit = lambda v: max(EDGE_MULTIPLE, int(v * scale) // EDGE_MULTIPLE * EDGE_MULTIPLE)  # noqa: E731
-    return fit(width), fit(height)
+    return snap_uniform(size, scale, LAYOUT_MAX_PIXELS)
 
 
 def tile_rows(height: int) -> list[tuple[int, int]]:
@@ -238,13 +275,16 @@ def _run_edit(client, config, prompt, image, mask, work: Path, tag: str,
     `extra_images` ride along after the edited image in roster order -- the render pass sends
     the traced floor plan that way, so the prompt can name it as image 2.
     """
+    from .interiors.trace import save_image
+
     size = image.size
     validate_size(size[0], size[1], source=str(config.get("config_source") or ""))
-    image_path = work / f"{tag}_input.png"
-    mask_path = work / f"{tag}_mask.png"
     out_path = work / f"{tag}_raw.png"
-    image.save(image_path)
-    _mask_image(mask).save(mask_path)
+    # Through `save_image`: a viewer left open on the previous draw's input makes the same
+    # filename unwritable on Windows, and failing here would abort the run before the call is
+    # even made. The roster uses whatever name it actually got, so the two cannot disagree.
+    image_path = save_image(image, work / f"{tag}_input.png")
+    mask_path = save_image(_mask_image(mask), work / f"{tag}_mask.png")
     roster = [str(image_path)] + [str(p) for p in (extra_images or [])]
     print(f"  {tag}: {size[0]}x{size[1]} ({size[0] * size[1] / 1e6:.2f} MP), "
           f"editable {100.0 * mask.mean():.1f}%, {len(roster)} image(s)")

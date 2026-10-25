@@ -1,0 +1,22 @@
+{
+  "name": "_test_fox",
+  "workdir": "generated/bosses/_test_fox",
+  "source": "anim/Fox.glb",
+  "forward_axis": "-Y",
+  "directions": 8,
+  "actions": {
+    "idle":   {"source": "Survey", "fps_out": 6},
+    "move":   {"source": "Walk",   "fps_out": 12},
+    "attack": {"source": "Run",    "fps_out": 12}
+  },
+  "camera": {"elevation_deg": 45, "margin": 1.1},
+  "render": {"engine": "CYCLES", "device": "CPU", "samples": 8, "denoise": true,
+             "resolution": 192, "shading": "raw", "ground_shadow": true},
+  "stages": {
+    "concept": {"backend": "none"},
+    "mesh":    {"backend": "none"},
+    "rig":     {"backend": "none"},
+    "animate": {"mode": "passthrough"}
+  },
+  "install_root": "Graphics/Monsters"
+}

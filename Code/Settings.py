@@ -12,9 +12,19 @@ HEIGHT = 400#950
 WINDOW_WIDTH_RATIO = 0.6
 WINDOW_HEIGHT_RATIO = 0.6
 FPS = 30
+# Draw Graphics/Meshes/<name> when a skin pack exists. PRCH_MESH_BOSS=0 forces sprites.
+USE_MESH_BOSS = os.environ.get("PRCH_MESH_BOSS", "1") != "0"
+MESH_BOSS_HEIGHT_PX = int(os.environ.get("PRCH_MESH_BOSS_HEIGHT", "650"))
+# Orthographic camera tilt used by the mesh skin shader and ground-frame contact.
+VIEW_ELEVATION_DEG = 45.0
 RENDER_BACKEND = os.environ.get("RENDER_BACKEND", "gpu")  # "cpu" | "gpu" — override via env for profiling
 DISPLAY_FLAGS = pygame.SRCALPHA
 TILESIZE =150#150
+# Interior sight: the chamber mask is walkable (light passes); everything else is a wall.
+# Unseen floor is black. Off restores the old full-chamber reveal.
+INTERIOR_SIGHT = True
+INTERIOR_SIGHT_CELL = 32
+INTERIOR_SIGHT_RADIUS = 8 * TILESIZE
 # Ground is composited into ONE surface and uploaded as ONE GL texture, so the whole world has
 # to fit inside GL_MAX_TEXTURE_SIZE. The 7x6 sunspine map needs 22473x12258 at full scale and
 # fails with a glTexImage2D error; it only runs shrunk to 0.586, discarding two thirds of the
@@ -86,6 +96,13 @@ DEBUG_DRAW_MASKS = False  # Draw collision masks for all entities and objects
 DEBUG_DRAW_OBSTACLE_TINT = True  # Semi-transparent class hue on SAM3 / shape obstacle tiles
 DEBUG_DRAW_EFFECT_RECTS = False  # Draw effect collision rects in red
 DEBUG_DRAW_FACTION_OUTLINES = False  # Seeds GameSettings.debug_faction_outlines; toggle also in settings (Ctrl+Shift+S)
+# Temporary: lock weather wind so GPU fluid smoke drift is easy to verify (180° = left / -x).
+DEBUG_PIN_WIND = False
+DEBUG_PIN_WIND_DIRECTION = 180.0
+DEBUG_PIN_WIND_INTENSITY = 8.0  # above stormy peak (~6.8)
+# A furnished building carries 3-4 prop variants and the game loads one of them, at random,
+# each time the level loads. A variant's tag ("v02") loads that one wherever it exists.
+DEBUG_PROPS_VARIANT = ""
 SAM3_TREE_TRUNK_HEIGHT_RATIO = 0.18  # Bottom fraction of tree polygons that block movement (canopy above)
 # When True, entity mask PNGs are written under Graphics/Masks (dev/asset pipeline only).
 EXPORT_ENTITY_MASKS_TO_DISK = False
@@ -199,6 +216,57 @@ evasion_data = ability_data
 
 # Enemies
 monster_data = {
+	"demon": {
+		"health": 2500,
+		"exp": 5000,
+		"energy": 100,
+		"attack_type": "melee",
+		"attack_sound": "../Audio/Attack/Slash.wav",
+		"speed": 3,
+		"resistance": 8,
+		"combat_config": {
+			"melee_attack_radius": 260,
+			"notice_radius": 1600,
+			"melee_attacks": [{"damage": 40, "cooldown": 2200}],
+			"melee_parry_chance": 0.0,
+			"projectile_parry_chance": 0.0,
+			"parry_cooldown": 0,
+			"use_mask_entity_collision_normal": True,
+			"use_mask_obstacle_collision_normal": True,
+			"special_attacks": [
+				{
+					"name": "MeteorShower",
+					"chance": 0.35,
+					"cooldown": 12000,
+					"cooldown_variability": 3000,
+					"duration_ms": 20000,
+					"spawn_interval_ms": 450,
+					"scatter_radius": 420,
+					"scale_min": 0.35,
+					"scale_max": 1.6,
+					"burst_damage": 75,
+					"dot_damage": 8,
+					"dot_interval_ms": 500,
+					"linger_ms": 3000,
+					"impact_radius": 90,
+					"knockback": 252,
+					"knockback_follow_through": 0.55,
+					"mana_cost": 80,
+					"cast_action": "cast1_swift",
+					"trigger_conditions": [
+						{"name": "in_range_of_player", "parameters": {"radius": 900}}
+					],
+				}
+			],
+			"combat_context": {
+				"damage_player": True,
+				"trigger_death_particles": True,
+				"add_exp": True,
+				"update_quad_tree": True,
+				"spawn_meteor": True,
+			},
+		},
+	},
 	"squid": {"health": 100,
                "exp": 180,
                "attack_type": "melee", 

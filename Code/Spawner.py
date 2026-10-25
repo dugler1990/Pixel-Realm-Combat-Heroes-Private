@@ -558,6 +558,8 @@ class Spawner:
             context['update_quad_tree'] = level.layout_manager.add_obstacle_sprite_to_quad_tree
         if 'spawn_enemy' in combat_config.keys():
             context['spawn_enemy'] = self.spawn_enemy
+        if 'spawn_meteor' in combat_config.keys():
+            context['spawn_meteor'] = level.spawn_meteor
                 
         # Add other methods as needed based on combat_config
         return context
@@ -595,6 +597,8 @@ class Spawner:
             persistent=persistent,
             item_drop_info=item_drop_info,
             team_id=team_id,
+            mesh=config.get("mesh", True),
+            mesh_height_px=config.get("mesh_height_px"),
         )
 
     def _mp_local_enemies_suppressed(self):

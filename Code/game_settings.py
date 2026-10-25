@@ -20,8 +20,8 @@ class GameSettings:
         default_factory=lambda: [30, 45, 60, 75, 90, 120, 144]
     )
 
-    music_volume_index: int = 5  # 50%
-    sfx_volume_index: int = 5  # 50%
+    music_volume_index: int = 0  # muted
+    sfx_volume_index: int = 0  # muted
     environment_speed_index: int = 2  # 1.0x
     fps_cap_index: int = 0  # 30 fps (matches existing default)
     debug_mode: bool = False

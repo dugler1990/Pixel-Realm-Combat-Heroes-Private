@@ -27,6 +27,8 @@ from UI import UI
 from Particles import AnimationPlayer
 from Magic import MagicPlayer
 from Evasion import EvasionPlayer
+from meteor_strike import MeteorStrike
+from gpu_fluid_smoke import GpuFluidSmoke
 from Upgrade import Upgrade
 import copy
 import os
@@ -454,6 +456,7 @@ class Level4:
         self.animation_player = AnimationPlayer()
         self.magic_player = MagicPlayer(self.animation_player)
         self.evasion_player = EvasionPlayer(self.animation_player, self.create_trap)
+        self.fluid_smoke = GpuFluidSmoke(self.backend)
         self.current_attack = None
         self.rts_world_adapter = LevelRtsWorldAdapter(self)
         self.rts_world_sim = RtsWorldSim()
@@ -1919,6 +1922,64 @@ class Level4:
                                                amount=resolved_amount
                                                )
 
+    def spawn_meteor(
+        self,
+        pos,
+        *,
+        scale=1.0,
+        owner=None,
+        source_team=None,
+        burst_damage=75,
+        dot_damage=8,
+        dot_interval_ms=500,
+        linger_ms=3000,
+        impact_radius=90,
+        knockback=252.0,
+        knockback_follow_through=0.55,
+        shake_scale_threshold=None,
+    ):
+        """Ground-targeted meteor strike used by MeteorShower special attacks."""
+        frames = self.animation_player.frames
+        frames_by_phase = {
+            "targeting": frames.get("meteor_targeting") or [],
+            "descent": frames.get("meteor_descent") or [],
+            "impact": frames.get("meteor_impact") or [],
+            "residual": frames.get("meteor_residual") or [],
+            "residual_v": frames.get("meteor_residual_v") or [],
+        }
+        if not any(frames_by_phase.values()):
+            _combat_log.warning("spawn_meteor skipped: no meteor frames loaded")
+            return None
+        resolved_team = source_team or getattr(owner, "team_id", "enemy")
+        return MeteorStrike(
+            pos,
+            [self.layout_manager.visible_sprites],
+            frames_by_phase=frames_by_phase,
+            level=self,
+            owner=owner,
+            source_team=resolved_team,
+            scale=scale,
+            burst_damage=burst_damage,
+            dot_damage=dot_damage,
+            dot_interval_ms=dot_interval_ms,
+            linger_ms=linger_ms,
+            impact_radius=impact_radius,
+            knockback=knockback,
+            knockback_follow_through=knockback_follow_through,
+            shake_scale_threshold=shake_scale_threshold,
+        )
+
+    def _draw_smoke_fx(self):
+        """Legacy sprite smoke disabled — fluid draws mid-frame via camera group."""
+        return
+
+    def draw_fluid_smoke_mid(self):
+        """Ground + rise fluid passes (called between sprites and roofs)."""
+        fx = getattr(self, "fluid_smoke", None)
+        if fx is None or self.is_server:
+            return
+        fx.draw_ground()
+        fx.draw_rise()
 
     def calculate_angle(self, source, target):
         dx = target[0] - source[0]
@@ -2479,6 +2540,15 @@ class Level4:
             if self.layout_manager.daytime_layout:
                 if self.game_settings:
                     self.weather.time_speed_multiplier = self.game_settings.environment_speed
+                self.weather.update(dt)
+                if DEBUG_PIN_WIND:
+                    self.weather.wind_direction = DEBUG_PIN_WIND_DIRECTION
+                    self.weather.wind_intensity = DEBUG_PIN_WIND_INTENSITY
+                fluid = getattr(self, "fluid_smoke", None)
+                if fluid is not None:
+                    offset = self.layout_manager.visible_sprites.offset
+                    size = self.backend.get_size()
+                    fluid.step(dt, self.weather, (offset.x, offset.y), size)
                 if not self.is_server:
                     shadow = (self.layout_manager.lighting.sun_shadow(self.weather.current_time)
                               if self.layout_manager.lighting else None)
@@ -2489,9 +2559,8 @@ class Level4:
                         self.weather.light_level,
                         camera_focus=camera_focus,
                         shadow=shadow,
+                        mid_fx_draw=self.draw_fluid_smoke_mid,
                     )
-                self.weather.update(dt)
-                if not self.is_server:
                     self.weather_overlay.set_weather(self.weather.weather_type,
                                                      self.weather.weather_intensity,
                                                      self.weather.wind_direction)
@@ -2549,8 +2618,16 @@ class Level4:
                     else 0
                 )
                 if not self.is_server:
+                    if DEBUG_PIN_WIND:
+                        self.weather.wind_direction = DEBUG_PIN_WIND_DIRECTION
+                        self.weather.wind_intensity = DEBUG_PIN_WIND_INTENSITY
+                    fluid = getattr(self, "fluid_smoke", None)
+                    if fluid is not None:
+                        offset = self.layout_manager.visible_sprites.offset
+                        fluid.step(dt, self.weather, (offset.x, offset.y), self.backend.get_size())
                     self.layout_manager.visible_sprites.custom_draw(
-                        self.player, dt, _grass_sway, 0.5, camera_focus=camera_focus
+                        self.player, dt, _grass_sway, 0.5, camera_focus=camera_focus,
+                        mid_fx_draw=self.draw_fluid_smoke_mid,
                     )
             #self.layout_manager.update_weather(self.weather)
             

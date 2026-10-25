@@ -131,6 +131,28 @@ def sprite_feet_sort_y(sprite):
     return mask_midbottom_world(rect, mask)[1]
 
 
+# A prop's floor footprint is as deep as half its width: the floor diamond under
+# something that wide in this 2:1 view.
+PROP_BASE_DEPTH = 0.5
+
+
+def prop_base_mask(mask, depth=PROP_BASE_DEPTH):
+    """The part of a placed prop that stands on the floor: the bottom of its silhouette,
+    ``depth`` x its width deep. A statue blocks at its plinth, not at its head.
+
+    Returns (top_row, band_mask), band_mask being mask rows [top_row, bottom), or None
+    for an empty mask.
+    """
+    bounds = _mask_opaque_bounds(mask)
+    if bounds is None:
+        return None
+    band_h = max(1, min(bounds.height, round(bounds.width * depth)))
+    top = bounds.bottom - band_h
+    band = pygame.Mask((mask.get_size()[0], band_h))
+    band.draw(mask, (0, -top))
+    return top, band
+
+
 def frames_to_masks(animation_frames):
     masks = []
     #print(animation_frames)
@@ -344,6 +366,21 @@ def _animation_frame_sort_key(filename):
     if ext.lower() in ("png", "jpg", "jpeg", "gif", "webp") and stem.isdigit():
         return (0, int(stem), filename.lower())
     return (1, filename.lower())
+
+
+def load_sprite_manifest(monster_name):
+    """manifest.json written by tools/boss_sprite_pipeline next to a monster's frames, or None.
+
+    Its presence is what switches a monster to N-direction sprites: frames live in
+    <action>/<dir>/, `anchor_px` is the ground-contact pixel, `actions.<a>.fps` the
+    playback rate.
+    """
+    path = os.path.normpath(f"../Graphics/Monsters/{monster_name}/manifest.json")
+    if not os.path.exists(path):
+        return None
+    import json
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 def import_folder(path, scale=None):

@@ -1,9 +1,23 @@
 msgpack>=1.0,<2.0
 numpy==2.1.1
-opencv_python==4.9.0.80
-Pillow==10.4.0
+# 4.9 was built against the NumPy 1.x ABI and dies on `import cv2` under the
+# numpy pin above; 4.10.0.84 is the first release compiled for NumPy 2.
+opencv_python==4.10.0.84
+# Pillow 10 is unsatisfiable alongside inference-sdk, which requires >=11.
+Pillow>=11.0,<12.0
 psutil==5.9.8
 pygame==2.5.2
-PyOpenGL==3.1.7
-PyOpenGL-accelerate==3.1.7
+# 3.1.7 has no cp312 wheel and builds from source (needs MSVC); 3.1.10 ships one.
+# These two must stay on the same version.
+PyOpenGL==3.1.10
+PyOpenGL-accelerate==3.1.10
+pytmx>=3.32
 inference-sdk>=0.9.0
+
+# Painted-map / world-levels pipeline (tools/painted_map_pipeline).
+# Not needed to run the game, but the level tooling imports them directly.
+scipy>=1.14
+shapely>=2.0
+
+# Tests.
+pytest>=8.0

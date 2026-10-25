@@ -28,6 +28,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+
 from ..world_levels.geometry import dilate_mask
 
 # Two classes, both drawn from the palette region_proposer already paints and names, so the
@@ -36,7 +37,19 @@ from ..world_levels.geometry import dilate_mask
 FLOOR_RGB = (200, 70, 210)
 SOLID_RGB = (50, 200, 80)
 CLASS_COLOURS = {"floor": FLOOR_RGB, "solid": SOLID_RGB}
-CLASS_NAMES = {"floor": "magenta", "solid": "green"}
+
+# The building's own wall -- the band between its outline and the interior -- drawn apart from
+# the walls between rooms. They are different things: the shell is measured off the art and is
+# what shrinks the interior inside the silhouette, while a partition is derived from it. One
+# colour for both made every plan read as an undifferentiated green mass.
+OUTER_RGB = (40, 90, 190)
+
+# What each colour is called when a prompt has to name it. `outer` and `outside` are here
+# because the render pass sends the control image and then described three colours: a census
+# of one control image was 45.5% black and 27.5% blue -- both unnamed -- against 0.22% dark
+# grey, which the prompt called "most of the picture". The model was reconciling a description
+# of a picture it was not looking at, which is how the render outline drifted off the mask.
+CLASS_NAMES = {"floor": "magenta", "solid": "green", "outer": "blue", "outside": "black"}
 
 # Euclidean RGB distance beyond which a pixel counts as "not repainted". Sandstone measures
 # ~137-141 from the nearer class colour; a flat fill that has been through PNG and a resize
@@ -129,18 +142,85 @@ def component_report(mask, min_area: int = 0) -> ComponentReport:
     )
 
 
-def derive_art_classes(floor, chamber, thickness):
-    """floor / wall / solid from the floor mask alone.
+def save_image(image, out_path) -> "Path":
+    """Write a picture, falling back to a fresh name when the target cannot be written.
+
+    Every one of these is opened in a viewer as soon as it is produced, and on Windows a
+    viewer holding the previous copy makes the same filename unwritable -- which crashed a
+    run mid-loop rather than merely failing to redraw. A scratch file in a work directory is
+    not worth losing a set of paid draws over.
+    """
+    from pathlib import Path as _Path
+
+    out_path = _Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        image.save(out_path)
+        return out_path
+    except OSError:
+        for attempt in range(1, 100):
+            alternative = out_path.with_name(
+                f"{out_path.stem}_{attempt:02d}{out_path.suffix}")
+            try:
+                image.save(alternative)
+                return alternative
+            except OSError:
+                continue
+        raise
+
+
+def derive_art_classes(floor, chamber, thickness, silhouette=None, keep_clear=None):
+    """floor / wall / outer / solid from the floor mask.
 
     Only floor has a meaning that can be checked, so only floor is worth painting. Wall is
     the band the emitter will lay collision quads along, so deriving it by the same dilation
     the emitter uses for its thickness makes the control image's wall band identical by
-    construction to where the collision actually is -- rather than something the render pass
-    is asked to match and re-prompted when it doesn't.
+    construction to where the collision actually is.
+
+    `silhouette` splits the two kinds of wall apart. The BUILDING'S wall is the band between
+    its outline and the chamber -- the shell measured off the art, the thing that shrinks the
+    interior inside the silhouette. A PARTITION is the stone between rooms. Drawing both in
+    one colour is what made these plans read as a green mass with no structure in it.
+
+    `keep_clear` is the doorway. The partition band is grown outward from whatever the model
+    painted, so wherever the floor stops short of the threshold the band closes across it and
+    walls up the entrance -- which happened on every draw. The way in is held out of the wall
+    explicitly rather than hoped for.
+
+    A partition is stone with floor on BOTH sides. The band grown from a single room's edge
+    has floor on one side and the shell on the other -- that is not a partition, it is the
+    shell, and painting it green put a second wall inside the building's own wall on every
+    one-room plan: the room lost `thickness` px all round and the roof hole was cut to the
+    wrong edge.
+
+    "Floor on both sides" is a morphological closing: dilate the floor by `thickness`, erode
+    it back, and what was filled in is exactly the stone between floor regions less than
+    2 x `thickness` apart -- corridor walls, room dividers, the fillet in a concave corner.
+    Stone with the shell behind it is not filled, because there is no floor beyond it to hold
+    the erosion off. (Not "two connected components": rooms joined by a corridor are one.)
+
+    Everything that is neither floor nor partition is the building's solid mass -- the shell,
+    and any unexcavated stone inside it -- and it is all `outer`. There used to be a third,
+    grey `solid` class for interior stone beyond the band; the render prompt never named it,
+    so the model reconciled a colour it had no words for. Now every pixel the model sees is
+    one of four it is told about. `solid` is kept as a key, always empty, for readers.
     """
     floor = floor & chamber
-    wall = dilate_mask(floor, int(thickness)) & ~floor & chamber
-    return {"floor": floor, "wall": wall, "solid": chamber & ~floor & ~wall}
+    thickness = int(thickness)
+    band = dilate_mask(floor, thickness) & ~floor & chamber
+    if keep_clear is not None:
+        band = band & ~keep_clear
+
+    k = 2 * thickness + 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+    closed = cv2.morphologyEx(np.ascontiguousarray(floor.astype(np.uint8)),
+                              cv2.MORPH_CLOSE, kernel) > 0
+    wall = band & closed
+
+    shell = (silhouette & ~chamber) if silhouette is not None else np.zeros_like(floor)
+    outer = shell | (chamber & ~floor & ~wall)
+    return {"floor": floor, "wall": wall, "outer": outer,
+            "solid": np.zeros_like(floor)}
 
 
 @dataclass(frozen=True)

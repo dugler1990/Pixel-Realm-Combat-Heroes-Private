@@ -1,0 +1,31 @@
+{
+  "name": "demon",
+  "concept_image": "image_assets/bosses/demon_concept.png",
+  "workdir": "generated/bosses/demon",
+  "install_root": "Graphics/Monsters",
+  "gpu_host": null,
+  "remote_root": "~/Pixel-Realm-Combat-Heroes-public",
+
+  "forward_axis": "-Y",
+  "directions": 8,
+  "actions": {
+    "idle":   {"fps_out": 10},
+    "move":   {"fps_out": 12},
+    "attack": {"fps_out": 15}
+  },
+  "camera": {"elevation_deg": 45, "margin": 1.1},
+  "light":  {"elevation_deg": 50, "azimuth_deg": -35, "energy": 3.0, "ambient": 0.35},
+  "render": {"engine": "CYCLES", "device": "CPU", "samples": 32, "denoise": true,
+             "resolution": 256, "shading": "raw", "ground_shadow": true},
+
+  "stages": {
+    "concept": {"backend": "sam3", "keep_top": 1,
+                "sam3": {"api_url": "http://GPU_BOX:9001", "api_key_env": "ROBOFLOW_API_KEY",
+                         "workspace_name": "douglass-workspace-y1brz", "workflow_id": "boss-cutout",
+                         "input_name": "image"}},
+    "mesh":    {"backend": "hunyuan3d", "variant": "tencent/Hunyuan3D-2", "texture": true,
+                "steps": 30, "octree_resolution": 256, "max_faces": 40000, "seed": 0},
+    "rig":     {"backend": "unirig", "seed": 0},
+    "animate": {"mode": "procedural"}
+  }
+}
