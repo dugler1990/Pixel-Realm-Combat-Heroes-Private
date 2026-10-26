@@ -1,0 +1,16 @@
+{
+  "frame_ms": 41.667,
+  "source_fps": 24.0,
+  "step": 1,
+  "start_frame": 160,
+  "end_frame": 192,
+  "count": 32,
+  "size": [
+    385,
+    188
+  ],
+  "anchor": [
+    159,
+    64
+  ]
+}

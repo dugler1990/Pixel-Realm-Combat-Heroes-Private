@@ -618,6 +618,13 @@ class Spawner:
             pos = config['pos']
         # Scale position by TILESIZE
         scaled_pos = (pos[0] * TILESIZE, pos[1] * TILESIZE)
+        if str(config.get("type", "")) == "flyer":
+            from flyer import Flyer
+            groups = [self.level.layout_manager.visible_sprites]
+            attackable = getattr(self.level, "attackable_sprites", None)
+            if attackable is not None:
+                groups.append(attackable)
+            return Flyer(scaled_pos, groups, self.level)
         team_id = self._team_id_for_spawn_config(config)
         
         monster_config = monster_data[config['type']]
