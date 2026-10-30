@@ -15,7 +15,7 @@ class DashEntity(Protocol):
     stats: dict
     _dash_runtime: Optional[dict]
 
-    def collision(self, QuadTree, entity_quad_tree, speed=0): ...
+    def step_against_walls(self, dx, dy, tree): ...
 
 
 @dataclass

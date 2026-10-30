@@ -20,9 +20,12 @@ being unfinished rather than a design decision, so taking the widest would size 
 in the game to whichever sprite happens to be biggest today. Sizing to the barbarian is a
 choice, and it is written here as one.
 
-What is measured is the sprite's opaque extent, because collision is `rect` + `mask` through
-the quadtree (`Entity.py`) -- the mask is the player. The hitbox (`rect.inflate(-6, -26)`,
-about 144 x 124) only carries position; it is not what the world collides with.
+What is measured is the sprite's full opaque width. Walls collide with a smaller footprint
+than that: a ground ellipse at the feet, 2R wide with R = `collision_ground_radius_px`
+(`Entity.wall_foot`, `Code/collision_core.py`). Sizing corridors by the full width is kept on
+purpose, as a generous clearance for a footprint that is narrower. The hitbox
+(`rect.inflate(-6, -26)`, about 144 x 124) only carries position; it is not what the world
+collides with.
 """
 
 from __future__ import annotations

@@ -49,14 +49,12 @@ class MultiplayerClient:
             self.inbox.put(message)
 
     def send_join(self, character: str, x: float, y: float,
-                  hitbox_w: float = 0.0, hitbox_h: float = 0.0,
-                  obstacles=None, map_width: float = 0.0, map_height: float = 0.0) -> None:
-        """Announce this player. Stage B optionally uploads the map's obstacle
-        rects + dimensions (the client already has them) + this player's hitbox
-        size, so the server can validate positions against walls. Enemies are NOT
-        uploaded -- the server loads its OWN map and runs the real Level4 (the
-        server-authoritative pivot). All optional, so a client that omits them
-        gets the v0 position relay (no server collision)."""
+                  hitbox_w: float = 0.0, hitbox_h: float = 0.0, wall_foot=None) -> None:
+        """Announce this player at its hitbox centre (x, y), the same point every
+        later report uses. `hitbox_w/h` and `wall_foot` (the footprint walls block,
+        (dx, dy, w, h) relative to hitbox.topleft) let the server check reports
+        against its own map's walls with the client's own collision code. Both
+        optional: a client that omits them is relayed unchecked."""
         message = {
             "type": MSG_JOIN,
             "player_id": self.player_id,
@@ -66,10 +64,8 @@ class MultiplayerClient:
             "hitbox_w": hitbox_w,
             "hitbox_h": hitbox_h,
         }
-        if obstacles:
-            message["obstacles"] = obstacles
-            message["map_width"] = map_width
-            message["map_height"] = map_height
+        if wall_foot is not None:
+            message["wall_foot"] = [int(v) for v in wall_foot]
         self._send(message)
 
     def send_state(self, x: float, y: float, move_x: float, move_y: float, attacking: bool,

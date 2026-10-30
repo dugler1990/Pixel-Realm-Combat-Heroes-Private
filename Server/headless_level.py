@@ -37,15 +37,8 @@ from PlayerSelection import (  # noqa: E402
     unlocked_player_directory,
 )
 from render_backend import StubBackend  # noqa: E402
-
 # Layout dirs are relative to Code/ (combat_unit chdir'd us there on import).
-_LEVEL_LAYOUTS = {
-    6: "../levels/tmx",
-    7: "../levels/Map7",
-    8: "../levels/Map8",
-    9: "../levels/Frostreach/ice_wall_gate",
-    10: "../levels/Frostreach/expanse",
-}
+from level_layouts import LEVEL_TO_LAYOUT, MP_LEVEL_NUMBER  # noqa: E402
 
 # A realistic dummy display size so YSortCameraGroup's viewport/grass subsurface
 # are sane. The simulation is camera-independent (enemy AI runs over every
@@ -95,7 +88,7 @@ def build_headless_level(character_dir=None, level_number=6, size=_DEFAULT_SIZE,
     character_index = unlocked_player_directory.index(character_dir)
     base_stats = unlocked_player_base_stats[character_index].copy()
 
-    layouts_dir = _LEVEL_LAYOUTS.get(level_number, _LEVEL_LAYOUTS[6])
+    layouts_dir = LEVEL_TO_LAYOUT.get(level_number, LEVEL_TO_LAYOUT[MP_LEVEL_NUMBER])
 
     level = Level4(
         InputManager(),

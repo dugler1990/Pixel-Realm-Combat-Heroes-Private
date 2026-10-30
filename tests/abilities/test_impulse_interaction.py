@@ -84,6 +84,9 @@ class _StubEntity:
 
         Entity.apply_impulse(self, force, follow_through=follow_through)
 
+    def plant_sprite_on_hitbox(self):
+        pass
+
     def can_receive_interaction(self, ctx):
         from Entity import Entity
 
@@ -114,6 +117,9 @@ class _StubPlayer:
         from Entity import Entity
 
         Entity.apply_impulse(self, force, follow_through=follow_through)
+
+    def plant_sprite_on_hitbox(self):
+        pass
 
     def can_receive_interaction(self, ctx):
         return BasePlayer.can_receive_interaction(self, ctx)
@@ -274,3 +280,38 @@ def test_impulse_cancels_leap_runtime():
     _resolver().apply(ctx)
     assert target._leap_runtime is None
     assert target.hitbox.x == 7
+
+
+def test_knockback_stops_at_a_wall():
+    import collision_core
+    from QuadTree import QuadTree, QuadTreeManager
+    from hashRect import HashableRect
+
+    level_stub = SimpleNamespace(interaction_resolver=_resolver())
+    enemy = CombatUnit(
+        monster_name=MONSTER,
+        pos=(100, 100),
+        groups=[pygame.sprite.Group()],
+        obstacle_sprites=SimpleNamespace(),
+        combat_context={"level": level_stub},
+        persistent=False,
+        special_attacks=None,
+        item_drop_info=None,
+        team_id="enemy",
+    )
+    foot = collision_core.foot_rect(enemy.hitbox, enemy.wall_foot())
+    wall = HashableRect(pygame.Rect(foot.right + 10, foot.y - 200, 50, 400), _id=-1)
+    tree = QuadTree(items=[wall], depth=8, bounding_rect=pygame.Rect(-1000, -1000, 4000, 4000),
+                    manager=QuadTreeManager())
+    enemy.step_against_walls(0, 0, tree)  # it has moved among these walls before
+    before_x = enemy.hitbox.x
+    ctx = InteractionContext(
+        kind="impulse",
+        source_kind="test",
+        source_team="player",
+        target=enemy,
+        impulse_x=50,
+        impulse_y=0,
+    )
+    assert _resolver().apply(ctx) is True
+    assert enemy.hitbox.x == before_x + 10  # flush against the wall, not through it

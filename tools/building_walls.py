@@ -7,12 +7,11 @@ or the door position changes. Hand-maintaining that is error-prone, and the cham
 polygon has to stay exactly the silhouette inset by the wall thickness or the reveal
 region drifts away from the walls.
 
-Why many small quads rather than one polygon: an entity's push-out direction comes
-from the obstacle's bounding-rect CENTRE (collision_core.rect_rebound_dir), not the
-contact point -- mask-derived normals are opt-in per unit profile and off for the
-player. A single hollow ring would therefore push anyone standing inside it outward
-THROUGH the wall. Short segments keep the AABB centre near the contact point, so the
-push direction stays locally correct.
+Why many small quads rather than one polygon: originally because the push-out direction
+came from the obstacle's bounding-rect centre, which a single hollow ring would put in the
+middle of the room. Walls now block the feet pixel-exactly (collision_core.blocked_step)
+with no push-out, so that reason is gone; small quads also keep each quad-tree item, and
+its mask, small.
 
 Re-running is idempotent: objects whose name starts with the prefix are replaced.
 

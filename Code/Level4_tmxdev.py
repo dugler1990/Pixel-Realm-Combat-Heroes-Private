@@ -247,15 +247,7 @@ def mask_to_surface(mask, color, size):
        
 DEV_STATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.dev_reload_state.json')
 
-LAYOUT_TO_LEVEL = {
-    '../levels/tmx': 6,
-    '../levels/Map7': 7,
-    '../levels/Map8': 8,
-    '../levels/Frostreach/ice_wall_gate': 9,
-    '../levels/Frostreach/expanse': 10,
-    '../levels/Frostreach/sunspine_dunes_01': 11,
-    '../levels/Frostreach/sunspine_7x6_play': 12,
-}
+from level_layouts import LAYOUT_TO_LEVEL
 
 
 class Level4:

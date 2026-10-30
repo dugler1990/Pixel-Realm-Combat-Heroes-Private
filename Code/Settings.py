@@ -234,7 +234,6 @@ monster_data = {
 			"projectile_parry_chance": 0.0,
 			"parry_cooldown": 0,
 			"use_mask_entity_collision_normal": True,
-			"use_mask_obstacle_collision_normal": True,
 			"special_attacks": [
 				{
 					"name": "MeteorShower",
@@ -555,7 +554,6 @@ monster_data = {
 			"entity_collision_push_static": 15,
 			"entity_collision_push_moving": 3.0,
 			"use_mask_entity_collision_normal": True,
-			"use_mask_obstacle_collision_normal": True,
 			"mask_collision_min_deflect_deg": 30,
 			"combat_context": {},
 		},

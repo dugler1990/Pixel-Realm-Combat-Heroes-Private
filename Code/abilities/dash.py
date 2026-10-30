@@ -115,17 +115,17 @@ class DashAbility(PlayerAbility):
         elif direction != "right":
             delta = 0
 
-        pre_x = entity.hitbox.x
-        entity.hitbox.x += int(delta)
-
         collision_mode = runtime["collision_mode"]
         if collision_mode == "resolve":
-            entity.collision(QuadTree, entity_quad_tree, speed=abs(delta))
+            # As far as the walls let the feet go; stop_on_wall ends the dash on no x progress.
+            moved_x, _ = entity.step_against_walls(int(delta), 0, QuadTree)
             entity.plant_sprite_on_hitbox()
-            if runtime["stop_on_wall"] and int(delta) != 0 and entity.hitbox.x == pre_x:
+            if runtime["stop_on_wall"] and int(delta) != 0 and moved_x == 0:
                 self._end(entity, runtime)
-                return
-        elif collision_mode == "damage_on_hit":
+            return
+
+        entity.hitbox.x += int(delta)
+        if collision_mode == "damage_on_hit":
             entity.plant_sprite_on_hitbox()
             self._apply_damage_on_hit(entity, context, entity_quad_tree, runtime)
         else:

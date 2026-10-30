@@ -28,20 +28,15 @@ Message shapes (see the multiplayer plan's "Wire protocol" section):
      "enemies": [{"id": 7, "type": "skeleton", "x": .., "y": ..,
                   "status": "move", "dir": "left", "health": .., "max_health": ..}]}
 
-    # client -> server, on connect / disconnect. Stage B optionally adds the
-    # player's collision-rect size (hitbox_w/h) and a one-time upload of the
-    # map's obstacle rects + dimensions (the client already has them) so the
-    # server can build a quadtree and validate positions against walls. All
-    # optional -- omitting them yields the plain v0 relay (no server collision).
-    # Each obstacle is [x, y, w, h]; an IRREGULAR obstacle (tree/decor whose
-    # pixel mask is smaller than its rect) adds a 5th element -- the packed mask
-    # bytes (Stage B2.5, see Code/obstacle_mask.py) -- so the server gates on the
-    # silhouette, not the bounding rect.
+    # client -> server, on connect / disconnect. (x, y) is the hitbox centre, the
+    # same point every input report uses. hitbox_w/h and wall_foot (the footprint
+    # walls block, [dx, dy, w, h] relative to hitbox.topleft) let the server check
+    # each report against its own map's walls with the client's collision code
+    # (collision_core). Both optional -- omitting them yields an unchecked relay.
     {"type": "join", "player_id": "...", "character": "../Graphics/Orange_Wizard/",
      "x": ..., "y": ...,
      "hitbox_w": .., "hitbox_h": ..,
-     "obstacles": [[x, y, w, h], [x, y, w, h, b"<packed mask>"], ...],
-     "map_width": .., "map_height": ..}
+     "wall_foot": [dx, dy, w, h]}
     {"type": "leave", "player_id": "..."}
 
     # server -> client, broadcast at tick rate (includes the receiver's own entry).

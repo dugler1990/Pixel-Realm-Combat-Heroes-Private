@@ -17,147 +17,83 @@ _CODE_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file
 if _CODE_DIR not in sys.path:
     sys.path.insert(0, _CODE_DIR)
 
-# Stage B2: the server uses pygame's geometry primitives (Rect) + the game's
-# real QuadTree + the shared collision_core. GEOMETRY ONLY -- no display,
-# surfaces, assets, or game loop; the server still never instantiates
-# Player/Level4. (pygame.Rect needs no display.)
-import pygame  # noqa: E402
-from QuadTree import QuadTree, QuadTreeManager  # noqa: E402
-from hashRect import HashableRect  # noqa: E402
+# The server checks reported player positions with the same wall code the client moves
+# with (collision_core), against its own Level4's obstacle QuadTree. GEOMETRY ONLY -- Rect
+# and Mask, no display. (pygame.Rect / pygame.Mask need no display.)
+from QuadTree import QuadTree  # noqa: E402
 import collision_core  # noqa: E402
-from obstacle_mask import rect_hits_mask, unpack_mask  # noqa: E402
 from network.protocol import derive_status  # noqa: E402
 
-# Obstacle upload entry (client -> server at join). Always (x, y, w, h); an
-# IRREGULAR obstacle (tree/decor) additionally carries a 5th element -- the
-# packed pixel mask (Stage B2.5), so the server gates on the same silhouette the
-# client collides against instead of the bounding rect.
-ObstacleRect = Tuple[float, float, float, float]
-
-# Server obstacle-collision tuning (Stage B2). The server iterates the SHARED
-# collision_core push-out (the same math the client runs per frame) to fully
-# separate a discrete reported position. Small per-pass cap -> minimal overshoot
-# past the wall (<= _PUSH_CAP px, and only for already-violating positions).
-_PUSH_CAP = 8.0           # px moved per separation pass
-_MAX_PASSES = 40          # clears up to _PUSH_CAP * _MAX_PASSES px of penetration
-_OVERLAP_TOLERANCE = 2.0  # don't correct grazes <= this (honest players at a wall)
-_QUERY_ID = -999_999      # broadphase query id; must not collide with obstacle ids
-
-
-def _overlap_amounts(player_rect, obstacle_rect):
-    """(overlap_x, overlap_y) of two rects; <= 0 on either axis means no overlap."""
-    ox = min(player_rect.right, obstacle_rect.right) - max(player_rect.left, obstacle_rect.left)
-    oy = min(player_rect.bottom, obstacle_rect.bottom) - max(player_rect.top, obstacle_rect.top)
-    return ox, oy
+WallFoot = Tuple[int, int, int, int]
 
 
 @dataclass
 class ServerPlayerState:
     player_id: str
     character: str  # player_info_dir path, e.g. "../Graphics/Orange_Wizard/"
+    # The last ACCEPTED position (the client's hitbox centre). The broadcast and the
+    # server's Level4 read this, never a report that hasn't been checked.
     x: float
     y: float
     direction_x: float = 0.0  # -1, 0, 1 -- mirrors Player.direction.x
     direction_y: float = 0.0
     attacking: bool = False
     status: str = "down_idle"  # drives client animation; server-derived, see derive_status
-    # Collision-rect size, sent at join (Stage B). 0 => obstacle resolution off.
+    # Hitbox size and wall footprint (dx, dy, w, h relative to hitbox.topleft), sent at
+    # join. No footprint => reports are accepted unchecked.
     hitbox_w: float = 0.0
     hitbox_h: float = 0.0
+    wall_foot: Optional[WallFoot] = None
     # CS4: the client relays its real player's health each frame so the server's
     # enemy aggro can drop a downed player. Defaults alive until first reported.
     health: float = 100.0
+    # The latest reported position, waiting for accept_report on the sim thread.
+    reported_x: Optional[float] = None
+    reported_y: Optional[float] = None
 
     def apply_update(self, x: float, y: float, move_x: float, move_y: float,
-                     attacking: bool, obstacle_index: "QuadTree" = None,
-                     health: float = None) -> None:
-        """Relay the client's authoritative position + re-derive `status`, then
-        (Stage B) validate the position against map obstacles.
+                     attacking: bool, health: float = None) -> None:
+        """Store the client's reported position + re-derive `status` (receiver thread).
 
-        v0 / Stage A is a POSITION RELAY. The wire message carries BOTH the
-        client's actual position `(x, y)` (from its real `Entity.move()`) AND
-        its movement inputs `(move_x, move_y, attacking)`. The server trusts the
-        position field and uses the inputs only to derive the animation
-        `status`. (Integrating position server-side from inputs -- the original
-        v0 design -- diverged hundreds of px from the client's real physics; see
-        the plan's "CORRECTION".)
-
-        Stage B adds obstacle VALIDATION on top of the relay: the stored (and
-        therefore broadcast) position is pushed out of any map obstacle, so the
-        shared/authoritative view can't sit inside a wall. The inputs stay on
-        the wire so a later stage can move from "validate" to "simulate" with no
-        client/protocol change.
+        The wire message carries BOTH the client's actual position `(x, y)` (from its
+        real `Entity.move()`) AND its movement inputs `(move_x, move_y, attacking)`; the
+        inputs only derive the animation `status`. The position waits in
+        `reported_x/y` until `accept_report` checks it against the walls on the sim
+        thread, so nothing ever broadcasts an unchecked report.
         """
-        self.x = x
-        self.y = y
+        self.reported_x = x
+        self.reported_y = y
         self.direction_x = move_x
         self.direction_y = move_y
         self.attacking = attacking
         self.status = derive_status(self.status, move_x, move_y, attacking)
         if health is not None:
             self.health = health
-        if obstacle_index is not None and self.hitbox_w > 0 and self.hitbox_h > 0:
-            self.resolve_obstacle_collision(obstacle_index)
 
-    def resolve_obstacle_collision(self, obstacle_index: "QuadTree") -> None:
-        """Push (x, y) out of overlapping map obstacles, using the REAL QuadTree
-        broadphase + the SHARED `collision_core` push-out (the same code the
-        client runs). Stage B2 -- replaces B1's hand-rolled linear-scan MTV.
+    def accept_report(self, obstacle_tree: "QuadTree") -> bool:
+        """Accept the latest report, or drop it; True if it was dropped.
 
-        Each pass: query the quadtree for obstacles near the player's hitbox,
-        keep those overlapping beyond a small tolerance (so honest players at a
-        wall *surface* aren't nudged), and apply `collision_core.obstacle_pushout`
-        (capped per pass) -- the identical rect math `Entity` uses. Iterating it
-        separates a discrete reported position the way the client's per-frame
-        push separates over many frames.
-
-        Parallel-maintenance WIN (multiplayer plan): the push-out is now ONE
-        function shared with `Entity` -- duplication #1 eliminated for the rect
-        path. The conformance test asserts client == server for the same inputs.
-
-        Scope: resolves the realistic cases (walls, edges, corners). A position
-        teleported *deep* into a multi-tile cluster (a blatant cheat) may not
-        fully escape in `_MAX_PASSES`; the server still reduces penetration.
-        Honest clients never produce that (their own collision keeps them at the
-        wall surface).
-
-        Irregular obstacles (Stage B2.5): if an obstacle carries a pixel mask
-        (tree/decor, stored as a numpy silhouette grid), require the player to
-        actually overlap the silhouette -- not just its bounding rect -- before
-        pushing, mirroring the client's mask gate
-        ([Entity._resolve_obstacle_collisions](../Code/Entity.py)). Otherwise a
-        position the client legitimately allowed in the obstacle's transparent
-        area would be falsely corrected (a pop on the other client). The player
-        is approximated by its (fully solid) hitbox rect -- the per-frame player
-        animation mask is deliberately not mirrored server-side; the hitbox is
-        smaller than the sprite, so this only ever skips a push, never adds a
-        false one.
+        A report whose footprint overlaps no wall is accepted exactly. One inside a wall
+        (lag or a cheat) is dropped and the player stays at the last accepted position:
+        one check, where moving toward the report pixel by pixel cost one check per
+        pixel of the jump. An honest client's reports are always clear, so it is never
+        corrected.
         """
-        hw = self.hitbox_w / 2.0
-        hh = self.hitbox_h / 2.0
-        pw = max(1, round(self.hitbox_w))
-        ph = max(1, round(self.hitbox_h))
-        for _ in range(_MAX_PASSES):
-            player_rect = pygame.Rect(round(self.x - hw), round(self.y - hh), pw, ph)
-            query = HashableRect(player_rect, _id=_QUERY_ID)
-            overlapping = []
-            for item in obstacle_index.hit(query):
-                ox, oy = _overlap_amounts(player_rect, item.rect)
-                if ox <= _OVERLAP_TOLERANCE or oy <= _OVERLAP_TOLERANCE:
-                    continue
-                grid = getattr(item, "mask", None)
-                if grid is not None and not rect_hits_mask(
-                    grid, item.rect.x, item.rect.y, player_rect
-                ):
-                    continue  # in the bounding rect but not the solid silhouette
-                overlapping.append(item.rect)
-            if not overlapping:
-                break
-            dx, dy = collision_core.obstacle_pushout(player_rect, overlapping, _PUSH_CAP)
-            if dx == 0.0 and dy == 0.0:
-                break
-            self.x += dx
-            self.y += dy
+        if self.reported_x is None:
+            return False
+        rx, ry = self.reported_x, self.reported_y
+        self.reported_x = self.reported_y = None
+        if (obstacle_tree is None or self.wall_foot is None
+                or self.hitbox_w <= 0 or self.hitbox_h <= 0):
+            self.x, self.y = rx, ry
+            return False
+        size = (self.hitbox_w, self.hitbox_h)
+        reported = collision_core.hitbox_from_center((rx, ry), size)
+        if collision_core.hits_wall(
+                collision_core.foot_rect(reported, self.wall_foot), obstacle_tree):
+            return True
+        self.x, self.y = rx, ry
+        return False
 
     def to_snapshot(self) -> dict:
         return {
@@ -178,9 +114,9 @@ class GameState:
     # drained and broadcast by the tick loop -- keeps the tick loop the sole
     # socket writer (see "Threading model" in the multiplayer plan).
     pending_events: List[dict] = field(default_factory=list)
-    # Map collision geometry (Stage B), uploaded by the client at join. First
-    # non-empty upload wins -- all clients share the same map on localhost/LAN.
-    # The quadtree is the real game `QuadTree`, built from the uploaded rects.
+    # The walls reported positions are checked against: the server's own Level4's
+    # obstacle QuadTree (the one its enemies collide with), set when the level is built.
+    # None until then (and in relay mode, unless a test injects one).
     obstacle_quad_tree: Optional[QuadTree] = None
     # First client to join is flagged the host (legacy field, broadcast in
     # state_update). The server-authoritative pivot made it vestigial -- the
@@ -190,10 +126,6 @@ class GameState:
     # The live enemy render-state the sim loop writes each tick from the real
     # Level4 (gather_enemy_relay) and the broadcast loop ships to every client.
     enemies: List[dict] = field(default_factory=list)
-    # Map dimensions for the obstacle QuadTree's bounding rect (from the obstacle
-    # upload). Enemies are NOT uploaded -- the server loads its own map.
-    map_width: float = 0.0
-    map_height: float = 0.0
     # player->enemy hits (MSG_HIT_ENEMY) from ANY client, queued by receiver
     # threads and drained by the sim loop, which applies each to the authoritative
     # Level4 enemy. Same threading discipline as pending_events.
@@ -205,29 +137,3 @@ class GameState:
     # (CS3/CS5b: the old `pending_to_host` queue -- joiner->host enemy hits + loot
     #  pickups -- was removed. The server is authoritative now: hits go to
     #  pending_enemy_hits, pickups to pending_pickups, both applied in the sim loop.)
-
-    def build_obstacle_index(self, obstacles: List[ObstacleRect],
-                             map_w: float, map_h: float) -> None:
-        """Build the real obstacle `QuadTree` from uploaded obstacle entries.
-
-        Each entry is `(x, y, w, h)` or, for an IRREGULAR obstacle (Stage B2.5),
-        `(x, y, w, h, packed_mask_bits)` -- the 5th element is unpacked into the
-        obstacle's pixel mask and carried on the `HashableRect` so
-        `resolve_obstacle_collision` can gate on the silhouette.
-
-        Same class/broadphase the client uses (Code/QuadTree.py); pygame.Rect is
-        pure geometry (no display). Idempotent-ish: first non-empty upload wins
-        (call site guards on `obstacle_quad_tree is None`).
-        """
-        if not obstacles:
-            return
-        items = []
-        for i, entry in enumerate(obstacles):
-            x, y, w, h = entry[0], entry[1], entry[2], entry[3]
-            rect = pygame.Rect(int(x), int(y), int(w), int(h))
-            mask = unpack_mask(int(w), int(h), entry[4]) if len(entry) >= 5 and entry[4] else None
-            items.append(HashableRect(rect, _id=i, mask=mask))
-        bounding = pygame.Rect(0, 0, max(1, int(map_w)), max(1, int(map_h)))
-        self.obstacle_quad_tree = QuadTree(
-            items=items, depth=8, bounding_rect=bounding, manager=QuadTreeManager(),
-        )

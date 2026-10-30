@@ -47,9 +47,17 @@ PIXELS_PER_ANIM_FRAME = 15.0
 # level entry, or a remote puppet snapping to its first authoritative position. Those have no
 # gait, so they phase nothing -- without this, a puppet placed 781px from its spawn point
 # spins its legs through 78 frames in one tick and plants the sprite on an arbitrary pose.
-# Legitimate movement stays far below: the fastest speed in Settings is 15, and collision
-# pushback is capped at MAX_DISPLACEMENT, so a real tick lands around 21px at the very most.
+# Legitimate movement stays far below: the fastest speed in Settings is 15, and walls only
+# ever shorten a step, so a real tick lands around 21px at the very most.
 MAX_PHASED_STEP = 40.0
+
+
+def _pixel_step(rect, dx, dy):
+    """The integer step `rect.x += dx; rect.y += dy` would take (pygame rounds floats)."""
+    probe = rect.copy()
+    probe.x += dx
+    probe.y += dy
+    return probe.x - rect.x, probe.y - rect.y
 
 class Entity(pygame.sprite.Sprite):
     casts_shadow = True  # entities (player/enemies/friendlies) drop directional shadows
@@ -67,9 +75,9 @@ class Entity(pygame.sprite.Sprite):
         self.id = Entity.id_counter
         self.frame_index = 0
         self.animation_speed = 0.25
-        # Pixels actually covered by the last move(), after collision. Not velocity: nothing
-        # in collision() clears velocity, so an entity pressed against a wall keeps a full
-        # velocity vector forever and phasing on it would spin the legs while stuck.
+        # Pixels actually covered by the last move(), after collision. Not velocity: an entity
+        # shoved by others or held by sub-pixel rounding can carry velocity without moving,
+        # and phasing on it would spin the legs while stuck.
         self.distance_moved = 0.0
         self.direction = pygame.math.Vector2()
         self.velocity = pygame.math.Vector2(0, 0)  # Current velocity for movement
@@ -82,7 +90,9 @@ class Entity(pygame.sprite.Sprite):
         self.terrain_grade = pygame.math.Vector2(0, 0)
         self.terrain_grade_mag = 0.0
         self.terrain_tilt_deg = 0.0
-        self._collision_probe_rect = pygame.Rect(0, 0, 1, 1)
+        self._wall_foot = None  # captured by wall_foot() on first use
+        self._wall_tree = None  # the obstacle tree of the last step_against_walls
+        self._stuck_at = None  # the last step the walls stopped dead (see step_against_walls)
         # Flag to track whether move method has been called before
         self.move_not_called_before = True
         # Active effects tracking: {effect_area_id: effect_instance}
@@ -202,6 +212,59 @@ class Entity(pygame.sprite.Sprite):
             else:
                 self.collision_ground_radius_px = float(rect.width) / 4.0
         self._ground_radius_src = mask
+
+    def wall_foot(self):
+        """The footprint walls collide with: (dx, dy, w, h) relative to hitbox.topleft.
+
+        A ground circle of radius collision_ground_radius_px at the drawn feet
+        (hitbox.midbottom + anchor_offset, where plant_sprite_on_hitbox puts them), seen as
+        an ellipse. Captured once, so animation frames can't change it, and the server
+        rebuilds it exactly from a reported hitbox.
+        """
+        foot = getattr(self, "_wall_foot", None)
+        if foot is None:
+            from Settings import VIEW_ELEVATION_DEG
+
+            if getattr(self, "mesh_boss", None) is not None:
+                feet_offset = 0  # the mesh boss plants its feet on hitbox.midbottom
+            else:
+                if getattr(self, "anchor_offset", None) is None:
+                    self.capture_feet_anchor()
+                feet_offset = int(self.anchor_offset or 0)
+            if getattr(self, "collision_ground_radius_px", None) is None:
+                self.refresh_collision_reach_px()
+            radius = float(getattr(self, "collision_ground_radius_px", 0.0) or 0.0)
+            if radius <= 0.0:
+                rect = getattr(self, "rect", None)
+                radius = float(rect.width) / 4.0 if rect is not None else 8.0
+            foot = collision_core.wall_foot_for(
+                self.hitbox.size, feet_offset, radius, VIEW_ELEVATION_DEG
+            )
+            self._wall_foot = foot
+        return foot
+
+    def step_against_walls(self, dx, dy, tree):
+        """Move the hitbox by the integer step (dx, dy) as far as the walls let the feet go.
+
+        Returns the step actually taken. Remembers `tree` so knockback, which arrives
+        without one, blocks on the same walls.
+
+        A step the walls stopped dead stays stopped while nothing changes: the same feet,
+        the same step and the same walls skip the checks. A crowd pressing into a wall is
+        mostly that, and a stuck step is the most expensive one.
+        """
+        if tree is not None:
+            self._wall_tree = tree
+        foot = collision_core.foot_rect(self.hitbox, self.wall_foot())
+        key = (tuple(foot), dx, dy, tree, collision_core.walls_version(tree))
+        if key == getattr(self, "_stuck_at", None):
+            return 0, 0
+        took_x, took_y = collision_core.blocked_step(foot, dx, dy, tree)
+        stuck = took_x == 0 and took_y == 0 and (dx or dy)
+        self._stuck_at = key if stuck else None
+        self.hitbox.x += took_x
+        self.hitbox.y += took_y
+        return took_x, took_y
 
     def get_collision_reach_px(self):
         reach = getattr(self, "collision_reach_px", None)
@@ -325,18 +388,18 @@ class Entity(pygame.sprite.Sprite):
                 self.velocity = pygame.math.Vector2(0, 0)
 
         self._apply_terrain_grade()
-        
-        # Apply velocity to position
-        self.hitbox.x += self.velocity.x
-        self.hitbox.y += self.velocity.y
-        
-        
-        # if hasattr(self, "type" ): 
-        #     if self.type == "player":
-        #         print(f"hitbo pre : {self.hitbox}")
-     
-        
-        #self.collision("Vertical",QuadTree=QuadTree)
+
+        # Apply velocity to position: the integer step `hitbox.x += velocity.x` takes (pygame
+        # rounds), as far as the walls let the feet go.
+        want_x, want_y = _pixel_step(self.hitbox, self.velocity.x, self.velocity.y)
+        took_x, took_y = self.step_against_walls(want_x, want_y, QuadTree)
+        # A wall that cut the step keeps only the motion it allowed: no pressing into walls,
+        # no bounce.
+        if took_x != want_x:
+            self.velocity.x = float(took_x)
+        if took_y != want_y:
+            self.velocity.y = float(took_y)
+
         self.collision(
                         QuadTree=QuadTree ,
                         entity_quad_tree = entity_quad_tree,
@@ -412,10 +475,6 @@ class Entity(pygame.sprite.Sprite):
         cfg = getattr(self, "combat_config", None) or {}
         return bool(cfg.get("use_mask_entity_collision_normal", False))
 
-    def _use_mask_obstacle_collision_normal(self):
-        cfg = getattr(self, "combat_config", None) or {}
-        return bool(cfg.get("use_mask_obstacle_collision_normal", False))
-
     def _mask_normal_from_overlap_mask(self, self_mask, overlap_mask):
         """Unit push-out normal from overlap pixels; None if degenerate."""
         try:
@@ -484,157 +543,8 @@ class Entity(pygame.sprite.Sprite):
         return True, self._apply_mask_collision_min_deflect(raw[0], raw[1])
 
     def _apply_entity_displacement(self, QuadTree, self_rect, self_hitbox, displacement_x, displacement_y):
-        new_left = self_hitbox.left + displacement_x
-        new_top = self_hitbox.top + displacement_y
-
-        self._collision_probe_rect.update(new_left, new_top, self_hitbox.width, self_hitbox.height)
-        obstacles_hit = QuadTree.hit(HashableRect(self._collision_probe_rect, self.id))
-        if obstacles_hit:
-            obstacle = next(iter(obstacles_hit))
-            if self_rect.left < obstacle.left:
-                self_hitbox.right = obstacle.left
-                self_hitbox.top = new_top
-            elif self_rect.left > obstacle.right:
-                self_hitbox.left = obstacle.right
-                self_hitbox.top = new_top
-            elif self_rect.top < obstacle.top:
-                self_hitbox.bottom = obstacle.top
-                self_hitbox.left = new_left
-            else:
-                self_hitbox.top = obstacle.bottom
-                self_hitbox.left = new_left
-        else:
-            self_hitbox.left += displacement_x
-            self_hitbox.top += displacement_y
-
-    def _resolve_obstacle_collisions(
-        self,
-        nearby_obstacles,
-        self_rect,
-        self_hitbox,
-        self_mask,
-        self_centerx,
-        self_centery,
-        speed,
-        mask_log,
-    ):
-        displacement_obstacles = 1
-        total_displacement_x = 0
-        total_displacement_y = 0
-        max_penetration_depth = 0
-
-        for obstacle in nearby_obstacles:
-            do_collision = True
-            normal = None
-
-            if mask_log.isEnabledFor(logging.DEBUG):
-                parts = [
-                    "Obstacle collision - self.mask: %s, obstacle.mask: %s"
-                    % (self.mask is not None, getattr(obstacle, "mask", None) is not None),
-                ]
-                if self.mask:
-                    parts.append("  self.mask size: %s" % (self.mask.get_size(),))
-                if hasattr(obstacle, "mask") and obstacle.mask:
-                    parts.append("  obstacle.mask size: %s" % (obstacle.mask.get_size(),))
-                mask_log.debug("\n".join(parts))
-
-            obstacle_rect = obstacle.rect
-            if self_mask and obstacle.mask:
-                dx = obstacle_rect.x - self_rect.x
-                dy = obstacle_rect.y - self_rect.y
-
-                if mask_log.isEnabledFor(logging.DEBUG):
-                    entity_mask_size = self_mask.get_size()
-                    entity_rect_size = (self_rect.width, self_rect.height)
-                    obstacle_mask_size = obstacle.mask.get_size()
-                    obstacle_rect_size = (obstacle_rect.width, obstacle_rect.height)
-                    parts = [
-                        "  Entity rect: %s (x=%s, y=%s, w=%s, h=%s)"
-                        % (self_rect, self_rect.x, self_rect.y, self_rect.width, self_rect.height),
-                        "  Obstacle rect: %s (x=%s, y=%s, w=%s, h=%s)"
-                        % (
-                            obstacle_rect,
-                            obstacle_rect.x,
-                            obstacle_rect.y,
-                            obstacle_rect.width,
-                            obstacle_rect.height,
-                        ),
-                        "  Entity mask size: %s, Entity rect size: %s"
-                        % (entity_mask_size, entity_rect_size),
-                        "  Obstacle mask size: %s, Obstacle rect size: %s"
-                        % (obstacle_mask_size, obstacle_rect_size),
-                    ]
-                    if entity_mask_size != entity_rect_size:
-                        parts.append(
-                            "  WARNING: Entity mask size %s != rect size %s"
-                            % (entity_mask_size, entity_rect_size)
-                        )
-                    if obstacle_mask_size != obstacle_rect_size:
-                        parts.append(
-                            "  WARNING: Obstacle mask size %s != rect size %s"
-                            % (obstacle_mask_size, obstacle_rect_size)
-                        )
-                    parts.append("  Offset (dx, dy): (%s, %s)" % (dx, dy))
-                    mask_log.debug("\n".join(parts))
-
-                if self._use_mask_obstacle_collision_normal():
-                    has_overlap, normal = self._mask_collision_push_normal(
-                        self_mask, self_rect, obstacle.mask, obstacle_rect
-                    )
-                    if mask_log.isEnabledFor(logging.DEBUG):
-                        mask_log.debug(
-                            "  Mask overlap check - dx: %s, dy: %s, overlap: %s",
-                            dx,
-                            dy,
-                            has_overlap,
-                        )
-                    if not has_overlap:
-                        do_collision = False
-                        if mask_log.isEnabledFor(logging.DEBUG):
-                            mask_log.debug("  Mask filter worked - no collision (overlap == 0)")
-                    elif mask_log.isEnabledFor(logging.DEBUG):
-                        mask_log.debug("  Mask collision confirmed")
-                else:
-                    overlap = self_mask.overlap_area(obstacle.mask, (dx, dy))
-
-                    if mask_log.isEnabledFor(logging.DEBUG):
-                        mask_log.debug(
-                            "  Mask overlap check - dx: %s, dy: %s, overlap: %s", dx, dy, overlap
-                        )
-
-                    if overlap == 0:
-                        do_collision = False
-                        if mask_log.isEnabledFor(logging.DEBUG):
-                            mask_log.debug("  Mask filter worked - no collision (overlap == 0)")
-                    else:
-                        if mask_log.isEnabledFor(logging.DEBUG):
-                            mask_log.debug(
-                                "  Mask collision confirmed - overlap: %s pixels", overlap
-                            )
-                    normal = None
-            else:
-                if mask_log.isEnabledFor(logging.DEBUG):
-                    mask_log.debug("  Skipping mask check - using rect collision")
-
-            if do_collision:
-                # Push-out math lives in collision_core so the headless server
-                # runs the IDENTICAL rect resolution (multiplayer plan, Stage B2).
-                penetration_depth = collision_core.rect_penetration(self_rect, obstacle_rect)
-                if normal:
-                    total_displacement_x += normal[0]
-                    total_displacement_y += normal[1]
-                else:
-                    rebound_dx, rebound_dy = collision_core.rect_rebound_dir(self_rect, obstacle_rect)
-                    total_displacement_x += rebound_dx
-                    total_displacement_y += rebound_dy
-                max_penetration_depth = max(max_penetration_depth, penetration_depth)
-
-        scaled_x, scaled_y = collision_core.finalize_pushout(
-            total_displacement_x, total_displacement_y, max_penetration_depth,
-            speed, displacement_obstacles,
-        )
-        self_hitbox.left += scaled_x
-        self_hitbox.top += scaled_y
+        # Shoved by another body: as far as the walls let the feet go, never into a wall.
+        self.step_against_walls(*_pixel_step(self_hitbox, displacement_x, displacement_y), QuadTree)
 
     def _resolve_entity_collision_legacy(
         self,
@@ -697,8 +607,9 @@ class Entity(pygame.sprite.Sprite):
                     rebound_angle = collision_normal + math.pi
                     displacement_x = displacement_obstacles * math.cos(rebound_angle)
                     displacement_y = displacement_obstacles * math.sin(rebound_angle)
-                self_hitbox.left += displacement_x
-                self_hitbox.top += displacement_y
+                self.step_against_walls(
+                    *_pixel_step(self_hitbox, displacement_x, displacement_y), QuadTree
+                )
                 if self.benchmark_runtime.enabled:
                     self.benchmark_runtime.metrics.record_collision_resolved()
             else:
@@ -862,40 +773,21 @@ class Entity(pygame.sprite.Sprite):
         )
 
     #@profile
-    def collision(self, QuadTree, entity_quad_tree, speed = 0):# Speed is just to adjust displacement when colliding with objects so you dont go through
-                                                                  # Maybe i should do the same with entity collisions.
-        
+    def collision(self, QuadTree, entity_quad_tree, speed = 0):
         """
-        Issues with this function : i have a bunch of conditions and each one actually
-        moved the player, as opposed to keeping track of a displacement, 
-        this is because if there is a collision and then we notice a obstacle collision of the deflection of that 
-        collision, we do not make the movement change in terms of displacement, we use the obstacle 
-        boundry. We could surely fix this but this is just so that you dont get too lost.
-        
-        explanation of function 
-        
-        check collisions with any obstacles, if that happens, thats all that happens, 
-        
-        if there are no imediate obstacle collisions, check entity collisions, 
-        
+        Entity-to-entity bumping. Walls are not handled here: move() has already stepped
+        the feet against them (step_against_walls), and every shove below goes through
+        step_against_walls too, so a bump can never push you into a wall.
+
             if entity is stationary , consider the collision like into a wall
                  TODO, they should take some impact depending on size
-                 
+
             if the entity is moving, we do some basic calcs about increasing rebound based on relative velocity
             but we just rebound on the normal of the collision , rbound is larger if the entity is bigger
-            
-            if rebounding from an entity would result in you colliding with an object, you appear at theb oundry of the object
-            im still worrid you could get hit simultansouly by a bunch of entites and go through an obstacle
-            lets see.
-            
-            seems to work ok , being in a corner ( secondary collision with vertical and horizontal wall can go wrong.)
-            
-            would be cool if there was some dampening some how, like, at the moment if you get stuck in a corner
-            you bound around like crazy, would be nice if... you needed speed for that, i dno.
-        
-        
+
+        `speed` is unused now that walls block instead of pushing back; kept for callers.
             """
-            
+
         displacement_obstacles, base_displacement_entities = self._entity_entity_push_params()
         exponent = 4
 
@@ -909,23 +801,7 @@ class Entity(pygame.sprite.Sprite):
         player_size_scale = 3.5 if getattr(self, "type", None) == "player" else 1.0
         self_collision_size = (self_rect.width * self_rect.height) * player_size_scale
         query_self = HashableRect(self_rect, self.id)
-        nearby_obstacles = QuadTree.hit(query_self)
         nearby_entities = entity_quad_tree.hit(query_self)
-        mask_log = get_collision_mask_logger()
-
-        self._resolve_obstacle_collisions(
-            nearby_obstacles,
-            self_rect,
-            self_hitbox,
-            self_mask,
-            self_centerx,
-            self_centery,
-            speed,
-            mask_log,
-        )
-
-        if nearby_obstacles:
-            return
 
         if self._collision_mode() == "simple_swarm" and self._is_simple_swarm_enemy():
             self._resolve_entity_collisions_simple(
@@ -960,139 +836,6 @@ class Entity(pygame.sprite.Sprite):
 
 
 
-    #@profile
-    def collision__(self, QuadTree, entity_quad_tree):
-        # Define displacement for collision resolution with obstacles
-        displacement_obstacles = 20  # Adjust this value as needed
-        
-        # Define base displacement for entity collisions
-        base_displacement_entities = 10  # Adjust this value as needed
-        exponent = 3 # Adjust this exponent for the desired relationship
-        
-        # Check for nearby obstacles using the QuadTree
-        nearby_obstacles = QuadTree.hit(HashableRect(self.rect, self.id))
-        nearby_entities = entity_quad_tree.hit(HashableRect(self.rect, self.id))
-        
-        # Iterate over nearby obstacles (walls)
-        for obstacle in nearby_obstacles:
-            # Calculate the angle of collision relative to the entity's movement direction
-            angle_radians = math.atan2(self.direction.y, self.direction.x)
-            angle_degrees = math.degrees(angle_radians)
-            
-            # Calculate the angle between the entity's direction and the collision normal
-            collision_normal = math.atan2(obstacle.rect.centery - self.rect.centery, obstacle.rect.centerx - self.rect.centerx)
-            
-            # Calculate the rebound angle (opposite angle)
-            rebound_angle = collision_normal + math.pi 
-            
-            # Adjust the position of the entity based on the rebound angle for obstacles
-            self.hitbox.left += displacement_obstacles * math.cos(rebound_angle)
-            self.hitbox.top += displacement_obstacles * math.sin(rebound_angle)
-        
-        # If not colliding with a wall, handle entity collisions
-        if not nearby_obstacles:
-            for entity in nearby_entities:
-                # Calculate the size ratio of the colliding entities (for example, based on widths)
-                
-                #print(f"size ratio : {size_ratio}")
-                # Calculate the displacement based on the size ratio and apply it for entities
-                
-                
-                if hasattr(self,'type'):
-                    if self.type == "player" :
-                        self_size = self.rect.width*20
-                        #print(self.rect.size)
-                    else: self_size = self.rect.width
-                        #print(f"entity.direction: {entity.direction}")
-                size_ratio = self_size / entity.rect.width
-                
-                displacement_entities = base_displacement_entities + base_displacement_entities * (1 + math.exp(-exponent * (1 - size_ratio)))
-                #print(displacement_entities)
-                # Calculate relative velocity (speed) between the entities
-                relative_velocity = self.direction.magnitude() - entity.direction.magnitude()
-                # Calculate the direction vector from the other entity to self
-                
-                
-                
-                
-                
-                #### Here if the other entity is stationary, we just get the direction of self as with wall
-                #     Regardless, this must be what is going wrong.
-                
-                direction_vector = pygame.math.Vector2(self.rect.center) - pygame.math.Vector2(entity.rect.center)
-                
-                # Calculate the angle between the direction vector and the collision normal
-                collision_normal = math.atan2(direction_vector.y, direction_vector.x)
-                
-                # Calculate the rebound angle based on the collision normal and relative velocity
-                rebound_angle = collision_normal + math.pi
-               # # Adjust the displacement based on the relative velocity
-                # if relative_velocity > 0:  # Entities are moving towards each other
-                #     displacement_entities *= 1.5  # Increase displacement
-                # elif relative_velocity < 0:  # Entities are moving away from each other
-                #     displacement_entities *= 0.5  # Decrease displacement
-                
-                
-                displacement_y = displacement_entities * math.sin(rebound_angle)
-                displacement_x = displacement_entities * math.cos(rebound_angle)
-                     
-                    # if math.sin(rebound_angle) > 0:
-                    #     displacement_y *= -1
-                    
-                    # # # Adjust displacement_x based on the sign of math.cos(rebound_angle)
-                    # if math.cos(rebound_angle) > 0:
-                    #     displacement_x *= -1
-               
-                    # #displacement_x *= abs(math.sin(collision_normal))
-                    # #displacement_y *= abs(math.cos(collision_normal))
-           
-                # Determine which vertex to adjust based on the rebound angle
-                #if rebound_angle < math.pi:  
-                #new_left = self.rect.left + displacement_x
-                #new_top = self.rect.top + displacement_y
-                #else:  # Collision from the left or above
-                #    new_left = self.rect.left - displacement_x
-                #    new_top = self.rect.top - displacement_y            
-               
-                # new_left = self.rect.left + displacement_x
-                # new_top = self.rect.top + displacement_y
-                
-                # Check if the new position collides with any obstacles
-                # obstacles_hit = QuadTree.hit(HashableRect(pygame.Rect(new_left, new_top, self.hitbox.width, self.hitbox.height), self.id))
-                # obstacles_hit=False
-                # if hasattr(self,'type'):
-                #     if self.type == "player" :
-                #         print(f"entity.direction: {entity.direction}")
-                #         print(f"self.direction: {self.direction}")
-                #         print(f"relative_velocity: {relative_velocity}")
-                #         print(f"self.direction.magnitude() : {self.direction.magnitude() }")
-                #         print(f"entity.direction.magnitude(): {entity.direction.magnitude()}")
-                #         print(f"direction_vector: {direction_vector}")
-                #         print(f"collision_normal: {collision_normal}")
-                #         print(f"displacement_y: {displacement_y}")
-                #         print(f"displacement_x: {displacement_x}")
-                    
-                
-                # # If there are obstacles in the path, adjust the position
-                # if obstacles_hit:
-                #     obstacle = next(iter(obstacles_hit))  # Get the closest obstacle
-                #     if self.rect.left < obstacle.left:  # Intersection with left side
-                #         self.hitbox.right = obstacle.left
-                #         self.hitbox.top = new_top
-                #     elif self.rect.left > obstacle.right:  # Intersection with right side
-                #         self.hitbox.left = obstacle.right
-                #         self.hitbox.top = new_top
-                #     elif self.rect.top < obstacle.top:  # Intersection with top side
-                #         self.hitbox.bottom = obstacle.top
-                #         self.hitbox.left = new_left
-                #     else:  # Intersection with bottom side
-                #         self.hitbox.top = obstacle.bottom
-                #         self.hitbox.left = new_left
-                #else:
-                    # Move the entity to the calculated new position
-                self.hitbox.left += displacement_x
-                self.hitbox.top += displacement_y
-    
     def check_effects(self, effect_quad_trees, effect_cell_grid=None):
         """
         Check if entity is colliding with any effect areas.
@@ -1400,8 +1143,13 @@ class Entity(pygame.sprite.Sprite):
         dx = float(force[0]) if hasattr(force, "__getitem__") else float(force.x)
         dy = float(force[1]) if hasattr(force, "__getitem__") else float(force.y)
         if hasattr(self, "hitbox"):
-            self.hitbox.x += int(dx)
-            self.hitbox.y += int(dy)
+            tree = getattr(self, "_wall_tree", None)
+            if tree is not None:
+                # Knocked back against the walls it last moved among: never into one.
+                self.step_against_walls(int(dx), int(dy), tree)
+            else:
+                self.hitbox.x += int(dx)
+                self.hitbox.y += int(dy)
         self.plant_sprite_on_hitbox()
         self.velocity.x += dx * follow_through
         self.velocity.y += dy * follow_through
@@ -1451,74 +1199,6 @@ class Entity(pygame.sprite.Sprite):
         return x, y
           
               
-    ###@profile
-    def collision_old3(self, direction):
-        for sprite in self.obstacle_sprites:
-            # Calculate the distance between the entity and the obstacle sprite
-            #print(f"sprite.rect.center:{sprite.rect.center}, self.hitbox.center : {self.hitbox.center}")
-            #distance = pygame.math.Vector2(sprite.rect.center) - pygame.math.Vector2(self.hitbox.center)
-            # Check if the obstacle is within the maximum collision distance
-            #if distance.length() <= self.max_collision_distance.length():
-                         # Calculate the distance between the entity and the obstacle sprite
-            dx = sprite.rect.centerx - self.hitbox.centerx
-            dy = sprite.rect.centery - self.hitbox.centery
-            if min(dx,dy) < 100:
-            #print(dy)
-            #print(dx)
-            #distance_squared = dx ** 2 + dy ** 2
-            #print(distance_squared)
-            # Check if the obstacle is within the maximum collision distance
-            #if distance_squared <= self.max_collision_distance_squared:
-                if sprite.hitbox.colliderect(self.hitbox):
-                    if direction == "Horizontal":
-                        if self.direction.x > 0:  # Moving Right
-                            self.hitbox.right = sprite.hitbox.left
-                        elif self.direction.x < 0:  # Moving Left
-                            self.hitbox.left = sprite.hitbox.right
-                    
-                    elif direction == "Vertical":
-                        if self.direction.y > 0:  # Moving Down
-                            self.hitbox.bottom = sprite.hitbox.top
-                        elif self.direction.y < 0:  # Moving Up
-                            self.hitbox.top = sprite.hitbox.bottom
-                    return
-                
-    ###@profile
-    def collision_old2(self, direction):
-        if direction == "Horizontal":
-            for sprite in self.obstacle_sprites:
-                if sprite.hitbox.colliderect(self.hitbox):
-                    if self.direction.x > 0: # Moving Right
-                        self.hitbox.right = sprite.hitbox.left
-                    elif self.direction.x < 0: # Moving Left
-                        self.hitbox.left = sprite.hitbox.right
-                    return                  
-        if direction == "Vertical":
-            for sprite in self.obstacle_sprites:
-                if sprite.hitbox.colliderect(self.hitbox):
-                    if self.direction.y > 0: # Moving Down
-                        self.hitbox.bottom = sprite.hitbox.top
-                    elif self.direction.y < 0: # Moving Up
-                        self.hitbox.top = sprite.hitbox.bottom
-                    return
-    ###@profile
-    def collision_old(self, direction):
-        if direction == "Horizontal":
-            for sprite in self.obstacle_sprites:
-                if sprite.hitbox.colliderect(self.hitbox):
-                    if self.direction.x > 0: # Moving Right
-                        self.hitbox.right = sprite.hitbox.left
-                    if self.direction.x < 0: # Moving Left
-                        self.hitbox.left = sprite.hitbox.right
-                        
-        if direction == "Vertical":
-            for sprite in self.obstacle_sprites:
-                if sprite.hitbox.colliderect(self.hitbox):
-                    if self.direction.y > 0: # Moving Down
-                        self.hitbox.bottom = sprite.hitbox.top
-                    if self.direction.y < 0: # Moving Up
-                        self.hitbox.top = sprite.hitbox.bottom
-
     def wave_value(self):
         value = sin(pygame.time.get_ticks())
         if value >= 0:

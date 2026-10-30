@@ -6,9 +6,13 @@ _quadtree_log = get_debug_logger("quadtree")
 class QuadTreeManager:
     def __init__(self):
         self.item_mapping = {}
+        # Changes whenever an item is inserted, removed or gets a new mask, so callers can
+        # tell the tree is no longer what they last checked (collision_core.walls_version).
+        self.version = 0
 
     def add_mapping(self, item_id, node, index):
         #print(self.item_mapping)
+        self.version += 1
         self.item_mapping[item_id] = (node, index)
 
     def remove_mapping(self, item_id):
@@ -22,6 +26,7 @@ class QuadTreeManager:
        #print(f"item mapping : {self.item_mapping}")
         
         if node is not None and index is not None:
+            self.version += 1
             #if item_id ==1:
                #print('in theory deleting item 1:')
                #print(f"node : {node}  index : {index}")
@@ -77,6 +82,7 @@ class QuadTreeManager:
     def update_item_mask(self, item_id, mask):
         node, index = self.get_mapping(item_id)
         if node is not None and index is not None:
+            self.version += 1
             node.update_item_mask(index,mask)
 
 

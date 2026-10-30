@@ -1,13 +1,9 @@
-"""Register an assembled level with the game: a path, two lookups and a menu slot.
+"""Register an assembled level with the game: a path, a lookup entry and a menu slot.
 
-Adding a level touches three files, and every one of them is a literal that has to gain
-exactly one entry. Kept apart from the assembly so a failure here cannot leave the game code
-half-edited, and written to be idempotent: running it twice adds nothing.
-
-``Code/Main2.py`` also carried a ternary chain mapping level number to path, which is not
-something to edit programmatically. ``ensure_dict_lookup`` replaces it with a dict lookup over
-the LAYOUT_TO_LEVEL that was already there -- behaviour identical, and registration becomes a
-single dict entry rather than another link in a chain.
+Adding a level touches two files, and each is a literal that has to gain exactly one entry:
+``Code/level_layouts.py`` (the one level table the client, the server and these tools read)
+and the selection grid. Kept apart from the assembly so a failure here cannot leave the game
+code half-edited, and written to be idempotent: running it twice adds nothing.
 """
 
 from __future__ import annotations
@@ -15,23 +11,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-MAIN = Path("Code/Main2.py")
-DEV = Path("Code/Level4_tmxdev.py")
+LAYOUTS = Path("Code/level_layouts.py")
 SELECTION = Path("Code/LevelSelection.py")
-
-_TERNARY = re.compile(
-    r"layouts_dir = \(level_6_layout_path if level_number == 6 else.*?"
-    r"else level_10_layout_path\)",
-    re.DOTALL,
-)
-_LOOKUP = (
-    "layouts_dir = LEVEL_TO_LAYOUT.get(level_number, level_10_layout_path)"
-)
 
 
 def existing_levels(repo: Path) -> dict[int, str]:
-    """Level number -> layout path, read from Main2's LAYOUT_TO_LEVEL."""
-    text = (repo / MAIN).read_text(encoding="utf-8")
+    """Level number -> layout path, read from Code/level_layouts.py."""
+    text = (repo / LAYOUTS).read_text(encoding="utf-8")
     out: dict[int, str] = {}
     for name, value in re.findall(r"^level_(\d+)_layout_path = '([^']+)'", text, re.M):
         out[int(name)] = value
@@ -53,27 +39,8 @@ def taken_slots(repo: Path) -> set[tuple[int, int]]:
 
 
 def ensure_dict_lookup(repo: Path) -> bool:
-    """Swap Main2's level-number ternary chain for a dict lookup. Idempotent."""
-    path = repo / MAIN
-    text = path.read_text(encoding="utf-8")
-    if "LEVEL_TO_LAYOUT" in text:
-        return False
-    if not _TERNARY.search(text):
-        raise RuntimeError(f"{MAIN}: the layouts_dir ternary is not where it was; not editing")
-    text = _TERNARY.sub(_LOOKUP, text)
-    # Defined right after the table it inverts, so the two cannot drift apart.
-    text = text.replace(
-        "\n\nLAYOUT_TO_LEVEL = {",
-        "\n\nLAYOUT_TO_LEVEL = {",
-    )
-    anchor = re.search(r"(LAYOUT_TO_LEVEL = \{.*?\n\})", text, re.DOTALL)
-    text = text[: anchor.end()] + (
-        "\n\n# Inverted so a level number resolves to its folder in one lookup. Adding a level\n"
-        "# is then one entry in the table above rather than another branch in a chain.\n"
-        "LEVEL_TO_LAYOUT = {number: path for path, number in LAYOUT_TO_LEVEL.items()}\n"
-    ) + text[anchor.end():]
-    path.write_text(text, encoding="utf-8")
-    return True
+    """Kept for callers: the level lookup is already a dict in Code/level_layouts.py."""
+    return False
 
 
 def write_thumbnail(repo: Path, slot: tuple[int, int], world_png: Path) -> Path:
@@ -105,8 +72,8 @@ def find_existing(repo: Path, slug: str, region: str = "Frostreach"):
     default layout -- a second tile that silently opens a different level.
     """
     layout = f"../levels/{region}/{slug}"
-    main_text = (repo / MAIN).read_text(encoding="utf-8")
-    match = re.search(rf"^level_(\d+)_layout_path = '{re.escape(layout)}'", main_text, re.M)
+    layouts_text = (repo / LAYOUTS).read_text(encoding="utf-8")
+    match = re.search(rf"^level_(\d+)_layout_path = '{re.escape(layout)}'", layouts_text, re.M)
     if not match:
         return None
     number = int(match.group(1))
@@ -117,36 +84,30 @@ def find_existing(repo: Path, slug: str, region: str = "Frostreach"):
 
 def register(repo: Path, *, slug: str, number: int, slot: tuple[int, int],
              region: str = "Frostreach", world_png: Path | None = None) -> dict:
-    """Add the level to Main2, Level4_tmxdev, the selection grid and the thumbnail folder."""
+    """Add the level to Code/level_layouts.py, the selection grid and the thumbnail folder."""
     repo = Path(repo).resolve()
     layout = f"../levels/{region}/{slug}"
     changed: list[str] = []
     refactored = ensure_dict_lookup(repo)
 
-    main_path = repo / MAIN
-    text = main_path.read_text(encoding="utf-8")
+    layouts_path = repo / LAYOUTS
+    text = layouts_path.read_text(encoding="utf-8")
     if layout not in text:
+        # The path name after the last one, then its entry at the end of LAYOUT_TO_LEVEL.
         text = re.sub(
             r"(^level_\d+_layout_path = '[^']+'\n)(?!level_)",
             lambda m: m.group(1) + f"level_{number}_layout_path = '{layout}'\n",
             text, count=1, flags=re.M,
         )
-        text = text.replace(
-            "    level_11_layout_path: 11,\n",
-            f"    level_11_layout_path: 11,\n    level_{number}_layout_path: {number},\n",
+        text, count = re.subn(
+            r"(LAYOUT_TO_LEVEL = \{.*?)(\n\})",
+            lambda m: m.group(1) + f"\n    level_{number}_layout_path: {number}," + m.group(2),
+            text, count=1, flags=re.DOTALL,
         )
-        main_path.write_text(text, encoding="utf-8")
-        changed.append(str(MAIN))
-
-    dev_path = repo / DEV
-    text = dev_path.read_text(encoding="utf-8")
-    if layout not in text:
-        text = text.replace(
-            "    '../levels/Frostreach/sunspine_dunes_01': 11,\n",
-            f"    '../levels/Frostreach/sunspine_dunes_01': 11,\n    '{layout}': {number},\n",
-        )
-        dev_path.write_text(text, encoding="utf-8")
-        changed.append(str(DEV))
+        if not count:
+            raise RuntimeError(f"{LAYOUTS}: could not find LAYOUT_TO_LEVEL")
+        layouts_path.write_text(text, encoding="utf-8")
+        changed.append(str(LAYOUTS))
 
     sel_path = repo / SELECTION
     text = sel_path.read_text(encoding="utf-8")

@@ -18,8 +18,8 @@ import sys
 import threading
 import time
 
-# Headless: the server builds obstacle pixel masks (Stage B2.5) via Surface +
-# surfarray, which work without a real display under the dummy SDL driver.
+# Headless: the server builds and runs the real Level4 (its surfaces and masks)
+# without a real display, under the dummy SDL driver.
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
@@ -49,8 +49,15 @@ from common import GameState, ServerPlayerState  # noqa: E402
 TICK_RATE_HZ = 60
 TICK_DT = 1.0 / TICK_RATE_HZ
 
-# The co-op level the server loads. MP is level 6 only for now.
-MP_LEVEL_NUMBER = 6
+# The co-op level the server loads (Code/level_layouts.py).
+from level_layouts import MP_LEVEL_NUMBER  # noqa: E402
+
+
+def _wall_foot(raw):
+    """The join message's wall footprint as an int tuple, or None if absent."""
+    if not raw or len(raw) != 4:
+        return None
+    return tuple(int(v) for v in raw)
 
 
 class GameServer:
@@ -72,7 +79,7 @@ class GameServer:
         self.tick = 0
         # CS2: the server-authoritative enemy sim. Built lazily by the sim loop
         # (sole owner -> all pygame/sim work stays on one thread) once the first
-        # client has uploaded the map geometry + enemy spawn spec. None until then.
+        # client has joined; it loads its own map. None until then.
         self.server_level = None
 
     def run(self):
@@ -104,6 +111,7 @@ class GameServer:
                         y=float(message["y"]),
                         hitbox_w=float(message.get("hitbox_w", 0.0)),
                         hitbox_h=float(message.get("hitbox_h", 0.0)),
+                        wall_foot=_wall_foot(message.get("wall_foot")),
                     )
                     with self.game_state.lock:
                         self.game_state.players[player_id] = player
@@ -114,22 +122,6 @@ class GameServer:
                         if self.game_state.host_player_id is None:
                             self.game_state.host_player_id = player_id
                             print(f"[server] {player_id} is the host (enemy authority)")
-                        # Stage B2: first non-empty geometry upload wins; build
-                        # the real obstacle QuadTree from it (all clients share
-                        # the same map on localhost/LAN).
-                        obstacles = message.get("obstacles")
-                        if obstacles and self.game_state.obstacle_quad_tree is None:
-                            # Entries are (x,y,w,h) or, for irregular obstacles,
-                            # (x,y,w,h,packed_mask) -- pass through verbatim so
-                            # build_obstacle_index can rebuild the pixel masks.
-                            self.game_state.build_obstacle_index(
-                                obstacles,
-                                float(message.get("map_width", 0.0)),
-                                float(message.get("map_height", 0.0)),
-                            )
-                            masked = sum(1 for o in obstacles if len(o) >= 5 and o[4])
-                            print(f"[server] built obstacle quadtree from {len(obstacles)} rects "
-                                  f"({masked} masked) ({player_id})")
                         # Server-authoritative pivot: the server LOADS ITS OWN map
                         # and runs the real Level4 -- it no longer accepts an enemy
                         # spawn spec from clients.
@@ -149,10 +141,8 @@ class GameServer:
                         # and the sim loop writes game_state.enemies each tick), so
                         # any `enemies` a client puts on an input message is ignored.
                         if player is not None:
-                            # v0 position relay: trust the client's reported (x, y),
-                            # use move_x/move_y/attacking only to derive status.
-                            # Stage B2: apply_update then validates against the
-                            # obstacle quadtree (None until geometry is uploaded).
+                            # Store the report; the sim loop checks it against the
+                            # walls (_accept_reports) before anything reads it.
                             health = message.get("health")
                             player.apply_update(
                                 float(message.get("x", player.x)),
@@ -160,7 +150,6 @@ class GameServer:
                                 float(message.get("move_x", 0.0)),
                                 float(message.get("move_y", 0.0)),
                                 bool(message.get("attacking", False)),
-                                self.game_state.obstacle_quad_tree,
                                 health=float(health) if health is not None else None,
                             )
 
@@ -212,11 +201,10 @@ class GameServer:
         except OSError:
             pass
 
-    # -- fixed-rate broadcast loop --
-    # v0 / Stage A: the server does NOT simulate movement (position is relayed
-    # from clients, applied on receipt in apply_update). This loop only paces
-    # broadcasts at a steady TICK_RATE_HZ, decoupled from clients' send rates.
-    # Stage B/C is where per-tick server-side simulation/validation comes back.
+    # -- fixed-rate sim + broadcast loop --
+    # The server does NOT simulate player movement: each tick it checks the latest
+    # reported positions against the walls (_accept_reports), steps the world sim,
+    # and broadcasts at a steady TICK_RATE_HZ, decoupled from clients' send rates.
 
     def _simulation_loop(self):
         accumulator = 0.0
@@ -227,10 +215,25 @@ class GameServer:
             last = now
             while accumulator >= TICK_DT:
                 self.tick += 1
+                self._accept_reports()
                 self._step_world_sim()
                 self._broadcast_tick()
                 accumulator -= TICK_DT
             time.sleep(0.001)
+
+    # -- check reported player positions against the walls --
+    # Runs on the sim thread every tick, in relay mode too, before the world sim, so
+    # Level4 and the broadcast only ever see checked positions. Same walls and same
+    # collision_core code the client moves with, so an honest client is never corrected.
+    def _accept_reports(self):
+        gs = self.game_state
+        with gs.lock:
+            tree = gs.obstacle_quad_tree
+            for pid, player in gs.players.items():
+                rx, ry = player.reported_x, player.reported_y
+                if player.accept_report(tree):
+                    print(f"[server] dropped {pid}'s report ({rx}, {ry}): footprint in a "
+                          f"wall; kept ({player.x}, {player.y})")
 
     # -- advance the server-authoritative world simulation one tick --
     # The server runs the REAL Level4 (it loads its own map + enemies). Owned
@@ -302,6 +305,9 @@ class GameServer:
         # pygame/sim work stays single-threaded.
         from headless_level import build_headless_level
         self.server_level = build_headless_level(level_number=MP_LEVEL_NUMBER)
+        # One map: reported positions are checked against the walls its enemies use.
+        with self.game_state.lock:
+            self.game_state.obstacle_quad_tree = self.server_level.layout_manager.obstacle_quad_tree
         # Park the sentinel off-map; networked players are added each tick.
         self.server_level.player.rect.center = self._SENTINEL_PARK
         self.server_level.player.hitbox.center = self._SENTINEL_PARK

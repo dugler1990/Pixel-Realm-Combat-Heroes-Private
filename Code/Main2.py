@@ -23,31 +23,9 @@ from benchmark_runtime import BENCHMARK_RUNTIME
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
 from multiplayer_runtime import MULTIPLAYER_RUNTIME
 from network import MultiplayerClient
-from obstacle_mask import is_irregular, pack_mask
+from level_layouts import DEFAULT_LAYOUT, LEVEL_TO_LAYOUT, MP_LEVEL_NUMBER
 from render_backend import create_backend
 import psutil
-
-level_8_layout_path = '../levels/Map8'
-level_7_layout_path = '../levels/Map7'
-level_6_layout_path = '../levels/tmx'
-level_9_layout_path = '../levels/Frostreach/ice_wall_gate'
-level_10_layout_path = '../levels/Frostreach/expanse'
-level_11_layout_path = '../levels/Frostreach/sunspine_dunes_01'
-level_12_layout_path = '../levels/Frostreach/sunspine_7x6_play'
-
-LAYOUT_TO_LEVEL = {
-    level_6_layout_path: 6,
-    level_7_layout_path: 7,
-    level_8_layout_path: 8,
-    level_9_layout_path: 9,
-    level_10_layout_path: 10,
-    level_11_layout_path: 11,
-    level_12_layout_path: 12,
-}
-
-# Inverted so a level number resolves to its folder in one lookup. Adding a level
-# is then one entry in the table above rather than another branch in a chain.
-LEVEL_TO_LAYOUT = {number: path for path, number in LAYOUT_TO_LEVEL.items()}
 
 
 DEV_STATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.dev_reload_state.json')
@@ -160,7 +138,7 @@ class Game:
         self._start_multiplayer_session(MULTIPLAYER_RUNTIME.character, MULTIPLAYER_RUNTIME.player_id)
 
     def _start_multiplayer_session(self, character_dir, player_id):
-        """Build a zero-point config for `character_dir`, load level 6, and
+        """Build a zero-point config for `character_dir`, load the co-op level, and
         connect+join the server as `player_id`. Shared by the env-var bootstrap
         and the menu entry so the connect logic lives in exactly one place."""
         if character_dir in unlocked_player_directory:
@@ -181,7 +159,7 @@ class Game:
         self.in_player_selection = False
         self.in_level_selection = False
         self.multiplayer_pending = False
-        self.start_level(6)
+        self.start_level(MP_LEVEL_NUMBER)
 
         # Apply the per-player spawn offset to the ACTUAL local player, not just
         # the position we report. Every client bootstraps to the same fixed
@@ -195,44 +173,21 @@ class Game:
             player.rect.centery += int(MULTIPLAYER_RUNTIME.spawn_y)
             player.hitbox.center = player.rect.center
 
-        join_x, join_y = player.rect.centerx, player.rect.centery
+        # The hitbox centre, the same point every later report uses.
+        join_x, join_y = player.hitbox.centerx, player.hitbox.centery
 
-        # Stage B: hand the server this player's collision-rect size and the
-        # map's obstacle rects + dimensions (the client already built them) so the
-        # server can build a quadtree and keep the broadcast position out of
-        # walls. Pure geometry the client already has -- no extra computation, no
-        # change to local collision.
-        lm = self.level.layout_manager
+        # The server loads its own map + runs the real Level4 and checks each report
+        # against its walls with the same code this client moves with: it only needs
+        # this player's hitbox size and wall footprint. The client just reports its
+        # own player and renders the server's enemies as puppets.
         hitbox_w, hitbox_h = player.hitbox.size
-        # Each obstacle is (x, y, w, h); an IRREGULAR one (tree/decor with a
-        # pixel mask smaller than its rect) also ships its packed mask (Stage
-        # B2.5) so the server gates on the same silhouette the client collides
-        # against -- not the bounding rect -- and never false-corrects a position
-        # the client legitimately allowed in the transparent area.
-        obstacles = []
-        masked_count = 0
-        for s in lm.obstacle_sprites:
-            r = s.rect
-            mask = getattr(s, "mask", None)
-            if is_irregular(mask, r.width, r.height):
-                obstacles.append((r.x, r.y, r.width, r.height, pack_mask(mask)))
-                masked_count += 1
-            else:
-                obstacles.append((r.x, r.y, r.width, r.height))
-        map_w = getattr(lm, "csv_layout_width", 0)
-        map_h = getattr(lm, "csv_layout_height", 0)
-
-        # Server-authoritative pivot: the SERVER loads its own map + runs the real
-        # Level4, so the client no longer uploads enemy spawns -- it just reports
-        # its own player and renders the server's enemies as puppets. (Obstacles
-        # are still uploaded for Stage B server-side player-position validation.)
+        wall_foot = player.wall_foot()
         self.level.mp_client = MultiplayerClient(
             MULTIPLAYER_RUNTIME.host, MULTIPLAYER_RUNTIME.port, player_id
         )
         self.level.mp_client.send_join(
             character_dir, join_x, join_y,
-            hitbox_w=hitbox_w, hitbox_h=hitbox_h, obstacles=obstacles,
-            map_width=map_w, map_height=map_h,
+            hitbox_w=hitbox_w, hitbox_h=hitbox_h, wall_foot=wall_foot,
         )
         # The server owns enemies now -> drop any this client spawned during level
         # load before mp_client was set (the spawner is suppressed from here on).
@@ -240,8 +195,7 @@ class Game:
         print(
             f"[multiplayer] connected to {MULTIPLAYER_RUNTIME.host}:{MULTIPLAYER_RUNTIME.port} "
             f"as {player_id} ({character_dir}) at ({join_x}, {join_y}); "
-            f"uploaded {len(obstacles)} obstacle rects ({masked_count} masked), "
-            f"hitbox=({hitbox_w}x{hitbox_h})"
+            f"hitbox=({hitbox_w}x{hitbox_h}), wall_foot={wall_foot}"
         )
 
     def _close_multiplayer(self):
@@ -293,7 +247,7 @@ class Game:
             elif BENCHMARK_RUNTIME.enabled:
                 layouts_dir = BENCHMARK_RUNTIME.layout_dir
             else:
-                layouts_dir = LEVEL_TO_LAYOUT.get(level_number, level_10_layout_path)
+                layouts_dir = LEVEL_TO_LAYOUT.get(level_number, DEFAULT_LAYOUT)
             player_position = None
 
         if player_info_dir is not None:

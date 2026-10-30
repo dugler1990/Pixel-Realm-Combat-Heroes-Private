@@ -70,16 +70,22 @@ class _StubEntity:
         self.direction = pygame.math.Vector2(0, 0)
         self.attacking = False
         self._dash_runtime = None
-        self.collision_calls = 0
+        self.wall_steps = 0
         self.collision_blocks = collision_blocks
 
     def groups(self):
         return []
 
-    def collision(self, QuadTree, entity_quad_tree, speed=0):
-        self.collision_calls += 1
+    def plant_sprite_on_hitbox(self):
+        pass
+
+    def step_against_walls(self, dx, dy, tree):
+        self.wall_steps += 1
         if self.collision_blocks:
-            self.hitbox.x -= int(speed) if speed > 0 else 0
+            return 0, 0
+        self.hitbox.x += dx
+        self.hitbox.y += dy
+        return dx, dy
 
 
 @pytest.fixture
@@ -101,17 +107,17 @@ def test_try_start_spends_energy_once(dash):
     assert entity.energy == 30 - cost
 
 
-def test_pass_through_does_not_call_collision(dash):
+def test_pass_through_does_not_step_against_walls(dash):
     entity = _StubEntity()
     ctx = PlayerAbilityContext()
     dash.try_start(entity, ctx, direction="right")
 
     dash.tick(entity, ctx, 16, None, None)
-    assert entity.collision_calls == 0
+    assert entity.wall_steps == 0
     assert entity.hitbox.x == 30
 
 
-def test_resolve_calls_collision():
+def test_resolve_steps_against_walls():
     config = {
         **evasion_data["slide"],
         "collision_mode": "resolve",
@@ -122,7 +128,7 @@ def test_resolve_calls_collision():
     dash.try_start(entity, ctx, direction="right")
 
     dash.tick(entity, ctx, 16, None, None)
-    assert entity.collision_calls == 1
+    assert entity.wall_steps == 1
     assert entity.hitbox.x == 30
 
 
