@@ -978,14 +978,11 @@ class LayoutManager:
         is clipped to. Three tags describe the rest, each an object carrying `<tag>=<name>`:
           chamber_of -- the room you can stand in. The trigger for the cutaway and the
             hole in the roof. What the interior pipeline traced from the painting.
-            InteriorSight rasterizes this mask: floor passes light, the rest is a wall.
           door_of    -- the painted door. Its exterior pixels become an overhead area, so
             a body walking in goes under the door the way it goes under a tree canopy.
-          room_of    -- a room, for spawning. Not a visibility region (eroded cores,
-            too small). Sight is line-of-sight on the chamber, see interior_visibility.
-        Anything carrying one of those tags is geometry OF a building, never a building:
-        `room_of` once fell through, became a second building with no art, and drew its
-        placeholder roof -- flat tan -- over the real room.
+          sight_of   -- a loop round the building's stone, with `band`: the walls
+            InteriorSight casts against. Points, not a mask -- sight stops at edges.
+        Anything carrying one of those tags is geometry OF a building, never a building.
 
         Buildings join NEITHER ground_sprites — create_ground_surface composites those
         into one static texture, which would put the roof permanently beyond reach of
@@ -1004,9 +1001,19 @@ class LayoutManager:
         tmx_folder = getattr(self, "tmx_folder", None)
 
         # Pass 1: the shapes that belong to a building, keyed by its name.
-        chambers, doors = {}, {}
+        chambers, doors, sight_loops, sight_bands = {}, {}, {}, {}
+        # The scale every other building shape gets in _mask_and_rect_for_tmx_shape.
+        scale_x = self.TILESIZE / self.tmxdata.tilewidth
+        scale_y = self.TILESIZE / self.tmxdata.tileheight
         for object_ in tmx_object_layer:
             props = getattr(object_, "properties", None) or {}
+            owner = str(props.get("sight_of", "")).strip()
+            if owner:
+                points = getattr(object_, "points", None) or ()
+                sight_loops.setdefault(owner, []).append(
+                    [(float(x) * scale_x, float(y) * scale_y) for x, y in points])
+                sight_bands[owner] = float(props.get("band", 0)) * scale_x
+                continue
             for key, into in (("chamber_of", chambers), ("door_of", doors)):
                 owner = str(props.get(key, "")).strip()
                 if not owner:
@@ -1024,7 +1031,7 @@ class LayoutManager:
         for object_ in tmx_object_layer:
             props = getattr(object_, "properties", None) or {}
             if any(str(props.get(key, "")).strip()
-                   for key in ("chamber_of", "hole_of", "room_of", "door_of")):
+                   for key in ("chamber_of", "door_of", "sight_of")):
                 continue
             name = str(getattr(object_, "name", ""))
             footprint, mask, _draw_pts = self._mask_and_rect_for_tmx_shape(object_)
@@ -1055,6 +1062,7 @@ class LayoutManager:
                 chamber=chambers.get(name), arch_quad=arch_quad,
                 door_origin=door_origin, door_inward=door_inward,
                 door_depth=door_depth, door_mode=door_mode,
+                sight_loops=sight_loops.get(name), sight_band=sight_bands.get(name, 0.0),
             ))
 
             # The door's frame, cut from the roof art: drawn over a body once his feet are

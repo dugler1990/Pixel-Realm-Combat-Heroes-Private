@@ -323,6 +323,28 @@ def test_assemble_punches_the_chamber_and_clips_the_interior():
     assert b.door_mode is None
 
 
+def test_black_stone_covers_the_inside_in_black_round_the_room(monkeypatch):
+    monkeypatch.setattr("Building.INTERIOR_BLACK_STONE", True)
+    footprint = pygame.Rect(0, 0, 80, 80)
+    mask = pygame.Mask((80, 80), fill=True)
+    chamber = (pygame.Rect(20, 20, 30, 30), pygame.Mask((30, 30), fill=True))
+    b = assemble(footprint, mask, _shaped_roof(footprint, mask),
+                 pygame.Surface(footprint.size, pygame.SRCALPHA), chamber=chamber)
+    assert tuple(b.roof_inside.get_at((5, 5))) == (0, 0, 0, 255), "the stone is black"
+    assert b.roof_inside.get_at((35, 35))[3] == 0, "the room still shows"
+    assert tuple(b.roof_open.get_at((5, 5)))[:3] == (200, 100, 50), "roof_open keeps the art"
+
+
+def test_without_black_stone_the_inside_is_covered_by_the_roof(monkeypatch):
+    monkeypatch.setattr("Building.INTERIOR_BLACK_STONE", False)
+    footprint = pygame.Rect(0, 0, 80, 80)
+    mask = pygame.Mask((80, 80), fill=True)
+    chamber = (pygame.Rect(20, 20, 30, 30), pygame.Mask((30, 30), fill=True))
+    b = assemble(footprint, mask, _shaped_roof(footprint, mask),
+                 pygame.Surface(footprint.size, pygame.SRCALPHA), chamber=chamber)
+    assert b.roof_inside is b.roof_open
+
+
 def test_assemble_without_a_chamber_uses_the_footprint():
     footprint = pygame.Rect(0, 0, 80, 80)
     mask = pygame.Mask((80, 80), fill=True)

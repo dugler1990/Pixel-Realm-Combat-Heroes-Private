@@ -22,11 +22,15 @@ RENDER_BACKEND = os.environ.get("RENDER_BACKEND", "gpu")  # "cpu" | "gpu" — ov
 CAMERA_ENEMY = os.environ.get("PRCH_CAMERA_ENEMY", "0") != "0"
 DISPLAY_FLAGS = pygame.SRCALPHA
 TILESIZE =150#150
-# Interior sight: the chamber mask is walkable (light passes); everything else is a wall.
-# Unseen floor is black. Off restores the old full-chamber reveal.
+# Interior sight: walls block sight. Inside a building you see what the camera subject's
+# feet can see, out to RADIUS, and the rest of the chamber is black. The walls are the map's
+# `sight_of` loops; a building without them shows its whole chamber, as everything does
+# with INTERIOR_SIGHT off.
 INTERIOR_SIGHT = True
-INTERIOR_SIGHT_CELL = 32
 INTERIOR_SIGHT_RADIUS = 8 * TILESIZE
+# Inside a building, the stone round the rooms -- the building outside its chamber -- is
+# black instead of the roof art, the way a dungeon's rock is. Every room shows.
+INTERIOR_BLACK_STONE = True
 # Ground is composited into ONE surface and uploaded as ONE GL texture, so the whole world has
 # to fit inside GL_MAX_TEXTURE_SIZE. The 7x6 sunspine map needs 22473x12258 at full scale and
 # fails with a glTexImage2D error; it only runs shrunk to 0.586, discarding two thirds of the

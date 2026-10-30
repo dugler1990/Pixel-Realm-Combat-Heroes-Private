@@ -469,6 +469,9 @@ class YSortCameraGroup(pygame.sprite.Group):
 
         self._update_buildings(focus, dt)
         self._draw_building_interiors()
+        # Buildings the subject is inside and seeing from: bodies on their floor out of
+        # sight are not drawn, shadows included.
+        lit = self._lit_buildings()
 
         # Directional shadow pre-pass: dark sheared silhouettes on the ground, under all
         # sprites (drawn before them). shadow = (dir_x, dir_y, length_scale, strength).
@@ -476,6 +479,8 @@ class YSortCameraGroup(pygame.sprite.Group):
             sdx, sdy, slen, sstr = shadow
             for sprite in self.sprites():
                 if not getattr(sprite, "casts_shadow", False):
+                    continue
+                if lit and self._out_of_sight(sprite, focus, lit):
                     continue
                 if getattr(sprite, "mesh_boss", None) is not None:
                     continue
@@ -505,6 +510,8 @@ class YSortCameraGroup(pygame.sprite.Group):
             if getattr(sprite, "draws_above_y_sort", False):
                 aerial_sprites.append(sprite)
                 continue
+            if lit and self._out_of_sight(sprite, focus, lit):
+                continue
             offset_pos = sprite.rect.topleft - self.offset
             self._draw_sorted_sprite(sprite, offset_pos)
             if self._grass_disturbance_enabled() and hasattr(sprite, "monster_name"):
@@ -516,9 +523,6 @@ class YSortCameraGroup(pygame.sprite.Group):
         if callable(mid_fx_draw):
             mid_fx_draw()
 
-        # After sprites: unseen floor (and props standing on it) go black. Before
-        # roofs: the chamber hole is the window that shows this fog.
-        self._draw_interior_fog()
         self._draw_building_roofs(focus)
 
         # Overhead areas -- tree canopies and building doors -- over the player when he
@@ -608,6 +612,11 @@ class YSortCameraGroup(pygame.sprite.Group):
 
         Sits after grass on purpose: grass blits straight to the backend further up, so
         drawing this in the height_overlay slot would grow grass on the interior floor.
+
+        Inside a building with sight, the chamber is drawn black and the interior again
+        through the fan the subject sees, both from resident textures, so a moving fan
+        uploads nothing. Under the sprites, not over them: a body whose feet are seen is
+        drawn whole, and the sprite pass leaves out the ones whose feet are not.
         """
         if not self.buildings:
             return
@@ -615,38 +624,44 @@ class YSortCameraGroup(pygame.sprite.Group):
         for building in self.buildings:
             if building.view == VIEW_OUT or not view.colliderect(building.footprint):
                 continue
-            self.backend.blit(
-                building.interior,
-                (building.footprint.x - self.offset.x, building.footprint.y - self.offset.y),
-                cache_key=id(building.interior),
-            )
-
-    def _draw_interior_fog(self):
-        """Black out chamber floor the subject cannot see.
-
-        Interior art is still the full painting (drawn earlier). This pass is the
-        shutter: transparent on visible cells, black on the rest, so a corridor
-        does not show the rooms off it. Drawn after sprites so a statue around
-        the corner does not float in the dark.
-        """
-        if not self.buildings:
-            return
-        view = pygame.Rect(self.offset.x, self.offset.y, self.window_width, self.window_height)
-        for building in self.buildings:
-            if building.view != VIEW_IN:
-                continue
+            dest = (building.footprint.x - self.offset.x, building.footprint.y - self.offset.y)
             sight = getattr(building, "sight", None)
-            if sight is None or not sight.active:
+            if building.view == VIEW_IN and sight is not None and sight.active:
+                self.backend.blit(
+                    sight.black,
+                    (sight.black_rect.x - self.offset.x, sight.black_rect.y - self.offset.y),
+                    cache_key=id(sight.black),
+                )
+                self.backend.blit_fan(
+                    building.interior, dest,
+                    (sight.origin[0] - self.offset.x, sight.origin[1] - self.offset.y),
+                    sight.ring - (self.offset.x, self.offset.y),
+                    cache_key=id(building.interior),
+                )
                 continue
-            if not view.colliderect(sight.fog_rect):
-                continue
-            if sight.consume_dirty():
-                self.backend.invalidate_texture(sight.fog)
-            self.backend.blit(
-                sight.fog,
-                (sight.fog_rect.x - self.offset.x, sight.fog_rect.y - self.offset.y),
-                cache_key=id(sight.fog),
-            )
+            self.backend.blit(building.interior, dest, cache_key=id(building.interior))
+
+    def _lit_buildings(self):
+        """The buildings whose floor is only seen through the subject's fan."""
+        return [building for building in (self.buildings or ())
+                if getattr(building, "sight", None) is not None and building.sight.active]
+
+    def _out_of_sight(self, sprite, focus, lit):
+        """Is `sprite` on a lit building's floor where the subject cannot see it?
+
+        By its feet, the way the roof pass decides who is on a floor: a body whose feet are
+        seen is drawn whole, head over the wall and all, and one whose feet are not is not
+        drawn at all -- not even what of it sticks up over lit stone. The subject itself is
+        always drawn.
+        """
+        if sprite is focus:
+            return False
+        hitbox = getattr(sprite, "hitbox", None)
+        feet = hitbox.midbottom if hitbox is not None else sprite.rect.midbottom
+        for building in lit:
+            if building.contains(feet) and not building.sight.sees(feet):
+                return True
+        return False
 
     def _draw_building_roofs(self, focus):
         """Roofs, over every sprite. Inside: baked chamber cutaway. Door: arch split.
@@ -663,7 +678,7 @@ class YSortCameraGroup(pygame.sprite.Group):
             dest = (building.footprint.x - self.offset.x, building.footprint.y - self.offset.y)
             if building.view == VIEW_IN:
                 self.backend.blit(
-                    building.roof_open, dest, cache_key=id(building.roof_open))
+                    building.roof_inside, dest, cache_key=id(building.roof_inside))
             elif building.view == VIEW_DOOR:
                 self.backend.blit(building.roof, dest, cache_key=id(building.roof))
                 self.backend.blit(

@@ -241,6 +241,18 @@ def test_inside_blits_roof_open_not_the_full_roof():
     assert dest == (b.footprint.x, b.footprint.y)
 
 
+def test_inside_blits_the_black_stone_when_the_building_has_it():
+    b = _building()
+    b.roof_inside = b.roof_open.copy()
+    group, backend = _group(b)
+    b.update(0.016, b.footprint.center)
+
+    group._draw_building_roofs(Focus(b.footprint.center))
+
+    surface, _dest = backend.calls[-1]
+    assert surface is b.roof_inside
+
+
 def test_offscreen_building_is_culled():
     b = _building()
     group, backend = _group(b)

@@ -34,6 +34,7 @@ LAYER_ROLES: dict[str, LayerRole] = {
     "Buildings": LayerRole.BUILDINGS,
     "Objects": LayerRole.OBJECTS,
     "ObstaclePolygons": LayerRole.OBJECTS,
+    "BuildingWalls": LayerRole.OBJECTS,
     "PaintedCollision": LayerRole.OBJECTS,
     "Object Layer 1": LayerRole.OBJECTS,
     "Heat Effect Layer": LayerRole.EFFECT,

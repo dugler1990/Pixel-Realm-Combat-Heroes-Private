@@ -52,6 +52,29 @@ class RenderBackend:
         pygame.draw.circle(tmp, color, (radius, radius), radius, width)
         self.blit(tmp, (center[0] - radius, center[1] - radius))
 
+    def blit_fan(self, surface, dest, center, ring, *, cache_key=None):
+        """Blit `surface` at `dest`, but only inside `ring`: a polygon in screen px that is
+        star-shaped around `center`, so the triangles center, ring[i], ring[i+1] cover it.
+
+        Generic version: cut the covered part out on the CPU and blit that. The GPU backend
+        draws the triangles from the resident texture instead, and uploads nothing.
+        """
+        points = [(float(x), float(y)) for x, y in ring]
+        if len(points) < 3:
+            return
+        xs, ys = [x for x, _ in points], [y for _, y in points]
+        left, top = math.floor(min(xs)), math.floor(min(ys))
+        box = pygame.Rect(left, top, math.ceil(max(xs)) - left + 1, math.ceil(max(ys)) - top + 1)
+        box = box.clip(pygame.Rect(dest[0], dest[1], *surface.get_size()))
+        box = box.clip(pygame.Rect((0, 0), self.get_size()))
+        if box.width <= 0 or box.height <= 0:
+            return
+        piece = surface.subsurface(box.move(-dest[0], -dest[1])).copy()
+        stencil = pygame.Surface(box.size, pygame.SRCALPHA)
+        pygame.draw.polygon(stencil, (255, 255, 255, 255), [(x - box.x, y - box.y) for x, y in points])
+        piece.blit(stencil, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        self.blit(piece, box.topleft)
+
     def compose(self, size=None):
         """Offscreen SRCALPHA surface sized to `size` (default: full backend size).
 
@@ -922,20 +945,7 @@ class GPUBackend(RenderBackend):
             tex_rect = atlas_uv
         elif cache_key is not None and area is None:
             self._blit_flush_keyed += 1
-            # Persistent cache for large surfaces (ground, weather frames, etc.) that
-            # have stable ids but exceed the atlas size cap. Upload once, reuse every frame.
-            gl_tex = self._large_cache.get(cache_key)
-            if gl_tex is None:
-                pixels = pygame.image.tostring(src.convert_alpha(), "RGBA", False)
-                gl_tex = self._make_texture()
-                glBindTexture(GL_TEXTURE_2D, gl_tex)
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-                             GL_RGBA, GL_UNSIGNED_BYTE, pixels)
-                glBindTexture(GL_TEXTURE_2D, 0)
-                self._large_cache[cache_key] = gl_tex
-                if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
-                    BENCHMARK_RUNTIME.metrics.record_gpu_texture_upload(0.0)
-            texture = gl_tex
+            texture = self._resident_texture(src, cache_key)
             tex_rect = (0.0, 0.0, 1.0, 1.0)
         else:
             # True scratch — no cache_key or area= (health bars, debug rects, etc.)
@@ -969,6 +979,62 @@ class GPUBackend(RenderBackend):
         else:
             self._push_batch(texture, dest_rect, tex_rect)
 
+        if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
+            BENCHMARK_RUNTIME.metrics.record_gpu_draw_call()
+
+    def _resident_texture(self, surface, cache_key):
+        """The large-cache texture for `surface`, uploaded the first time `cache_key` is seen.
+
+        For large surfaces (ground, weather frames, interiors) that have stable ids but
+        exceed the atlas size cap. Upload once, reuse every frame.
+        """
+        gl_tex = self._large_cache.get(cache_key)
+        if gl_tex is None:
+            width, height = surface.get_size()
+            pixels = pygame.image.tostring(surface.convert_alpha(), "RGBA", False)
+            gl_tex = self._make_texture()
+            glBindTexture(GL_TEXTURE_2D, gl_tex)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                         GL_RGBA, GL_UNSIGNED_BYTE, pixels)
+            glBindTexture(GL_TEXTURE_2D, 0)
+            self._large_cache[cache_key] = gl_tex
+            if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
+                BENCHMARK_RUNTIME.metrics.record_gpu_texture_upload(0.0)
+        return gl_tex
+
+    def blit_fan(self, surface, dest, center, ring, *, cache_key=None):
+        """The fan as triangles textured from the resident copy of `surface`: one per ring
+        edge, written straight into the batch, so a fan that changes uploads nothing."""
+        if cache_key is None:
+            # Nothing to keep a resident texture under: cut it out on the CPU instead.
+            super().blit_fan(surface, dest, center, ring)
+            return
+        width, height = surface.get_size()
+        ring = np.asarray(ring, dtype=np.float32).reshape(-1, 2)
+        if width == 0 or height == 0 or len(ring) < 3:
+            return
+        texture = self._resident_texture(surface, cache_key)
+        dest_x, dest_y = self._dest_topleft(dest)
+        corners = np.empty((len(ring), 3, 2), dtype=np.float32)
+        corners[:, 0] = center
+        corners[:, 1] = ring
+        corners[:, 2] = np.roll(ring, -1, axis=0)
+        corners = corners.reshape(-1, 2)
+        if len(ring) % 2:
+            # The batch holds two triangles a slot: pad with one that covers nothing.
+            corners = np.vstack([corners, np.repeat(corners[:1], 3, axis=0)])
+        verts = np.ones((len(corners), _FLOATS_PER_VERT), dtype=np.float32)
+        verts[:, 0:2] = corners
+        verts[:, 2] = (corners[:, 0] - dest_x) / width
+        verts[:, 3] = (corners[:, 1] - dest_y) / height
+        flat = verts.reshape(-1)
+        self._flush_batch()
+        for start in range(0, len(flat), _BATCH_BUF_FLOATS):
+            chunk = flat[start:start + _BATCH_BUF_FLOATS]
+            self._batch_verts[:len(chunk)] = chunk
+            self._batch_texture = texture
+            self._batch_count = len(chunk) // _FLOATS_PER_QUAD
+            self._flush_batch()
         if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
             BENCHMARK_RUNTIME.metrics.record_gpu_draw_call()
 
@@ -1340,6 +1406,9 @@ class StubBackend(RenderBackend):
         return self._surface
 
     # --- GPU-only draw helpers some draw paths call directly (all no-ops) ---
+    def blit_fan(self, *args, **kwargs):
+        pass
+
     def draw_shadow(self, *args, **kwargs):
         pass
 

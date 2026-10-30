@@ -5,9 +5,10 @@ inside" (interior). Fully out draws the roof; fully in swaps to a baked copy wit
 chamber punched out. Two states, and one rule for which you are in: your feet are in the
 chamber or they are not. The chamber is the room the pipeline traced from the painting.
 
-Once inside, InteriorSight (see that module) blacks out floor the subject cannot
-see: walls block, unseen rooms stay dark. The cutaway is still the whole chamber;
-sight is a shutter over the painting, not a second hole in the roof.
+Once inside, the roof round the chamber is drawn black (INTERIOR_BLACK_STONE): the stone
+you cannot stand in is dark, and every room shows. InteriorSight, when on, blacks out what
+the subject's feet cannot see as well: walls block sight. The cutaway is still the whole
+chamber; sight is drawn inside it, not a second hole in the roof.
 
 The door is not part of this class. It is a canopy: the layout manager registers the
 exterior's own door pixels as an overhead area, and the camera draws that over the player
@@ -25,7 +26,7 @@ display. The surface assembly (`assemble`, `door_cover`) lives here for the same
 it is pure pygame, and the layout manager only has to load images and read tags.
 """
 
-from Settings import INTERIOR_SIGHT, TILESIZE
+from Settings import INTERIOR_BLACK_STONE, INTERIOR_SIGHT, TILESIZE
 # Re-exported, not just imported: the door plane and its defaults were part of this module's
 # surface before the geometry moved out, and tmx_layout_manager and the tests still import
 # them from here.
@@ -145,6 +146,13 @@ def roof_with_chamber_punched(roof, chamber_clip):
     return roof_open
 
 
+def in_black(surface):
+    """Copy of `surface` in black, its alpha kept."""
+    black = surface.copy()
+    black.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+    return black
+
+
 def door_cover(footprint, roof, door_rect, door_mask):
     """The exterior's own door pixels, as an overhead area: (world rect, surface) or None.
 
@@ -167,7 +175,7 @@ def door_cover(footprint, roof, door_rect, door_mask):
 
 
 def assemble(footprint, mask, roof, interior, chamber=None, arch_quad=None,
-             hysteresis_margin=TILESIZE, **door_plane):
+             hysteresis_margin=TILESIZE, sight_loops=None, sight_band=0.0, **door_plane):
     """A Building from loaded art and authored shapes.
 
     `chamber` is `(rect, mask)` in world px or None -- the room you can stand in, the
@@ -176,6 +184,10 @@ def assemble(footprint, mask, roof, interior, chamber=None, arch_quad=None,
     clipped to the silhouette. The interior is clipped to the chamber (plus the arch, when
     a door plane is authored, so wedge mode has floor pixels in the doorway); the roof
     keeps everything but the chamber.
+
+    `sight_loops` are the building's walls for sight -- the map's `sight_of` loops, closed
+    lists of world px points -- and `sight_band` how far past a wall's face sight reaches,
+    so the face you look at is lit. No loops: no sight, and the whole chamber shows.
 
     `door_plane` is passed through untouched (`door_origin`, `door_inward`, `door_depth`,
     `door_mode`, `door_lip_jitter`).
@@ -199,10 +211,12 @@ def assemble(footprint, mask, roof, interior, chamber=None, arch_quad=None,
         arch_quad=arch_quad, hysteresis_margin=hysteresis_margin,
         **door_plane,
     )
-    if INTERIOR_SIGHT:
+    if INTERIOR_BLACK_STONE:
+        building.roof_inside = in_black(building.roof_open)
+    if INTERIOR_SIGHT and sight_loops:
         from interior_visibility import InteriorSight
-        building.sight = InteriorSight.from_chamber(
-            building.chamber_rect, building.chamber_mask)
+        building.sight = InteriorSight(
+            building.chamber_rect, building.chamber_mask, sight_loops, band=sight_band)
     return building
 
 
@@ -233,6 +247,10 @@ class Building:
             roof_open = roof.copy()
             roof_open.fill((0, 0, 0, 0))
         self.roof_open = roof_open
+        # What covers the building while you are inside it. assemble() swaps it for the
+        # same shape in black when INTERIOR_BLACK_STONE is on. The wedge's door view keeps
+        # drawing roof_open: from the doorway you are not inside yet.
+        self.roof_inside = roof_open
 
         # The chamber is the room you can actually stand in, authored separately from
         # the silhouette. It has to be separate: a solid building's outline is mostly
@@ -255,8 +273,8 @@ class Building:
         if door_mode not in (None, DOOR_MODE_WEDGE):
             raise ValueError(f"door_mode must be None or {DOOR_MODE_WEDGE!r}, got {door_mode!r}")
         self.door_mode = door_mode
-        # Set by assemble() when INTERIOR_SIGHT is on. Direct Building() calls in
-        # tests leave this None and keep the old full-chamber reveal.
+        # Set by assemble() when INTERIOR_SIGHT is on and the map gives the building sight
+        # walls. None shows the whole chamber.
         self.sight = None
 
     @property

@@ -7,6 +7,7 @@ def test_known_layers_resolve():
     assert resolve_layer_role("PaintedGround") is LayerRole.PAINTED_GROUND
     assert resolve_layer_role("Objects") is LayerRole.OBJECTS
     assert resolve_layer_role("ObstaclePolygons") is LayerRole.OBJECTS
+    assert resolve_layer_role("BuildingWalls") is LayerRole.OBJECTS
     assert resolve_layer_role("Object Layer 1") is LayerRole.OBJECTS
     assert resolve_layer_role("Heat Effect Layer") is LayerRole.EFFECT
     assert resolve_layer_role("Slipery Layer") is LayerRole.EFFECT
