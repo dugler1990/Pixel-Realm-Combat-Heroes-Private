@@ -55,6 +55,11 @@ DOOR_MODE_WEDGE = "wedge"
 # Collision nudge at the outer lip only (out <-> door). door <-> in is a hard contains.
 DOOR_LIP_JITTER = 8
 
+# A patch walled in by chamber, walls and door frame under this share of the silhouette is
+# a gap between them and shows the interior art (`_pockets`). On great_pyramid (2026-10-31)
+# the gaps were 6k px at most and the doorway 33k, the stone between rooms 625k, of 5.7M.
+POCKET_FRACTION = 0.01
+
 # Disk masks for exit hysteresis. Keyed by radius so we do not rebuild a 150px
 # circle every frame; dilating the AABB instead would keep you "inside" in the
 # desert corners of a diamond chamber.
@@ -183,17 +188,36 @@ def door_cover(footprint, roof, door_rect, door_mask):
     return world, cover
 
 
+def _pockets(footprint, mask, covered):
+    """Footprint-sized mask of the small patches of the silhouette that `covered` encloses.
+
+    The chamber is traced from the plan and the walls are SAM's, so they never quite meet:
+    the chamber's corners are round where the painted walls are square, and the stone the
+    door rule drops (interiors `sam_room`) is in neither. Each gap is a small patch of the
+    silhouette walled in by the two; the stone between rooms and the building's outer face
+    are a few patches far bigger than any of them.
+    """
+    uncovered = mask.copy() if mask is not None else pygame.Mask(footprint.size, fill=True)
+    biggest_pocket = int(uncovered.count() * POCKET_FRACTION)
+    uncovered.erase(covered, (0, 0))
+    pockets = uncovered.copy()
+    for big in uncovered.connected_components(biggest_pocket):
+        pockets.erase(big, (0, 0))
+    return pockets
+
+
 def assemble(footprint, mask, roof, interior, chamber=None, arch_quad=None,
-             hysteresis_margin=TILESIZE, name=None, walls=(), **door_plane):
+             hysteresis_margin=TILESIZE, name=None, walls=(), doors=(), **door_plane):
     """A Building from loaded art and authored shapes.
 
     `chamber` is `(rect, mask)` in world px or None -- the floor you can stand on, the
     trigger for going inside. No chamber: the footprint is the floor. `walls` are the
-    building's wall obstacles, `(rect, mask)` pieces in world px. `roof` and `interior` are
-    footprint-sized and already clipped to the silhouette. The interior is clipped to the
-    floor and its walls (plus the arch, when a door plane is authored, so wedge mode has
-    floor pixels in the doorway); inside, everything else is black. roof_open, the roof with
-    the chamber punched out, is the wedge's door view.
+    building's wall obstacles and `doors` its door frame, `(rect, mask)` pieces in world px.
+    `roof` and `interior` are footprint-sized and already clipped to the silhouette. The
+    interior is clipped to the floor, its walls, the door frame and the gaps they enclose
+    (`_pockets`), plus the arch when a door plane is authored, so wedge mode has floor pixels
+    in the doorway; inside, everything else is black. roof_open, the roof with the chamber
+    punched out, is the wedge's door view.
 
     `name` is the map object's, which a prop's `building` tag names.
 
@@ -207,12 +231,18 @@ def assemble(footprint, mask, roof, interior, chamber=None, arch_quad=None,
         chamber_mask if chamber_rect is not None else mask,
     )
     walls_mask = mask_of(footprint, walls) if walls else None
+    doors_mask = mask_of(footprint, doors) if doors else None
+    if walls_mask is not None and chamber_rect is not None:
+        # The gaps count as walls, so the fog keeps them dark until they are explored too.
+        covered = mask_of(footprint, [(chamber_rect, chamber_mask), *walls, *doors])
+        walls_mask.draw(_pockets(footprint, mask, covered), (0, 0))
     interior_clip = chamber_clip
-    if walls_mask is not None or arch_quad is not None:
+    if walls_mask is not None or doors_mask is not None or arch_quad is not None:
         interior_clip = chamber_clip.copy()
-    if walls_mask is not None:
-        interior_clip.blit(clip_surface(footprint, footprint, walls_mask), (0, 0),
-                           special_flags=pygame.BLEND_RGBA_MAX)
+    for shown in (walls_mask, doors_mask):
+        if shown is not None:
+            interior_clip.blit(clip_surface(footprint, footprint, shown), (0, 0),
+                               special_flags=pygame.BLEND_RGBA_MAX)
     if arch_quad is not None:
         or_polygon_into_clip(interior_clip, footprint, arch_quad)
     interior = interior.copy()

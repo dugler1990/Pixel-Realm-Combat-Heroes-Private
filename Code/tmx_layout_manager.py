@@ -1067,7 +1067,7 @@ class LayoutManager:
             self.buildings.append(assemble(
                 footprint, mask, roof, interior,
                 chamber=chambers.get(name), arch_quad=arch_quad, name=name,
-                walls=walls.get(name, ()),
+                walls=walls.get(name, ()), doors=doors.get(name, ()),
                 door_origin=door_origin, door_inward=door_inward,
                 door_depth=door_depth, door_mode=door_mode,
             ))
