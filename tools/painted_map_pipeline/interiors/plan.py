@@ -352,6 +352,26 @@ def trace_plan_from_mask(floor, spec, silhouette, chamber, editable=None, unpain
     )
 
 
+def retrace(plan, spec) -> Plan:
+    """A stored plan, re-derived against the spec as it is NOW.
+
+    A pickled plan carries the spec it was made with, so a door drawn in Tiled after the
+    plan was kept -- the normal order on a building already on the map -- would never be
+    seen by anything that reloads the pickle: the floor would not be held out of it, the
+    render would keep the model's door, the emitter would not skip it. The pickle is only
+    the floor; everything else (masks, classes, checks) is cheap and comes from the spec.
+    """
+    silhouette, chamber, editable = geometry_masks(spec)
+    unpainted = next((c.get("fraction", 0.0) for c in plan.report.get("checks", ())
+                      if c.get("name") == "unpainted"), 0.0)
+    traced = trace_plan_from_mask(plan.floor & editable, spec, silhouette, chamber,
+                                  editable, unpainted=unpainted)
+    traced.painted_path = plan.painted_path
+    traced.composited_path = plan.composited_path
+    traced.shape_path = getattr(plan, "shape_path", None)
+    return traced
+
+
 def preflight(spec) -> str:
     """Why this building cannot hold a plan, or "" when it can.
 

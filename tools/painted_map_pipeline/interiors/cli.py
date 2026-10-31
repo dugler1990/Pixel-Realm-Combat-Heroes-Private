@@ -16,14 +16,12 @@ read off the map. Unchanged, and still the right answer for a building you drew 
 Either way the spec that comes out feeds the same loop:
 
     plan     paint the floor plan flat, trace it, check it, rank the draws
-    emit     the traced plan -> chamber, collision quads and rooms, into a scratch map
-    preview  walk the doorway in the real engine and save the frames
     render   paint the stonework with the plan as a control image
-    accept   write the interior asset and the geometry into the shipped map
+    accept   local SAM3 finds the walls and the floor in the kept painting; the walls
+             (collision and sight) and the interior asset go into the shipped map
 
-Every step but `render` is cheap or free, and the order is deliberate: you look at the
-transition in flat colour and throw the plan away if it is wrong, before any stone is
-painted. The old generator had one loop that re-rolled the layout and the art together on
+Every step but `render` is cheap or free, and the order is deliberate: you look at the plan
+in flat colour and throw it away if it is wrong, before any stone is painted. The old generator had one loop that re-rolled the layout and the art together on
 every retry, which is why it never converged on either.
 
 An accepted interior is then furnished, with a gate after every step:
@@ -62,6 +60,7 @@ from . import emit as emit_mod
 from . import identify as identify_mod
 from . import plan as plan_mod
 from . import sam_local
+from . import sam_room
 from . import spec as spec_mod
 
 WORK_ROOT = Path("generated/building_interiors")
@@ -80,11 +79,10 @@ def _failed(step: str, exc: Exception) -> None:
 
 
 # The steps after the plan, by the files each one writes. They run in a chain -- plan,
-# render, floor trace, map -- and every step reuses whatever it finds in the folder. So when
-# something new is kept or made at one step, everything after it is moved aside: that is how
-# a new plan got shown a render of the old one, and a new render the old one's floor trace.
+# render, map -- and every step reuses whatever it finds in the folder. So when a new plan is
+# kept, the renders made from the old one are moved aside: that is how a new plan got shown
+# a render of the old one.
 RENDER_FILES = ("render*", "augment*", "control.png")
-FLOOR_FILES = ("floor*",)
 
 
 def _set_aside(work: Path, patterns) -> None:
@@ -125,18 +123,9 @@ def _keep_plan(plan, work: Path) -> None:
         with Image.open(kept) as previous:
             same = np.array_equal(np.asarray(previous.convert("RGB")), np.asarray(control))
     if not same:
-        _set_aside(work, RENDER_FILES + FLOOR_FILES)
+        _set_aside(work, RENDER_FILES)
     control.save(kept)
     (work / "plan.pickle").write_bytes(pickle.dumps(plan))
-
-
-def _drop_floor_trace(work: Path) -> None:
-    """A new render makes the floor trace of the old one stale: set it aside."""
-    try:
-        _set_aside(work, FLOOR_FILES)
-    except OSError as exc:
-        print(f"  warning: {exc}. The floor step may reuse the old render's trace -- close "
-              f"it and press [r] at the floor gate", file=sys.stderr)
 
 
 # ---------------------------------------------------------------- discovery
@@ -928,30 +917,10 @@ def _geometry_summary(spec) -> str:
     return "\n".join(lines)
 
 
-def _retrace(plan, spec):
-    """The stored plan, re-derived against the spec as it is NOW.
-
-    A pickled plan carries the spec it was made with, so a door drawn in Tiled after the
-    plan was kept -- the normal order on a building already on the map -- would never be
-    seen by anything that reloads the pickle: the floor would not be held out of it, the
-    render would keep the model's door, the emitter would not skip it. The pickle is only
-    the floor; everything else (masks, classes, checks) is cheap and comes from the spec.
-    """
-    silhouette, chamber, editable = plan_mod.geometry_masks(spec)
-    unpainted = next((c.get("fraction", 0.0) for c in plan.report.get("checks", ())
-                      if c.get("name") == "unpainted"), 0.0)
-    traced = plan_mod.trace_plan_from_mask(plan.floor & editable, spec, silhouette, chamber,
-                                           editable, unpainted=unpainted)
-    traced.painted_path = plan.painted_path
-    traced.composited_path = plan.composited_path
-    traced.shape_path = getattr(plan, "shape_path", None)
-    return traced
-
-
 def _draw_or_reuse(spec, work: Path, args, redraw: bool, criticism: str = "", attach=()):
     """The plan draws, from disk when they exist.
 
-    Reuse is what makes `[b] back to plan` honest. If stepping back from the preview redrew
+    Reuse is what makes `[b] back to plan` honest. If stepping back from the render redrew
     the plans, every trip round the loop would cost API calls -- and a gate you will not use
     because it is expensive is decoration.
     """
@@ -959,7 +928,7 @@ def _draw_or_reuse(spec, work: Path, args, redraw: bool, criticism: str = "", at
 
     cache = work / "plans.pickle"
     if cache.exists() and not redraw:
-        plans = [_retrace(plan, spec) for plan in pickle.loads(cache.read_bytes())]
+        plans = [plan_mod.retrace(plan, spec) for plan in pickle.loads(cache.read_bytes())]
         print(f"  reusing {len(plans)} plan draw(s) from the last run -- [r] to draw more")
         return plans
 
@@ -1177,43 +1146,9 @@ def _plan_gate(spec, work: Path, args, redraw: bool = False):
             print(f"  {answer!r}?")
 
 
-def _preview_gate(plan) -> str:
-    """Walk the doorway in the real engine and look at it. 'ok', 'back' or 'stop'."""
-    from . import preview as preview_mod
-
-    work = _work(plan.spec.building).resolve()
-    try:
-        scratch = emit_mod.scratch_level(plan.spec)
-        result = emit_mod.write_plan(plan, scratch / "map.tmx")
-        print(f"  scratch  : {scratch}")
-        print(f"  walls {result['walls']}, rooms {result['rooms']}")
-        frames = preview_mod.filmstrip(plan.spec, scratch, work / "preview")
-        strip = preview_mod.contact_strip(frames, work / "preview" / "transition.png")
-    except Exception as exc:                                   # noqa: BLE001
-        # A preview that cannot run is not a reason to lose the plan behind it.
-        print(f"  preview failed ({type(exc).__name__}: {exc})", file=sys.stderr)
-        answer = _ask("  [enter] carry on anyway   [b] back to plan   [q] stop", "")
-        return {"b": "back", "q": "stop"}.get(answer.strip().lower()[:1], "ok")
-
-    print(f"\n  {strip}")
-    _show(strip)
-    while True:
-        answer = _ask("\n  [enter] the transition looks right   [b] back to plan   "
-                      "[s] show again   [q] stop", "").strip().lower()
-        if not answer:
-            return "ok"
-        if answer.startswith("b"):
-            return "back"
-        if answer.startswith("q"):
-            return "stop"
-        if answer.startswith("s"):
-            _show(strip)
-        else:
-            print(f"  {answer!r}?")
-
-
 def _render_gate(plan, work: Path, args):
-    """Paint the stonework and choose which render to keep."""
+    """Paint the stonework and choose which render to keep. The walls are found in the one
+    you keep, at the accept screen after this."""
     from . import render as render_mod
 
     choice, drawn = 0, None
@@ -1240,7 +1175,6 @@ def _render_gate(plan, work: Path, args):
                     drawn = render_mod.render_interior(plan, _config(args), work,
                                                        draws=args.draws,
                                                        criticism=criticism, attach=attach)
-                    _drop_floor_trace(work)
                 except STEP_ERRORS as exc:
                     _failed("the render", exc)
                     drawn = shown
@@ -1304,14 +1238,13 @@ def _render_gate(plan, work: Path, args):
                 _failed("the augment", exc)
                 continue
             if augmented:
-                _drop_floor_trace(work)
                 drawn, choice, last_augment = augmented, 0, (base, additions)
             continue
         # `r1` and `r <something>` are retries with context; a bare `r` still means draw more.
         # `r2` / `r12` exist only for an augment: the drift overlay is what it changed that
         # it should not have, which a from-scratch render has no notion of.
         is_drift_retry = is_augment and answer in ("r2", "r12")
-        if is_drift_retry or answer == "r1" or answer.startswith("r1 ") or answer.startswith("r "):
+        if is_drift_retry or answer == "r1" or answer.startswith(("r1 ", "r ")):
             try:
                 if is_drift_retry:
                     criticism, attach = _parse_augment_retry(answer, shape, drawn[choice])
@@ -1349,7 +1282,6 @@ def _render_gate(plan, work: Path, args):
                     augmented = None
                 criticism, attach = "", ()
                 if augmented:
-                    _drop_floor_trace(work)
                     drawn, choice = augmented, 0
                 continue
             drawn, choice, force = None, 0, True
@@ -1361,8 +1293,8 @@ def _render_gate(plan, work: Path, args):
             print(f"  {answer!r}?")
 
 
-def _write_into_map(plan, written: Path) -> None:
-    """The one step that changes the shipped level."""
+def _write_into_map(plan, written: Path, walls) -> None:
+    """The one step that changes the shipped level. `walls` are SAM's, in canvas px."""
     map_path = Path(plan.spec.map_path)
     roof = Path(plan.spec.roof_image)
     if not _inside(roof, map_path.parent):
@@ -1374,124 +1306,89 @@ def _write_into_map(plan, written: Path) -> None:
         shutil.copyfile(roof, destination)
         plan.spec.roof_image = str(destination)
         print(f"  exterior : {destination}")
-    result = emit_mod.write_plan(plan, map_path)
+    result = emit_mod.write_plan(plan, map_path, walls)
+    walls_file = sam_room.save_walls(plan.spec, walls)
     print(f"  interior : {written}")
-    print(f"  map      : {result['map']}  ({result['walls']} walls, {result['shell']} shell, "
-          f"{result['rooms']} rooms"
+    print(f"  walls    : {walls_file}")
+    print(f"  map      : {result['map']}  ({result['walls']} walls, {result['shell']} shell"
           f"{', building object added' if result.get('building_object') else ''})")
 
 
-# The two checks a floor must pass before it is written. A floor that does not reach the
-# doorway walls the passage; an unpainted one is not a trace at all. Everything else the
-# report says is for the eye, together with the overlay.
-FLOOR_GATE_CHECKS = ("floor_behind_door", "unpainted")
+def _accept_gate(plan, kept: Path, work: Path, args):
+    """Find the walls in the kept render, show them on it, write them.
 
-
-def _floor_gate(plan, kept: Path, work: Path, args):
-    """Trace the accepted render into the room the model painted, look at it, write it.
-
-    What comes out is the chamber (floor and walls), the collision (the floor's edge) and
-    the trigger for "inside" -- everything the engine will believe about this building. So
-    it is shown over the render it traced, and it is not written until it has been looked
-    at. `[f <path>]` feeds a painting made by hand into the same tracer.
+    SAM3 finds the walls (`sam_room.sam_walls`), and they are what the map gets: the walls you
+    collide with and the sight lines. So they are shown in red over the painting, with the
+    walk in from outside in green, and nothing is written until they have been looked at.
 
     `[enter]` writes, here, so that a write the emitter refuses -- or one a held file stops
-    -- leaves you at this menu with this painting rather than ending the session. Returns
-    the traced plan once written, None on [q], and "back" when the floor painting could not
-    be drawn and there is none to show: the decision before this one is the render.
+    -- leaves you at this menu rather than ending the session. Returns the plan once written,
+    None on [q], and "back" on [b]: the decision before this one is the render.
     """
-    from . import floor as floor_mod
     from . import render as render_mod
 
-    painting, previous, force = None, None, bool(args.redraw)
+    walls = shown = None
     while True:
-        if painting is None:
+        if walls is None:
             try:
-                painting = floor_mod.draw_floor(plan, _config(args), work, kept, force=force)
-            except STEP_ERRORS as exc:
-                _failed("the floor painting", exc)
-                painting = previous
-                if painting is None:
-                    print("  back to the render gate", file=sys.stderr)
+                walls = sam_room.sam_walls(plan, kept, work)
+            except (sam_local.SamLocalError, *STEP_ERRORS) as exc:
+                _failed("finding the walls", exc)
+                answer = _ask("\n  [s] try again   [b] back to the render   [q] stop",
+                              "").strip().lower()
+                if answer.startswith("q"):
+                    return None
+                if answer.startswith("b"):
                     return "back"
-                print("  back at the floor gate with the painting you had", file=sys.stderr)
-            force = False
-        traced = floor_mod.trace_floor(painting, plan.spec)
-        shown = floor_mod.floor_overlay(traced, kept, work / "floor_overlay.png")
-        print(layout_checks.format_report(traced.report, "floor"))
-        _sent(_prompt_sent(work, "floor_prompt.txt", lambda: floor_mod.floor_prompt(plan.spec)), [
-            ("render", kept),
-            ("plan", work / "floor_plan.png"),
-            ("mask", _mask_sent(work, "floor")),
-            ("trace", shown),
-        ])
-        failed = [c for c in traced.report["checks"]
-                  if c["name"] in FLOOR_GATE_CHECKS and not c["passed"]]
+                continue
+        # Drawn once per set of walls: the viewer holds the file open, and on Windows writing
+        # it again while it is shown fails.
+        if shown is None:
+            shown = sam_room.overlay(kept, walls, work / "walls_overlay.png", plan=plan)
         _show(shown)
-        if failed:
-            names = ", ".join(c["name"] for c in failed)
-            print(f"\n  NOT WRITABLE -- {names} failed: "
-                  + ("the painted floor does not reach the doorway, so the passage would be "
-                     "walled. " if any(c["name"] == "floor_behind_door" for c in failed) else "")
-                  + "Fix the painting with [f], or [q] and redraw the render.")
-        raw_answer = _ask(f"\n  {'[enter] write   ' if not failed else ''}"
-                          f"[r] trace again (one API call)   [f <path>] use this painting instead"
-                          f"\n  [s] show again   [q] stop", "").strip()
+        print(f"\n  {len(walls)} wall(s) found by SAM, in red; green is where a body from "
+              f"outside can walk -> {shown}")
+        raw_answer = _ask("\n  [enter] write   [b] back to the render   [s] show again   "
+                          "[q] stop", "").strip()
         answer = raw_answer.lower()
         if not answer:
-            if failed:
-                print("  not written")
-                continue
-            refused = emit_mod.problem(traced)
+            refused = emit_mod.problem(plan, walls)
             if refused:
                 print(f"\n  not written: {refused}", file=sys.stderr)
-                print("  still at the floor gate -- [r] trace again, [f <path>] another "
-                      "painting, or [q]", file=sys.stderr)
+                print("  still at the accept screen -- [b] back to the render, or [q]",
+                      file=sys.stderr)
                 continue
             try:
-                _write_into_map(traced, render_mod.accept(traced, kept))
+                _write_into_map(plan, render_mod.accept(plan, kept), walls)
             except STEP_ERRORS as exc:
                 _failed("writing the map", exc)
-                print("  still at the floor gate", file=sys.stderr)
+                print("  still at the accept screen", file=sys.stderr)
                 continue
-            return traced
+            return plan
         if answer.startswith("q"):
             return None
-        if answer.startswith("f"):
-            path = Path(raw_answer[1:].strip().strip('"'))
-            if not path.is_file():
-                print(f"  no painting at {path}")
-                continue
-            from PIL import Image
-
-            try:
-                painting = Image.open(path).convert("RGB")
-            except OSError as exc:
-                _failed(f"reading {path.name}", exc)
-                continue
-            print(f"  tracing {path.name}")
-        elif answer.startswith("r"):
-            previous, painting, force = painting, None, True
-        elif not answer.startswith("s"):
+        if answer.startswith("b"):
+            return "back"
+        if not answer.startswith("s"):
             print(f"  {answer!r}?")
 
 
 def _accept_and_write(plan, kept: Path, work: Path, args):
-    """From a kept render to the shipped map: trace its floor, cut the asset, write.
+    """From a kept render to the shipped map: find its walls, cut the asset, write.
 
-    The one accept path, for `build`, `render` and `accept` alike. The floor gate's
+    The one accept path, for `build`, `render` and `accept` alike. The accept screen's
     `[enter] write` is the confirmation, and the write happens there; there is no second
-    "write into map?" prompt. True when written, False when stopped, "back" when the floor
-    gate sent you back to choose a render.
+    "write into map?" prompt. True when written, False when stopped, "back" when the accept
+    screen sent you back to choose a render.
     """
     blocked = plan_mod.preflight(plan.spec)
     if blocked:
         print(f"\n  cannot accept {plan.spec.building}: {blocked}", file=sys.stderr)
         return False
-    traced = _floor_gate(plan, kept, work, args)
-    if traced is None or traced == "back":
+    written = _accept_gate(plan, kept, work, args)
+    if written is None or written == "back":
         print("  map untouched")
-        return False if traced is None else "back"
+        return False if written is None else "back"
     return True
 
 
@@ -1499,42 +1396,20 @@ def _build(spec, args) -> bool:
     """One building, from its spec to an accepted interior in the map.
 
     The same shape as the discovery loops: run the expensive thing once, show it, accept or
-    adjust. `[b] back to plan` is the reason preview sits before render rather than after --
-    a bad layout is cheap to discover and expensive to paint.
+    adjust. The plan gate sits before render rather than after because a bad layout is
+    cheap to discover and expensive to paint.
     """
     work = _work(spec.building)
     print(f"\n{'=' * 70}\n{spec.building}\n{'=' * 70}")
     print(spec_mod.describe(spec))
 
-    # --redraw means draw fresh once, not redraw on every trip round the loop. Coming back
-    # from the preview has to be free or nobody comes back from the preview.
+    # --redraw means draw fresh once, not redraw on every trip round the loop.
     redraw = args.redraw
     while True:
         plan = _plan_gate(spec, work, args, redraw)
         redraw = False
         if plan is None:
             return False
-
-        # Emit is free and derived, so it always runs -- the scratch map is what a manual
-        # in-game check loads. The PREVIEW is opt-in: it boots a real Level4, and walking the
-        # doorway yourself tells you more than a filmstrip does. Both show the REQUEST: the
-        # room the model actually paints is traced at accept, after the render exists, and
-        # cannot be previewed before it.
-        try:
-            scratch = emit_mod.scratch_level(plan.spec)
-            result = emit_mod.write_plan(plan, scratch / "map.tmx")
-        except STEP_ERRORS as exc:
-            _failed("writing the scratch map", exc)
-            print("  back to the plan gate", file=sys.stderr)
-            continue
-        print(f"  scratch  : {scratch}")
-        print(f"  walls {result['walls']}, rooms {result['rooms']}")
-        if args.preview:
-            verdict = _preview_gate(plan)
-            if verdict == "stop":
-                return False
-            if verdict == "back":
-                continue
 
         if args.synthetic:
             print("\n  --synthetic stops here: a procedural plan has no stonework to paint. "
@@ -1547,11 +1422,11 @@ def _build(spec, args) -> bool:
 
 
 def _render_then_accept(plan, work: Path, args):
-    """The render gate, then the floor gate, with a way back from the second to the first.
+    """The render gate, then the accept screen, with a way back from the second to the first.
 
-    True when the map was written, False when stopped, "back" for the plan gate. The floor
-    gate hands back "back" when it has no floor painting to show -- the draw failed -- and the
-    decision before it is which render to keep, so that is where you land.
+    True when the map was written, False when stopped, "back" for the plan gate. The accept
+    screen hands back "back" on [b], and the decision before it is which render to keep, so
+    that is where you land.
     """
     while True:
         kept = _render_gate(plan, work, args)
@@ -1574,14 +1449,12 @@ def _require_accepted(spec) -> None:
 
 
 def _room_plan(spec, work: Path, args):
-    """The plan decorate shows the model: the painted room's trace, else the requested one."""
+    """The plan furnishing works to: the one accept wrote the map from."""
     from . import decorate as decor_mod
 
     plan = decor_mod.room_plan(spec, work)
     if plan is None:
-        print("  no floor trace on disk -- showing the model the requested plan, which may "
-              "not match the painted room")
-        plan = _load_plan(spec.building, args)
+        raise SystemExit(f"no plan for {spec.building!r}: run `plan` first")
     return plan
 
 
@@ -2060,8 +1933,8 @@ def _locate_gate(plan, spec, work: Path, args, sheets: list):
 def _place_gate(spec, work: Path, args, located: list):
     """Step 5: the placements written into the map as Tiled objects, one set per variant.
 
-    Written to the scratch level first, where `[p]` walks it in the game. `[a]` writes the
-    shipped map, after a copy of it is put in the work folder. Never under --dry-run: the
+    `[a]` writes the shipped map, after a copy of it is put in the work folder. Never under
+    --dry-run: the
     copy backend's props do not go near the shipped map. True once written, False on [q],
     "back" on [b].
     """
@@ -2072,7 +1945,6 @@ def _place_gate(spec, work: Path, args, located: list):
     from . import decorate as decor_mod
     from . import extract as extract_mod
     from . import kit as kit_mod
-    from . import preview as preview_mod
 
     catalog = extract_mod.load_catalog(spec)
     tsx = props_mod.write_tileset(kit_mod.prop_set_dir(spec), catalog)
@@ -2081,32 +1953,14 @@ def _place_gate(spec, work: Path, args, located: list):
     dry_run = bool(getattr(args, "dry_run", False))
     print(f"\n  step 5, place: {sum(len(p) for _t, p in variants)} props in "
           f"{len(variants)} variant(s), from {tsx}")
-    try:
-        scratch = emit_mod.scratch_level(spec)
-        result = emit_mod.write_props(spec, variants, scratch / "map.tmx", tsx, span)
-    except STEP_ERRORS as exc:
-        _failed("writing the scratch map", exc)
-        return "back"
-    print(f"  scratch  : {result['map']}  (open it in Tiled, or [p] to walk it in the game)")
     while True:
         accept = "" if dry_run else "[a] write them into the shipped map   "
-        answer = _ask(f"\n  {accept}[p] walk the scratch level in the game   "
-                      f"[b] back to locate   [q] stop", "").strip().lower()
+        answer = _ask(f"\n  {accept}[b] back to locate   [q] stop", "").strip().lower()
         if answer.startswith("q"):
             return False
         if answer.startswith("b"):
             return "back"
-        if answer.startswith("p"):
-            try:
-                frames = preview_mod.filmstrip(spec, scratch, work.resolve() / "preview")
-                strip = preview_mod.contact_strip(frames, work.resolve() / "preview" /
-                                                  "furnished.png")
-            except Exception as exc:                               # noqa: BLE001
-                print(f"  preview failed ({type(exc).__name__}: {exc})", file=sys.stderr)
-                continue
-            print(f"  {strip}")
-            _show(strip)
-        elif answer.startswith("a"):
+        if answer.startswith("a"):
             if dry_run:
                 print("  --dry-run: the shipped map is not written")
                 continue
@@ -2185,52 +2039,13 @@ def cmd_build(args) -> int:
 
 
 def _load_plan(building: str, args=None):
-    """The kept plan, re-derived against the spec as it is now (see `_retrace`)."""
+    """The kept plan, re-derived against the spec as it is now (see `plan.retrace`)."""
     import pickle
 
     path = _work(building) / "plan.pickle"
     if not path.exists():
         raise SystemExit(f"no traced plan for {building!r}: run `plan` first")
-    return _retrace(pickle.loads(path.read_bytes()), _load_spec(building, args))
-
-
-def cmd_emit(args) -> int:
-    """The requested plan, written to the scratch level. What is on the shipped map after
-    accept is the TRACED room; re-emitting that is `accept` again, free once its floor
-    painting exists."""
-    plan = _load_plan(args.building, args)
-    try:
-        scratch = emit_mod.scratch_level(plan.spec)
-        result = emit_mod.write_plan(plan, scratch / "map.tmx")
-    except STEP_ERRORS as exc:
-        _failed("emit", exc)
-        return 2
-    print(f"scratch level : {scratch}")
-    print(f"walls         : {result['walls']} segments, {result['shell']} shell")
-    print(f"chamber       : {len(result['chamber'])} vertices")
-    print(f"rooms         : {result['rooms']} spawn areas")
-    print(f"doors         : {result['doors']}")
-    print(f"\nnext:  ... preview --building {args.building}")
-    return 0
-
-
-def cmd_preview(args) -> int:
-    """Walk the doorway in the game and save the frames. Run it with the game's Python
-    (`Code\\sprite_venv\\Scripts\\python.exe`): the engine needs pytmx."""
-    from . import preview as preview_mod
-
-    work = _work(args.building).resolve()
-    if args.level:
-        # The real level, with whatever accept last wrote into it.
-        spec = _load_spec(args.building, args)
-        layouts = Path(spec.map_path).resolve().parent
-    else:
-        spec = _load_plan(args.building, args).spec
-        layouts = emit_mod.scratch_level(spec)
-    frames = preview_mod.filmstrip(spec, layouts, work / "preview")
-    strip = preview_mod.contact_strip(frames, work / "preview" / "transition.png")
-    print(f"\n  the transition: {strip}")
-    return 0
+    return plan_mod.retrace(pickle.loads(path.read_bytes()), _load_spec(building, args))
 
 
 def cmd_render(args) -> int:
@@ -2247,10 +2062,10 @@ def cmd_render(args) -> int:
 
 
 def cmd_accept(args) -> int:
-    """A render you already have -> the shipped map, through the floor gate.
+    """A render you already have -> the shipped map, through the accept screen.
 
-    Also how a building is re-emitted after the emitter changes: the floor painting is
-    reused from disk when it was traced from this same render, so it costs nothing.
+    Also how a building is re-emitted after the emitter changes: SAM's walls for these same
+    bytes are reused from the work folder, so it costs no SAM run.
     """
     plan = _load_plan(args.building, args)
     work = _work(args.building)
@@ -2383,7 +2198,7 @@ def cmd_place(args) -> int:
 
 COMMANDS = {
     "list": cmd_list, "new": cmd_new, "build": cmd_build, "plan": cmd_plan,
-    "emit": cmd_emit, "preview": cmd_preview, "render": cmd_render, "accept": cmd_accept,
+    "render": cmd_render, "accept": cmd_accept,
     "furnish": cmd_furnish, "decorate": cmd_decorate, "sheet": cmd_sheet,
     "extract": cmd_extract, "locate": cmd_locate, "place": cmd_place,
 }
@@ -2455,15 +2270,7 @@ def main(argv=None) -> int:
                         help="new --identify sam3: score floor for entrances (default 0.2)")
     parser.add_argument("--redraw", action="store_true",
                         help="build: draw new plans and renders instead of reusing the ones "
-                             "already in the work directory. Reuse is what makes stepping "
-                             "back from the preview free, so it is the default")
-    parser.add_argument("--preview", action="store_true",
-                        help="build: boot a real Level4 and walk the doorway, saving a "
-                             "filmstrip. Off by default -- emit still writes the scratch "
-                             "level, so checking it in the game yourself needs no flag")
-    parser.add_argument("--level", action="store_true",
-                        help="preview: walk the real level, with what accept wrote into it, "
-                             "instead of the scratch copy")
+                             "already in the work directory")
     parser.add_argument("--rescan", action="store_true",
                         help="new --identify sam3: re-run every SAM pass even when the last "
                              "answer for the same crop and prompts is on disk. Without it a "
@@ -2474,15 +2281,15 @@ def main(argv=None) -> int:
                         help="new --identify sam3: tile the refine passes for 1:1 pixels "
                              "instead of sending each crop whole. Costs ~63 tiles per prompt "
                              "per building to recover about 6px of edge accuracy, so it is "
-                             "off. Reach for it only if a doorway looks wrong in `preview`")
+                             "off. Reach for it only if a doorway looks wrong in game")
     parser.add_argument("--identify", default="tmx", choices=("tmx", "sam3"),
                         help="new: where the silhouette and entrance come from. tmx reads "
                              "the polygon authored in Tiled (offline default); sam3 finds "
                              "every building in --level-image from the two prompts")
     parser.add_argument("--synthetic", action="store_true",
                         help="plan: build a procedural crypt from the door plane instead of "
-                             "painting one. No API key, no spend -- runs the emitter, the "
-                             "checks and the preview end to end at the real scale")
+                             "painting one. No API key, no spend -- runs the plan checks end "
+                             "to end at the real scale")
     parser.add_argument("--dry-run", action="store_true",
                         help="force the copy backend: every trace, check and gate runs for "
                              "real on the exterior's own pixels, no spend")

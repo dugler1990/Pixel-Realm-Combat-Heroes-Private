@@ -22,7 +22,6 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from . import floor as floor_mod
 from . import render as render_mod
 from .trace import save_image
 
@@ -136,16 +135,20 @@ def write_base(spec, work: Path) -> tuple:
 
 
 def room_plan(spec, work: Path):
-    """The room as it was painted -- the floor trace accept wrote the map from -- or None.
+    """The room's plan -- what accept wrote the map from -- or None before there is one.
 
-    Re-traced from `floor_raw.png` on disk, which is free. The plan the room was REQUESTED
-    with is the wrong thing to show the model: the render insets floors and thickens walls,
-    and "stand it on the floor" has to mean the floor that is actually painted.
+    The plan, not a trace of the painting: the walls in the map are the plan's, and the
+    render gate only keeps a render whose floor agrees with it, so "stand it on the floor"
+    means the floor the player can actually walk on.
     """
-    raw = Path(work) / "floor_raw.png"
-    if not raw.exists():
+    import pickle
+
+    from .plan import retrace
+
+    path = Path(work) / "plan.pickle"
+    if not path.exists():
         return None
-    return floor_mod.trace_floor(Image.open(raw).convert("RGB"), spec)
+    return retrace(pickle.loads(path.read_bytes()), spec)
 
 
 # ---------------------------------------------------------------- variants

@@ -1,27 +1,18 @@
-"""Traced floor plan -> chamber polygon and wall polygons, written to a scratch TMX.
+"""An accepted interior -> its objects in the shipped map.
 
-The walls are not laid along a traced line. They are strips: one a partition wide right
-round the walkable ground (the floor and the way in from the door), one a shell wide inside
-the building's outline, each minus the walkable ground. So they hug the painted floor to the
-pixel and are solid by construction. Laying blocks along a simplified outline instead put
-walls across pyramid_01's rooms and its entrance (the outline was 145 px off), and even at
-3 px left threads of wall and wedge-shaped gaps.
+The room walls are the ones SAM3 found in the painting (`sam_room.sam_walls`), and the same
+polygons are what sight stops at. The shell -- a strip `spec.wall` wide inside the building's
+outline, minus the walkable ground -- the chamber and the door frame still come from the plan.
 
-The pieces are as big as a map polygon allows, not cut short. The engine pushes a body away
-from a piece's bounding-box centre, which on a big piece can sit inside a room; that is a
+The shell pieces are as big as a map polygon allows, not cut short. The engine pushes a body
+away from a piece's bounding-box centre, which on a big piece can sit inside a room; that is a
 known cost, left for now.
-
-Why a scratch TMX: writing is regex string surgery on the shipped map, idempotent only by
-name prefix, so a half-failed write leaves it partly stripped. The preview loads whatever
-path it is handed, so it stays honest against a copy.
 """
 
 from __future__ import annotations
 
 import os
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 import cv2
@@ -30,9 +21,10 @@ from PIL import Image, ImageDraw
 
 from ..world_levels.geometry import mask_to_polygon
 from .plan import door_mask, geometry_masks
+from .player_size import player_size
 from .trace import to_world
 
-# Every wall piece and the chamber are outlined to within a pixel of their mask.
+# Every shell piece and the chamber are outlined to within a pixel of their mask.
 PIECE_TOLERANCE_PX = 1.0
 CHAMBER_TOLERANCE_PX = 1.0
 # A piece smaller than this is a speck of the mask, not a wall anyone could meet.
@@ -162,14 +154,6 @@ def door_frame_mask(spec) -> np.ndarray:
     return frame
 
 
-def wall_mask(plan, walkable=None) -> np.ndarray:
-    """The room walls: a strip `spec.partition` wide right round the walkable ground, inside
-    the building. The same number the render pass is shown as a wall band, so what you see
-    and what you walk into are one thickness."""
-    walkable = walkable_mask(plan) if walkable is None else walkable
-    return _grow(walkable, plan.spec.partition) & ~walkable & plan.silhouette
-
-
 def shell_mask(plan, walkable=None) -> np.ndarray:
     """The building's own wall: a strip `spec.wall` wide inside the outline, minus the
     walkable ground, so its one opening is the way in, exactly door-wide. (The floor does
@@ -181,12 +165,6 @@ def shell_mask(plan, walkable=None) -> np.ndarray:
     walkable = walkable_mask(plan) if walkable is None else walkable
     thickness = plan.spec.wall or plan.spec.partition
     return plan.silhouette & ~_shrink(plan.silhouette, thickness) & ~walkable
-
-
-def wall_pieces(plan, walkable=None) -> list:
-    """`wall_mask` as world polygons the map can hold."""
-    walkable = walkable_mask(plan) if walkable is None else walkable
-    return _pieces(wall_mask(plan, walkable), walkable, plan.spec.origin)
 
 
 def shell_pieces(plan, walkable=None) -> list:
@@ -261,101 +239,83 @@ def _first_floor(plan):
     return None
 
 
-def assert_passage_open(plan, pieces) -> None:
-    """Raise if any wall piece sits on the walk from the door to the floor.
+def _body_width(spec) -> int:
+    """The widest character on the roster, in this building's canvas px."""
+    return int(player_size(scale=spec.world_scale).width)
 
-    The same line `floor_behind_door` walks: from the door point on the silhouette edge,
-    inward, to the first floor pixel. It does not ask anything of the painting -- the door
-    polygon is held out of the mask, and nothing here wants floor in it. It asks that the
-    walls derived from the painting leave that stretch open, because a wall there is an
-    invisible wall in the doorway. Better to refuse the write.
-    No floor on that line means the gate already failed this plan; nothing to assert.
 
-    The walls are built round the walkable ground, the way in included, so this fires only
-    when the door line leaves it -- a door point outside its own door polygon. It caught
-    pyramid_01 when walls were laid along a 145 px outline, one of them across the entrance.
+def walk_in(plan, pieces) -> tuple:
+    """(reach, open): where a body's centre can get to from outside the building, in canvas
+    px, and whether that takes in the biggest open stretch of floor.
+
+    `pieces` are world polygons the body cannot cross -- SAM's walls and the shell. The body
+    is `_body_width` across, so a gap narrower than that is shut. It starts anywhere outside:
+    the canvas is padded first, because the canvas is the silhouette's bounding box and a door
+    on its edge would otherwise have no ground in front of it.
+
+    The biggest open stretch, not every floor pixel: a pocket walled off elsewhere is not the
+    doorway's business, and a sliver of floor between the door and a wall across it is not
+    the room.
     """
     spec = plan.spec
-    if not spec.door_origin or not pieces:
-        return
-    first = _first_floor(plan)
-    if first is None:
-        return
+    half = _body_width(spec) / 2.0
+    pad = int(np.ceil(half)) + 4
     # One canvas, one rasteriser: the same PIL fill `rasterize_polygon` uses, without an
     # 11 MP image per piece.
-    canvas = Image.new("L", tuple(spec.size), 0)
+    canvas = Image.new("L", (spec.size[0] + 2 * pad, spec.size[1] + 2 * pad), 0)
     draw = ImageDraw.Draw(canvas)
-    local = [tuple((x - spec.origin[0], y - spec.origin[1]) for x, y in piece)
-             for piece in pieces]
-    for polygon in local:
-        draw.polygon(polygon, fill=255)
-    blocked = np.asarray(canvas) > 0
-    ox, oy = spec.door_origin
-    ix, iy = spec.door_inward
-    for step in range(first[0]):
-        x, y = int(round(ox + ix * step)), int(round(oy + iy * step))
-        if not blocked[y, x]:
-            continue
-        culprit = next((piece for piece, polygon in zip(pieces, local)
-                        if _covers(polygon, (x, y))), None)
-        where = ""
-        if culprit:
-            xs, ys = [p[0] for p in culprit], [p[1] for p in culprit]
-            where = (f" (the wall piece spanning world ({int(min(xs))}, {int(min(ys))}) "
-                     f"to ({int(max(xs))}, {int(max(ys))}))")
+    for piece in pieces:
+        draw.polygon([(x - spec.origin[0] + pad, y - spec.origin[1] + pad) for x, y in piece],
+                     fill=255)
+    free = _shrink(np.asarray(canvas) == 0, half)
+    count, labels = cv2.connectedComponents(free.astype(np.uint8), connectivity=8)
+    margin = np.ones(labels.shape, dtype=bool)
+    margin[pad:-pad, pad:-pad] = False
+    outside = np.unique(labels[margin & free])
+    reach = np.isin(labels, outside)[pad:-pad, pad:-pad]
+    floor = np.pad(plan.floor, pad) & free
+    per_label = np.bincount(labels[floor], minlength=count)
+    return reach, bool(per_label.any() and per_label.argmax() in outside)
+
+
+def assert_passage_open(plan, pieces) -> None:
+    """Raise unless a body from outside can walk past `pieces` into the room (`walk_in`).
+
+    `pieces` are the world polygons the map will collide with: SAM's walls and the shell. A
+    wall that shuts the way in is an invisible wall in the doorway; better to refuse the write.
+
+    This used to check one 1 px line from the door point to the first floor pixel, and stopped
+    there. On great_pyramid (2026-10-31) the floor started 182 px in, SAM's wall lay across
+    the floor just past it, and the check passed a doorway nobody could walk through.
+    """
+    spec = plan.spec
+    if not spec.door_origin or not pieces or not plan.floor.any():
+        return
+    _reach, open_ = walk_in(plan, pieces)
+    if not open_:
         raise ValueError(
-            f"the collision closes the doorway of {spec.building}: a wall crosses the walk "
-            f"in from the door {step} px from the door point, at world "
-            f"({int(x + spec.origin[0])}, {int(y + spec.origin[1])}), and the floor only "
-            f"starts {first[0]} px in{where}. Nothing was written.")
+            f"the collision closes the doorway of {spec.building}: a body "
+            f"{_body_width(spec)} px wide starting outside cannot reach the biggest open "
+            f"stretch of floor -- the green on the walls overlay is how far it gets. "
+            f"Nothing was written.")
 
 
-def _covers(polygon, point) -> bool:
-    """Is `point` inside or on `polygon`? For naming the piece that closed the doorway."""
-    contour = np.asarray(polygon, dtype=np.float32).reshape(-1, 1, 2)
-    return cv2.pointPolygonTest(contour, (float(point[0]), float(point[1])), True) >= -1.0
-
-
-def problem(plan) -> str:
-    """Why `write_plan` would refuse this plan, or "" when it would write it.
+def problem(plan, walls=()) -> str:
+    """Why `write_plan` would refuse this plan and these walls, or "" when it would write them.
 
     Every geometric refusal `write_plan` can raise, computed the same way and with no I/O,
     so a gate can ask before it hands a plan on -- and stay where it is when the answer is
     no, instead of the whole session dying on a traceback with paid draws behind it.
+    `walls` are `sam_room.sam_walls`' polygons, in canvas px.
     """
+    from .sam_room import world_walls
+
     try:
-        walkable = walkable_mask(plan)
-        assert_passage_open(plan, wall_pieces(plan, walkable) + shell_pieces(plan, walkable))
+        assert_passage_open(plan, world_walls(plan.spec, walls) + shell_pieces(plan))
         chamber_from_plan(plan)
     except ValueError as exc:
         return str(exc)
     return ""
-
-
-def rooms(plan, radius=None) -> list:
-    """Eroded floor components as world polygons: one per room.
-
-    Rooms are the natural unit for spawning, and this is the same erosion `room_count`
-    measures, so what gets a spawn area is exactly what was counted.
-    """
-    from . import checks as layout_checks
-    from .trace import component_report
-
-    radius = radius or layout_checks.CORRIDOR_HALF_TILES * plan.spec.tile
-    eroded = layout_checks.erode(plan.floor, radius)
-    minimum = int(layout_checks.MIN_ROOM_TILES_SQ * plan.spec.tile * plan.spec.tile)
-    out = []
-    number, labels = cv2.connectedComponents(
-        np.ascontiguousarray(eroded.astype(np.uint8)), connectivity=8)
-    for label in range(1, number):
-        component = labels == label
-        if int(component.sum()) < minimum:
-            continue
-        try:
-            out.append(to_world(mask_to_polygon(component, epsilon_frac=0.02), plan.spec.origin))
-        except ValueError:
-            continue
-    return out
 
 
 # ---------------------------------------------------------------- TMX writing
@@ -444,71 +404,6 @@ def _ensure_layer(xml, layer) -> str:
     if match:
         xml = re.sub(r'nextlayerid="\d+"', 'nextlayerid="%d"' % (layer_id + 1), xml, count=1)
     return xml
-
-
-def _shadow(source: Path, target: Path) -> None:
-    """Point `target` at `source` as cheaply as this machine allows.
-
-    A symlink is the cheapest and needs a privilege Windows does not grant by default --
-    `OSError 1314` -- so a plain checkout hits it on the first preview. A directory junction
-    needs no privilege and behaves the same for reading, and a hard link does the job for a
-    file. Copying is the last resort: correct everywhere, and the reason the fallbacks are
-    worth having is that a level folder can hold hundreds of megabytes of art.
-    """
-    try:
-        target.symlink_to(source)
-        return
-    except (OSError, NotImplementedError):
-        pass
-
-    if source.is_dir():
-        try:                                     # junction: no privilege required
-            subprocess.run(["cmd", "/c", "mklink", "/J", str(target), str(source)],
-                           check=True, capture_output=True)
-            return
-        except (OSError, subprocess.SubprocessError):
-            pass
-        shutil.copytree(source, target)
-        return
-
-    try:
-        os.link(source, target)                  # hard link: same file, no copy
-    except (OSError, NotImplementedError):
-        shutil.copyfile(source, target)
-
-
-def scratch_level(spec) -> Path:
-    """A shadow of the level folder whose map.tmx is the one plans are written into.
-
-    A whole folder rather than a stray file because the engine takes a layout DIRECTORY and
-    loads `map.tmx` from it, and because tilesets and building art resolve relative to the
-    map. Everything but the map is symlinked, so shadowing a level with a 242 MB background
-    costs nothing.
-
-    The shipped map is never written until accept. That matters more than churn: writing is
-    regex surgery, idempotent only by name prefix, so a half-failed write leaves the real
-    map partly stripped.
-    """
-    source_dir = Path(spec.map_path).resolve().parent
-    scratch_dir = source_dir.parent / f"{source_dir.name}.plan"
-    scratch_dir.mkdir(parents=True, exist_ok=True)
-
-    for entry in source_dir.iterdir():
-        target = scratch_dir / entry.name
-        if entry.name == "map.tmx":
-            shutil.copyfile(entry, target)
-            continue
-        if entry.name == "initial_layout_name.txt":
-            continue
-        if target.is_symlink() or target.exists():
-            continue
-        _shadow(entry.resolve(), target)
-
-    # The engine reads this as a path relative to Code/, so the shadow has to name itself.
-    code_dir = Path(__file__).resolve().parents[3] / "Code"
-    (scratch_dir / "initial_layout_name.txt").write_text(
-        os.path.relpath(scratch_dir, code_dir) + "\n", encoding="utf-8")
-    return scratch_dir
 
 
 PROPS_LAYER = "Props"
@@ -614,40 +509,35 @@ def write_props(spec, variants, map_path: Path, tsx: Path, span: int,
     return {"map": str(map_path), "props": count, "variants": len(variants), "firstgid": firstgid}
 
 
-def write_plan(plan, map_path: Path, *, obstacle_layer="ObstaclePolygons",
-               building_layer="Buildings", spawn_layer="spawner") -> dict:
-    """Replace this building's generated geometry in `map_path` with the plan's.
+def write_plan(plan, map_path: Path, walls, *, obstacle_layer="BuildingWalls",
+               building_layer="Buildings") -> dict:
+    """Replace this building's generated geometry in `map_path`: `walls` (SAM's, canvas px)
+    and the shell as obstacles, the chamber, door frame and sight loops as building shapes.
 
-    Idempotent by name prefix, like building_walls: every object this writes is named
-    `<building>_wall_NN`, `<building>_shell_NN`, `<building>_chamber`, `<building>_room_NN`
-    or `<building>_door*`, and re-running replaces exactly those and leaves the building
-    object alone. (`<building>_hole` was written by an earlier emitter; it is stripped so a
-    re-emit cleans it up, and can leave this list once every map has been re-emitted.)
+    Idempotent by name prefix: every object this writes is named `<building>_wall_NN`,
+    `<building>_shell_NN`, `<building>_chamber`, `<building>_sight_NN` or `<building>_door*`,
+    and re-running replaces exactly those, in any layer, and leaves the building object alone.
+
+    The obstacles go to their own layer, created if the map has none: the level SAM merge
+    deletes and rebuilds `ObstaclePolygons` on every run.
 
     The door is the door's frame (`door_frame_mask`), not the opening: it is what the game
     draws over a body passing under it. The opening itself stays in `interior.json`.
-
-    Rooms go to the `spawner` layer, created if the map has none: they are the unit for
-    spawning, and the engine's spawner reader skips any object without a `spawner_config`,
-    so they sit inert until one is given a spawn config. Never the Buildings layer -- a
-    room there loads as a second building with a placeholder roof.
     """
+    from .sam_room import wall_objects, world_walls
+
     building = plan.spec.building
     xml = Path(map_path).read_text(encoding="utf-8")
     for prefix in (f"{building}_wall", f"{building}_shell", f"{building}_chamber",
-                   f"{building}_hole", f"{building}_room", f"{building}_door"):
+                   f"{building}_door", f"{building}_sight"):
         xml = _strip_prefixed(xml, prefix)
-    xml = _ensure_layer(xml, spawn_layer)
+    xml = _ensure_layer(xml, obstacle_layer)
 
     obj_id = _next_object_id(xml)
-    walkable = walkable_mask(plan)
-    walls = wall_pieces(plan, walkable)
-    shell = shell_pieces(plan, walkable)
-    assert_passage_open(plan, walls + shell)
-    walls_xml = ""
-    for index, piece in enumerate(walls):
-        walls_xml += _object_xml(obj_id, "%s_wall_%02d" % (building, index), piece)
-        obj_id += 1
+    shell = shell_pieces(plan)
+    wall_polygons = world_walls(plan.spec, walls)
+    assert_passage_open(plan, wall_polygons + shell)
+    walls_xml, obj_id = wall_objects(plan.spec, walls, obj_id)
     for index, piece in enumerate(shell):
         walls_xml += _object_xml(obj_id, "%s_shell_%02d" % (building, index), piece)
         obj_id += 1
@@ -656,13 +546,6 @@ def write_plan(plan, map_path: Path, *, obstacle_layer="ObstaclePolygons",
     chamber_xml = _object_xml(obj_id, f"{building}_chamber", chamber,
                               {"chamber_of": building})
     obj_id += 1
-
-    room_polygons = rooms(plan)
-    rooms_xml = ""
-    for index, polygon in enumerate(room_polygons):
-        rooms_xml += _object_xml(obj_id, "%s_room_%02d" % (building, index), polygon,
-                                 {"room_of": building})
-        obj_id += 1
 
     # The opening counts as ground for `_pieces`, so a frame that closes round it is cut
     # rather than filled -- a filled frame would be the opening again.
@@ -673,25 +556,33 @@ def write_plan(plan, map_path: Path, *, obstacle_layer="ObstaclePolygons",
         doors_xml += _object_xml(obj_id, name, piece, {"door_of": building})
         obj_id += 1
 
+    # What the game casts sight against: the walls you collide with, so sight stops where
+    # feet do. `band` is how far past a wall's face sight reaches: the partition, the wall
+    # band the render was shown.
+    loops = wall_polygons + shell
+    sight_xml = ""
+    for index, loop in enumerate(loops):
+        sight_xml += _object_xml(obj_id, "%s_sight_%02d" % (building, index), loop,
+                                 {"sight_of": building, "band": int(plan.spec.partition)})
+        obj_id += 1
+
     building_xml = _building_object_xml(plan.spec, xml, obj_id, Path(map_path).parent)
     if building_xml:
         obj_id += 1
 
     xml = _insert_into_layer(xml, obstacle_layer, walls_xml)
-    xml = _insert_into_layer(xml, building_layer, chamber_xml + doors_xml)
+    xml = _insert_into_layer(xml, building_layer, chamber_xml + doors_xml + sight_xml)
     if building_xml:
         xml = _insert_into_layer(xml, building_layer, building_xml)
-    if rooms_xml:
-        xml = _insert_into_layer(xml, spawn_layer, rooms_xml)
     xml = re.sub(r'nextobjectid="\d+"', 'nextobjectid="%d"' % obj_id, xml, count=1)
     Path(map_path).write_text(xml, encoding="utf-8")
 
     return {
         "map": str(map_path),
-        "walls": len(walls),
+        "walls": len(wall_polygons),
         "shell": len(shell),
         "chamber": [(int(x), int(y)) for x, y in chamber],
-        "rooms": len(room_polygons),
         "doors": len(doors),
+        "sight": len(loops),
         "building_object": bool(building_xml),
     }

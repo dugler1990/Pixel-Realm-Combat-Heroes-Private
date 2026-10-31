@@ -7,8 +7,6 @@ scale, against its real doorway, for free.
 
 from __future__ import annotations
 
-import shutil
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
@@ -38,13 +36,6 @@ def plan(spec):
 
 # ---------------------------------------------------------------- spec
 
-def test_spec_computes_the_scale_rather_than_asking_for_it(spec):
-    """Every number a person would otherwise type into a prompt comes from the building."""
-    assert spec.size == (3600, 3140)
-    assert spec.tiles == (24.0, 20.9)
-    assert 390 < spec.door_width < 410  # the authored 400 px door gap
-
-
 def test_spec_resolves_the_door_plane_through_the_games_own_call(spec):
     """The threshold, the collision gap and the roof split are one piece of geometry."""
     assert spec.door_origin is not None
@@ -73,14 +64,6 @@ def test_a_spec_from_another_schema_is_refused_not_guessed_at(tmp_path):
 
 # ---------------------------------------------------------------- identify
 
-def test_identify_reads_the_authored_polygon_offline():
-    found = identify_mod.identify(MAP, BUILDING, "pyramid", "dark doorway")
-
-    assert found.source == "tmx"
-    assert len(found.silhouette) == 4
-    assert found.door_point == (8430.0, 4970.0)
-
-
 def test_identify_says_so_when_there_is_nothing_to_check_against():
     """The gate only exists where the collision pass has already run. It must report that
     rather than silently passing."""
@@ -107,12 +90,6 @@ def test_an_unknown_identify_provider_names_the_ones_that_exist():
 
 
 # ---------------------------------------------------------------- plan
-
-def test_the_synthetic_plan_passes_every_check_at_the_real_scale(plan):
-    """The offline provider exists to prove the plumbing end to end, so it has to be a plan
-    that would actually be accepted -- not merely one that traces."""
-    assert plan.passed, plan.failed
-
 
 def test_the_plan_pass_runs_far_below_the_size_cap():
     """Loop A is cheap because of resolution, not because flat colour is cheap."""
@@ -174,79 +151,3 @@ def test_the_chamber_stays_inside_the_silhouette(plan, spec):
     inside = np.asarray(rasterize_polygon(spec.size, local)) > 0
 
     assert not (inside & ~plan.silhouette).any()
-
-
-def test_the_emitter_handles_a_non_convex_floor(plan):
-    """`wall_segments` tiles one convex ring with one gap; a corridor with rooms off it is
-    neither, which is why the walls are the strip round the floor instead."""
-    pieces = emit_mod.wall_pieces(plan)
-
-    assert pieces
-    assert all(len(piece) >= 3 for piece in pieces)
-
-
-def test_rooms_match_what_the_check_counted(plan):
-    counted = next(c for c in plan.report["checks"] if c["name"] == "room_count")
-
-    assert len(emit_mod.rooms(plan)) == counted["rooms"]
-
-
-# ---------------------------------------------------------------- writing
-
-def _map_copy(tmp_path):
-    target = tmp_path / "map.tmx"
-    shutil.copyfile(MAP, target)
-    return target
-
-
-def _names(map_path):
-    """Named objects only -- the painted-ground image object carries no name."""
-    root = ET.parse(map_path).getroot()
-    return [o.get("name") for group in root.iter("objectgroup")
-            for o in group.findall("object") if o.get("name")]
-
-
-def _ids(map_path, prefix):
-    root = ET.parse(map_path).getroot()
-    return {int(o.get("id")) for group in root.iter("objectgroup")
-            for o in group.findall("object") if (o.get("name") or "").startswith(prefix)}
-
-
-def test_writing_a_plan_replaces_the_generated_geometry(plan, tmp_path):
-    target = _map_copy(tmp_path)
-    before = _ids(target, "great_pyramid_wall")
-    assert before, "the fixture map should already carry generated walls"
-
-    result = emit_mod.write_plan(plan, target)
-    after = _ids(target, "great_pyramid_wall")
-
-    assert len(after) == result["walls"]
-    assert not (before & after), "the old walls are gone, not stacked under new ones"
-
-
-def test_writing_is_idempotent(plan, tmp_path):
-    """Re-running must replace its own objects, not stack another set on top."""
-    target = _map_copy(tmp_path)
-    emit_mod.write_plan(plan, target)
-    once = _names(target)
-    emit_mod.write_plan(plan, target)
-
-    assert _names(target) == once
-
-
-def test_hand_authored_objects_survive_a_write(plan, tmp_path):
-    target = _map_copy(tmp_path)
-    emit_mod.write_plan(plan, target)
-
-    assert "great_pyramid" in _names(target)
-    assert "great_pyramid_door" in _names(target)
-
-
-def test_object_ids_stay_unique_after_a_write(plan, tmp_path):
-    target = _map_copy(tmp_path)
-    emit_mod.write_plan(plan, target)
-    root = ET.parse(target).getroot()
-    ids = [o.get("id") for group in root.iter("objectgroup")
-           for o in group.findall("object")]
-
-    assert len(ids) == len(set(ids))

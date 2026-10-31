@@ -5,8 +5,12 @@
 and it cannot be imported here: it lives in its own venv (Python 3.12, torch cu118), so
 pulling it into this interpreter would mean torch in the game's environment.
 
-So it is a subprocess, and the contract between the two projects is a file. That contract
-already exists and already matches: ``polygons.json`` entries are
+So it runs out of process, and the contract between the two projects is a file. By default
+the call goes to sam3local's local server (`scripts/serve.py`), started here on first use, which
+keeps the model loaded between calls -- loading it is most of a run's time on the GTX 1050. With
+``SAM3LOCAL_SERVER=0``, or a sam3local without a server, each call is one `run_chunk.py` process
+instead. Either way the run writes the same ``polygons.json``, and that contract already exists
+and already matches: ``polygons.json`` entries are
 ``{class, prompt, confidence, points}`` -- the same shape ``extract_polygons`` returned, so
 the class filtering in ``identify`` is untouched by the swap.
 
@@ -20,7 +24,11 @@ from __future__ import annotations
 import json
 import math
 import os
+import socket
 import subprocess
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from PIL import Image
@@ -209,6 +217,154 @@ def _cached(work: Path, chunk_id: str, request: dict):
         return None
 
 
+def _run_subprocess(root: Path, script: Path, target: Path, chunk_id: str, work: Path,
+                    prompts_path: Path, tile: bool, timeout: int) -> str:
+    """One `run_chunk.py` process for this call: it loads the model, runs, and exits. Only when
+    the server is switched off (`SAM3LOCAL_SERVER=0`) or sam3local has none. Returns its output."""
+    command = [
+        str(_interpreter(root)), str(script),
+        "--image", str(target),
+        "--chunk-id", chunk_id,
+        "--out", str(work),
+        "--prompts", str(prompts_path),
+    ]
+    # Both flags are explicit: left to itself `run_chunk` tiles anything bigger than one tile,
+    # so an untiled locate pass has to say so or it silently becomes the sweep it replaces.
+    command.append("--tile" if tile else "--no-tile")
+    finished = subprocess.run(command, cwd=str(root), timeout=timeout,
+                              capture_output=True, text=True)
+    if finished.returncode != 0:
+        raise SamLocalError(
+            f"local SAM3 failed ({finished.returncode}):\n{finished.stdout}\n{finished.stderr}")
+    return finished.stdout
+
+
+# The local SAM3 server (sam3local `scripts/serve.py`, `sam3_local/server.py`) keeps the model
+# loaded between calls. These mirror the few facts of its protocol this side needs; the two
+# projects share no code, only `config/server.json` and the files a run writes.
+SERVER_HOST = "127.0.0.1"
+SERVER_SERVICE = "sam3local"
+SERVER_PORT_TAKEN = 3            # `serve.py start` exit code: another server has the port
+SERVER_START_TIMEOUT = 300       # s: the model load, paid once per server
+
+
+def _server_config(root: Path) -> dict:
+    path = root / "config" / "server.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SamLocalError(f"cannot read {path}: {exc}") from exc
+
+
+def _server_log(root: Path) -> Path:
+    return root / "output" / "server.log"
+
+
+def _health(port: int, timeout: float = 2.0):
+    """The server's `/health`, or None when no sam3local server answers on `port` -- including
+    some other program that happens to hold it."""
+    try:
+        with urllib.request.urlopen(f"http://{SERVER_HOST}:{port}/health",
+                                    timeout=timeout) as reply:
+            data = json.loads(reply.read())
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) and data.get("service") == SERVER_SERVICE else None
+
+
+def _listening(port: int) -> bool:
+    try:
+        with socket.create_connection((SERVER_HOST, port), timeout=1.0):
+            return True
+    except OSError:
+        return False
+
+
+def _wait_gone(port: int, timeout: float = 3600.0) -> None:
+    """Until a stopping server has closed the port, so a fresh one can bind it."""
+    deadline = time.monotonic() + timeout
+    while _listening(port):
+        if time.monotonic() > deadline:
+            raise SamLocalError(f"the SAM3 server on port {port} did not stop")
+        time.sleep(0.5)
+
+
+def _start_server(root: Path, port: int) -> None:
+    """Start the server detached -- it outlives this process, which is the point -- and wait
+    until it answers. Raises with the log's path when it does not come up."""
+    log = _server_log(root)
+    idle = float(_server_config(root).get("idle_minutes", 15))
+    command = [str(_interpreter(root)), str(root / "scripts" / "serve.py"), "start",
+               "--log", str(log)]
+    detach = ({"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP}
+              if os.name == "nt" else {"start_new_session": True})
+    print(f"  starting the SAM3 server (loads the model once, stops after {idle:g} idle "
+          f"minutes) ...", flush=True)
+    child = subprocess.Popen(command, cwd=str(root), stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             close_fds=True, **detach)
+    deadline = time.monotonic() + SERVER_START_TIMEOUT
+    while time.monotonic() < deadline:
+        if _health(port) is not None:
+            return
+        code = child.poll()
+        # Port taken: another server is up or loading; keep waiting for that one.
+        if code is not None and code != SERVER_PORT_TAKEN:
+            raise SamLocalError(f"the SAM3 server stopped while starting (exit {code}); "
+                                f"see {log}")
+        time.sleep(1.0)
+    taken = " -- or another program holds that port" if child.poll() == SERVER_PORT_TAKEN else ""
+    raise SamLocalError(f"the SAM3 server did not answer on port {port} within "
+                        f"{SERVER_START_TIMEOUT}s{taken}; see {log}")
+
+
+def _post(port: int, path: str, body: dict, timeout: float) -> tuple:
+    request = urllib.request.Request(f"http://{SERVER_HOST}:{port}{path}",
+                                     data=json.dumps(body).encode("utf-8"), method="POST",
+                                     headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as reply:
+            return reply.status, json.loads(reply.read())
+    except urllib.error.HTTPError as error:
+        try:
+            return error.code, json.loads(error.read())
+        except ValueError:
+            return error.code, {}
+
+
+def _run_server(root: Path, target: Path, chunk_id: str, work: Path, prompts_path: Path,
+                tile: bool, timeout: int) -> str:
+    """This call through the local SAM3 server, started if it is not up. Returns its output.
+
+    A server that refuses because sam3local changed since it started (409), or that is on
+    its way out (503), is replaced once. Anything else that goes wrong raises: a server that
+    cannot start is a failure to see, not a reason to quietly load the model per call again.
+    """
+    port = int(_server_config(root)["port"])
+    body = {"image": str(target), "chunk_id": chunk_id, "out": str(work),
+            "prompts": str(prompts_path), "tile": bool(tile)}
+    replaced = False
+    while True:
+        if _health(port) is None:
+            _start_server(root, port)
+        try:
+            status, reply = _post(port, "/run", body, timeout)
+        except OSError as exc:
+            raise SamLocalError(f"lost the SAM3 server during {chunk_id} ({exc}); "
+                                f"see {_server_log(root)}") from exc
+        if status in (409, 503) and not replaced:
+            print(f"  the SAM3 server is out of date or stopping "
+                  f"({reply.get('stale') or reply.get('error')}); starting a fresh one",
+                  flush=True)
+            _wait_gone(port)
+            replaced = True
+            continue
+        if status == 200 and reply.get("code") == 0:
+            return reply.get("log", "")
+        raise SamLocalError(f"local SAM3 failed ({status}, code {reply.get('code')}):\n"
+                            f"{reply.get('log', '')}\n{reply.get('error', '')}")
+
+
 def segment(image_path: Path, prompts, work: Path, *, chunk_id: str = "interiors",
             tile: bool = True, timeout: int = 3600, downscale: int = 1,
             rescan: bool = False) -> list:
@@ -257,28 +413,17 @@ def segment(image_path: Path, prompts, work: Path, *, chunk_id: str = "interiors
         return polygons
 
     prompts_path = write_prompts(prompts, work / "sam3_prompts.json")
-    command = [
-        str(_interpreter(root)), str(script),
-        "--image", str(target),
-        "--chunk-id", chunk_id,
-        "--out", str(work),
-        "--prompts", str(prompts_path),
-    ]
-    # Both flags are explicit: left to itself `run_chunk` tiles anything bigger than one tile,
-    # so an untiled locate pass has to say so or it silently becomes the sweep it replaces.
-    command.append("--tile" if tile else "--no-tile")
-
     print(f"  local SAM3 on {target.name} ({', '.join(prompts)}), "
           f"~{passes} passes ...", flush=True)
-    finished = subprocess.run(command, cwd=str(root), timeout=timeout,
-                              capture_output=True, text=True)
-    if finished.returncode != 0:
-        raise SamLocalError(
-            f"local SAM3 failed ({finished.returncode}):\n{finished.stdout}\n{finished.stderr}")
+    if os.environ.get("SAM3LOCAL_SERVER") == "0" or not (root / "scripts" / "serve.py").exists():
+        output = _run_subprocess(root, script, target, chunk_id, work, prompts_path, tile,
+                                 timeout)
+    else:
+        output = _run_server(root, target, chunk_id, work, prompts_path, tile, timeout)
 
     result = work / chunk_id / "polygons.json"
     if not result.exists():
-        raise SamLocalError(f"local SAM3 wrote no {result}:\n{finished.stdout}")
+        raise SamLocalError(f"local SAM3 wrote no {result}:\n{output}")
     document = json.loads(result.read_text(encoding="utf-8"))
     (result.parent / "request.json").write_text(
         json.dumps(request, indent=2) + "\n", encoding="utf-8")

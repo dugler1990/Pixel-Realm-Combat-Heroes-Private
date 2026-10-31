@@ -1,16 +1,9 @@
-"""The walls hug the floor they were given, and a refusal leaves you at the gate.
+"""The walls SAM found are what the map gets, and a refusal leaves you at the gate.
 
 pyramid_01's three-room draw passed every check -- floor right up to the painted door -- and
-the build then died on a traceback in `assert_passage_open`. Two faults, both pinned here:
-
-The emitter laid wall blocks along the floor's outline traced at 1% of its perimeter. Rooms
-joined by corridors are one contour, so that was 145 px, wider than any corridor: the walls
-ran across every room and the entrance corridor. Walls are now the strip round the walkable
-ground itself, so they cannot leave its edge.
-
-The refusal was not caught. It is a ValueError out of `write_plan`, two calls below a gate,
-so the session ended with every draw still unchosen. A refusal now says why and leaves you
-at the decision that led to it.
+the build then died on a traceback in `assert_passage_open`: a ValueError out of
+`write_plan`, two calls below a gate, so the session ended with every draw still unchosen.
+A refusal now says why and leaves you at the decision that led to it.
 
 No map: the spec is built here, because nothing under test reads one.
 """
@@ -31,9 +24,10 @@ from tools.painted_map_pipeline.image_client import ImageClientError
 from tools.painted_map_pipeline.interiors import art as art_mod
 from tools.painted_map_pipeline.interiors import cli as cli_mod
 from tools.painted_map_pipeline.interiors import emit as emit_mod
-from tools.painted_map_pipeline.interiors import floor as floor_mod
 from tools.painted_map_pipeline.interiors import plan as plan_mod
 from tools.painted_map_pipeline.interiors import render as render_mod
+from tools.painted_map_pipeline.interiors import sam_local
+from tools.painted_map_pipeline.interiors import sam_room
 from tools.painted_map_pipeline.interiors.checks import erode
 from tools.painted_map_pipeline.interiors.plan import door_mask, geometry_masks, trace_plan_from_mask
 from tools.painted_map_pipeline.interiors.spec import InteriorSpec
@@ -142,27 +136,23 @@ def plans(spec):
     return [rooms, _pulled_back(spec, rooms)]
 
 
-def test_no_wall_lands_on_walkable_ground(spec, plans):
+def test_no_shell_lands_on_walkable_ground(spec, plans):
     """Not on the floor, not in the way in -- and no piece encloses a room, which a map
     polygon (no holes) would otherwise fill solid."""
     for plan in plans:
         walkable = erode(emit_mod.walkable_mask(plan), SLACK)
-        walls = _raster(spec, emit_mod.wall_pieces(plan))
         shell = _raster(spec, emit_mod.shell_pieces(plan))
 
-        assert walls.any() and shell.any()
-        assert not (walls & walkable).any(), f"{int((walls & walkable).sum())} px walled"
+        assert shell.any()
         assert not (shell & walkable).any(), f"{int((shell & walkable).sum())} px shelled"
 
 
-def test_the_walls_are_solid(spec, plans):
-    """Every pixel of each strip is inside some piece: no threads, no wedges, no seams
+def test_the_shell_is_solid(spec, plans):
+    """Every pixel of the strip is inside some piece: no threads, no wedges, no seams
     where a ring was cut."""
     for plan in plans:
-        for strip, pieces in ((emit_mod.wall_mask(plan), emit_mod.wall_pieces(plan)),
-                              (emit_mod.shell_mask(plan), emit_mod.shell_pieces(plan))):
-            missed = erode(strip, SLACK) & ~_raster(spec, pieces)
-            assert not missed.any(), f"{int(missed.sum())} px of wall missing"
+        missed = erode(emit_mod.shell_mask(plan), SLACK) & ~_raster(spec, emit_mod.shell_pieces(plan))
+        assert not missed.any(), f"{int(missed.sum())} px of wall missing"
 
 
 def test_the_outer_wall_opens_only_at_the_door(spec, plans):
@@ -193,6 +183,215 @@ def test_the_chamber_polygon_is_the_room_and_stays_off_the_door(spec, plans):
     assert not (drawn & ~dilate_mask(room, SLACK)).any(), "past the room"
     assert not (room & ~dilate_mask(drawn, SLACK)).any(), "short of the room"
     assert not (drawn & erode(door_mask(spec), SLACK)).any(), "over the door"
+
+
+# ---------------------------------------------------------------- SAM's walls
+
+def _wall(points, confidence=0.5):
+    return {"class": "stone border", "prompt": "stone border", "confidence": confidence,
+            "points": [list(p) for p in points]}
+
+
+def _box(x0, y0, x1, y1):
+    return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+
+
+@pytest.fixture(scope="module")
+def painting(spec, tmp_path_factory):
+    path = tmp_path_factory.mktemp("painting") / "render_composited.png"
+    Image.new("RGB", tuple(spec.size), (90, 80, 70)).save(path)
+    return path
+
+
+def _sam(coarse, refined, calls=None):
+    """A stand-in `sam_local.segment`: `coarse` (crop px) for the whole crop; for a refine
+    window, `refined` (crop px) clipped to the window and moved into its frame -- what SAM
+    would see of them there."""
+    def segment(image, prompts, work, chunk_id, tile):
+        if calls is not None:
+            calls.append((list(prompts), chunk_id, tile))
+        if "_w_" not in chunk_id:
+            return coarse
+        wx, wy = (int(v) for v in chunk_id.rsplit("_w_", 1)[1].split("_"))
+        size = Image.open(image).size
+        out = []
+        for wall in refined:
+            (ax, ay), (bx, by) = np.min(wall["points"], 0), np.max(wall["points"], 0)
+            ax, ay = max(ax, wx), max(ay, wy)
+            bx, by = min(bx, wx + size[0]), min(by, wy + size[1])
+            if ax < bx and ay < by:
+                out.append(_wall(_box(ax - wx, ay - wy, bx - wx, by - wy), wall["confidence"]))
+        return out
+    return segment
+
+
+def _bbox(wall):
+    xs, ys = zip(*wall["points"])
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def test_sam_walls_keeps_confident_walls_inside_the_building(spec, plans, painting, tmp_path,
+                                                            monkeypatch):
+    crop, (x0, y0) = sam_room.interior_crop(spec, painting, tmp_path)
+    inside = _box(1700 - x0, 1000 - y0, 1900 - x0, 1060 - y0)
+    found = [_wall(inside), _wall(_box(1700 - x0, 1200 - y0, 1900 - x0, 1260 - y0), 0.1),
+             _wall(_box(0, 0, 200, 60))]   # the crop's corner: outside the diamond
+    calls = []
+    monkeypatch.setattr(sam_local, "segment", _sam(found, found, calls))
+    walls = sam_room.sam_walls(plans[0], painting, tmp_path)
+
+    chunk = sam_room._chunk_id(spec, painting)
+    assert calls[0] == (list(sam_room.WALL_PROMPTS), chunk, False), "the coarse pass first"
+    assert len(calls) > 1 and all(c[1].startswith(chunk + "_w_") and c[2] is False
+                                  for c in calls[1:]), "then the refine windows"
+    assert len(walls) == 1, "the 0.1 one is under the floor, the corner one outside"
+    assert _bbox(walls[0]) == pytest.approx((1700, 1000, 1900, 1060), abs=2), \
+        "back on the painting's pixels"
+    assert walls[0]["collision_mode"] == "solid"
+
+
+def test_refine_windows_go_only_where_the_coarse_walls_are():
+    coarse = np.zeros((3000, 4000), dtype=bool)
+    assert sam_room._windows((4000, 3000), coarse) == []
+
+    coarse[100:120, 100:300] = True
+    boxes = sam_room._windows((4000, 3000), coarse)
+    assert boxes and all(x0 <= 100 < x1 and y0 <= 100 < y1 for x0, y0, x1, y1 in boxes)
+    assert all(x1 - x0 <= sam_room.REFINE_WINDOW and y1 - y0 <= sam_room.REFINE_WINDOW
+               for x0, y0, x1, y1 in boxes)
+
+
+def test_a_refined_mask_off_the_coarse_walls_is_dropped(spec, plans, painting, tmp_path,
+                                                        monkeypatch):
+    """Up close SAM also outlines floor tiles. The coarse pass says what is a wall; the
+    refine pass only says where its edges are."""
+    _crop, (x0, y0) = sam_room.interior_crop(spec, painting, tmp_path)
+    wall = [_wall(_box(1700 - x0, 1000 - y0, 1900 - x0, 1060 - y0))]
+    tiles = [_wall(_box(1700 - x0, 1300 - y0, 1900 - x0, 1360 - y0))]
+    monkeypatch.setattr(sam_local, "segment", _sam(wall, wall + tiles))
+    walls = sam_room.sam_walls(plans[0], painting, tmp_path)
+
+    assert [_bbox(w) for w in walls] == [pytest.approx((1700, 1000, 1900, 1060), abs=2)]
+
+
+def test_a_wall_across_two_windows_is_one_wall(spec, plans, painting, tmp_path, monkeypatch):
+    """Each window sees part of it; the parts are OR-ed into one picture before tracing."""
+    _crop, (x0, y0) = sam_room.interior_crop(spec, painting, tmp_path)
+    stride = int(sam_room.REFINE_WINDOW * (1 - sam_room.REFINE_OVERLAP))
+    left, right = stride - 300, sam_room.REFINE_WINDOW + 300      # past both windows' edges
+    long = [_wall(_box(left, 1000 - y0, right, 1060 - y0))]
+    monkeypatch.setattr(sam_local, "segment", _sam(long, long))
+    walls = sam_room.sam_walls(plans[0], painting, tmp_path)
+
+    assert len(walls) == 1
+    assert _bbox(walls[0]) == pytest.approx((left + x0, 1000, right + x0, 1060), abs=2)
+
+
+def _across_the_way_in(spec):
+    """A quad (canvas px) lying across the door line 20 px in, like the door's painted frame."""
+    door, inward = np.asarray(spec.door_origin), np.asarray(spec.door_inward)
+    tangent = np.asarray([-inward[1], inward[0]])
+    middle = door + inward * 20
+    return [middle + tangent * 150 - inward * 8, middle + tangent * 150 + inward * 8,
+            middle - tangent * 150 + inward * 8, middle - tangent * 150 - inward * 8]
+
+
+def _strip(spec, across, deep):
+    """A quad (canvas px) from `across[0]` to `across[1]` along the door, and from `deep[0]`
+    to `deep[1]` in from the door point."""
+    door, inward = np.asarray(spec.door_origin), np.asarray(spec.door_inward)
+    tangent = np.asarray([-inward[1], inward[0]])
+    return [tuple(door + tangent * a + inward * d) for a, d in
+            ((across[0], deep[0]), (across[1], deep[0]), (across[1], deep[1]), (across[0], deep[1]))]
+
+
+def test_sam_pieces_touching_the_door_are_dropped(spec, plans, painting, tmp_path, monkeypatch):
+    """great_pyramid's: the wall's painted top ran straight over the passage behind the door,
+    and SAM drew it as one long band and again as shorter pieces either side. The band touches
+    the door and goes; the pieces either side keep the wall, and only the strip at the door
+    opens."""
+    plan = plans[1]
+    _crop, (x0, y0) = sam_room.interior_crop(spec, painting, tmp_path)
+    deep = (150, 190)                                   # the door polygon reaches 160 in
+    pieces = [_strip(spec, (-400, 400), deep),          # across the doorway
+              _strip(spec, (-400, -120), deep), _strip(spec, (120, 400), deep)]
+
+    def segment(image, prompts, work, chunk_id, tile):
+        # The quads themselves in each window's frame: `_sam`'s boxes would square them off.
+        wx, wy = (int(v) for v in chunk_id.rsplit("_w_", 1)[1].split("_")) \
+            if "_w_" in chunk_id else (0, 0)
+        return [_wall([(x - x0 - wx, y - y0 - wy) for x, y in piece]) for piece in pieces]
+
+    monkeypatch.setattr(sam_local, "segment", segment)
+    walls = sam_room.sam_walls(plan, painting, tmp_path)
+    covered = _raster(spec, sam_room.world_walls(spec, walls))
+
+    def at(across):
+        x, y = _point(np.asarray(_strip(spec, (across, across), (170, 170))[0]))
+        return covered[y, x]
+
+    assert at(-260) and at(260), "the wall either side of the door is kept"
+    assert not at(0), "the band across the doorway is gone"
+    assert not (covered & door_mask(spec)).any()
+    assert emit_mod.problem(plan, walls) == ""
+
+
+def test_a_redrawn_painting_gets_a_new_sam_run(spec, painting, tmp_path):
+    other = tmp_path / "render_composited.png"
+    Image.new("RGB", tuple(spec.size), (10, 10, 10)).save(other)
+    assert sam_room._chunk_id(spec, painting) != sam_room._chunk_id(spec, other)
+    assert sam_room._chunk_id(spec, painting) == sam_room._chunk_id(spec, painting)
+
+
+def _layers(target):
+    root = ET.parse(target).getroot()
+    return {group.get("name"): [o.get("name") for o in group.findall("object")]
+            for group in root.iter("objectgroup")}
+
+
+def test_the_walls_go_into_their_own_layer_once(plans, tmp_path):
+    target = tmp_path / "map.tmx"
+    target.write_text(MINIMAL_MAP.replace(
+        ' <objectgroup id="1" name="ObstaclePolygons">\n',
+        ' <objectgroup id="1" name="ObstaclePolygons">\n'
+        '  <object id="9" name="test_pyramid_wall_00" x="0" y="0">\n'
+        '   <polygon points="0,0 1,0 1,1"/>\n'
+        '  </object>\n'), encoding="utf-8")
+    walls = [dict(_wall(_box(1700, 1000, 1900, 1060)), sam3_class="stone border",
+                  collision_mode="solid", chunk_id="walls_x")]
+    for _ in range(2):
+        result = emit_mod.write_plan(plans[0], target, walls)
+
+    layers = _layers(target)
+    assert layers["ObstaclePolygons"] == [], "the template's walls are gone from the SAM layer"
+    names = layers["BuildingWalls"]
+    assert names.count("test_pyramid_wall_00") == 1 and result["walls"] == 1
+    assert all(not n.startswith("test_pyramid_room") for group in layers.values() for n in group)
+    root = ET.parse(target).getroot()
+    wall = next(o for o in root.iter("object") if o.get("name") == "test_pyramid_wall_00")
+    props = {p.get("name"): p.get("value") for p in wall.findall("properties/property")}
+    assert props["sam3_class"] == "stone border" and props["collision_mode"] == "solid"
+    assert (int(wall.get("x")), int(wall.get("y"))) == (1700 + 5000, 1000 + 3000)
+    sight = [n for n in layers["Buildings"] if n.startswith("test_pyramid_sight")]
+    assert len(sight) == 1 + result["shell"], "sight stops at the same walls"
+
+
+def test_a_wall_across_the_way_in_is_refused(spec, plans):
+    plan = plans[1]                                 # the floor stops short of the door
+    walls = [dict(_wall([tuple(p) for p in _across_the_way_in(spec)]), sam3_class="stone border",
+                  collision_mode="solid")]
+    assert "closes the doorway" in emit_mod.problem(plan, walls)
+    assert emit_mod.problem(plan, []) == ""
+
+
+def test_a_wall_across_the_floor_past_the_door_is_refused(spec, plans):
+    """great_pyramid's: the floor started right behind the door and SAM's wall lay across it
+    further in. The old check walked a 1 px line only as far as the first floor pixel, and
+    passed it; a body walking in does not. Wide enough to meet the shell either side: stone
+    that is neither wall nor shell is ground the engine lets you walk on."""
+    plan = plans[0]                                 # the floor reaches the door
+    assert "closes the doorway" in emit_mod.problem(
+        plan, [_wall(_strip(spec, (-3000, 3000), (300, 320)))])
 
 
 # ---------------------------------------------------------------- the gates
@@ -275,72 +474,78 @@ def test_a_first_draw_that_fails_stops_cleanly(tmp_path, monkeypatch, capsys):
     assert "drawing the plan failed" in capsys.readouterr().err
 
 
-def _floor_gate_env(monkeypatch, spec, work, verdicts=("",), write_errors=()):
-    traced = SimpleNamespace(spec=spec, report={"checks": [
-        {"name": "floor_behind_door", "passed": True},
-        {"name": "unpainted", "passed": True}]})
-    monkeypatch.setattr(floor_mod, "draw_floor", lambda *a, **k: Image.new("RGB", (4, 4)))
-    monkeypatch.setattr(floor_mod, "trace_floor", lambda painting, spec: traced)
-    monkeypatch.setattr(floor_mod, "floor_overlay", lambda plan, source, out: out)
+WALLS = [{"points": [[0, 0], [10, 0], [10, 10]], "sam3_class": "stone border",
+          "collision_mode": "solid"}]
+
+
+def _accept_gate_env(monkeypatch, spec, work, verdicts=("",), write_errors=(), sam_errors=()):
+    """The accept screen with SAM, the overlay and the write stubbed out.
+    Returns (plan, kept, writes): what the gate is handed, the render, and the walls written."""
+    plan = SimpleNamespace(spec=spec)
+    kept = work / "render_composited.png"
+    kept.write_bytes(b"render")
+    failures = iter(sam_errors)
+
+    def sam_walls(plan_, painting, work_):
+        error = next(failures, None)
+        if error:
+            raise error
+        return WALLS
+
+    monkeypatch.setattr(sam_room, "sam_walls", sam_walls)
+    monkeypatch.setattr(sam_room, "overlay", lambda painting, walls, out, plan=None: out)
     monkeypatch.setattr(render_mod, "accept", lambda plan, composited: work / "interior.png")
     answers = iter(verdicts)
-    monkeypatch.setattr(emit_mod, "problem", lambda plan: next(answers))
+    monkeypatch.setattr(emit_mod, "problem", lambda plan, walls: next(answers))
     errors = iter(write_errors)
     writes = []
 
-    def write(plan, written):
+    def write(plan, written, walls):
         error = next(errors, None)
         if error:
             raise error
-        writes.append(plan)
+        writes.append(walls)
 
     monkeypatch.setattr(cli_mod, "_write_into_map", write)
-    return traced, writes
+    return plan, kept, writes
 
 
-def test_a_floor_the_emitter_refuses_leaves_you_at_the_floor_gate(
+def test_a_wall_the_emitter_refuses_leaves_you_at_the_accept_screen(
         tmp_path, monkeypatch, capsys):
     spec = _spec(tmp_path)
     work = _scripted(monkeypatch, tmp_path, ["", ""])
-    traced, writes = _floor_gate_env(monkeypatch, spec, work,
-                                     verdicts=["a quad closes the doorway", ""])
+    plan, kept, writes = _accept_gate_env(monkeypatch, spec, work,
+                                          verdicts=["a wall closes the doorway", ""])
 
-    kept = work / "render_composited.png"
-    assert cli_mod._floor_gate(SimpleNamespace(spec=spec), kept, work, _args()) is traced
-    assert len(writes) == 1, "written once, on the second [enter]"
-    assert "not written: a quad closes the doorway" in capsys.readouterr().err
+    assert cli_mod._accept_gate(plan, kept, work, _args()) is plan
+    assert writes == [WALLS], "SAM's walls are what is written, once, on the second [enter]"
+    assert "not written: a wall closes the doorway" in capsys.readouterr().err
 
 
-def test_a_write_a_held_file_stops_leaves_you_at_the_floor_gate(
+def test_a_write_a_held_file_stops_leaves_you_at_the_accept_screen(
         tmp_path, monkeypatch, capsys):
     spec = _spec(tmp_path)
     work = _scripted(monkeypatch, tmp_path, ["", ""])
-    traced, writes = _floor_gate_env(monkeypatch, spec, work, verdicts=["", ""],
-                                     write_errors=[PermissionError("map.tmx is in use")])
+    plan, kept, writes = _accept_gate_env(monkeypatch, spec, work, verdicts=["", ""],
+                                          write_errors=[PermissionError("map.tmx is in use")])
 
-    kept = work / "render_composited.png"
-    assert cli_mod._floor_gate(SimpleNamespace(spec=spec), kept, work, _args()) is traced
+    assert cli_mod._accept_gate(plan, kept, work, _args()) is plan
     assert len(writes) == 1
     assert "writing the map failed -- PermissionError" in capsys.readouterr().err
 
 
-def test_a_floor_painting_that_cannot_be_drawn_goes_back_to_the_render(
-        tmp_path, monkeypatch, capsys):
+def test_a_sam_failure_leaves_you_at_the_accept_screen(tmp_path, monkeypatch, capsys):
     spec = _spec(tmp_path)
-    work = _scripted(monkeypatch, tmp_path, [])
-    _floor_gate_env(monkeypatch, spec, work)
+    work = _scripted(monkeypatch, tmp_path, ["s", ""])
+    plan, kept, writes = _accept_gate_env(
+        monkeypatch, spec, work, sam_errors=[sam_local.SamLocalError("CUDA out of memory")])
 
-    def fails(*args, **kwargs):
-        raise ImageClientError("moderation blocked")
-
-    monkeypatch.setattr(floor_mod, "draw_floor", fails)
-
-    kept = work / "render_composited.png"
-    assert cli_mod._floor_gate(SimpleNamespace(spec=spec), kept, work, _args()) == "back"
-    assert "back to the render gate" in capsys.readouterr().err
+    assert cli_mod._accept_gate(plan, kept, work, _args()) is plan
+    assert writes == [WALLS], "[s] ran SAM again, [enter] wrote"
+    assert "finding the walls failed -- SamLocalError" in capsys.readouterr().err
 
 
-def test_back_from_the_floor_gate_chooses_a_render_again_without_buying_one(
+def test_back_from_the_accept_screen_chooses_a_render_again_without_buying_one(
         tmp_path, monkeypatch):
     spec = _spec(tmp_path)
     work = _scripted(monkeypatch, tmp_path, [])
@@ -376,14 +581,14 @@ def test_keeping_a_different_plan_sets_aside_what_was_made_from_the_old_one(
     work.mkdir()
     Image.new("RGB", (4, 4), (255, 0, 0)).save(work / "plan_control.png")
     _touch(work, "render_composited.png", "render_raw.png", "control.png",
-           "augment_meta.json", "floor_raw.png", "floor_meta.json", "plan_draw1_raw.png")
+           "augment_meta.json", "plan_draw1_raw.png")
     monkeypatch.setattr(plan_mod, "control_image",
                         lambda plan: Image.new("RGB", (4, 4), (0, 0, 255)))
 
     cli_mod._keep_plan(_draw(spec, work), work)
 
-    assert _set_aside(work) == ["augment_meta.json", "control.png", "floor_meta.json",
-                                "floor_raw.png", "render_composited.png", "render_raw.png"]
+    assert _set_aside(work) == ["augment_meta.json", "control.png", "render_composited.png",
+                                "render_raw.png"]
     assert (work / "plan_draw1_raw.png").exists(), "the plan step's own draws stay"
     assert (work / "plan.pickle").exists()
     with Image.open(work / "plan_control.png") as kept:
@@ -395,26 +600,14 @@ def test_keeping_the_same_plan_keeps_what_was_made_from_it(spec, tmp_path, monke
     work = tmp_path / "work"
     work.mkdir()
     Image.new("RGB", (4, 4), (0, 0, 255)).save(work / "plan_control.png")
-    _touch(work, "render_composited.png", "floor_raw.png")
+    _touch(work, "render_composited.png")
     monkeypatch.setattr(plan_mod, "control_image",
                         lambda plan: Image.new("RGB", (4, 4), (0, 0, 255)))
 
     cli_mod._keep_plan(_draw(spec, work), work)
 
-    assert (work / "render_composited.png").exists() and (work / "floor_raw.png").exists()
+    assert (work / "render_composited.png").exists()
     assert not (work / "old").exists()
-
-
-def test_a_new_render_sets_aside_the_floor_trace(spec, tmp_path, monkeypatch):
-    work = _scripted(monkeypatch, tmp_path, ["r", ""])
-    _touch(work, "render_composited.png", "floor_raw.png", "floor_meta.json")
-    monkeypatch.setattr(render_mod, "render_interior",
-                        lambda *a, **k: [work / "render_composited.png"])
-
-    kept = cli_mod._render_gate(SimpleNamespace(spec=spec), work, _args())
-
-    assert kept == work / "render_composited.png"
-    assert _set_aside(work) == ["floor_meta.json", "floor_raw.png"]
 
 
 def test_a_plan_that_cannot_be_kept_leaves_you_at_the_plan_gate(
@@ -467,7 +660,7 @@ def test_accepting_twice_rewrites_the_door_rather_than_stacking_it(plans, tmp_pa
     target = tmp_path / "map.tmx"
     target.write_text(MINIMAL_MAP, encoding="utf-8")
     for _ in range(2):
-        emit_mod.write_plan(plans[0], target)
+        emit_mod.write_plan(plans[0], target, [])
 
     root = ET.parse(target).getroot()
     doors = [o for o in root.iter("object")
