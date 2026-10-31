@@ -44,7 +44,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import shutil
 import sys
@@ -52,6 +51,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from ..building_interiors import BuildingInteriorError, load_building
+from ..review_gate import ask as _ask, prompt_sent as _prompt_sent, sent as _sent, show as _show
 from . import art as art_mod
 from . import ask_model
 from . import checks as layout_checks
@@ -147,15 +147,6 @@ def buildings_on(map_path: Path) -> list:
                 "has_door": bool(props.get("door_x")),
             })
     return found
-
-
-def _ask(question, default=""):
-    suffix = f" [{default}]" if default else ""
-    try:
-        answer = input(f"{question}{suffix}\n> ").strip()
-    except EOFError:
-        answer = ""
-    return answer or default
 
 
 def _work(building: str) -> Path:
@@ -262,14 +253,6 @@ def _score_against_map(candidates, map_path: Path, object_prompt: str) -> str:
         else:
             candidate.notes = candidate.notes + scored.notes
     return "  " + "\n  ".join(shared) if shared else ""
-
-
-def _show(path: Path) -> None:
-    """Open the overlay. Looking at a threshold change is the point of making one."""
-    try:
-        os.startfile(str(Path(path).resolve()))       # noqa: S606  (Windows)
-    except (AttributeError, OSError):
-        pass                                          # not Windows, or no viewer: the path prints
 
 
 def _rest(choice: str) -> str:
@@ -829,42 +812,6 @@ def _redoor(spec, gap: float) -> None:
     spec.door_inward = tuple(inward)
     spec.arch_quad = tuple((float(x), float(y)) for x, y in arch)
     print(f"  doorway now {spec.door_width:.0f} px")
-
-
-def _prompt_sent(work: Path, name: str, rebuild) -> str:
-    """The prompt file the pass wrote, or a rebuild of it if there is none yet.
-
-    The file is what actually went, criticism from a retry included. Rebuilding it from the
-    spec prints the prompt a fresh draw WOULD get, which after an `r1` is a different thing --
-    and printing the wrong one is exactly the failure this whole block exists to stop.
-    """
-    path = Path(work) / name
-    if path.exists():
-        try:
-            return path.read_text(encoding="utf-8")
-        except OSError:
-            pass
-    return rebuild()
-
-
-def _sent(prompt: str, images) -> None:
-    """The prompt in full, and the images that went with it, by path.
-
-    Both halves matter and only one was ever printed. A render is the exterior plus a control
-    image plus these words, and judging the result without seeing all three is guesswork --
-    the same guesswork that had us reading numbers off draws for hours.
-    """
-    print("\n  ---- prompt sent ----")
-    for line in (prompt or "").rstrip().splitlines():
-        print(f"  | {line}")
-    print("  ---- images sent ----")
-    for label, path in images:
-        if not path:
-            print(f"  | {label:<10} -")
-            continue
-        mark = "" if Path(path).exists() else "   (not written yet)"
-        print(f"  | {label:<10} {path}{mark}")
-    print("  ---------------------")
 
 
 def _mask_sent(work: Path, pass_name: str) -> Path:

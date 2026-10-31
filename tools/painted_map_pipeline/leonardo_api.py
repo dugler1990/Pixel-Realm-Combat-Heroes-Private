@@ -349,6 +349,26 @@ def _iter_image_items(images) -> list[dict]:
     return items
 
 
+def _extract_video_urls(generation) -> list[str]:
+    """Mp4s on a finished video generation. A poster image is not the clip."""
+    urls: list[str] = []
+    if isinstance(generation, list):
+        for entry in generation:
+            urls.extend(_extract_video_urls(entry))
+        return urls
+    root = _generation_root(_normalize_response(generation))
+    images = root.get("generated_images") or root.get("images") or []
+    for item in _iter_image_items(images):
+        for key in ("motionMP4URL", "mp4Url", "videoUrl"):
+            raw = item.get(key)
+            if raw:
+                urls.append(str(raw))
+        url = str(item.get("url") or "")
+        if url.split("?", 1)[0].lower().endswith(".mp4"):
+            urls.append(url)
+    return urls
+
+
 def _extract_image_urls(generation) -> list[str]:
     urls: list[str] = []
     if isinstance(generation, list):
@@ -384,7 +404,7 @@ def wait_for_generation(generation_id: str, config: dict) -> dict:
         result = get_generation(generation_id, config)
         status = _generation_status(result)
         last_status = status or last_status
-        urls = _extract_image_urls(result)
+        urls = _extract_image_urls(result) or _extract_video_urls(result)
         if urls:
             return result
         if status in {"FAILED", "ERROR"}:
@@ -475,6 +495,111 @@ def _cost_usd(create_response) -> float | None:
         except (TypeError, ValueError):
             return None
     return None
+
+
+# Veo 3.1 accepts only these frames, and only these lengths.
+VEO31_SIZES = {
+    (1280, 720),
+    (720, 1280),
+    (1920, 1080),
+    (1080, 1920),
+    (3840, 2160),
+    (2160, 3840),
+}
+VEO31_LITE_SIZES = {(1280, 720), (720, 1280), (1920, 1080), (1080, 1920)}
+VEO31_SECONDS = (4, 6, 8)
+DEFAULT_VEO31_MODEL = "veo-3.1-lite"
+
+
+def video_generation_payload(
+    *,
+    prompt: str,
+    image_id: str,
+    model: str = DEFAULT_VEO31_MODEL,
+    seconds: int = 4,
+    width: int = 1280,
+    height: int = 720,
+    audio: bool = False,
+) -> dict:
+    """The v2 body for one Veo 3.1 clip that starts on an uploaded frame."""
+    model = str(model)
+    size = (int(width), int(height))
+    allowed = VEO31_LITE_SIZES if model == "veo-3.1-lite" else VEO31_SIZES
+    if size not in allowed:
+        choices = ", ".join(f"{w}x{h}" for w, h in sorted(allowed))
+        raise LeonardoApiError(f"{model} does not accept {size[0]}x{size[1]}. Use one of: {choices}")
+    if int(seconds) not in VEO31_SECONDS:
+        raise LeonardoApiError(f"Veo 3.1 duration must be 4, 6, or 8 seconds, not {seconds}")
+    return {
+        "model": model,
+        "public": False,
+        "parameters": {
+            "prompt": prompt,
+            "guidances": {
+                "start_frame": [
+                    {"image": {"id": image_id, "type": "UPLOADED"}},
+                ],
+            },
+            "duration": int(seconds),
+            "motion_has_audio": bool(audio),
+            "quantity": 1,
+            "width": size[0],
+            "height": size[1],
+        },
+    }
+
+
+def generate_image_to_video(
+    *,
+    prompt: str,
+    input_image: Path,
+    output_path: Path,
+    config: dict,
+    model: str = DEFAULT_VEO31_MODEL,
+    seconds: int = 4,
+    width: int = 1280,
+    height: int = 720,
+    audio: bool = False,
+) -> dict:
+    """Upload the start frame, ask Veo 3.1 for a clip, and save the mp4."""
+    image_id = upload_init_image(input_image, config)
+    payload = video_generation_payload(
+        prompt=prompt,
+        image_id=image_id,
+        model=model,
+        seconds=seconds,
+        width=width,
+        height=height,
+        audio=audio,
+    )
+    api_key = _api_key(config)
+    base = str(config.get("base_url") or DEFAULT_V2_BASE_URL).rstrip("/")
+    if base.endswith("/v1"):
+        base = DEFAULT_V2_BASE_URL
+    result = _request_json("POST", f"{base}/generations", api_key, payload)
+    generation_id = _extract_generation_id(result)
+    if not generation_id:
+        raise LeonardoApiError(_readable_api_error(result, width, height, model))
+    finished = wait_for_generation(generation_id, config)
+    urls = _extract_video_urls(finished)
+    if not urls:
+        raise LeonardoApiError(f"No video URL in completed generation {generation_id}")
+    download_url(urls[0], output_path)
+    return {
+        "provider": "leonardo",
+        "api_version": "v2",
+        "model": model,
+        "output_path": str(output_path),
+        "generation_id": generation_id,
+        "init_image_id": image_id,
+        "source_url": urls[0],
+        "width": int(width),
+        "height": int(height),
+        "seconds": int(seconds),
+        "create_response": result,
+        "generation_response": finished,
+        "cost_usd": _cost_usd(result),
+    }
 
 
 def generate_with_content_reference(

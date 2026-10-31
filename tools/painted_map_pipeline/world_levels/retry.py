@@ -10,31 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
-def split_retry(line: str) -> tuple[str, Path | None, str]:
-    """Split `r <why> @<image> <note about it>` into (reason, image, note).
-
-    The path is the one token straight after the `@`; everything after that token is the note
-    describing it, with or without an `@@` in front. Taking the whole remainder as the filename
-    is how a sentence ends up being stat()ed.
-    """
-    body = line[1:]
-    body, _, tail = body.partition("@@")
-    reason, _, token = body.partition("@")
-    parts = token.split(None, 1)
-    token = parts[0] if parts else ""
-    note = " ".join(part.strip() for part in (parts[1] if len(parts) > 1 else "", tail)
-                    if part.strip())
-    if not token:
-        # A note with nothing to attach it to is still criticism; keep it as the reason rather
-        # than dropping it silently.
-        return " ".join(part for part in (reason.strip(), note) if part), None, ""
-
-    path = Path(token).expanduser()
-    if not path.is_file():
-        raise FileNotFoundError(f"no such image: {path}")
-    # A stray non-ASCII character from a paste would make ascii_prompt reject the whole job.
-    return reason.strip(), path, note.encode("ascii", "ignore").decode("ascii")
+from ..review_gate import split_retry  # noqa: F401  (review_run and interiors/cli import it from here)
 
 
 def shape_retry(line: str, overlay: Path, note: str, directive: str) -> tuple[str, Path, str]:

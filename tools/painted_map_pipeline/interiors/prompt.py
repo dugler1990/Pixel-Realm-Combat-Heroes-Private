@@ -16,6 +16,7 @@ building rather than typed.
 from __future__ import annotations
 
 from .trace import CLASS_NAMES, FLOOR_RGB, SOLID_RGB
+from ..review_gate import with_criticism  # noqa: F401  (kit, plan and render import it from here)
 
 Block = list  # a list of lines, or None when it does not apply
 
@@ -203,33 +204,3 @@ def plan_prompt(spec) -> str:
         rules_block(spec),
     )
 
-
-def with_criticism(prompt: str, criticism: str = "", attach=(), first_index: int = 2) -> str:
-    """The prompt, plus what was wrong with the last try and what the extra images are.
-
-    Same construction as ``world_levels.job_builder._with_retry_context``: everything the
-    first attempt was given is kept and the criticism goes on the end, because a retry that
-    drops the original instructions trades one failure for another.
-
-    `first_index` is what the first attachment is called, and it is not always 2. The plan
-    pass sends one image, so an attachment is image 2; the render pass already sends the
-    control plan as image 2 and says so in its own prompt, so an attachment there is image 3.
-    Numbering them from 2 regardless would have the prompt call two different pictures "image
-    2", which is worse than not numbering them at all.
-
-    Non-ASCII is stripped rather than rejected: a smart quote pasted into the review prompt
-    would otherwise fail the whole call in `openai_api.edit_image`, after the draw was paid
-    for and while the person is looking at a menu.
-    """
-    from pathlib import Path as _Path
-
-    criticism = (criticism or "").strip()
-    if not criticism and not attach:
-        return prompt
-    lines = [prompt.rstrip(), ""]
-    for position, path in enumerate(attach, start=first_index):
-        lines.append(f"IMAGE {position} IS {_Path(path).name}.")
-    if criticism:
-        lines.append(criticism)
-    text = "\n".join(lines).rstrip() + "\n"
-    return text.encode("ascii", "ignore").decode("ascii")

@@ -50,12 +50,6 @@ levels/*/*/export/**/*.png
 # Scratch renders that collect in the repo root while iterating.
 /*.png
 
-
-# Shadow level folders the interior pipeline writes plans into. Symlinks to the real
-# level's art plus a map.tmx carrying the traced geometry; the shipped map is only
-# written on accept.
-levels/*/*.plan/
-
 # boss_sprite_pipeline: bpy venv, GPU-box tool checkouts, bulky rendered frames
 tools/boss_sprite_pipeline/.venv-bpy/
 tools/boss_sprite_pipeline/gpu_box/vendor/
@@ -83,6 +77,7 @@ generated/building_interiors/_backups/
 # that is what ships. Plans (.pickle), discovery renders and old/ backups stay local.
 generated/building_interiors/
 generated/concepts/
+generated/entity_pipeline/
 levels/*/*/buildings/old_*/
 
 # SAM3 obstacle polygons: 10-20 MB of JSON per chunk, regenerable.

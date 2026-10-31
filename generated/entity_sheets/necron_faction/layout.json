@@ -1,0 +1,19 @@
+{
+  "named_boxes": [
+    ["archangel_commander", [47, 25, 324, 336]],
+    ["archangel_warrior", [357, 42, 665, 336]],
+    ["archangel_guard", [710, 58, 960, 336]],
+    ["dragon_beast", [52, 343, 304, 576]],
+    ["winged_drake", [331, 372, 515, 576]],
+    ["sky_knight", [551, 365, 732, 576]],
+    ["heavy_sky_guard", [791, 356, 946, 576]],
+    ["sky_infantry", [75, 592, 251, 780]],
+    ["sky_spearman", [324, 588, 485, 780]],
+    ["sky_archer", [550, 587, 706, 780]],
+    ["sky_elite", [778, 591, 968, 780]],
+    ["warhound", [76, 805, 249, 960]],
+    ["beastman_assassin", [322, 791, 463, 960]],
+    ["beastman_warrior", [553, 787, 706, 960]],
+    ["beastman_veteran", [791, 790, 938, 960]]
+  ]
+}
