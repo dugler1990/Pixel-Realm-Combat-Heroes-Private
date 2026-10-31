@@ -323,26 +323,37 @@ def test_assemble_punches_the_chamber_and_clips_the_interior():
     assert b.door_mode is None
 
 
-def test_black_stone_covers_the_inside_in_black_round_the_room(monkeypatch):
-    monkeypatch.setattr("Building.INTERIOR_BLACK_STONE", True)
+def test_inside_the_whole_silhouette_is_black():
+    """Black right to the building's edge -- the room, the stone round it, the base -- and
+    nothing past it."""
     footprint = pygame.Rect(0, 0, 80, 80)
-    mask = pygame.Mask((80, 80), fill=True)
+    mask = pygame.Mask((80, 80))
+    mask.draw(pygame.Mask((60, 60), fill=True), (10, 10))
     chamber = (pygame.Rect(20, 20, 30, 30), pygame.Mask((30, 30), fill=True))
     b = assemble(footprint, mask, _shaped_roof(footprint, mask),
-                 pygame.Surface(footprint.size, pygame.SRCALPHA), chamber=chamber)
-    assert tuple(b.roof_inside.get_at((5, 5))) == (0, 0, 0, 255), "the stone is black"
-    assert b.roof_inside.get_at((35, 35))[3] == 0, "the room still shows"
-    assert tuple(b.roof_open.get_at((5, 5)))[:3] == (200, 100, 50), "roof_open keeps the art"
+                 pygame.Surface(footprint.size, pygame.SRCALPHA), chamber=chamber,
+                 name="great_pyramid")
+    assert tuple(b.black.get_at((15, 15))) == (0, 0, 0, 255), "the stone round the room"
+    assert tuple(b.black.get_at((65, 65))) == (0, 0, 0, 255), "down to the base"
+    assert tuple(b.black.get_at((35, 35))) == (0, 0, 0, 255), "under the room, drawn over it"
+    assert b.black.get_at((5, 5))[3] == 0, "outside the building"
+    assert b.name == "great_pyramid"
 
 
-def test_without_black_stone_the_inside_is_covered_by_the_roof(monkeypatch):
-    monkeypatch.setattr("Building.INTERIOR_BLACK_STONE", False)
+def test_the_interior_shows_on_the_floor_and_its_walls_only():
+    """Inside, the painting shows on the floor and on the wall obstacles round it; the
+    stone past them stays black."""
     footprint = pygame.Rect(0, 0, 80, 80)
     mask = pygame.Mask((80, 80), fill=True)
+    interior = pygame.Surface(footprint.size, pygame.SRCALPHA)
+    interior.fill((30, 80, 180, 255))
     chamber = (pygame.Rect(20, 20, 30, 30), pygame.Mask((30, 30), fill=True))
-    b = assemble(footprint, mask, _shaped_roof(footprint, mask),
-                 pygame.Surface(footprint.size, pygame.SRCALPHA), chamber=chamber)
-    assert b.roof_inside is b.roof_open
+    wall = (pygame.Rect(50, 20, 10, 30), pygame.Mask((10, 30), fill=True))
+    b = assemble(footprint, mask, _shaped_roof(footprint, mask), interior,
+                 chamber=chamber, walls=[wall])
+    assert b.interior.get_at((35, 35))[3] == 255, "the floor"
+    assert b.interior.get_at((55, 35))[3] == 255, "its wall"
+    assert b.interior.get_at((70, 35))[3] == 0, "the stone past the wall"
 
 
 def test_assemble_without_a_chamber_uses_the_footprint():

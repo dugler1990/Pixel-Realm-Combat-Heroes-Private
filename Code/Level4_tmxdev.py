@@ -2587,7 +2587,8 @@ class Level4:
                                if isinstance(s, Torch)]
                     lighting.render(self.backend, self.weather.current_time,
                                     (offset.x, offset.y), (W, H),
-                                    torches=torches, player_center=(W // 2, H // 2))
+                                    torches=torches, player_center=(W // 2, H // 2),
+                                    inside=self.layout_manager.visible_sprites.building_inside())
 
                
                 

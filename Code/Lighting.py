@@ -6,15 +6,25 @@ registered fires/spells), composited as a multiply light-map by the GPU backend.
 
 Render each frame:
     lighting.render(backend, time_of_day, camera_offset, screen_size,
-                    torches=<Torch sprites>, player_center=(W//2, H//2))
+                    torches=<Torch sprites>, player_center=(W//2, H//2),
+                    inside=<the building the camera subject is in, or None>)
 
 Generalizable: drop in extra lights with lighting.add_light(LightSource(...)).
+
+Inside a building it is as dark as INTERIOR_AMBIENT at any hour, and the lights that
+belong to that building -- its braziers, registered from the props layer -- shine. They
+shine only from inside: from outside the roof covers them.
 """
 import math
 import random
 from dataclasses import dataclass, field
 
 import pygame
+
+from Settings import INTERIOR_AMBIENT
+
+# Prop types (the category the props tileset gives each tile) that burn like a torch.
+BURNING_PROPS = {"brazier"}
 
 
 @dataclass
@@ -29,6 +39,7 @@ class LightSource:
     flicker: float = 0.0              # 0 = steady; else amplitude (fraction of intensity)
     flicker_speed: float = 0.010      # radians per millisecond
     screen_centered: bool = False
+    building: str | None = None       # name of the building it is inside; None = outdoors
     _phase: float = field(default_factory=lambda: random.uniform(0.0, 1000.0))
 
 
@@ -73,6 +84,21 @@ class LightingManager:
         if light in self._registry:
             self._registry.remove(light)
 
+    def torch_light(self, x, y, building=None):
+        """A light that burns like a Torch sprite's, at world (x, y)."""
+        return LightSource(x=x, y=y, radius=self.torch_radius, color=self.torch_color,
+                           intensity=self.torch_intensity, flicker=self.torch_flicker,
+                           flicker_speed=self.torch_flicker_speed, building=building)
+
+    def add_prop_light(self, props, rect):
+        """Register the light a placed prop gives, if its tile's type burns (a brazier): a
+        torch at the prop's centre, belonging to the prop's `building` tag. Returns the
+        light, or None for a prop that gives none."""
+        if str(props.get("type", "")).strip().lower() not in BURNING_PROPS:
+            return None
+        building = str(props.get("building", "")).strip() or None
+        return self.add_light(self.torch_light(rect.centerx, rect.centery, building))
+
     # ---- time of day -------------------------------------------------------
     def ambient_at(self, t):
         """Ambient brightness [MIN_AMBIENT, 1] by hour-of-day (same curve as the old
@@ -112,15 +138,18 @@ class LightingManager:
         return (math.sin(lean), math.cos(lean), length_scale, strength)
 
     # ---- per-frame render --------------------------------------------------
-    def render(self, backend, time_of_day, offset, screen_size, torches=(), player_center=None):
-        ambient = self.ambient_at(time_of_day)
+    def render(self, backend, time_of_day, offset, screen_size, torches=(), player_center=None,
+               inside=None):
+        # Inside a building it is the building's own darkness, whatever the hour.
+        ambient = INTERIOR_AMBIENT if inside is not None else self.ambient_at(time_of_day)
         if ambient >= 0.999:
             return  # full daylight: multiply-by-1 is a no-op, skip the whole pass
 
         w, h = screen_size
         ox, oy = offset
-        # 0 at full day -> 1 at full dark
-        dark = (1.0 - ambient) / (1.0 - self.MIN_AMBIENT)
+        # 0 at full day -> 1 at full dark (indoors can be darker than night; held at 1)
+        dark = min(1.0, (1.0 - ambient) / (1.0 - self.MIN_AMBIENT))
+        inside_name = getattr(inside, "name", None) if inside is not None else None
         ticks = pygame.time.get_ticks()
 
         backend.begin_light_pass(ambient)
@@ -137,8 +166,10 @@ class LightingManager:
             self._emit(backend, t.rect.centerx - ox, t.rect.centery - oy,
                        self.torch_radius, self.torch_color, self.torch_intensity * fl, w, h)
 
-        # Registered generic lights
+        # Registered generic lights. A building's own lights shine only from inside it.
         for L in self._registry:
+            if L.building is not None and L.building != inside_name:
+                continue
             if L.screen_centered and player_center is not None:
                 lx, ly = player_center
             else:

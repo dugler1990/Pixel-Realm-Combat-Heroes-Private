@@ -102,6 +102,18 @@ def test_one_furnishing_variant_per_building_is_loaded():
         assert xs in ([0, 50, 200], [100, 200]), "one variant, never both; the hand prop always"
 
 
+def test_a_brazier_burns_like_a_torch_in_its_building():
+    from Lighting import LightingManager
+
+    manager = _manager()
+    manager.lighting = LightingManager()
+    manager.create_props_layer([_placed(100, 200, 30, 40, type="brazier", building="pyramid"),
+                                _placed(0, 0, 20, 60, type="statue", building="pyramid")])
+    (light,) = manager.lighting._registry
+    assert (light.x, light.y, light.building) == (115, 220, "pyramid")
+    assert light.radius == manager.lighting.torch_radius
+
+
 def test_the_debug_setting_picks_the_variant(monkeypatch):
     import Settings
 

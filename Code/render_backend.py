@@ -52,28 +52,29 @@ class RenderBackend:
         pygame.draw.circle(tmp, color, (radius, radius), radius, width)
         self.blit(tmp, (center[0] - radius, center[1] - radius))
 
-    def blit_fan(self, surface, dest, center, ring, *, cache_key=None):
-        """Blit `surface` at `dest`, but only inside `ring`: a polygon in screen px that is
-        star-shaped around `center`, so the triangles center, ring[i], ring[i+1] cover it.
+    def blit_scaled(self, surface, dest_rect, *, cache_key=None):
+        """Blit `surface` stretched smoothly over `dest_rect` (screen px).
 
-        Generic version: cut the covered part out on the CPU and blit that. The GPU backend
-        draws the triangles from the resident texture instead, and uploads nothing.
+        Generic version: smooth-scale just the part that lands on screen, on the CPU, and
+        blit that. The GPU backend stretches the resident texture instead.
         """
-        points = [(float(x), float(y)) for x, y in ring]
-        if len(points) < 3:
+        dest = pygame.Rect(dest_rect)
+        src_w, src_h = surface.get_size()
+        if dest.width <= 0 or dest.height <= 0 or src_w == 0 or src_h == 0:
             return
-        xs, ys = [x for x, _ in points], [y for _, y in points]
-        left, top = math.floor(min(xs)), math.floor(min(ys))
-        box = pygame.Rect(left, top, math.ceil(max(xs)) - left + 1, math.ceil(max(ys)) - top + 1)
-        box = box.clip(pygame.Rect(dest[0], dest[1], *surface.get_size()))
-        box = box.clip(pygame.Rect((0, 0), self.get_size()))
-        if box.width <= 0 or box.height <= 0:
+        shown = dest.clip(pygame.Rect((0, 0), self.get_size()))
+        if shown.width <= 0 or shown.height <= 0:
             return
-        piece = surface.subsurface(box.move(-dest[0], -dest[1])).copy()
-        stencil = pygame.Surface(box.size, pygame.SRCALPHA)
-        pygame.draw.polygon(stencil, (255, 255, 255, 255), [(x - box.x, y - box.y) for x, y in points])
-        piece.blit(stencil, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-        self.blit(piece, box.topleft)
+        kx, ky = src_w / dest.width, src_h / dest.height
+        # The source pixels under the part on screen, one wider each side to smooth from.
+        left = max(0, int((shown.left - dest.left) * kx) - 1)
+        top = max(0, int((shown.top - dest.top) * ky) - 1)
+        right = min(src_w, math.ceil((shown.right - dest.left) * kx) + 1)
+        bottom = min(src_h, math.ceil((shown.bottom - dest.top) * ky) + 1)
+        piece = surface.subsurface((left, top, right - left, bottom - top))
+        size = (round((right - left) / kx), round((bottom - top) / ky))
+        at = (dest.left + round(left / kx), dest.top + round(top / ky))
+        self.blit(pygame.transform.smoothscale(piece, size), at)
 
     def compose(self, size=None):
         """Offscreen SRCALPHA surface sized to `size` (default: full backend size).
@@ -982,11 +983,12 @@ class GPUBackend(RenderBackend):
         if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
             BENCHMARK_RUNTIME.metrics.record_gpu_draw_call()
 
-    def _resident_texture(self, surface, cache_key):
+    def _resident_texture(self, surface, cache_key, smooth=False):
         """The large-cache texture for `surface`, uploaded the first time `cache_key` is seen.
 
         For large surfaces (ground, weather frames, interiors) that have stable ids but
-        exceed the atlas size cap. Upload once, reuse every frame.
+        exceed the atlas size cap. Upload once, reuse every frame. `smooth` filters it
+        linearly, for a texture drawn stretched.
         """
         gl_tex = self._large_cache.get(cache_key)
         if gl_tex is None:
@@ -994,6 +996,9 @@ class GPUBackend(RenderBackend):
             pixels = pygame.image.tostring(surface.convert_alpha(), "RGBA", False)
             gl_tex = self._make_texture()
             glBindTexture(GL_TEXTURE_2D, gl_tex)
+            if smooth:
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
                          GL_RGBA, GL_UNSIGNED_BYTE, pixels)
             glBindTexture(GL_TEXTURE_2D, 0)
@@ -1002,39 +1007,19 @@ class GPUBackend(RenderBackend):
                 BENCHMARK_RUNTIME.metrics.record_gpu_texture_upload(0.0)
         return gl_tex
 
-    def blit_fan(self, surface, dest, center, ring, *, cache_key=None):
-        """The fan as triangles textured from the resident copy of `surface`: one per ring
-        edge, written straight into the batch, so a fan that changes uploads nothing."""
+    def blit_scaled(self, surface, dest_rect, *, cache_key=None):
+        """`surface` stretched over `dest_rect` from a resident, linearly filtered texture:
+        the stretch itself smooths it, and nothing is uploaded until the surface changes."""
         if cache_key is None:
-            # Nothing to keep a resident texture under: cut it out on the CPU instead.
-            super().blit_fan(surface, dest, center, ring)
+            super().blit_scaled(surface, dest_rect)
             return
         width, height = surface.get_size()
-        ring = np.asarray(ring, dtype=np.float32).reshape(-1, 2)
-        if width == 0 or height == 0 or len(ring) < 3:
+        x, y, w, h = pygame.Rect(dest_rect)
+        if width == 0 or height == 0 or w <= 0 or h <= 0:
             return
-        texture = self._resident_texture(surface, cache_key)
-        dest_x, dest_y = self._dest_topleft(dest)
-        corners = np.empty((len(ring), 3, 2), dtype=np.float32)
-        corners[:, 0] = center
-        corners[:, 1] = ring
-        corners[:, 2] = np.roll(ring, -1, axis=0)
-        corners = corners.reshape(-1, 2)
-        if len(ring) % 2:
-            # The batch holds two triangles a slot: pad with one that covers nothing.
-            corners = np.vstack([corners, np.repeat(corners[:1], 3, axis=0)])
-        verts = np.ones((len(corners), _FLOATS_PER_VERT), dtype=np.float32)
-        verts[:, 0:2] = corners
-        verts[:, 2] = (corners[:, 0] - dest_x) / width
-        verts[:, 3] = (corners[:, 1] - dest_y) / height
-        flat = verts.reshape(-1)
+        texture = self._resident_texture(surface, cache_key, smooth=True)
+        self._push_batch(texture, (x, y, w, h), (0.0, 0.0, 1.0, 1.0))
         self._flush_batch()
-        for start in range(0, len(flat), _BATCH_BUF_FLOATS):
-            chunk = flat[start:start + _BATCH_BUF_FLOATS]
-            self._batch_verts[:len(chunk)] = chunk
-            self._batch_texture = texture
-            self._batch_count = len(chunk) // _FLOATS_PER_QUAD
-            self._flush_batch()
         if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
             BENCHMARK_RUNTIME.metrics.record_gpu_draw_call()
 
@@ -1406,7 +1391,7 @@ class StubBackend(RenderBackend):
         return self._surface
 
     # --- GPU-only draw helpers some draw paths call directly (all no-ops) ---
-    def blit_fan(self, *args, **kwargs):
+    def blit_scaled(self, *args, **kwargs):
         pass
 
     def draw_shadow(self, *args, **kwargs):

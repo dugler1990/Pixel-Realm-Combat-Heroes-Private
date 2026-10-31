@@ -908,7 +908,9 @@ class LayoutManager:
         (extract-props); pytmx copies the tile's properties onto each placed object. The
         art joins the y-sorted sprites, so you can walk behind a statue, and a separate
         invisible obstacle covers just its footprint (prop_base_mask), so you bump into
-        the plinth, not the head. mount=wall props (sconces, banners) block nothing.
+        the plinth, not the head. mount=wall props (sconces, banners) block nothing. A prop
+        whose tile type burns (a brazier, Lighting.BURNING_PROPS) lights like a torch,
+        inside its `building`.
 
         Furnished interiors (tools/painted_map_pipeline/interiors, `furnish`) write several
         variants per building, each object tagged `building` and `variant`; one variant per
@@ -939,6 +941,10 @@ class LayoutManager:
             Tile(pos, [self.visible_sprites], "ground", surface=image, mask=mask)
 
             props = getattr(object_, "properties", None) or {}
+            # A brazier burns like a torch, inside its building.
+            lighting = getattr(self, "lighting", None)
+            if lighting is not None:
+                lighting.add_prop_light(props, pygame.Rect(pos, size))
             if str(props.get("mount", "floor")).strip().lower() == "wall":
                 continue
             base = prop_base_mask(mask)
@@ -975,14 +981,16 @@ class LayoutManager:
         """Authored buildings: a footprint plus roof and interior art.
 
         The object's shape is the building's exterior: the art bounds, and what the roof
-        is clipped to. Three tags describe the rest, each an object carrying `<tag>=<name>`:
-          chamber_of -- the room you can stand in. The trigger for the cutaway and the
-            hole in the roof. What the interior pipeline traced from the painting.
+        is clipped to. Two tags describe the rest, each an object carrying `<tag>=<name>`:
+          chamber_of -- the floor you can stand on. The trigger for going inside, and the
+            floor the fog of war covers. What the interior pipeline traced from the painting.
           door_of    -- the painted door. Its exterior pixels become an overhead area, so
             a body walking in goes under the door the way it goes under a tree canopy.
-          sight_of   -- a loop round the building's stone, with `band`: the walls
-            InteriorSight casts against. Points, not a mask -- sight stops at edges.
-        Anything carrying one of those tags is geometry OF a building, never a building.
+        Anything carrying one of those tags, or an older one (sight_of, room_of, hole_of),
+        is geometry OF a building, never a building: `room_of` once fell through, became a
+        second building with no art, and drew its placeholder roof over the real room.
+        The building's walls are the obstacles the interior pipeline names `<name>_wall_NN`
+        (in BuildingWalls): inside, the painting shows on them as well as on the floor.
 
         Buildings join NEITHER ground_sprites — create_ground_surface composites those
         into one static texture, which would put the roof permanently beyond reach of
@@ -1001,19 +1009,9 @@ class LayoutManager:
         tmx_folder = getattr(self, "tmx_folder", None)
 
         # Pass 1: the shapes that belong to a building, keyed by its name.
-        chambers, doors, sight_loops, sight_bands = {}, {}, {}, {}
-        # The scale every other building shape gets in _mask_and_rect_for_tmx_shape.
-        scale_x = self.TILESIZE / self.tmxdata.tilewidth
-        scale_y = self.TILESIZE / self.tmxdata.tileheight
+        chambers, doors = {}, {}
         for object_ in tmx_object_layer:
             props = getattr(object_, "properties", None) or {}
-            owner = str(props.get("sight_of", "")).strip()
-            if owner:
-                points = getattr(object_, "points", None) or ()
-                sight_loops.setdefault(owner, []).append(
-                    [(float(x) * scale_x, float(y) * scale_y) for x, y in points])
-                sight_bands[owner] = float(props.get("band", 0)) * scale_x
-                continue
             for key, into in (("chamber_of", chambers), ("door_of", doors)):
                 owner = str(props.get(key, "")).strip()
                 if not owner:
@@ -1028,10 +1026,19 @@ class LayoutManager:
                 else:
                     into[owner] = (rect, mask)
 
+        walls = {}
+        for object_ in getattr(self.tmxdata, "objects", ()):
+            owner, tag, _number = str(getattr(object_, "name", "") or "").rpartition("_wall_")
+            if not (tag and owner):
+                continue
+            rect, mask, _pts = self._mask_and_rect_for_tmx_shape(object_)
+            if mask is not None and mask.count():
+                walls.setdefault(owner, []).append((rect, mask))
+
         for object_ in tmx_object_layer:
             props = getattr(object_, "properties", None) or {}
             if any(str(props.get(key, "")).strip()
-                   for key in ("chamber_of", "door_of", "sight_of")):
+                   for key in ("chamber_of", "door_of", "sight_of", "room_of", "hole_of")):
                 continue
             name = str(getattr(object_, "name", ""))
             footprint, mask, _draw_pts = self._mask_and_rect_for_tmx_shape(object_)
@@ -1059,10 +1066,10 @@ class LayoutManager:
             )
             self.buildings.append(assemble(
                 footprint, mask, roof, interior,
-                chamber=chambers.get(name), arch_quad=arch_quad,
+                chamber=chambers.get(name), arch_quad=arch_quad, name=name,
+                walls=walls.get(name, ()),
                 door_origin=door_origin, door_inward=door_inward,
                 door_depth=door_depth, door_mode=door_mode,
-                sight_loops=sight_loops.get(name), sight_band=sight_bands.get(name, 0.0),
             ))
 
             # The door's frame, cut from the roof art: drawn over a body once his feet are

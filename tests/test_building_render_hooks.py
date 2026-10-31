@@ -1,4 +1,4 @@
-"""Where the camera group draws buildings: full roof outside, chamber cutaway inside."""
+"""Where the camera group draws buildings: the roof outside; inside, black and the floor."""
 
 import os
 import sys
@@ -146,15 +146,15 @@ def test_sprites_in_front_of_a_roof_are_redrawn_on_top():
 
 
 def test_a_body_on_the_floor_is_not_redrawn_over_the_roof():
-    """The hole is their window: on the floor, the roof around the room hides whatever
-    sticks out past it. Re-blitting would put the body on top of the pyramid's face."""
+    """Seen from outside, the roof hides a body on the floor. Re-blitting would put the
+    body on top of the pyramid's face."""
     b = _chambered_building()
     group, backend = _group(b)
-    b.update(0.016, (70, 60))                    # in the chamber -> roof_open
+    b.update(0.016, (5000, 5000))                # the subject is outside -> the roof
     sprite = _sprite(group, pygame.Rect(65, 40, 10, 20))   # feet (70, 60), on the floor
-    group._draw_building_roofs(Focus((70, 60)))
+    group._draw_building_roofs(Focus((5000, 5000)))
     surfaces = [c[0] for c in backend.calls]
-    assert b.roof_open in surfaces
+    assert b.roof in surfaces
     assert sprite.image not in surfaces
 
 
@@ -228,29 +228,16 @@ def test_a_door_frame_covers_the_player_only_once_he_is_past_the_door_line():
     assert backend.calls[-1][0] is cover, "past the line: the frame is the last thing drawn"
 
 
-def test_inside_blits_roof_open_not_the_full_roof():
+def test_inside_draws_no_roof():
+    """Inside, the building is its black and its floor, under the sprites: nothing of the
+    roof is drawn over them."""
     b = _building()
     group, backend = _group(b)
     b.update(0.016, b.footprint.center)
 
     group._draw_building_roofs(Focus(b.footprint.center))
 
-    surface, dest = backend.calls[-1]
-    assert surface is b.roof_open
-    assert surface is not b.roof
-    assert dest == (b.footprint.x, b.footprint.y)
-
-
-def test_inside_blits_the_black_stone_when_the_building_has_it():
-    b = _building()
-    b.roof_inside = b.roof_open.copy()
-    group, backend = _group(b)
-    b.update(0.016, b.footprint.center)
-
-    group._draw_building_roofs(Focus(b.footprint.center))
-
-    surface, _dest = backend.calls[-1]
-    assert surface is b.roof_inside
+    assert backend.calls == []
 
 
 def test_offscreen_building_is_culled():
@@ -273,10 +260,8 @@ def test_interior_is_skipped_until_inside_then_drawn_at_footprint():
 
     b.update(0.016, b.footprint.center)
     group._draw_building_interiors()
-    assert len(backend.calls) == 1
-    surface, dest = backend.calls[0]
-    assert surface is b.interior
-    assert dest == (b.footprint.x, b.footprint.y)
+    assert [c[0] for c in backend.calls] == [b.black, b.interior]
+    assert all(dest == (b.footprint.x, b.footprint.y) for _surface, dest in backend.calls)
 
 
 def test_update_probes_the_camera_subject_not_the_player():
@@ -289,26 +274,36 @@ def test_update_probes_the_camera_subject_not_the_player():
     assert b.inside
 
 
-def test_chamber_cutaway_still_draws_a_roof():
-    """A smaller chamber opens the room; it does not hide the whole building."""
+def test_inside_the_building_is_black_but_for_its_floor():
+    """The bug: inside, the stone round the room showed the pyramid's outside -- the roof
+    art, and the ground painted under it. Now it is black down to the base, the room shows
+    the interior, and outside the building nothing changes."""
     footprint = pygame.Rect(20, 20, 100, 80)
     chamber = pygame.Rect(40, 40, 30, 30)
     roof = pygame.Surface(footprint.size, pygame.SRCALPHA)
     roof.fill((200, 160, 100, 255))
-    roof_open = roof.copy()
-    roof_open.fill((0, 0, 0, 0), (20, 20, 30, 30))  # punch chamber in local px
-    b = Building(
-        footprint, roof, pygame.Surface(footprint.size, pygame.SRCALPHA),
-        chamber_rect=chamber, chamber_mask=pygame.Mask((30, 30), fill=True),
-        roof_open=roof_open,
-    )
-    group, backend = _group(b)
+    interior = pygame.Surface(footprint.size, pygame.SRCALPHA)
+    interior.fill((30, 80, 180, 255), (20, 20, 30, 30))   # the room, in local px
+    b = Building(footprint, roof, interior,
+                 chamber_rect=chamber, chamber_mask=pygame.Mask((30, 30), fill=True))
+    pygame.display.init()
+    pygame.display.set_mode((200, 200))
+    backend = CompositingBackend(size=(200, 200))
+    backend.raw_surface.fill((210, 180, 120, 255))         # the painted ground, outside on it
+    group = YSortCameraGroup(
+        pygame.sprite.Group(), FakeGrassManager(), [], backend=backend, buildings=[b])
+    group.offset.update(0, 0)
+    group.window_width, group.window_height = 200, 200
+
     b.update(0.016, chamber.center)
+    group._draw_building_interiors()
     group._draw_building_roofs(Focus(chamber.center))
-    surface, _dest = backend.calls[-1]
-    assert surface is b.roof_open
-    assert surface.get_at((0, 0))[3] == 255, "outer wall of the roof stays"
-    assert surface.get_at((20, 20))[3] == 0, "chamber is punched"
+
+    frame = backend.raw_surface
+    assert frame.get_at((25, 25))[:3] == (0, 0, 0), "the stone round the room is black"
+    assert frame.get_at((115, 95))[:3] == (0, 0, 0), "down to the base"
+    assert frame.get_at((55, 55))[:3] == (30, 80, 180), "the room shows the interior"
+    assert frame.get_at((10, 10))[:3] == (210, 180, 120), "outside the building, untouched"
 
 
 class CompositingBackend(RecordingBackend):
