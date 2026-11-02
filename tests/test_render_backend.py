@@ -100,6 +100,7 @@ def test_gpu_backend_blit_smoke(monkeypatch):
     src.fill((255, 0, 0))
     backend.blit(src, (10, 10))
     backend.fill((0, 255, 0), pygame.Rect(30, 30, 8, 8))
+    backend._flush_batch()  # fills batch with sprites; draw them before reading pixels
 
     glReadBuffer(GL_BACK)
     raw = glReadPixels(0, 0, 64, 64, GL_RGBA, GL_UNSIGNED_BYTE)
