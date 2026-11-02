@@ -406,6 +406,9 @@ class GPUBackend(RenderBackend):
         self._white_texture = self._make_texture(np.array([255, 255, 255, 255], dtype=np.uint8), 1, 1)
         self._atlas_texture = None
         self._atlas_uv = {}
+        # fill() draws this white texel, tinted. build_atlas moves it into the atlas, so fills
+        # join the sprite batch instead of each costing a draw call.
+        self._fill_texture, self._fill_uv = self._white_texture, (0.0, 0.0, 1.0, 1.0)
         self._large_cache: dict[int, int] = {}  # id(surface) → GL texture handle
 
         # Batch state
@@ -556,7 +559,11 @@ class GPUBackend(RenderBackend):
         canvas = pygame.Surface((ATLAS, ATLAS), pygame.SRCALPHA)
         canvas.fill((0, 0, 0, 0))
         uv = {}
-        x, y, row_h = PAD, PAD, 0
+        # The white texel for fill(), placed first so a full atlas can never skip it. Sampled
+        # at its centre, so nearest filtering never reaches the transparent padding beside it.
+        canvas.set_at((PAD, PAD), (255, 255, 255, 255))
+        white_uv = ((PAD + 0.5) / ATLAS, (PAD + 0.5) / ATLAS) * 2
+        x, y, row_h = PAD + 1 + PAD, PAD, 1
         packed = skipped_too_large = skipped_atlas_full = skipped_oversized = 0
 
         for s in surfs:
@@ -584,6 +591,7 @@ class GPUBackend(RenderBackend):
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ATLAS, ATLAS, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels)
         glBindTexture(GL_TEXTURE_2D, 0)
         self._atlas_uv = uv
+        self._fill_texture, self._fill_uv = self._atlas_texture, white_uv
         skipped = skipped_oversized + skipped_too_large + skipped_atlas_full
         total = packed + skipped
         print(f"[ATLAS] packed={packed} skipped_oversized={skipped_oversized} "
@@ -1035,12 +1043,11 @@ class GPUBackend(RenderBackend):
         if blend_func is not None:
             self._flush_batch()
             glBlendFunc(*blend_func)
-            self._push_batch(self._white_texture, dest_rect, (0.0, 0.0, 1.0, 1.0), tint)
+            self._push_batch(self._fill_texture, dest_rect, self._fill_uv, tint)
             self._flush_batch()
             glBlendFunc(*_DEFAULT_BLEND_FUNC)
         else:
-            self._push_batch(self._white_texture, dest_rect, (0.0, 0.0, 1.0, 1.0), tint)
-            self._flush_batch()
+            self._push_batch(self._fill_texture, dest_rect, self._fill_uv, tint)
 
     def draw_rect(self, color, rect, width=0):
         r = pygame.Rect(rect)
