@@ -29,8 +29,7 @@ def _ensure_display():
 
 from abilities.leap_slam import ChargedLeapSlamAbility  # noqa: E402
 from abilities.protocol import PlayerAbilityContext  # noqa: E402
-from hashRect import HashableRect  # noqa: E402
-from Interaction import InteractionContext, InteractionResolver  # noqa: E402
+from Interaction import InteractionResolver  # noqa: E402
 from Settings import ability_data  # noqa: E402
 
 
@@ -77,6 +76,13 @@ class _StubTarget:
         self._leap_runtime = None
         self.damage_received = 0.0
 
+    def plant_sprite_on_hitbox(self):
+        self.rect.center = self.hitbox.center
+
+    def wall_foot(self):
+        """A 16x8 footprint centred on the hitbox's (x, y), which these stubs treat as the feet."""
+        return (-8, -4, 16, 8)
+
     def cancel_displacement_abilities(self):
         from Entity import Entity
 
@@ -116,24 +122,19 @@ class _StubEntity:
         self._dash_runtime = None
         self.impulse_follow_through = 0.5
         self.collision_calls = 0
-        self.level = SimpleNamespace(interaction_resolver=InteractionResolver())
+        self.level = SimpleNamespace(interaction_resolver=InteractionResolver(), attackable_sprites=[])
 
     def groups(self):
         return []
+
+    def plant_sprite_on_hitbox(self):
+        self.rect.center = self.hitbox.center
 
     def collision(self, QuadTree, entity_quad_tree, speed=0):
         self.collision_calls += 1
 
     def get_direction_as_string(self):
         return "right"
-
-
-class _FakeQuadTree:
-    def __init__(self, targets):
-        self._targets = list(targets)
-
-    def hit(self, query):
-        return list(self._targets)
 
 
 def _ability():
@@ -257,24 +258,46 @@ def test_air_control_accumulates_with_direction():
     assert runtime["air_steer_y"] == 0.0
 
 
-def test_landing_aoe_damage_and_impulse_falloff():
-    ability = _ability()
-    entity = _StubEntity(x=0, y=0)
-    center_target = _StubTarget(x=0, y=0, team_id="enemy")
-    edge_target = _StubTarget(x=100, y=0, team_id="enemy", target_id="target-2")
-    quadtree = _FakeQuadTree([center_target, edge_target])
-    runtime = {
+def _landing_runtime(ability):
+    return {
         "charge_ratio": 1.0,
         "impact_center": (0, 0),
         "direction": "right",
         "_ability": ability,
     }
-    ability._resolve_landing_aoe(entity, _ctx(), quadtree, runtime)
+
+
+def test_landing_aoe_hits_feet_on_the_ground_circle_with_falloff():
+    ability = _ability()
+    entity = _StubEntity(x=0, y=0)
+    center_target = _StubTarget(x=0, y=0, team_id="enemy")
+    edge_target = _StubTarget(x=100, y=0, team_id="enemy", target_id="target-2")
+    # 100 px down the screen is about 141 px away on the ground: outside the 120 px blast.
+    below_target = _StubTarget(x=0, y=100, team_id="enemy", target_id="target-3")
+    far_target = _StubTarget(x=200, y=0, team_id="enemy", target_id="target-4")
+    entity.level.attackable_sprites = [center_target, edge_target, below_target, far_target]
+
+    ability._resolve_landing_aoe(entity, _ctx(), None, _landing_runtime(ability))
+
     assert center_target.damage_received == pytest.approx(25.0)
     assert center_target.hitbox.x == pytest.approx(14.0)
-    edge_knockback = 14.0 * (1.0 - 100.0 / 120.0)
-    assert edge_target.damage_received == pytest.approx(25.0 * (1.0 - 100.0 / 120.0))
-    assert edge_target.hitbox.x == pytest.approx(100.0 + int(edge_knockback))
+    # Falloff is the ground distance to the footprint's edge: 100 px minus half its 16 px width.
+    edge_falloff = 1.0 - (100.0 - 8.0) / 120.0
+    assert edge_target.damage_received == pytest.approx(25.0 * edge_falloff)
+    assert edge_target.hitbox.x == pytest.approx(100.0 + int(14.0 * edge_falloff))
+    assert below_target.damage_received == 0
+    assert far_target.damage_received == 0
+
+
+def test_landing_aoe_without_a_group_hits_nobody():
+    ability = _ability()
+    entity = _StubEntity(x=0, y=0)
+    entity.level = SimpleNamespace(interaction_resolver=InteractionResolver())
+    bystander = _StubTarget(x=0, y=0, team_id="enemy")
+
+    ability._resolve_landing_aoe(entity, _ctx(), None, _landing_runtime(ability))
+
+    assert bystander.damage_received == 0
 
 
 def test_arc_height_scales_with_charge_ratio():

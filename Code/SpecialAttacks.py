@@ -115,6 +115,7 @@ class DashAttack(SpecialAttack):
             "damage": attack_config.get("damage"),
             "attack_type": attack_config.get("attack_type", "melee"),
             "hit_once_per_target": attack_config.get("hit_once_per_target", True),
+            "rehit_ms": attack_config.get("rehit_ms"),
             "presentation": attack_config.get(
                 "presentation",
                 {"status_template": "move", "end_status": "idle"},

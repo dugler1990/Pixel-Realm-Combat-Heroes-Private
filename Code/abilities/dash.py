@@ -6,8 +6,7 @@ import pygame
 
 from abilities.base import PlayerAbility
 from abilities.protocol import CombatAbilityContext, PlayerAbilityContext
-from hashRect import HashableRect
-from Interaction import InteractionContext
+import hit_core
 
 STUB_COLLISION_MODES = frozenset()
 IMPLEMENTED_COLLISION_MODES = frozenset({"pass_through", "resolve", "damage_on_hit"})
@@ -68,7 +67,8 @@ class DashAbility(PlayerAbility):
             "damage": self.config.get("damage"),
             "attack_type": self.config.get("attack_type", "melee"),
             "hit_once_per_target": bool(self.config.get("hit_once_per_target", True)),
-            "hit_targets": set(),
+            "hits": {},
+            "rehit_ms": self.config.get("rehit_ms"),
             "end_status_template": end_status_template,
             "_ability": self,
         }
@@ -132,48 +132,34 @@ class DashAbility(PlayerAbility):
             entity.plant_sprite_on_hitbox()
 
     def _apply_damage_on_hit(self, entity, context, entity_quad_tree, runtime) -> None:
-        if entity_quad_tree is None or runtime.get("damage") is None:
+        """Damage every body the dasher's pixels touch, by the dash's repeat rule.
+
+        Bodies come from the entity tree around the dasher (hit_core.bodies_near).
+        hit_once_per_target False keeps no record, so it hits every frame.
+        """
+        if runtime.get("damage") is None:
             return
-
-        entity_id = getattr(entity, "id", None)
-        query = HashableRect(entity.rect, entity_id)
-        nearby = entity_quad_tree.hit(query)
-        resolver = None
-        if isinstance(context, CombatAbilityContext):
-            resolver = context.interaction_resolver()
-
-        for target in nearby:
-            if target is entity:
-                continue
-            target_id = getattr(target, "id", id(target))
-            if runtime["hit_once_per_target"] and target_id in runtime["hit_targets"]:
-                continue
-
-            ctx = InteractionContext(
-                kind="damage",
-                source_kind="dash",
-                source=entity,
-                owner=entity,
-                source_team=getattr(entity, "team_id", None),
-                target=target,
-                amount=runtime["damage"],
-                attack_type=runtime["attack_type"],
-            )
-            if resolver is not None:
-                if not resolver.can_potentially_affect(
-                    getattr(entity, "team_id", None),
-                    getattr(target, "team_id", None),
-                    ctx,
-                ):
-                    continue
-                resolver.apply(ctx)
-            elif hasattr(target, "can_receive_interaction") and target.can_receive_interaction(ctx):
-                target.receive_interaction(ctx)
-            else:
-                continue
-
-            if runtime["hit_once_per_target"]:
-                runtime["hit_targets"].add(target_id)
+        level = getattr(entity, "level", None)
+        if level is None and isinstance(context, CombatAbilityContext):
+            level = (context.combat_context or {}).get("level")
+        resolver = getattr(level, "interaction_resolver", None)
+        shape = hit_core.shape_of(entity)
+        if resolver is None or shape is None:
+            return
+        nearby = hit_core.bodies_near(entity_quad_tree, shape.rect, getattr(entity, "id", -1))
+        targets = hit_core.find_hits(shape, nearby, exclude=(entity,))
+        resolver.strike(
+            targets,
+            hits=runtime["hits"] if runtime["hit_once_per_target"] else None,
+            rehit_ms=runtime["rehit_ms"],
+            kind="damage",
+            source_kind="dash",
+            source=entity,
+            owner=entity,
+            source_team=getattr(entity, "team_id", None),
+            amount=runtime["damage"],
+            attack_type=runtime["attack_type"],
+        )
 
     def _end(self, entity, runtime) -> None:
         entity._dash_runtime = None

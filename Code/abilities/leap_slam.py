@@ -9,8 +9,9 @@ import pygame
 from abilities.base import PlayerAbility
 from abilities.dash import entity_speed
 from abilities.protocol import PlayerAbilityContext
-from hashRect import HashableRect
+import hit_core
 from Interaction import InteractionContext
+from Settings import VIEW_ELEVATION_DEG
 
 
 class ChargedLeapSlamAbility(PlayerAbility):
@@ -297,8 +298,9 @@ class ChargedLeapSlamAbility(PlayerAbility):
         self._sync_airborne_position(entity, runtime, t, dt)
 
     def _resolve_landing_aoe(self, entity, context, entity_quad_tree, runtime) -> None:
-        if entity_quad_tree is None:
-            return
+        level = getattr(entity, "level", None)
+        # No group (a stub level): nobody is hit, but the landing effect still plays.
+        attackable = getattr(level, "attackable_sprites", None) or ()
 
         charge_ratio = float(runtime.get("charge_ratio", 1.0))
         min_radius = float(self.config.get("min_impact_radius", 40))
@@ -311,15 +313,13 @@ class ChargedLeapSlamAbility(PlayerAbility):
         entity.impulse_follow_through = follow_through
 
         center_x, center_y = runtime.get("impact_center", entity.hitbox.center)
-        query_rect = pygame.Rect(0, 0, int(radius * 2), int(radius * 2))
-        query_rect.center = (center_x, center_y)
-        entity_id = getattr(entity, "id", None)
-        nearby = entity_quad_tree.hit(HashableRect(query_rect, entity_id))
+        # The blast is a circle on the ground around the slammer's feet.
+        own_foot = hit_core.foot_shape(entity)
+        ground = own_foot.rect.center if own_foot is not None else (center_x, center_y)
+        blast = hit_core.ground_disc(ground, radius, VIEW_ELEVATION_DEG)
+        nearby = hit_core.find_hits(blast, attackable, exclude=(entity,), body=hit_core.foot_shape)
 
-        resolver = None
-        level = getattr(entity, "level", None)
-        if level is not None:
-            resolver = getattr(level, "interaction_resolver", None)
+        resolver = getattr(level, "interaction_resolver", None)
 
         presentation = self.config.get("presentation") or {}
         particle_template = presentation.get("particle_template")
@@ -333,25 +333,25 @@ class ChargedLeapSlamAbility(PlayerAbility):
                 if animation_player.frames.get(particle_key):
                     animation_player.create_particles(
                         particle_key,
-                        (center_x, center_y),
+                        ground,
                         entity.groups(),
                     )
 
         for target in nearby:
-            if target is entity:
-                continue
-            tx, ty = target.hitbox.center
-            dist = math.hypot(tx - center_x, ty - center_y)
-            if dist > radius:
-                continue
-            falloff = max(0.0, 1.0 - dist / radius) if radius > 0 else 0.0
+            foot = hit_core.foot_shape(target)
+            tx, ty = foot.rect.center
+            gx, gy = ground
+            dist = math.hypot(tx - gx, ty - gy)
+            # Falloff by ground distance to the footprint's edge: the circle the hit test used.
+            reach = hit_core.ground_reach(ground, foot, VIEW_ELEVATION_DEG)
+            falloff = max(0.0, 1.0 - min(reach, radius) / radius) if radius > 0 else 0.0
             damage_amount = base_damage * charge_ratio * falloff
             knockback_mag = base_knockback * charge_ratio * falloff
             if dist == 0:
                 nx, ny = 1.0, 0.0
             else:
-                nx = (tx - center_x) / dist
-                ny = (ty - center_y) / dist
+                nx = (tx - gx) / dist
+                ny = (ty - gy) / dist
 
             if damage_amount > 0:
                 dmg_ctx = InteractionContext(
