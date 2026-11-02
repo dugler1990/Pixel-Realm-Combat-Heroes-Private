@@ -189,17 +189,31 @@ class RangedCombatStrategy(CombatStrategy):
         self.ranged_attacks = ranged_attacks
 
     def decide_action(self, enemy, target):
-        if not hasattr(enemy,"movement_state") :
-            enemy.movement_state = 'defensive'
         distance, _ = enemy.get_target_distance_direction(target)
-        if distance <= enemy.combat_config["ranged_attack_radius"] and enemy.can_attack:
+        radius = enemy.combat_config["ranged_attack_radius"]
+        melee_radius = 0
+        if getattr(target, "attack_type", None) == "melee":
+            melee_radius = (getattr(target, "combat_config", None) or {}).get("melee_attack_radius", 50)
+        if melee_radius and distance <= melee_radius:
+            # A melee fighter is in his own swing range. Back off.
+            enemy.current_attack_type = None
+            enemy.movement_state = "defensive"
+            enemy.status = "move"
+        elif distance > radius:
+            enemy.current_attack_type = None
+            enemy.movement_state = "offensive"
+            enemy.status = "move"
+        elif enemy.can_attack:
             enemy.current_attack_type = "ranged"
-            enemy.movement_state = 'defensive'
+            enemy.movement_state = "hold"
             enemy.status = "attack"
         else:
+            # In range, shot still reloading. Stand still.
             enemy.current_attack_type = None
-            enemy.movement_state = 'defensive'
-            enemy.status = "move"
+            enemy.movement_state = "hold"
+            enemy.status = "idle"
+        if enemy.movement_state != "defensive":
+            enemy._retreat_sign = None
 
     def execute_attack(self, enemy, target):
         if self.handle_special_attacks(enemy, target):
@@ -221,18 +235,42 @@ class RangedCombatStrategy(CombatStrategy):
                                                      amount=attack.get("damage"))
                 enemy.attack_sound.play()
                 enemy.attack_cooldown = attack['cooldown']
-                enemy.direction = Vector2(0, 0) 
-    
+                enemy.direction = Vector2(0, 0)
+
+    def _retreat_direction(self, enemy, toward):
+        """Away from the melee fighter. Picked once per retreat, not every frame.
+
+        combat_config["retreat"] is "back" for straight back. Anything else,
+        including the default, picks straight back or 45 degrees to one side.
+        """
+        back = -toward
+        if back.length_squared() == 0:
+            return back
+        if enemy.combat_config.get("retreat") == "back":
+            return back
+        sign = getattr(enemy, "_retreat_sign", None)
+        if sign is None:
+            sign = random.choice((-1, 0, 1))
+            enemy._retreat_sign = sign
+        if sign == 0:
+            return back
+        return back.rotate(45 * sign)
+
     def move(self, enemy, target):
-        if enemy.status != "attack":  # Only move if not attacking
-            distance, direction = enemy.get_target_distance_direction(target)
-            if enemy.movement_state == 'defensive':
-                enemy.direction = -direction
-            elif enemy.movement_state == 'evasive':
-                enemy.direction = -direction + Vector2(random.uniform(-1, 1), random.uniform(-1, 1)).normalize()
-            enemy.status = 'move'
+        if enemy.status == "attack":
+            enemy.direction = Vector2(0, 0)
+            return
+        _distance, toward = enemy.get_target_distance_direction(target)
+        state = getattr(enemy, "movement_state", "offensive")
+        if state == "offensive":
+            enemy.direction = toward
+            enemy.status = "move"
+        elif state == "defensive":
+            enemy.direction = self._retreat_direction(enemy, toward)
+            enemy.status = "move"
         else:
-            enemy.direction = Vector2(0, 0)  
+            enemy.direction = Vector2(0, 0)
+            enemy.status = "idle"  
 
 
 class MixedCombatStrategy(CombatStrategy):

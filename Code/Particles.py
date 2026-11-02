@@ -1,3 +1,4 @@
+import math
 import pygame
 from Support import import_folder
 from random import choice
@@ -72,7 +73,11 @@ class AnimationPlayer:
 			"sparkle": import_folder("../Graphics/Particles/Sparkle"),
 			"leaf_attack": import_folder("../Graphics/Particles/leaf_attack"),
 			"thunder": import_folder("../Graphics/Particles/Thunder"),
-            'demon_dog_projectile': import_folder("../Graphics/Particles/Ice_Ball_Right_/frames" ),
+            'demon_dog_projectile': self._scale_frames(
+                import_folder("../Graphics/Particles/Ice_Ball_Right_/frames"), 3
+            ),
+            'arrow': [self._arrow_frame()],
+            'stone': [self._stone_frame()],
 
             # Meteor shower phases (Graphics/Particles/Meteor/)
             "meteor_targeting": import_folder("../Graphics/Particles/Meteor/targeting"),
@@ -114,6 +119,38 @@ class AnimationPlayer:
 				)
 			}
 
+    def _arrow_frame(self):
+        """A short arrow pointing right. Turned to face its travel when it is fired."""
+        image = pygame.Surface((16, 5), pygame.SRCALPHA)
+        pygame.draw.line(image, (120, 82, 42), (1, 2), (11, 2), 1)
+        pygame.draw.polygon(image, (186, 186, 194), [(10, 0), (15, 2), (10, 4)])
+        pygame.draw.line(image, (210, 210, 216), (1, 2), (4, 0), 1)
+        pygame.draw.line(image, (210, 210, 216), (1, 2), (4, 4), 1)
+        return image
+
+    def _stone_frame(self):
+        image = pygame.Surface((8, 8), pygame.SRCALPHA)
+        pygame.draw.circle(image, (96, 84, 70), (4, 4), 3)
+        pygame.draw.circle(image, (62, 54, 46), (3, 3), 1)
+        return image
+
+    def _face_direction(self, frames, direction):
+        """Turn right-pointing frames onto a travel vector. Screen y grows downward."""
+        if direction is None or direction.length_squared() == 0:
+            return frames
+        angle = -math.degrees(math.atan2(direction.y, direction.x))
+        return [pygame.transform.rotate(frame, angle) for frame in frames]
+
+    def _scale_frames(self, frames, factor):
+        """Shrink each frame by an integer factor. The collision box is the frame."""
+        scaled = []
+        for frame in frames:
+            scaled.append(pygame.transform.scale(
+                frame,
+                (max(1, frame.get_width() // factor), max(1, frame.get_height() // factor)),
+            ))
+        return scaled
+
     def reflect_images(self, frames):
         new_frames = []
 
@@ -141,11 +178,14 @@ class AnimationPlayer:
                          source_kind=None,
                          attack_type=None,
                          amount=None,
-                         interaction_tags=None):
+                         interaction_tags=None,
+                         stops=False):
         
         animation_frames = self.frames.get(animation_type)
         if not animation_frames:
             return None
+        if animation_type == "arrow":
+            animation_frames = self._face_direction(animation_frames, direction)
         
         #print( f'PARTICLE EFFECT PARAMS  : direction:{direction}, is_moving={is_moving}, movement : {movement if is_moving else None}' )
         particle = ParticleEffect(pos=pos,
@@ -162,7 +202,8 @@ class AnimationPlayer:
                        source_kind=source_kind,
                        attack_type=attack_type,
                        amount=amount,
-                       interaction_tags=interaction_tags)
+                       interaction_tags=interaction_tags,
+                       stops=stops)
 
         # Register particle in the quadtree
         
@@ -196,7 +237,8 @@ class ParticleEffect(pygame.sprite.Sprite):
                  source_kind=None,
                  attack_type=None,
                  amount=None,
-                 interaction_tags=None):
+                 interaction_tags=None,
+                 stops=False):
         
         super().__init__(groups)
         self.frames = frames
@@ -219,19 +261,18 @@ class ParticleEffect(pygame.sprite.Sprite):
         self.attack_type = attack_type or self.sprite_type
         self.interaction_kind = "damage"
         self.amount = amount
+        self.stops = stops
         self.tags = set(interaction_tags or [])
         self.quadtree = quadtree
         self.id = id(self)
-        
-        
+
         # Calculate movement based on direction if provided
         if direction:
             #print(type(direction))
             #print(dir(direction))
             self.movement = direction # Adjust the speed as needed Maybe this is unecessary
             #print(self.movement)
-            
-        
+
         # Register particle in the quadtree
         if self.is_moving:
             #print(f"QUADTREE: {self.quadtree}")
@@ -241,6 +282,15 @@ class ParticleEffect(pygame.sprite.Sprite):
                                                   self.movement,
                                                   self.sprite_type),
                                      alive = True)
+
+    def stop(self):
+        """Leave the quadtree and the sprite groups."""
+        if self.quadtree:
+            if hasattr(self.quadtree, "remove"):
+                self.quadtree.remove(self.id)
+            elif hasattr(self.quadtree, "manager"):
+                self.quadtree.manager.remove(self.id)
+        self.kill()
 
             
     #@profile

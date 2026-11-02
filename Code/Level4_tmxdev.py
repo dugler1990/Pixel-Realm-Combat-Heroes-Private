@@ -1543,7 +1543,7 @@ class Level4:
     def enemy_projectile_logic(self):
 
         if self.enemy_attack_sprites:
-            for enemy_attack_sprite in self.enemy_attack_sprites:
+            for enemy_attack_sprite in list(self.enemy_attack_sprites):
                 projectile_owner = getattr(enemy_attack_sprite, "owner", None)
                 projectile_owner_team = getattr(projectile_owner, "team_id", None)
                 source_team = getattr(enemy_attack_sprite, "source_team", "enemy")
@@ -1587,6 +1587,9 @@ class Level4:
                         )
                         if not prefilter_allowed:
                             continue
+                        target_id = id(target_sprite)
+                        if getattr(enemy_attack_sprite, "_hit_id", None) == target_id:
+                            continue
                         ctx = InteractionContext(
                             kind=interaction_kind,
                             source_kind=getattr(enemy_attack_sprite, "source_kind", "enemy_projectile"),
@@ -1599,6 +1602,11 @@ class Level4:
                             tags=set(getattr(enemy_attack_sprite, "tags", set())),
                         )
                         resolved = self.interaction_resolver.apply(ctx)
+                        if resolved:
+                            enemy_attack_sprite._hit_id = target_id
+                            if getattr(enemy_attack_sprite, "stops", False):
+                                enemy_attack_sprite.stop()
+                                break
                         _combat_log.debug(
                             "enemy_projectile apply sprite_id=%s target_id=%s target_team=%r resolved=%s amount=%r attack_type=%r",
                             id(enemy_attack_sprite),
@@ -1920,7 +1928,8 @@ class Level4:
                                                source_team=resolved_source_team,
                                                source_kind="enemy_projectile",
                                                attack_type="magic",
-                                               amount=resolved_amount
+                                               amount=resolved_amount,
+                                               stops=projectile_type != "demon_dog_projectile",
                                                )
 
     def spawn_meteor(
