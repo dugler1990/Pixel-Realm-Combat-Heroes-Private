@@ -48,3 +48,4 @@ a run, so compare draw calls per sprite drawn as well as per frame.
 | 2026-11-02 | baseline: draw calls counted on flush | ice map, 200 benchmark | 835.6 | 1247 | 648.5 | profiled per `custom_draw` (30, includes warmup): 613 sprites, 843 `_flush_batch`, 344 `_resident_texture`, `find_hits` 218 ms |
 | 2026-11-02 | `find_hits` filters by rect first | ice map, 200 benchmark | 1020.7 | 1737 | 599.9 | unprofiled run only; the profiled run was closed before it finished |
 | 2026-11-02 | ImageCache sprites pack into the atlas on first draw | not remeasured | | | | 200-sprite run was stopped. GPU test: two ImageCache sprites and a fill are one draw call |
+| 2026-11-02 | RTS sprites load through ImageCache | not remeasured | | | | 200-sprite run was stopped. `tests/rts` has one failure, `test_gather_paths_around_wall`, which also fails on the previous commit |

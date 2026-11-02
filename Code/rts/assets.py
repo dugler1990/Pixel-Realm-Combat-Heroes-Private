@@ -2,6 +2,8 @@ import os
 
 import pygame
 
+from ImageCache import ImageCache
+
 PLACEHOLDER_SPECS = {
     "chief_eskimo": ((24, 32), (168, 216, 234, 255)),
     "chief_jungle": ((24, 32), (45, 106, 79, 255)),
@@ -33,6 +35,7 @@ PLACEHOLDER_SPECS = {
     "building_trade_hut": ((40, 40), (123, 45, 139, 255)),
 }
 
+# sprite key -> surface: ImageCache's surface for a file, else a flat fallback square.
 _cache = {}
 
 
@@ -64,15 +67,7 @@ def load_sprite(sprite_key, fallback_size=(32, 32), fallback_color=(200, 200, 20
     ensure_placeholder_files()
     path = os.path.join(_assets_dir(), f"{key}.png")
     if os.path.isfile(path):
-        surf = pygame.image.load(path)
-        try:
-            surf = surf.convert_alpha()
-        except pygame.error:
-            pass
-    elif key in PLACEHOLDER_SPECS:
-        size, color = PLACEHOLDER_SPECS[key]
-        surf = pygame.Surface(size, pygame.SRCALPHA)
-        surf.fill(color)
+        surf = ImageCache.load_image(path)
     else:
         surf = pygame.Surface(fallback_size, pygame.SRCALPHA)
         surf.fill(fallback_color)
