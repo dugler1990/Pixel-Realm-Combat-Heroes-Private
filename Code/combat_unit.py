@@ -5,6 +5,7 @@ from Entity import Entity
 from Support import *
 import os
 from hashRect import HashableRect
+import hit_core
 from CombatStrategy import MeleeCombatStrategy,RangedCombatStrategy,MixedCombatStrategy
 import random
 import os
@@ -935,6 +936,16 @@ class CombatUnit(Entity):
         self.collision_reach_px = max(0.0, float(-dy))
         self.collision_ground_radius_px = float(ground_radius_px)
         self._ground_radius_src = None
+
+    def hit_shape(self):
+        """Mesh bosses: the posed capsule mask on the feet, the same box plant_sprite_on_hitbox
+        sets as rect. Sprite units: None, so hit_core uses self.mask at self.rect."""
+        if self.mesh_boss is None:
+            return None
+        facing = self.get_facing_deg() if hasattr(self, "get_facing_deg") else 0.0
+        mask, dx, dy = self.mesh_boss.body_mask(facing, self.mesh_height_px)
+        mx, my = self.hitbox.midbottom
+        return hit_core.Shape(mask, int(mx + dx), int(my + dy))
 
     def update(self, QuadTree , entity_quad_tree, dt = None):
         current_time = pygame.time.get_ticks()

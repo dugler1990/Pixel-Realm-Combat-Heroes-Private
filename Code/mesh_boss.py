@@ -224,7 +224,8 @@ def build_body_mask(
     """Pose rest capsules, project, rasterize. Returns (mask, dx, dy) from feet.
 
     dx, dy are the top-left of the mask relative to the feet / hitbox.midbottom.
-    Tools/tests only — gameplay uses ``capsule_screen_bounds`` instead.
+    Gameplay uses it for attack hits (CombatUnit.hit_shape); walls and bumps use
+    ``capsule_screen_bounds``.
     """
     if not pack.capsules:
         raise RuntimeError(f"pack {pack.name!r} has no body capsules")

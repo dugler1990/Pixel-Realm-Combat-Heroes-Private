@@ -391,19 +391,16 @@ with
 
 On the server a `RemotePlayer` never animates, so `self.mask` is never set. `set_network_state` already plants `rect` on the hitbox for the idle frame, so the idle frame's mask is the body.
 
-In `RemotePlayer.__init__`, directly after
+In `RemotePlayer.__init__`, directly after `self._server_mode = bool(server_mode)`, add
 
 ```python
-        self.image = pygame.image.load(character_assets + "down_idle/0.png").convert_alpha()
+        if self._server_mode:
+            # The server never animates this player: its body for enemy hits is this idle
+            # frame, which set_network_state plants on the reported hitbox.
+            self.mask = pygame.mask.from_surface(self.image)
 ```
 
-add
-
-```python
-        # The server never animates this player: its body for enemy hits is this idle frame,
-        # which set_network_state plants on the reported hitbox. Clients overwrite it in animate().
-        self.mask = pygame.mask.from_surface(self.image)
-```
+Server only: on a client, a mask set at spawn changes where the puppet is planted before its first animate() (two multiplayer tests caught that).
 
 ### Step 7. `Code/RemotePlayer.py`: the server-side player's tree entry names its owner
 

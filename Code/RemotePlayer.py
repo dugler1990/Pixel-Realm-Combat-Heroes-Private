@@ -103,6 +103,10 @@ class RemotePlayer(BasePlayer):
         # come from the client's reports (set_network_state). The CLIENT-side
         # RemotePlayer (server_mode=False) is unchanged: a render-only puppet.
         self._server_mode = bool(server_mode)
+        if self._server_mode:
+            # The server never animates this player: its body for enemy hits is this idle
+            # frame, which set_network_state plants on the reported hitbox.
+            self.mask = pygame.mask.from_surface(self.image)
         # [(amount, attack_type), ...] drained each tick by the server.
         self.incoming_hits = []
 
@@ -148,7 +152,7 @@ class RemotePlayer(BasePlayer):
             # from set_network_state, called before the tick.
             if entity_quad_tree is not None:
                 entity_quad_tree.insert(
-                    HashableRect(self.hitbox, self.id),
+                    HashableRect(self.hitbox, self.id, owner=self),
                     alive=(self.health > 0),
                     remove_existing=True,
                 )
