@@ -368,6 +368,7 @@ class Friendly(Entity):
     
     
     def actions(self, player, quadtree=None):
+        self.combat_strategy.land_melee_swing(self, player, quadtree)
         if self.status != "Summoning":  # TODO: Only perform actions if not summoning - should be if casting, need logic here 
             self.combat_strategy.decide_action(self, player)
             self.combat_strategy.move(self, player)

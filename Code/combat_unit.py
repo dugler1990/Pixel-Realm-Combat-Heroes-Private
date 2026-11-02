@@ -642,6 +642,7 @@ class CombatUnit(Entity):
         return getattr(self, "_dash_runtime", None) is not None
 
     def actions(self, player, quadtree=None):
+        self.combat_strategy.land_melee_swing(self, player, quadtree)
         if self.is_dash_active():
             return
         # Specials (MeteorShower, SummonIceGhosts, …) can start outside melee range.

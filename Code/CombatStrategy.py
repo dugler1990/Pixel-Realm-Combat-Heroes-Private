@@ -2,6 +2,7 @@ import random
 import pygame
 from pygame.math import Vector2
 from  hashRect import HashableRect
+import hit_core
 
 
 
@@ -93,6 +94,63 @@ class CombatStrategy:
 
         return False
 
+    def start_melee_swing(self, enemy, attack):
+        """Begin a swing. It lands later, in land_melee_swing, on whatever it touches.
+
+        The attack clip starts at frame 0. Otherwise frame_index carries over from the walk
+        cycle, and if that is past the end of the attack clip, the next animate() ends the
+        attack before any frame of it is checked.
+        """
+        enemy.frame_index = 0
+        enemy.melee_swing = {"attack": attack, "hits": {}}
+
+    def land_melee_swing(self, enemy, target, entity_tree):
+        """Every tick: a swing hits each hostile body its frame touches, by its repeat rule.
+
+        With the clip restarted at frame 0 (start_melee_swing), every attack frame gets
+        checked whether animate() runs before or after actions(). Bodies come
+        from the entity tree around the attacker (hit_core.bodies_near), plus the chosen
+        target for anything without a tree entry; find_hits drops the duplicate.
+        attack["hit_frames"] lists the attack-animation frames that can hit; without it
+        every frame of the swing can. attack["rehit_ms"] is the repeat rule (default once).
+        The swing ends when the enemy leaves "attack": the clip ended, or decide_action
+        cancelled it.
+        """
+        swing = getattr(enemy, "melee_swing", None)
+        if swing is None:
+            return
+        if enemy.status != "attack":
+            enemy.melee_swing = None
+            return
+        attack = swing["attack"]
+        hit_frames = attack.get("hit_frames")
+        if hit_frames is not None and int(enemy.frame_index) not in hit_frames:
+            return
+        context = self.combat_context if isinstance(self.combat_context, dict) else {}
+        resolver = getattr(context.get("level"), "interaction_resolver", None)
+        shape = hit_core.shape_of(enemy)
+        if resolver is None or shape is None:
+            return
+        candidates = hit_core.bodies_near(entity_tree, shape.rect, enemy.id)
+        if target is not None:
+            candidates.append(target)
+        targets = hit_core.find_hits(shape, candidates, exclude=(enemy,))
+        if not targets:
+            return
+        resolver.strike(
+            targets,
+            hits=swing["hits"],
+            rehit_ms=attack.get("rehit_ms"),
+            kind="damage",
+            source_kind="enemy_melee",
+            source=enemy,
+            owner=enemy,
+            source_team=getattr(enemy, "team_id", "enemy"),
+            amount=attack.get("damage"),
+            attack_type=attack.get("type", "melee"),
+            tags={"enemy_melee"},
+        )
+
 
 class MeleeCombatStrategy(CombatStrategy):
     def __init__(self,
@@ -149,8 +207,7 @@ class MeleeCombatStrategy(CombatStrategy):
                 distance_to_player = Vector2(enemy.rect.center).distance_to(target.rect.center)
                 if distance_to_player <= enemy.combat_config["melee_attack_radius"]:
                     attack = random.choice(self.melee_attacks)
-                    if "enemy_melee_hit" in self.combat_context:
-                        self.combat_context["enemy_melee_hit"](enemy, target, attack)
+                    self.start_melee_swing(enemy, attack)
                     enemy.attack_sound.play()
                     enemy.attack_cooldown = attack['cooldown']
                     enemy.direction = Vector2(0, 0) 
@@ -232,7 +289,8 @@ class RangedCombatStrategy(CombatStrategy):
                                                      groups=enemy.groups,
                                                      owner=enemy,
                                                      source_team=getattr(enemy, "team_id", None),
-                                                     amount=attack.get("damage"))
+                                                     amount=attack.get("damage"),
+                                                     rehit_ms=attack.get("rehit_ms"))
                 enemy.attack_sound.play()
                 enemy.attack_cooldown = attack['cooldown']
                 enemy.direction = Vector2(0, 0)
@@ -355,8 +413,7 @@ class MixedCombatStrategy(CombatStrategy):
                 if distance_to_player <= enemy.combat_config["melee_attack_radius"]:
                     
                     attack = random.choice(self.melee_attacks)
-                    if "enemy_melee_hit" in self.combat_context:
-                        self.combat_context["enemy_melee_hit"](enemy, target, attack)
+                    self.start_melee_swing(enemy, attack)
                     enemy.attack_sound.play()
                     enemy.attack_cooldown = attack['cooldown']
 
@@ -368,7 +425,8 @@ class MixedCombatStrategy(CombatStrategy):
                                      groups=enemy.groups,
                                      owner=enemy,
                                      source_team=getattr(enemy, "team_id", None),
-                                     amount=attack.get("damage"))
+                                     amount=attack.get("damage"),
+                                     rehit_ms=attack.get("rehit_ms"))
                 enemy.attack_sound.play()
                 enemy.attack_cooldown = attack['cooldown']
             enemy.direction = Vector2(0, 0)  
