@@ -264,8 +264,17 @@ def _readable_api_error(result, width: int, height: int, model: str) -> str:
     for entry in entries:
         if not isinstance(entry, dict):
             continue
-        details = (entry.get("extensions") or {}).get("details") or {}
-        code = code or str(details.get("code") or (entry.get("extensions") or {}).get("code") or "")
+        extensions = entry.get("extensions") or {}
+        if not isinstance(extensions, dict):
+            message = message or str(extensions)
+            extensions = {}
+        details = extensions.get("details") or {}
+        if isinstance(details, str):
+            message = message or details
+            details = {}
+        elif not isinstance(details, dict):
+            details = {}
+        code = code or str(details.get("code") or extensions.get("code") or "")
         message = message or str(details.get("message") or entry.get("message") or "")
     reason = f"Leonardo rejected the request ({code or 'unknown error'})"
     if "VALIDATION" in code.upper():
@@ -275,7 +284,10 @@ def _readable_api_error(result, width: int, height: int, model: str) -> str:
         )
     elif message:
         reason += f": {message}"
-    return reason
+    raw = json.dumps(result, default=str)
+    if len(raw) > 800:
+        raw = raw[:800] + "..."
+    return f"{reason} | body: {raw}"
 
 
 def _first_dict(value) -> dict:
@@ -509,6 +521,9 @@ VEO31_SIZES = {
 VEO31_LITE_SIZES = {(1280, 720), (720, 1280), (1920, 1080), (1080, 1920)}
 VEO31_SECONDS = (4, 6, 8)
 DEFAULT_VEO31_MODEL = "veo-3.1-lite"
+# Leonardo's "Graphic Design 2D" preset. On the site this sits with Graphic Design 3D
+# and Game Concept: the 2D game style, the 3D game style, and concept.
+GAME_2D_STYLE_ID = "703d6fe5-7f1c-4a9e-8da0-5331f214d5cf"
 
 
 def video_generation_payload(
@@ -520,6 +535,8 @@ def video_generation_payload(
     width: int = 1280,
     height: int = 720,
     audio: bool = False,
+    style_ids: list[str] | None = None,
+    negative_prompt: str = "",
 ) -> dict:
     """The v2 body for one Veo 3.1 clip that starts on an uploaded frame."""
     model = str(model)
@@ -528,25 +545,31 @@ def video_generation_payload(
     if size not in allowed:
         choices = ", ".join(f"{w}x{h}" for w, h in sorted(allowed))
         raise LeonardoApiError(f"{model} does not accept {size[0]}x{size[1]}. Use one of: {choices}")
-    if int(seconds) not in VEO31_SECONDS:
+    if model == "kling-2.5":
+        if int(seconds) != 5:
+            raise LeonardoApiError(f"kling-2.5 duration must be 5 seconds, not {seconds}")
+    elif int(seconds) not in VEO31_SECONDS:
         raise LeonardoApiError(f"Veo 3.1 duration must be 4, 6, or 8 seconds, not {seconds}")
-    return {
-        "model": model,
-        "public": False,
-        "parameters": {
-            "prompt": prompt,
-            "guidances": {
-                "start_frame": [
-                    {"image": {"id": image_id, "type": "UPLOADED"}},
-                ],
-            },
-            "duration": int(seconds),
-            "motion_has_audio": bool(audio),
-            "quantity": 1,
-            "width": size[0],
-            "height": size[1],
+    parameters = {
+        "prompt": prompt,
+        "guidances": {
+            "start_frame": [
+                {"image": {"id": image_id, "type": "UPLOADED"}},
+            ],
         },
+        "duration": int(seconds),
+        "motion_has_audio": bool(audio),
+        "quantity": 1,
+        "width": size[0],
+        "height": size[1],
     }
+    if style_ids is None:
+        parameters["style_ids"] = [GAME_2D_STYLE_ID]
+    elif style_ids:
+        parameters["style_ids"] = list(style_ids)
+    if negative_prompt:
+        parameters["negative_prompt"] = negative_prompt
+    return {"model": model, "public": False, "parameters": parameters}
 
 
 def generate_image_to_video(
@@ -560,6 +583,8 @@ def generate_image_to_video(
     width: int = 1280,
     height: int = 720,
     audio: bool = False,
+    style_ids: list[str] | None = None,
+    negative_prompt: str = "",
 ) -> dict:
     """Upload the start frame, ask Veo 3.1 for a clip, and save the mp4."""
     image_id = upload_init_image(input_image, config)
@@ -571,6 +596,8 @@ def generate_image_to_video(
         width=width,
         height=height,
         audio=audio,
+        style_ids=style_ids if style_ids is not None else list(config.get("video_style_ids") or [GAME_2D_STYLE_ID]),
+        negative_prompt=str(config.get("video_negative_prompt") or negative_prompt),
     )
     api_key = _api_key(config)
     base = str(config.get("base_url") or DEFAULT_V2_BASE_URL).rstrip("/")

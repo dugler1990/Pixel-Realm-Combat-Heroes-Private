@@ -3,13 +3,25 @@ from __future__ import annotations
 from PIL import Image
 
 from tools.painted_map_pipeline.image_client import prepare_reference_upload
-from tools.painted_map_pipeline.leonardo_api import is_v2_config
+from tools.painted_map_pipeline.leonardo_api import _readable_api_error, is_v2_config
 
 
 def test_is_v2_config_from_model():
     assert is_v2_config({"model": "nano-banana-2"})
     assert is_v2_config({"api_version": "v2"})
     assert not is_v2_config({"model_id": "abc", "base_url": "https://cloud.leonardo.ai/api/rest/v1"})
+
+
+def test_rejected_request_with_a_string_detail_still_prints():
+    text = _readable_api_error(
+        {"extensions": {"details": "rate limit"}},
+        1280,
+        720,
+        "veo-3.1-lite",
+    )
+    assert "rate limit" in text
+    assert "Leonardo rejected" in text
+    assert "body:" in text
 
 
 def test_prepare_reference_upload_fits_under_10mb():
