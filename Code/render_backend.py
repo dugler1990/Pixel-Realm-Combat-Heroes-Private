@@ -514,6 +514,8 @@ class GPUBackend(RenderBackend):
         glBufferSubData(GL_ARRAY_BUFFER, 0, data.nbytes, data)
         glBindVertexArray(self._vao)
         glDrawArrays(GL_TRIANGLES, 0, n * _VERTS_PER_QUAD)
+        if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
+            BENCHMARK_RUNTIME.metrics.record_gpu_draw_call()
         glBindVertexArray(0)
         glBindTexture(GL_TEXTURE_2D, 0)
         glUseProgram(0)
@@ -988,9 +990,6 @@ class GPUBackend(RenderBackend):
         else:
             self._push_batch(texture, dest_rect, tex_rect)
 
-        if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
-            BENCHMARK_RUNTIME.metrics.record_gpu_draw_call()
-
     def _resident_texture(self, surface, cache_key, smooth=False):
         """The large-cache texture for `surface`, uploaded the first time `cache_key` is seen.
 
@@ -1028,8 +1027,6 @@ class GPUBackend(RenderBackend):
         texture = self._resident_texture(surface, cache_key, smooth=True)
         self._push_batch(texture, (x, y, w, h), (0.0, 0.0, 1.0, 1.0))
         self._flush_batch()
-        if BENCHMARK_RUNTIME.enabled and BENCHMARK_RUNTIME.metrics_enabled:
-            BENCHMARK_RUNTIME.metrics.record_gpu_draw_call()
 
     def fill(self, color, rect=None, flags=0):
         if rect is None:
