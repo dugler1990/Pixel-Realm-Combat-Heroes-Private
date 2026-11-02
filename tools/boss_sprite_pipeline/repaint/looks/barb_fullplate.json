@@ -1,0 +1,88 @@
+{
+ "_about": "The barb in full plate (gear_test/in/barb_fullplate.png). 8 body views + 12 close-ups, chosen from the bare barb's patch report (2026-11-02): one view per hand (the second added 0.13-0.19 % of the texture), no side-face views (both failed to align on the barb), no separate foot views (small at sprite scale; the body views paint them), pelvis_back dropped (legs_back frames the hips from behind too), no 1024 head views (face_front and head_back replace them).",
+ "_res": "part_res 1024: the 4096 texture holds at most ~260 px across the face, 300-400 for hands/head, ~1000 for the legs (barb UV-id measure, 2026-11-02); 2880 was 3-11x more than the model keeps. quality: set after quality_test.py. regions.arm: the arm frame cut the pauldron tops.",
+ "part_res": [
+  1024,
+  1024
+ ],
+ "quality": "high",
+ "regions": {
+  "arm": {
+   "scale": 1.3,
+   "shift_up": 0.04
+  }
+ },
+ "subject": "barbarian hero in full plate armour",
+ "design": "a bearded barbarian in full plate armour: bright silvery steel plates with darker steel edges and round rivets, brown leather straps with steel buckles, a brown leather belt with a steel buckle, a pointed steel fauld plate with chevron lines at the front, overlapping tasset plates over the hips, articulated steel gauntlets and sabatons; bare head with warm tanned skin, dark brown hair tied in a top knot and a full dark brown beard",
+ "match_part": "steel, leather, skin, hair and beard colours",
+ "match_body": "steel, leather, skin, hair and beard colours and painting style",
+ "body_paint": "Paint it in the hand-painted style of image 3: every steel plate a clean, readable shape with a light silvery centre, darker steel towards its edges, a crisp bright highlight along each plate rim and a dark line where plates overlap; round rivets; leather straps darker brown with stitching and steel buckles; the face painterly with crisp eyes, nose and mouth and bold beard and hair locks.",
+ "part_variation": "with painterly variation (lighter and cooler on the steel high points, darker where plates overlap and in the gaps)",
+ "safety": "",
+ "finish_part": "Evenly lit: no cast shadows, no directional light, no mirror reflections and no white glare; the steel reads as steel through value contrast between plate centres, rims and overlaps.",
+ "finish_body": "Evenly lit: no cast shadows, no directional light, no mirror reflections and no white glare; the steel reads as steel through value contrast between plate centres, rims and overlaps.",
+ "views": [
+  "body_000",
+  "body_045",
+  "body_090",
+  "body_135",
+  "body_180",
+  "body_225",
+  "body_270",
+  "body_315",
+  "face_front",
+  "head_back",
+  "chest_front",
+  "back_upper",
+  "arm_l_out",
+  "arm_r_out",
+  "hand_l_out",
+  "hand_r_out",
+  "leg_l_front",
+  "leg_r_front",
+  "legs_back",
+  "pelvis_front"
+ ],
+ "shots": {
+  "chest_front": {
+   "shows": "his breastplate, gorget and shoulder straps, from the front",
+   "paint": "the breastplate: sculpted chest and stomach plates with bevelled edges and rivets, the gorget at the neck, leather shoulder straps with steel buckles"
+  },
+  "back_upper": {
+   "shows": "his backplate and shoulders, from behind",
+   "paint": "the backplate's plates with rivets, the leather straps and buckles crossing the back, the backs of the pauldrons"
+  },
+  "arm_l_out": {
+   "shows": "his armoured left arm, from the outside",
+   "paint": "the pauldron's overlapping lames, the upper-arm plate, the elbow cop and the vambrace, each plate with rivets and rim highlights, leather straps and buckles"
+  },
+  "arm_r_out": {
+   "shows": "his armoured right arm, from the outside",
+   "paint": "the pauldron's overlapping lames, the upper-arm plate, the elbow cop and the vambrace, each plate with rivets and rim highlights, leather straps and buckles"
+  },
+  "hand_l_out": {
+   "shows": "his left steel gauntlet, from outside (the back of the hand)",
+   "paint": "the gauntlet: articulated plates on every finger, each finger separate, the knuckle ridge, the cuff with rivets"
+  },
+  "hand_r_out": {
+   "shows": "his right steel gauntlet, from outside (the back of the hand)",
+   "paint": "the gauntlet: articulated plates on every finger, each finger separate, the knuckle ridge, the cuff with rivets"
+  },
+  "leg_l_front": {
+   "shows": "his armoured left leg (thigh, knee, shin), from the front",
+   "paint": "the thigh plate, the knee cop with its side wing, the greave, rivets and leather straps with buckles"
+  },
+  "leg_r_front": {
+   "shows": "his armoured right leg (thigh, knee, shin), from the front",
+   "paint": "the thigh plate, the knee cop with its side wing, the greave, rivets and leather straps with buckles"
+  },
+  "legs_back": {
+   "shows": "the backs of both armoured legs and the hips",
+   "paint": "the backs of the thigh plates and greaves, the tassets from behind, leather straps and buckles, dark padding behind the knees"
+  },
+  "pelvis_front": {
+   "shows": "his belt, fauld and tassets, from the front",
+   "paint": "the leather belt with its steel buckle, the pointed central fauld plate with chevron lines, the overlapping tasset plates over each hip with rivets"
+  }
+ }
+}
