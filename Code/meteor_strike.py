@@ -7,6 +7,8 @@ import random
 import pygame
 
 from Interaction import InteractionContext
+import hit_core
+from Settings import VIEW_ELEVATION_DEG
 
 _SCALE_CACHE: dict[tuple[int, int, int], list[pygame.Surface]] = {}
 _PERSPECTIVE_CACHE: dict[tuple[int, int], pygame.Surface] = {}
@@ -586,23 +588,14 @@ class MeteorStrike(pygame.sprite.Sprite):
         return None
 
     def _hosts_in_radius(self):
+        """Every body whose footprint the blast's ground circle touches."""
         attackable = getattr(self.level, "attackable_sprites", None)
         if attackable is None:
             return []
-        cx, cy = self.ground_pos
-        r2 = self.impact_radius * self.impact_radius
-        hits = []
-        for sprite in attackable.sprites():
-            if sprite is self.owner:
-                continue
-            center = self._target_center(sprite)
-            if center is None:
-                continue
-            dx = center[0] - cx
-            dy = center[1] - cy
-            if dx * dx + dy * dy <= r2:
-                hits.append(sprite)
-        return hits
+        blast = hit_core.ground_disc(self.ground_pos, self.impact_radius, VIEW_ELEVATION_DEG)
+        return hit_core.find_hits(
+            blast, attackable.sprites(), exclude=(self.owner,), body=hit_core.foot_shape
+        )
 
     def _apply_damage(self, amount: int, *, phase: str):
         resolver = getattr(self.level, "interaction_resolver", None)
@@ -664,14 +657,14 @@ class MeteorStrike(pygame.sprite.Sprite):
             dx = center[0] - cx
             dy = center[1] - cy
             dist = math.hypot(dx, dy)
-            if dist > radius:
-                continue
             if dist < 1e-3:
                 nx, ny = 1.0, 0.0
             else:
                 nx, ny = dx / dist, dy / dist
-            # Stronger near the crater; still shoves at the rim.
-            falloff = max(0.35, 1.0 - dist / radius)
+            # Stronger near the crater; still shoves at the rim. Distance is on the ground,
+            # to the footprint's edge: the circle the hit test used.
+            reach = hit_core.ground_reach((cx, cy), hit_core.foot_shape(target), VIEW_ELEVATION_DEG)
+            falloff = max(0.35, 1.0 - min(reach, radius) / radius)
             mag = self.knockback * falloff * self._target_knockback_factor(target)
             resolver.apply(
                 InteractionContext(

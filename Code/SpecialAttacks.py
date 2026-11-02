@@ -7,6 +7,7 @@ from Settings import TILESIZE
 from game_logging import get_debug_logger
 from abilities.dash import DashAbility
 from abilities.protocol import CombatAbilityContext
+import hit_core
 
 _combat_log = get_debug_logger("combat")
 
@@ -313,8 +314,13 @@ class MeteorShower(SpecialAttack):
         if spawn_fn is None:
             return
 
-        anchor = getattr(player, "rect", None)
-        center = anchor.center if anchor is not None else enemy.rect.center
+        # Aim at the feet: the blast is tested against the footprint (hit_core.foot_shape).
+        foot = hit_core.foot_shape(player)
+        if foot is not None:
+            center = foot.rect.center
+        else:
+            anchor = getattr(player, "rect", None)
+            center = anchor.center if anchor is not None else enemy.rect.center
         angle = random.uniform(0, 2 * math.pi)
         dist = random.uniform(0, self.scatter_radius)
         pos = (center[0] + math.cos(angle) * dist, center[1] + math.sin(angle) * dist)

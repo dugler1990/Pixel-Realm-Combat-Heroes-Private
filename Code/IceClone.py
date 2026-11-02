@@ -1,7 +1,8 @@
-import pygame
 from Trap import Trap
 from combat_unit import CombatUnit
 from Interaction import InteractionContext
+import hit_core
+from Settings import VIEW_ELEVATION_DEG
 
 class IceClone(Trap):
     def __init__(self, pos, groups, image_path, animation_player, effect_type,
@@ -22,21 +23,20 @@ class IceClone(Trap):
             self.explode()
 
     def freeze_enemies(self):
-        # Logic to freeze enemies in place
-        
-        # affected_sprites = pygame.sprite.spritecollide(self, self.groups[0], False)
-        for sprite in self.groups[0]:
-        #     if isinstance(sprite, Enemy) and sprite.frozen == False:  # Assuming there's an Enemy class
-        #         sprite.freeze()  # Assuming enemies have a freeze method
+        """Freeze every unit whose feet the freeze circle (radius + 180) touches."""
+        blast = hit_core.ground_disc(self.rect.midbottom, self.radius + 180, VIEW_ELEVATION_DEG)
+        for sprite in hit_core.find_hits(
+            blast, self.groups[0], exclude=(self,), body=hit_core.foot_shape
+        ):
             if isinstance(sprite, CombatUnit) and not sprite.frozen:
-                distance = pygame.math.Vector2(sprite.rect.center).distance_to(self.rect.center)
-                if distance < self.radius+180:
-                    sprite.freeze()
-    
+                sprite.freeze()
 
     def explode(self):
         # Explosion effect, potentially dealing damage
-        affected_sprites = pygame.sprite.spritecollide(self, self.groups[0], False, pygame.sprite.collide_circle)
+        blast = hit_core.ground_disc(self.rect.midbottom, self.radius, VIEW_ELEVATION_DEG)
+        affected_sprites = hit_core.find_hits(
+            blast, self.groups[0], exclude=(self,), body=hit_core.foot_shape
+        )
         for sprite in affected_sprites:
             ctx = InteractionContext(
                 kind="damage",
