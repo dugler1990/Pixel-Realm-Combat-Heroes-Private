@@ -154,21 +154,23 @@ def find_hits(shape, candidates, exclude=(), body=shape_of):
 
     `body` gives a target's shape: shape_of for swings, projectiles and dashes,
     foot_shape for ground blasts. With shape_of the target's shape lies inside its rect,
-    so the rect test runs first and only targets already close get the mask test.
+    so candidates whose rect misses are dropped first, one cheap test each, and only
+    the few close ones reach the loop and the mask test.
     """
     if shape is None:
         return []
-    area = shape.rect
+    if body is shape_of:
+        overlaps = shape.rect.colliderect
+        candidates = [
+            sprite for sprite in candidates
+            if (rect := getattr(sprite, "rect", None)) is not None and overlaps(rect)
+        ]
     hits = []
     seen = set()
     for sprite in candidates:
         if sprite in exclude or id(sprite) in seen:
             continue
         seen.add(id(sprite))
-        if body is shape_of:
-            rect = getattr(sprite, "rect", None)
-            if rect is None or not area.colliderect(rect):
-                continue
         if touching(shape, body(sprite)):
             hits.append(sprite)
     return hits
