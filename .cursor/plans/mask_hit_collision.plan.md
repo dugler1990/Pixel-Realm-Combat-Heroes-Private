@@ -4,25 +4,25 @@ overview: "Every attack lands only where its pixels touch the target's pixels. O
 todos:
   - id: core
     content: "Phase 1, steps 1-3: Code/hit_core.py (shapes, find_hits, bodies_near, ground_reach); collision_core.solid_mask; InteractionResolver.strike with the repeat rule."
-    status: pending
+    status: completed
   - id: bodies
     content: "Phase 2, steps 4-7: mesh boss hit_shape; build_body_mask docstring; server-side remote player mask; its entity-tree entry names its owner."
-    status: pending
+    status: completed
   - id: attack-sprites
     content: "Phase 3, steps 8-14: the AttackSprite contract; Weapon art cache + mask; particle masks; rehit_ms from magic_data and ranged attacks; one shared loop that reads the contract and keeps arrows stopping; parry reset; EnemyPuppet docstring."
-    status: pending
+    status: completed
   - id: abilities
     content: "Phase 4, steps 15-16: dash finds bodies through the entity tree; leap slam hits by ground circle with ground-distance falloff (fixes the snapshot bug in both)."
-    status: pending
+    status: completed
   - id: ground-blasts
     content: "Phase 5, steps 17-19: meteor blast vs footprint with ground-distance knockback; meteors aim at the feet; ice clone explode and freeze on the ground circle."
-    status: pending
+    status: completed
   - id: melee
     content: "Phase 6, steps 20-22: enemy swing restarts its clip, hits every hostile body its frame touches (entity tree), applied through strike; ranged attacks pass rehit_ms; Enemy and Friendly tick the swing too."
-    status: pending
+    status: completed
   - id: cleanup
     content: "Phase 7, steps 23-25: delete the unused damage evaluators, the old enemy_melee_hit hook, Level4.py and CombatStrategy1.py."
-    status: pending
+    status: completed
 isProject: false
 ---
 

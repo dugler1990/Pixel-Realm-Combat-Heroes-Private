@@ -11,7 +11,7 @@ Edit [`debug_logging.json`](debug_logging.json) next to this file. Paths under `
 | `tmx_layout` | `game.tmx.layout` | TMX grass profiles, spawner config, env spawn warnings, and other layout load messages ([`tmx_layout_manager.py`](tmx_layout_manager.py)). |
 | `animated_environment` | `game.animated.environment` | Animated environment sprites (frame timing) ([`AnimatedEnvironmentSprite.py`](AnimatedEnvironmentSprite.py)). |
 | `game_flow` | `game.flow` | Main state machine, menus, level selection, dev reload ([`Main2.py`](Main2.py), [`StartMenu.py`](StartMenu.py), [`LevelSelection.py`](LevelSelection.py), [`PlayerSelection.py`](PlayerSelection.py)). |
-| `combat` | `game.combat` | Attack traces, special attacks, traps, legacy combat strategy ([`Level4.py`](Level4.py), [`SpecialAttacks.py`](SpecialAttacks.py), [`Trap.py`](Trap.py), [`CombatStrategy1.py`](CombatStrategy1.py)). |
+| `combat` | `game.combat` | Attack traces, hits and rejections, special attacks, traps ([`Level4_tmxdev.py`](Level4_tmxdev.py), [`Interaction.py`](Interaction.py), [`SpecialAttacks.py`](SpecialAttacks.py), [`Trap.py`](Trap.py)). |
 | `player_item` | `game.player.item` | Pickup and inventory assign ([`Player.py`](Player.py), [`Inventory.py`](Inventory.py)). |
 | `spawner` | `game.spawner` | Neutral / spawn diagnostics ([`Spawner.py`](Spawner.py)). |
 | `input` | `game.input` | Input manager reset ([`inputManager.py`](inputManager.py)). |
