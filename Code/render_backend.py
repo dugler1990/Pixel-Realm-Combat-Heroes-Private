@@ -9,6 +9,7 @@ from OpenGL.GL.shaders import compileProgram, compileShader
 
 from Settings import DISPLAY_FLAGS, RENDER_BACKEND
 from benchmark_runtime import BENCHMARK_RUNTIME
+from ImageCache import ImageCache
 from mesh_boss import project_model_points
 
 
@@ -247,6 +248,13 @@ _MAX_BATCH_SIZE = 2048
 _BATCH_BUF_FLOATS = _MAX_BATCH_SIZE * _FLOATS_PER_QUAD
 _BATCH_BUF_BYTES = _BATCH_BUF_FLOATS * ctypes.sizeof(GLfloat)
 
+# The sprite atlas (GPUBackend._atlas_pack). Sprites over _ATLAS_MAX_SPRITE px on a side
+# (ground chunks, roofs, screen overlays) draw from their own texture instead.
+_ATLAS_MAX_SIZE = 4096
+_ATLAS_MAX_SPRITE = 512
+_ATLAS_PAD = 1
+_ATLAS_SHELF_STEP = 16
+
 
 # Mesh boss: orthographic 3D pass composited into the sprite stream.
 _MESH_VERTEX_SHADER = """
@@ -403,12 +411,23 @@ class GPUBackend(RenderBackend):
         glBindVertexArray(0)
 
         self._texture = self._make_texture()
-        self._white_texture = self._make_texture(np.array([255, 255, 255, 255], dtype=np.uint8), 1, 1)
-        self._atlas_texture = None
-        self._atlas_uv = {}
-        # fill() draws this white texel, tinted. build_atlas moves it into the atlas, so fills
-        # join the sprite batch instead of each costing a draw call.
-        self._fill_texture, self._fill_uv = self._white_texture, (0.0, 0.0, 1.0, 1.0)
+        # The sprite atlas: every ImageCache surface is copied in the first time it is drawn
+        # (_atlas_uv_for), so sprites batch into a few draw calls a frame.
+        self._atlas_size = min(_ATLAS_MAX_SIZE, int(glGetIntegerv(GL_MAX_TEXTURE_SIZE)))
+        self._atlas_texture = self._make_texture(
+            np.zeros((self._atlas_size, self._atlas_size, 4), dtype=np.uint8),
+            self._atlas_size, self._atlas_size,
+        )
+        self._atlas_uv = {}        # id(ImageCache surface) -> (u0, v0, u1, v1)
+        self._atlas_shelves = {}   # shelf height -> [next free x, shelf y]
+        self._atlas_top = _ATLAS_PAD
+        self._atlas_full_logged = False
+        white = pygame.Surface((1, 1), pygame.SRCALPHA)
+        white.fill((255, 255, 255, 255))
+        u0, v0, u1, v1 = self._atlas_pack(white)
+        # fill() draws this texel tinted, sampled at its centre so nearest filtering never
+        # reaches the padding beside it: fills batch with the sprites.
+        self._white_uv = ((u0 + u1) / 2, (v0 + v1) / 2) * 2
         self._large_cache: dict[int, int] = {}  # id(surface) → GL texture handle
 
         # Batch state
@@ -417,12 +436,10 @@ class GPUBackend(RenderBackend):
         self._batch_texture = None
 
         # Per-frame blit batching diagnostics. A blit only batches (no draw call of its own)
-        # when it hits the atlas; the other two paths each force a flush. Split lets us tell a
-        # timing-miss (had a cache_key but loaded after build_atlas -> prewarm fixes it) from
-        # expected scratch (no stable id: UI/debug/recolored frames). Reset each present().
-        self._blit_atlas = 0          # atlas hit -> batched
-        self._blit_flush_keyed = 0    # had cache_key but missed atlas (large-cache / atlas-miss)
-        self._blit_flush_nokey = 0    # no usable cache_key -> re-uploaded scratch every frame
+        # when it draws from the atlas; the other two paths each force a flush. Reset each present().
+        self._blit_atlas = 0          # ImageCache surface -> atlas, batched
+        self._blit_flush_keyed = 0    # cache_key but not ImageCache (large or changing surfaces)
+        self._blit_flush_nokey = 0    # no cache_key -> re-uploaded on every draw
         self.last_blit_stats = (0, 0, 0)
 
         self._init_grass_pipeline()
@@ -535,71 +552,48 @@ class GPUBackend(RenderBackend):
             return dest.topleft
         return (dest[0], dest[1])
 
-    def build_atlas(self):
-        from ImageCache import ImageCache
+    def _atlas_uv_for(self, surface):
+        """Where `surface` sits in the atlas, or None. An ImageCache surface is packed the
+        first time it is drawn; anything else draws from its own texture."""
+        key = id(surface)
+        uv = self._atlas_uv.get(key)
+        if uv is None and ImageCache.holds(surface):
+            uv = self._atlas_pack(surface)
+            if uv is not None:
+                self._atlas_uv[key] = uv
+        return uv
 
-        # Collect all ImageCache surfaces, deduplicated by id().
-        # These are class-level dicts held for program lifetime → ids permanently stable.
-        seen, surfs = set(), []
-        for s in list(ImageCache.cache.values()) + list(ImageCache._scaled_cache.values()):
-            if id(s) not in seen:
-                seen.add(id(s)); surfs.append(s)
-        for frame_list in ImageCache._folder_cache.values():
-            for s in frame_list:
-                if id(s) not in seen:
-                    seen.add(id(s)); surfs.append(s)
+    def _atlas_pack(self, surface):
+        """Copy `surface` into the atlas's free space and return its uv; None when it is over
+        _ATLAS_MAX_SPRITE on a side or the atlas is full.
 
-        max_gl = glGetIntegerv(GL_MAX_TEXTURE_SIZE)
-        ATLAS = min(4096, int(max_gl))
-        PAD = 1
-        # Exclude large one-off surfaces (backgrounds, UI panels) that would fill the
-        # atlas before animation frames get a chance. Sprites > 512px in either dimension
-        # are almost never animation frames — they're map art, menu screens, etc.
-        MAX_SPRITE_DIM = 512
-        surfs.sort(key=lambda s: s.get_height(), reverse=True)
-
-        canvas = pygame.Surface((ATLAS, ATLAS), pygame.SRCALPHA)
-        canvas.fill((0, 0, 0, 0))
-        uv = {}
-        # The white texel for fill(), placed first so a full atlas can never skip it. Sampled
-        # at its centre, so nearest filtering never reaches the transparent padding beside it.
-        canvas.set_at((PAD, PAD), (255, 255, 255, 255))
-        white_uv = ((PAD + 0.5) / ATLAS, (PAD + 0.5) / ATLAS) * 2
-        x, y, row_h = PAD + 1 + PAD, PAD, 1
-        packed = skipped_too_large = skipped_atlas_full = skipped_oversized = 0
-
-        for s in surfs:
-            w, h = s.get_size()
-            if w > MAX_SPRITE_DIM or h > MAX_SPRITE_DIM:
-                skipped_oversized += 1; continue  # not an animation frame — scratch
-
-            if w > ATLAS - PAD * 2 or h > ATLAS - PAD * 2:
-                skipped_too_large += 1; continue  # sprite too large — scratch fallback, keep going
-
-            if x + w + PAD > ATLAS:
-                y += row_h + PAD; x = PAD; row_h = 0
-
-            if y + h + PAD > ATLAS:
-                skipped_atlas_full += 1; continue  # skip this sprite, smaller ones may still fit
-
-            canvas.blit(s, (x, y))
-            uv[id(s)] = (x / ATLAS, y / ATLAS, (x + w) / ATLAS, (y + h) / ATLAS)
-            row_h = max(row_h, h); x += w + PAD
-            packed += 1
-
-        pixels = pygame.image.tostring(canvas.convert_alpha(), "RGBA", False)
-        self._atlas_texture = self._make_texture()
+        Shelf packing: a shelf holds sprites up to its height, in _ATLAS_SHELF_STEP steps, so
+        the frames of one animation share shelves. Nothing is ever removed: ImageCache
+        surfaces live for the whole run.
+        """
+        w, h = surface.get_size()
+        if w > _ATLAS_MAX_SPRITE or h > _ATLAS_MAX_SPRITE:
+            return None
+        size = self._atlas_size
+        shelf_h = -(-(h + _ATLAS_PAD) // _ATLAS_SHELF_STEP) * _ATLAS_SHELF_STEP
+        shelf = self._atlas_shelves.get(shelf_h)
+        if shelf is None or shelf[0] + w + _ATLAS_PAD > size:
+            if self._atlas_top + shelf_h > size:
+                if not self._atlas_full_logged:
+                    self._atlas_full_logged = True
+                    print(f"[ATLAS] full at {len(self._atlas_uv)} sprites; "
+                          f"later ones draw one call each", flush=True)
+                return None
+            shelf = [_ATLAS_PAD, self._atlas_top]
+            self._atlas_shelves[shelf_h] = shelf
+            self._atlas_top += shelf_h
+        x, y = shelf
+        shelf[0] = x + w + _ATLAS_PAD
+        pixels = pygame.image.tostring(surface.convert_alpha(), "RGBA", False)
         glBindTexture(GL_TEXTURE_2D, self._atlas_texture)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ATLAS, ATLAS, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels)
+        glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels)
         glBindTexture(GL_TEXTURE_2D, 0)
-        self._atlas_uv = uv
-        self._fill_texture, self._fill_uv = self._atlas_texture, white_uv
-        skipped = skipped_oversized + skipped_too_large + skipped_atlas_full
-        total = packed + skipped
-        print(f"[ATLAS] packed={packed} skipped_oversized={skipped_oversized} "
-              f"skipped_too_large={skipped_too_large} skipped_atlas_full={skipped_atlas_full} "
-              f"atlas_size={ATLAS} occupancy={packed}/{total} ({100 * packed // total if total else 0}%)",
-              flush=True)
+        return (x / size, y / size, (x + w) / size, (y + h) / size)
 
     # --- instanced grass blade pipeline (Phase A proof) ---------------------
 
@@ -917,7 +911,7 @@ class GPUBackend(RenderBackend):
         sprite's alpha silhouette."""
         if strength <= 0:
             return
-        atlas_uv = self._atlas_uv.get(cache_key) if cache_key is not None else None
+        atlas_uv = self._atlas_uv_for(image)
         if atlas_uv is not None:
             texture, uv = self._atlas_texture, atlas_uv
         elif cache_key is not None and cache_key in self._large_cache:
@@ -943,12 +937,8 @@ class GPUBackend(RenderBackend):
         if width == 0 or height == 0:
             return
 
-        # area= calls cannot use atlas UV (which covers the full surface, not the sub-rect).
-        # Guard kept even though no atlas-eligible sprite currently uses area=, because the
-        # assumption is non-obvious and someone adding area= to a sprite blit later shouldn't
-        # have to know about this constraint.
-        atlas_uv = (self._atlas_uv.get(cache_key)
-                    if (cache_key is not None and area is None) else None)
+        # area= draws a sub-rect, which an atlas uv (the whole surface) can't express.
+        atlas_uv = self._atlas_uv_for(src) if area is None else None
 
         if atlas_uv is not None:
             self._blit_atlas += 1
@@ -1040,11 +1030,11 @@ class GPUBackend(RenderBackend):
         if blend_func is not None:
             self._flush_batch()
             glBlendFunc(*blend_func)
-            self._push_batch(self._fill_texture, dest_rect, self._fill_uv, tint)
+            self._push_batch(self._atlas_texture, dest_rect, self._white_uv, tint)
             self._flush_batch()
             glBlendFunc(*_DEFAULT_BLEND_FUNC)
         else:
-            self._push_batch(self._fill_texture, dest_rect, self._fill_uv, tint)
+            self._push_batch(self._atlas_texture, dest_rect, self._white_uv, tint)
 
     def draw_rect(self, color, rect, width=0):
         r = pygame.Rect(rect)
@@ -1074,12 +1064,10 @@ class GPUBackend(RenderBackend):
             glDeleteTextures([gl_tex])
 
     def shutdown(self):
-        texture_ids = [self._texture, self._white_texture]
+        texture_ids = [self._texture, self._atlas_texture]
         texture_ids.extend(st["tex"] for st in getattr(self, "_mesh_state", {}).values())
         for st in getattr(self, "_skin_state", {}).values():
             texture_ids.extend((st["tex"], st["bones"]))
-        if self._atlas_texture is not None:
-            texture_ids.append(self._atlas_texture)
         if getattr(self, "_grass_atlas_texture", None) is not None:
             texture_ids.append(self._grass_atlas_texture)
         if getattr(self, "_smoke_atlas_texture", None) is not None:

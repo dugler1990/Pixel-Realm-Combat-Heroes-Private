@@ -386,7 +386,7 @@ def load_sprite_manifest(monster_name):
 def import_folder(path, scale=None):
     norm = os.path.normpath(path)
     cache_key = ImageCache.folder_cache_key(norm, scale)
-    cached = ImageCache._folder_cache.get(cache_key)
+    cached = ImageCache.frames(cache_key)
     if cached is not None:
         return cached
 
@@ -399,17 +399,15 @@ def import_folder(path, scale=None):
                 image_surf = pygame.transform.scale(image_surf, scale)
             surface_list.append(image_surf)
 
-    ImageCache._folder_cache[cache_key] = surface_list
-    return surface_list
+    return ImageCache.keep_frames(cache_key, surface_list)
 
 
-def import_folder_old(path):
-    
-    surface_list = []
-    
-    for _, __, img_files in walk(path):
-        for image in img_files:
-            full_path = path + "/" + image
-            image_surf = pygame.image.load(full_path).convert_alpha()
-            surface_list.append(image_surf)
-    return surface_list
+def import_folder_flipped(path):
+    """import_folder's frames mirrored left-right: flipped once, shared by every instance."""
+    cache_key = ImageCache.folder_cache_key(os.path.normpath(path) + "__flipped")
+    cached = ImageCache.frames(cache_key)
+    if cached is not None:
+        return cached
+    return ImageCache.keep_frames(
+        cache_key, [pygame.transform.flip(frame, True, False) for frame in import_folder(path)]
+    )

@@ -756,7 +756,10 @@ class Level4:
         from ImageCache import ImageCache
         wall_surface = pygame.Surface((TILESIZE, TILESIZE), pygame.SRCALPHA)
         wall_surface.fill((255, 0, 255, 140))
-        ImageCache._folder_cache[ImageCache.folder_cache_key("__benchmark_wall__")] = [wall_surface]
+        # A rerun of benchmark setup reuses the first wall surface: held surfaces are never replaced.
+        wall_surface = ImageCache.keep_frames(
+            ImageCache.folder_cache_key("__benchmark_wall__"), [wall_surface]
+        )[0]
 
         def spawn_wall_tile(tx, ty):
             surface = wall_surface

@@ -26,13 +26,9 @@ def pygame_headless():
 
 @pytest.fixture(autouse=True)
 def clear_image_caches():
-    ImageCache.cache.clear()
-    ImageCache._folder_cache.clear()
-    ImageCache._scaled_cache.clear()
+    ImageCache.clear()
     yield
-    ImageCache.cache.clear()
-    ImageCache._folder_cache.clear()
-    ImageCache._scaled_cache.clear()
+    ImageCache.clear()
 
 
 def _make_frame(size):

@@ -269,8 +269,6 @@ class Game:
                     entity_quad_tree=self.level.layout_manager.entity_quad_tree
                 )
             self.current_level_number = level_number
-            if hasattr(self.backend, 'build_atlas'):
-                self.backend.build_atlas()
             self.set_state("level")
 
     def set_state(self, new_state):
