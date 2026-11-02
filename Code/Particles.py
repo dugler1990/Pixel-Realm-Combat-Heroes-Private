@@ -1,6 +1,8 @@
 import math
 import pygame
 from Support import import_folder
+import hit_core
+from attack_sprite import AttackSprite
 from random import choice
 import os
 from Settings import *
@@ -119,6 +121,9 @@ class AnimationPlayer:
 				)
 			}
 
+        # Hit masks per animation type, built on first use (_masks_for).
+        self.masks = {}
+
     def _arrow_frame(self):
         """A short arrow pointing right. Turned to face its travel when it is fired."""
         image = pygame.Surface((16, 5), pygame.SRCALPHA)
@@ -159,6 +164,17 @@ class AnimationPlayer:
             new_frames.append(flipped_frame)
         return new_frames
 
+    def _masks_for(self, animation_type, frames):
+        """Hit masks for a particle's frames, built once per animation type. A turned arrow
+        gets new frames on every shot, so its masks are built per shot (one small frame)."""
+        if frames is not self.frames.get(animation_type):
+            return hit_core.frame_masks(frames)
+        masks = self.masks.get(animation_type)
+        if masks is None:
+            masks = hit_core.frame_masks(frames)
+            self.masks[animation_type] = masks
+        return masks
+
     def create_grass_particles(self, pos, groups):
         animation_frames = choice(self.frames["leaf"])
         ParticleEffect(pos, animation_frames, groups)
@@ -179,7 +195,8 @@ class AnimationPlayer:
                          attack_type=None,
                          amount=None,
                          interaction_tags=None,
-                         stops=False):
+                         stops=False,
+                         rehit_ms=None):
         
         animation_frames = self.frames.get(animation_type)
         if not animation_frames:
@@ -203,7 +220,9 @@ class AnimationPlayer:
                        attack_type=attack_type,
                        amount=amount,
                        interaction_tags=interaction_tags,
-                       stops=stops)
+                       stops=stops,
+                       rehit_ms=rehit_ms,
+                       masks=self._masks_for(animation_type, animation_frames))
 
         # Register particle in the quadtree
         
@@ -221,7 +240,7 @@ class AnimationPlayer:
                                          )
         return particle
 
-class ParticleEffect(pygame.sprite.Sprite):
+class ParticleEffect(AttackSprite, pygame.sprite.Sprite):
     #@profile
     def __init__(self, pos,
                  frames,
@@ -238,13 +257,17 @@ class ParticleEffect(pygame.sprite.Sprite):
                  attack_type=None,
                  amount=None,
                  interaction_tags=None,
-                 stops=False):
+                 stops=False,
+                 rehit_ms=None,
+                 masks=None):
         
         super().__init__(groups)
         self.frames = frames
         self.image = frames[0]
         
-        #self.masks = convert_animations_to_masks(self.animations)
+        # Hit masks, one per frame (AnimationPlayer._masks_for); None = the rect is the hit area.
+        self.masks = masks
+        self.mask = masks[0] if masks else None
         
         self.rect = self.image.get_rect(center=pos)
         self.frame_index = 0
@@ -255,14 +278,17 @@ class ParticleEffect(pygame.sprite.Sprite):
         self.last_update = pygame.time.get_ticks()
         self.animation_speed = frame_duration  # Time in milliseconds between frames
         self.sprite_type = "magic"
-        self.owner = owner
-        self.source_team = source_team or getattr(owner, "team_id", None)
-        self.source_kind = source_kind or ("enemy_projectile" if self.source_team == "enemy" else "player_attack")
-        self.attack_type = attack_type or self.sprite_type
-        self.interaction_kind = "damage"
-        self.amount = amount
-        self.stops = stops
-        self.tags = set(interaction_tags or [])
+        team = source_team or getattr(owner, "team_id", None)
+        self.init_attack(
+            owner=owner,
+            source_team=team,
+            source_kind=source_kind or ("enemy_projectile" if team == "enemy" else "player_attack"),
+            attack_type=attack_type or self.sprite_type,
+            amount=amount,
+            tags=interaction_tags or (),
+            rehit_ms=rehit_ms,
+            stops=stops,
+        )
         self.quadtree = quadtree
         self.id = id(self)
 
@@ -299,6 +325,8 @@ class ParticleEffect(pygame.sprite.Sprite):
         if now - self.last_update > self.animation_speed:
             self.frame_index = (self.frame_index + 1) % len(self.frames)
             self.image = self.frames[self.frame_index]
+            if self.masks:
+                self.mask = self.masks[self.frame_index]
             self.last_update = now
 
         if self.is_moving:

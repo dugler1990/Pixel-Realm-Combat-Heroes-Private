@@ -122,8 +122,8 @@ class EnemyPuppet(CombatUnit):
         damage from OUR player's stats (the host lacks them) the same way
         CombatUnit.receive_interaction would, and relay it to the host, which
         applies it to the real enemy. Health/death come back via the C1 relay.
-        Relayed every overlapping frame (no i-frames here) -- the host's real
-        enemy gates repeats exactly as it does for the host's own hits.
+        Relayed by the attack's repeat rule (InteractionResolver.strike): once per
+        attack by default, or again every rehit_ms.
         """
         if getattr(ctx, "kind", None) != "damage":
             return

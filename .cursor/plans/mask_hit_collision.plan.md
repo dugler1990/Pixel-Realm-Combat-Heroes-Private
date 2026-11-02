@@ -509,7 +509,26 @@ def _weapon_art(path):
         )
 ```
 
-- Replace `self.image = pygame.image.load(full_path).convert_alpha()` with `self.image, self.mask = _weapon_art(full_path)`.
+- Replace `self.image = pygame.image.load(full_path).convert_alpha()` with `self.image, self.mask = _weapon_art(full_path)`, and right after it add:
+
+```python
+        # Unarmed art has no opaque pixels: the punch is the player's own body (hit_shape).
+        self._unarmed = self.mask.count() == 0
+```
+
+- Add `import hit_core` at the top, and this method at the end of `class Weapon`:
+
+```python
+    def hit_shape(self):
+        """Unarmed: the player's current frame, so a punch lands where the player's sprite
+        touches (the same rule as enemy swings). Weapons with art: None, so hit_core uses
+        the art's mask."""
+        if self._unarmed:
+            return hit_core.shape_of(self.owner)
+        return None
+```
+
+  Decided during Phase 3: `Graphics/Weapons/Unarmed/{Right,Left,Up,Down}.png` have no opaque pixels, so a mask-only unarmed attack could never land. Today it hits through the image's 64×64 box.
 
 ### Step 9. `Code/Particles.py`: particles carry masks and the attack contract
 
