@@ -37,18 +37,116 @@ def _load_sheet_frames(path: Path) -> list[Image.Image]:
     return frames
 
 
+def _edge_keys(edge: np.ndarray) -> np.ndarray:
+    """Each colour that covers a real share of the border.
+
+    A Veo frame often has black bars and a cream field on the same edge.
+    One median keeps whichever colour loses the count.
+    """
+    bins = edge.astype(np.int32) // 16
+    ids = bins[:, 0] * 256 + bins[:, 1] * 16 + bins[:, 2]
+    uniq, counts = np.unique(ids, return_counts=True)
+    keep = uniq[counts >= max(8, int(0.05 * len(edge)))]
+    if len(keep) == 0:
+        return np.median(edge, axis=0).reshape(1, 3)
+    return np.stack([np.median(edge[ids == uid], axis=0) for uid in keep])
+
+
+def _matte_border(image: Image.Image) -> Image.Image:
+    """Clear the sheet colours where they touch the frame edge.
+
+    A pixel in the middle that happens to be the same grey stays. That is the
+    armour. Only the field connected to the border goes.
+    """
+    from scipy import ndimage
+
+    from tools.sprite_assets.remove_bg import _drop_specks
+
+    rgb = np.asarray(image.convert("RGB"))
+    height, width, _ = rgb.shape
+    edge = np.concatenate([
+        rgb[0, :, :],
+        rgb[-1, :, :],
+        rgb[:, 0, :],
+        rgb[:, -1, :],
+    ]).astype(np.float32)
+    keys = _edge_keys(edge)
+    dist = np.abs(rgb.astype(np.float32)[:, :, None, :] - keys[None, None, :, :]).max(axis=3)
+    match = dist.min(axis=2)
+    near = match <= 32.0
+    labels, _count = ndimage.label(near)
+    border_ids = np.unique(np.concatenate([
+        labels[0, :], labels[-1, :], labels[:, 0], labels[:, -1],
+    ]))
+    border_ids = border_ids[border_ids > 0]
+    background = np.isin(labels, border_ids) if len(border_ids) else np.zeros((height, width), dtype=bool)
+    # A gap between the legs is the same field colour, but the body closes it off
+    # from the frame edge. Clear those holes when they match the field tightly.
+    # A single matching pixel inside armour stays.
+    tight = match <= 18.0
+    hole_labels, _hole_count = ndimage.label(tight)
+    hole_border = np.unique(np.concatenate([
+        hole_labels[0, :], hole_labels[-1, :], hole_labels[:, 0], hole_labels[:, -1],
+    ]))
+    hole_border = hole_border[hole_border > 0]
+    enclosed = (hole_labels > 0) & ~np.isin(hole_labels, hole_border) if len(hole_border) else hole_labels > 0
+    hole_sizes = np.bincount(hole_labels.ravel())
+    big_holes = hole_sizes[hole_labels] >= 24
+    cleared = background | (enclosed & big_holes)
+    # One pixel of leftover field colour where it touches the new transparency.
+    fringe = ndimage.binary_dilation(cleared, iterations=1) & ~cleared & (match <= 40.0)
+    cleared = cleared | fringe
+    solid = _drop_specks(~cleared, max(12, int(0.0002 * height * width)))
+    out = np.zeros((height, width, 4), dtype=np.uint8)
+    out[:, :, :3] = rgb
+    out[:, :, 3] = np.where(solid, 255, 0).astype(np.uint8)
+    return Image.fromarray(out)
+
+
+def _crop_union(frames: list[Image.Image], pad: int = 2) -> list[Image.Image]:
+    """One box around every frame of the clip, so the figure does not jump."""
+    from tools.sprite_assets.remove_bg import trim_box
+
+    if not frames:
+        return frames
+    boxes = [trim_box(frame, pad=0) for frame in frames]
+    x0 = min(box[0] for box in boxes)
+    y0 = min(box[1] for box in boxes)
+    x1 = max(box[2] for box in boxes)
+    y1 = max(box[3] for box in boxes)
+    width, height = frames[0].size
+    box = (
+        max(0, x0 - pad),
+        max(0, y0 - pad),
+        min(width, x1 + pad),
+        min(height, y1 + pad),
+    )
+    return [frame.crop(box) for frame in frames]
+
+
 def _load_video_frames(path: Path) -> list[Image.Image]:
-    """A black-background video goes through extract_black_loop, then the fit step."""
-    import tempfile
+    """Sample the clip, clear the field, and crop to the figure.
 
-    from tools.sprite_assets.extract_black_loop import extract
+    The flyer cutter wants a long empty-black stretch, and a warrior filling
+    the frame never has one. The crop is the same idea: one box for the clip.
+    """
+    import cv2
 
-    with tempfile.TemporaryDirectory() as tmp:
-        out = Path(tmp) / "frames"
-        extract(path, out)
-        frames = [Image.open(p).convert("RGBA") for p in sorted(out.glob("*.png"))]
-        # Keep the pixels; the temp dir is about to go away.
-        return [frame.copy() for frame in frames]
+    cap = cv2.VideoCapture(str(path))
+    if not cap.isOpened():
+        raise RuntimeError(f"could not open {path}")
+    raw = []
+    while True:
+        ok, bgr = cap.read()
+        if not ok:
+            break
+        raw.append(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
+    cap.release()
+    if len(raw) < 4:
+        raise RuntimeError(f"no frames in {path}")
+    step = max(1, len(raw) // 16)
+    matted = [_matte_border(Image.fromarray(frame)) for frame in raw[::step][:16]]
+    return _crop_union(matted)
 
 
 def load_action(path: Path) -> list[Image.Image]:
@@ -99,6 +197,91 @@ def _widest_run_center(row: np.ndarray) -> int:
     return int((int(starts[i]) + int(ends[i])) // 2)
 
 
+def sheet_man_height(cells: list[Image.Image]) -> int:
+    """Median figure height of the standing men on the sheet.
+
+    A ballista or a tower is as wide as it is tall. A man is not, so the
+    machines do not set the scale.
+    """
+    heights = []
+    for image in cells:
+        _foot_x, _foot_y, height = foot_and_height(image)
+        if height > image.width * 1.35:
+            heights.append(height)
+    if not heights:
+        heights = [foot_and_height(image)[2] for image in cells]
+    if not heights:
+        raise RuntimeError("no cells to measure")
+    return int(round(median(heights)))
+
+
+def scene_fighter_height(image: Image.Image, band: str = "near") -> int:
+    """Median height of the standing fighters in one band of the battle.
+
+    ``near`` is the bottom half. ``center`` is the middle 60 percent of the
+    picture. The short specks and the merged clumps are the tails of the
+    sizes. A ballista is wider than it is tall, so it is not in this sample.
+    """
+    from scipy import ndimage
+
+    rgb = np.asarray(image.convert("RGB"), dtype=np.float32)
+    height, width = rgb.shape[:2]
+    red, green, blue = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    warm = (red > 140) & (green > 110) & (red > blue + 15)
+    if int(warm.sum()) < 64:
+        sand = np.median(rgb.reshape(-1, 3), axis=0)
+    else:
+        sand = np.median(rgb[warm], axis=0)
+    mark = np.abs(rgb - sand).max(axis=2) > 36
+    if band == "center":
+        y0, y1 = int(height * 0.20), int(height * 0.80)
+        x0, x1 = int(width * 0.20), int(width * 0.80)
+        kept = np.zeros_like(mark)
+        kept[y0:y1, x0:x1] = mark[y0:y1, x0:x1]
+        mark = kept
+    else:
+        mark[: height // 2, :] = False
+    labels, _count = ndimage.label(mark)
+    found = []
+    for idx, sl in enumerate(ndimage.find_objects(labels), start=1):
+        if sl is None:
+            continue
+        area = int((labels[sl] == idx).sum())
+        box_h = sl[0].stop - sl[0].start
+        box_w = sl[1].stop - sl[1].start
+        if area < 80 or box_h < box_w or box_h > height * 0.15 or box_w > width * 0.12:
+            continue
+        found.append(box_h)
+    if len(found) < 4:
+        raise RuntimeError("no standing fighters in the chosen part of the battle")
+    found.sort()
+    start = int(len(found) * 0.40)
+    stop = max(start + 1, int(len(found) * 0.85))
+    core = found[start:stop]
+    return int(core[len(core) // 2])
+
+
+def height_times_man(size, figure: int, man_height: int) -> float:
+    """How many standing men tall this figure should be.
+
+    A size from the score wins. Without one, keep the height of the drawing.
+    """
+    if isinstance(size, (int, float)) and not isinstance(size, bool):
+        return min(2.5, max(0.5, float(size)))
+    if man_height <= 0:
+        return 1.0
+    return figure / man_height
+
+
+def battle_scale(scene: Image.Image, cells: list[Image.Image], band: str = "near") -> float:
+    """How much smaller a man is in the battle than on the sheet.
+
+    The same fraction applies to every cell. A ballista that is not in the
+    battle keeps the size it had next to the men on the sheet.
+    """
+    return scene_fighter_height(scene, band) / sheet_man_height(cells)
+
+
 def _scale_to_height(image: Image.Image, target: int) -> Image.Image:
     _fx, _fy, height = foot_and_height(image)
     if height == target:
@@ -110,14 +293,19 @@ def _scale_to_height(image: Image.Image, target: int) -> Image.Image:
 
 def fit_actions(
     actions: dict[str, list[Image.Image]],
+    target_height: int | None = None,
 ) -> dict[str, list[Image.Image]]:
     """One height, one bottom-centre foot point, one canvas for every frame.
 
-    The height is the median figure height of the idle frames. Frames are not
-    trimmed one by one: that is what makes the sprite jump and change size.
+    Pass the height the figure should stand at. That is the cut cell's figure
+    height times the battle scale. Without it, the height is the median of the
+    idle frames.
+    Frames are not trimmed one by one: that is what makes the sprite jump.
     """
-    idle = actions["idle"]
-    target = int(round(median(foot_and_height(frame)[2] for frame in idle)))
+    if target_height is None:
+        target = int(round(median(foot_and_height(frame)[2] for frame in actions["idle"])))
+    else:
+        target = int(target_height)
     target = max(1, target)
     scaled = {name: [_scale_to_height(frame, target) for frame in frames] for name, frames in actions.items()}
 

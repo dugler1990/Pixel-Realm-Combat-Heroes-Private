@@ -21,3 +21,6 @@ shapely>=2.0
 
 # Tests.
 pytest>=8.0
+
+# Attack-test reel. Ships a small ffmpeg so the clips can be joined by copy.
+imageio-ffmpeg>=0.5

@@ -1,0 +1,6 @@
+{
+  "api_key_env": "OPENAI_API_KEY",
+  "model": "gpt-5-mini",
+  "url": "https://api.openai.com/v1/chat/completions",
+  "timeout_seconds": 120
+}

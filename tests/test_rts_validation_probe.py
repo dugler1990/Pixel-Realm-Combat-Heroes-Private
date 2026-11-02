@@ -58,6 +58,24 @@ def test_literal_all_excludes_terrain():
         RTS_VALIDATION_RUNTIME.scenario_filter = previous
 
 
+def test_warrior_brawl_is_opt_in():
+    from rts_validation_driver import _spawn_warrior_brawl
+    from rts_validation_runtime import RTS_VALIDATION_RUNTIME
+
+    previous = list(RTS_VALIDATION_RUNTIME.scenario_filter)
+    roster = os.environ.pop("PRCH_ENTITY_BRAWL", None)
+    try:
+        RTS_VALIDATION_RUNTIME.scenario_filter = ["all"]
+        assert "warrior_brawl" not in RtsValidationDriver()._filtered_names()
+        RTS_VALIDATION_RUNTIME.scenario_filter = ["warrior_brawl"]
+        assert RtsValidationDriver()._filtered_names() == ["warrior_brawl"]
+        assert _spawn_warrior_brawl(object()).startswith("fail:")
+    finally:
+        RTS_VALIDATION_RUNTIME.scenario_filter = previous
+        if roster is not None:
+            os.environ["PRCH_ENTITY_BRAWL"] = roster
+
+
 def test_explicit_terrain_name_is_included():
     from rts_validation_runtime import RTS_VALIDATION_RUNTIME
 

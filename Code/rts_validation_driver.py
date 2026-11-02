@@ -1,5 +1,7 @@
 """In-game RTS validation scenarios (runs inside Level4 update loop)."""
 
+import json
+import os
 import time
 
 import pygame
@@ -167,6 +169,57 @@ def _sit_throne(level, profile_id):
     return throne
 
 
+def _spawn_warrior_brawl(level):
+    """Read the roster the entity pipeline wrote and spawn it around the player."""
+    path = os.environ.get("PRCH_ENTITY_BRAWL", "")
+    if not path or not os.path.isfile(path):
+        return "fail: no brawl roster"
+    with open(path, "r", encoding="utf-8") as handle:
+        roster = json.load(handle)
+    spots = roster.get("spots") or []
+    if not spots:
+        return "fail: empty brawl roster"
+    player = getattr(level, "player", None)
+    if player is None or getattr(player, "hitbox", None) is None:
+        return "fail: no player"
+    player.team_id = "environment"
+    # Level-up opens the upgrade menu. 100 needs 10,000,000 exp, so the brawl cannot reach it.
+    player.power_level = 100
+    player.exp = 0
+    origin = player.hitbox.center
+    spawned = 0
+    for spot in spots:
+        try:
+            enemy = level.spawner.spawn_enemy({
+                "kind": "enemy",
+                "type": spot["type"],
+                "pos": (
+                    (origin[0] + float(spot["dx"])) / TILESIZE,
+                    (origin[1] + float(spot["dy"])) / TILESIZE,
+                ),
+                "spawn_team_id": spot["team"],
+            })
+        except Exception as exc:
+            return f"fail: {spot.get('type')}: {exc}"
+        # Targeting reads the entity tree. A unit is not added there until it
+        # moves, so register it once here instead of scanning every sprite.
+        if enemy is not None:
+            enemy.layout_callback_update_quad_tree(
+                HashableRect(
+                    enemy.rect,
+                    enemy.id,
+                    enemy.direction,
+                    enemy.sprite_type,
+                    enemy.mask,
+                    owner=enemy,
+                ),
+                alive=True,
+                remove_existing=False,
+            )
+        spawned += 1
+    return f"spawned {spawned}"
+
+
 class RtsValidationDriver:
     WARMUP_FRAMES = 30
     DT = 0.05
@@ -192,6 +245,7 @@ class RtsValidationDriver:
         "terrain_slope_speed": 42.0,
         "terrain_sprite_tilt": 14.0,
         "terrain_shadow_slope": 14.0,
+        "warrior_brawl": 20.0,
     }
 
     DEFAULT_SCENARIO_NAMES = (
@@ -217,6 +271,9 @@ class RtsValidationDriver:
         "terrain_sprite_tilt",
         "terrain_shadow_slope",
     )
+    # Not in the default list. The entity pipeline launches this one on its own
+    # so the generated warriors fight in the visible game window.
+    BRAWL_SCENARIO_NAMES = ("warrior_brawl",)
     TERRAIN_WALK_FRAMES_FAST = 8
     TERRAIN_WALK_FRAMES_VISIBLE = 70
     TERRAIN_SLOPE_LAPS = 3
@@ -257,6 +314,7 @@ class RtsValidationDriver:
         self._feet_wall_reverse_key = pygame.K_LEFT
         self._feet_wall_sign = 1
         self._feet_wall_axis = "x"
+        self._brawl_spawned = False
 
     def _filtered_names(self):
         requested = [
@@ -264,7 +322,11 @@ class RtsValidationDriver:
             for n in RTS_VALIDATION_RUNTIME.scenario_filter
             if n and str(n).strip().lower() != "all"
         ]
-        known = list(self.DEFAULT_SCENARIO_NAMES) + list(self.TERRAIN_SCENARIO_NAMES)
+        known = (
+            list(self.DEFAULT_SCENARIO_NAMES)
+            + list(self.TERRAIN_SCENARIO_NAMES)
+            + list(self.BRAWL_SCENARIO_NAMES)
+        )
         if not requested:
             return list(self.DEFAULT_SCENARIO_NAMES)
         return [n for n in requested if n in known]
@@ -359,6 +421,8 @@ class RtsValidationDriver:
                 self._feet_wall_reverse_key = pygame.K_LEFT
                 self._feet_wall_sign = 1
                 self._feet_wall_axis = "x"
+            if name == "warrior_brawl":
+                self._brawl_spawned = False
             if name.startswith("terrain_"):
                 self._terrain_phase = None
                 self._terrain_walk_frames = 0
@@ -461,6 +525,28 @@ class RtsValidationDriver:
         return code
 
     # --- scenarios ---
+
+    def _run_warrior_brawl(self, level):
+        """Spawn the pipeline roster around the player and leave them fighting.
+
+        The player is moved to the environment team for this scene, so the two
+        hostile sides aggro each other. The window stays up for the hold time.
+        """
+        if self._scenario_frame < 2:
+            return False, False, ""
+        if self._brawl_spawned:
+            return False, False, "fighting"
+        self._brawl_spawned = True
+        runtime = getattr(level, "benchmark_runtime", None)
+        if runtime is not None:
+            runtime.grass_benchmark_enabled = False
+        if not getattr(level, "_benchmark_walls_spawned", False):
+            level._spawn_benchmark_boundaries()
+            level._benchmark_walls_spawned = True
+        details = _spawn_warrior_brawl(level)
+        if details.startswith("fail:"):
+            return True, False, details
+        return True, True, details, "probe"
 
     def _run_map_entities_loaded(self, level):
         if self._scenario_frame < 2:

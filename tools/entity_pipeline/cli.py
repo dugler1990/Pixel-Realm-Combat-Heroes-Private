@@ -2,18 +2,26 @@
 
     python -m tools.entity_pipeline.cli run --session necron --image path/to/map.png
     python -m tools.entity_pipeline.cli cut --session necron --sheet path/to/sheet.png
+    python -m tools.entity_pipeline.cli stats --session necron
     python -m tools.entity_pipeline.cli anim --session necron --name beastman_warrior --sprite cells/beastman_warrior.png --seconds 4
+    python -m tools.entity_pipeline.cli all --session necron --each 1
+    python -m tools.entity_pipeline.cli anim-all --session necron --seconds 4
     python -m tools.entity_pipeline.cli frames --session necron --name beastman_warrior
     python -m tools.entity_pipeline.cli wire --session necron --name beastman_warrior --map levels/.../map.tmx --template tribey_spear
+    python -m tools.entity_pipeline.cli fight --session necron --map levels/.../map.tmx --each 1
 
 Each paid step (scene, sheet, each anim clip) prints the prompt and images it sent, opens the
 result, and asks before going on. --yes keeps every result without asking.
+all animates every cut sprite without asking, then opens the game on the warrior_brawl
+validation scenario so they fight on screen. anim-all and fight stay separate.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -23,13 +31,39 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from tools.entity_pipeline.figures import cut_sheet  # noqa: E402
-from tools.entity_pipeline.frames import ACTIONS, fit_actions, load_action, pack_monster  # noqa: E402
+from tools.entity_pipeline.frames import (  # noqa: E402
+    ACTIONS,
+    battle_scale,
+    fit_actions,
+    foot_and_height,
+    height_times_man,
+    load_action,
+    pack_monster,
+    sheet_man_height,
+)
 from tools.entity_pipeline.session import load_session, record_call, save_session, session_dir  # noqa: E402
+from tools.entity_pipeline.stats import (  # noqa: E402
+    DEFAULT_STATS_CONFIG,
+    StatsClientError,
+    adopt_names,
+    ask_scores,
+    build_prompt,
+    load_scores,
+    numbered_sheet,
+    parse_scores,
+    print_scores,
+    save_scores,
+    sheet_cells,
+)
 from tools.entity_pipeline.wire import (  # noqa: E402
     DEFAULT_X,
     DEFAULT_Y,
     add_placed_entity,
+    fight_placements,
+    roster_counts,
     format_entry,
+    install_monster_entries,
+    rescore_monster_entries,
     template_entry,
 )
 from tools.painted_map_pipeline.review_gate import (  # noqa: E402
@@ -54,14 +88,12 @@ SHEET_PROMPT = (
     "No text labels."
 )
 ANIM_ACTIONS = {
-    "idle": "Standing idle, a short breathing loop",
-    "move": "Walking in place, a walk cycle",
-    "attack": "One melee attack",
+    "idle": "A game idle animation. Clean and simple, don't add anything",
+    "move": "Walking in place",
+    "attack": "One attack",
 }
 ANIM_PROMPT = (
-    "2D sprite animation of this exact warrior, facing right, on a solid black background. "
-    "{action}. Same character, same scale, feet on the ground. "
-    "No scenery, no text, no other characters."
+    "This exact warrior, facing right, on a solid black background. {action}."
 )
 MENU = (
     "\n  [enter] keep   [r] redraw (one paid call)   [r <why> @img] redraw with criticism"
@@ -241,10 +273,61 @@ def cmd_cut(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_stats(args: argparse.Namespace) -> int:
+    """Score every cut warrior 1-10 from the sheet. One paid call. Nothing is written unless
+    the reply scores every warrior."""
+    work = session_dir(args.session)
+    cells = sheet_cells(work)
+    names = [name for name, _box in cells]
+    if (work / "stats.json").exists() and not args.force:
+        saved = load_scores(work)      # prints why when it is stale
+        if not saved:
+            return 1
+        print(f"stats: already have {work / 'stats.json'} (--force asks again)")
+        print_scores(saved)
+        return 0
+    sheet = Path(args.sheet) if args.sheet else work / "sheet.png"
+    if not sheet.exists():
+        print(f"sheet not found: {sheet}", file=sys.stderr)
+        return 1
+    config_path = Path(args.stats_config)
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    model = args.model or config.get("model")
+    if not model:
+        print(f"set model in {config_path} or pass --model", file=sys.stderr)
+        return 1
+    numbered = numbered_sheet(sheet, cells, work / "stats_sheet.png")
+    print(f"stats: sending {numbered} ({len(names)} warriors) to {model}")
+    try:
+        text = ask_scores(numbered, build_prompt(len(names)), config, model)
+    except StatsClientError as exc:
+        print(f"stats failed: {exc}", file=sys.stderr)
+        return 1
+    try:
+        scores = parse_scores(text, names)
+        cells, scores, renamed = adopt_names(work, cells, scores)
+    except StatsClientError as exc:
+        print(f"stats failed: {exc}\n--- reply ---\n{text}", file=sys.stderr)
+        return 1
+    for old, new in renamed:
+        print(f"stats: {old} -> {new}")
+    out = save_scores(work, model, sheet, cells, scores)
+    print_scores(scores)
+    print(f"stats: {out}")
+    return 0
+
+
 def _sprite_path(args: argparse.Namespace) -> Path:
     if args.sprite:
         return Path(args.sprite)
     return session_dir(args.session) / "cells" / f"{args.name}.png"
+
+
+def _cell_names(session: str) -> list[str]:
+    cells = session_dir(session) / "cells"
+    if not cells.is_dir():
+        return []
+    return sorted(path.stem for path in cells.glob("*.png"))
 
 
 def _video_settings(args: argparse.Namespace, config: dict) -> dict:
@@ -289,7 +372,8 @@ def cmd_anim(args: argparse.Namespace) -> int:
             record_call(args.session, f"anim:{args.name}:{action}", result)
             print(
                 f"{step}: {dest}  {settings['seconds']}s  "
-                f"{settings['model']}  cost_usd={result.get('cost_usd')}"
+                f"{settings['model']}  style=Graphic Design 2D  "
+                f"cost_usd={result.get('cost_usd')}"
             )
         return draw
 
@@ -300,6 +384,29 @@ def cmd_anim(args: argparse.Namespace) -> int:
         if not kept:
             return 1
     print(f"anim: {out}")
+    return 0
+
+
+def cmd_anim_all(args: argparse.Namespace) -> int:
+    """Every cut sprite, all three actions, kept without asking. Then the frame folders."""
+    names = _cell_names(args.session)
+    if not names:
+        print(f"no cells in {session_dir(args.session) / 'cells'}; run cut first", file=sys.stderr)
+        return 1
+    args.yes = True
+    print(f"anim-all: {len(names)} sprites, keeping every clip")
+    for name in names:
+        args.name = name
+        args.sprite = None
+        args.idle = None
+        args.move = None
+        args.attack = None
+        print(f"anim-all: {name}")
+        if cmd_anim(args) != 0:
+            return 1
+        if cmd_frames(args) != 0:
+            return 1
+    print(f"anim-all: {len(names)} sprites")
     return 0
 
 
@@ -322,7 +429,34 @@ def cmd_frames(args: argparse.Namespace) -> int:
             print(f"missing {action} sheet: {path}", file=sys.stderr)
             return 1
     loaded = {action: load_action(path) for action, path in paths.items()}
-    fitted = fit_actions(loaded)
+    work_root = session_dir(args.session)
+    cell = work_root / "cells" / f"{args.name}.png"
+    target = None
+    if cell.exists():
+        from PIL import Image
+
+        with Image.open(cell) as sprite:
+            figure = foot_and_height(sprite.convert("RGBA"))[2]
+        scale = 1.0
+        man = figure
+        scene_path = work_root / "scene.png"
+        cell_paths = sorted((work_root / "cells").glob("*.png"))
+        if scene_path.exists() and cell_paths:
+            cell_images = [Image.open(path).convert("RGBA") for path in cell_paths]
+            try:
+                man = sheet_man_height(cell_images)
+                with Image.open(scene_path) as scene:
+                    scale = battle_scale(scene.convert("RGB"), cell_images, getattr(args, "band", "near"))
+            except RuntimeError as exc:
+                print(f"  scale: {exc}; using the cut cell")
+            finally:
+                for image in cell_images:
+                    image.close()
+        scored = load_scores(work_root).get(args.name) or {}
+        times = height_times_man(scored.get("size"), figure, man)
+        target = max(1, round(man * scale * times))
+        print(f"  scale: {scale:.2f}, {times:.2f} men, figure {figure}px -> {target}px")
+    fitted = fit_actions(loaded, target)
     monster = pack_monster(args.name, fitted)
     sizes = {action: fitted[action][0].size for action in ACTIONS}
     print(f"frames: {monster}")
@@ -354,6 +488,176 @@ def cmd_wire(args: argparse.Namespace) -> int:
     object_id = add_placed_entity(Path(args.map), args.name, x=x, y=y)
     print(f"map: {args.map} object {object_id} {args.name} at ({x}, {y})")
     return 0
+
+
+def cmd_fight(args: argparse.Namespace) -> int:
+    """Place `each` copies of every cut warrior on two teams that already fight each other.
+
+    monster_data entries are copied from the template when the name is missing.
+    An object that is already on the map is left where it is.
+    """
+    if args.each < 1:
+        print("--each must be at least 1", file=sys.stderr)
+        return 1
+    names = _cell_names(args.session)
+    if not names:
+        print(f"no cells in {session_dir(args.session) / 'cells'}; run cut first", file=sys.stderr)
+        return 1
+    for name in names:
+        folder = Path("Graphics/Monsters") / name / "idle"
+        if not folder.is_dir():
+            print(f"fight: {name} has no frames in {folder}")
+    added = install_monster_entries(names, args.template)
+    if added:
+        print(f"fight: added monster_data {', '.join(added)} (copied from {args.template})")
+    else:
+        print("fight: monster_data already has every warrior")
+    x = DEFAULT_X if args.x is None else args.x
+    y = DEFAULT_Y if args.y is None else args.y
+    placed = 0
+    for spot in fight_placements(names, args.each, x, y):
+        try:
+            object_id = add_placed_entity(
+                Path(args.map),
+                spot["name"],
+                x=spot["x"],
+                y=spot["y"],
+                entity_type=spot["entity_type"],
+                team_id=spot["team_id"],
+            )
+        except SystemExit as exc:
+            if "already has" in str(exc):
+                print(f"map: {spot['name']} already placed")
+                continue
+            raise
+        placed += 1
+        print(
+            f"map: {args.map} object {object_id} {spot['name']} "
+            f"type={spot['entity_type']} team={spot['team_id']} at ({spot['x']}, {spot['y']})"
+        )
+    print(f"fight: {placed} new objects, {args.each} of each")
+    return 0
+
+
+def cmd_brawl(args: argparse.Namespace) -> int:
+    """Open the visible validation scenario with one line of each warrior fighting the other."""
+    if args.each < 1:
+        print("--each must be at least 1", file=sys.stderr)
+        return 1
+    names = _cell_names(args.session)
+    if not names:
+        print(f"no cells in {session_dir(args.session) / 'cells'}; run cut first", file=sys.stderr)
+        return 1
+    for name in names:
+        folder = Path("Graphics/Monsters") / name / "idle"
+        if not folder.is_dir():
+            print(f"brawl: {name} has no frames in {folder}", file=sys.stderr)
+            return 1
+    added = install_monster_entries(names, args.template)
+    if added:
+        print(f"brawl: added monster_data {', '.join(added)} (copied from {args.template})")
+    scores = load_scores(session_dir(args.session))
+    if not scores:
+        print("brawl: no usable stats.json, warriors keep the numbers already in monster_data")
+    else:
+        changed = rescore_monster_entries({n: scores[n] for n in names if n in scores}, args.template)
+        if changed:
+            print(f"brawl: applied stats.json to {', '.join(changed)}")
+        else:
+            print("brawl: stats.json already applied")
+        unscored = [n for n in names if n not in scores]
+        if unscored:
+            print(f"brawl: no score for {', '.join(unscored)}; they keep the template numbers")
+    counts = roster_counts({name: scores[name] for name in names if name in scores})
+    if counts:
+        print("brawl: " + ", ".join(
+            f"{counts[name] * args.each} {scores[name].get('label') or name}" for name in names if name in counts
+        ))
+    spots = [
+        {
+            "type": spot["entity_type"],
+            "team": spot["team_id"],
+            "dx": spot["x"],
+            "dy": spot["y"],
+        }
+        for spot in fight_placements(names, args.each, x=0, y=0, packed=True, counts=counts or None)
+    ]
+    roster = session_dir(args.session) / "brawl.json"
+    roster.write_text(json.dumps({"each": args.each, "spots": spots}, indent=2) + "\n", encoding="utf-8")
+    code_dir = _ROOT / "Code"
+    env = os.environ.copy()
+    env["PRCH_ENTITY_BRAWL"] = str(roster.resolve())
+    hold = str(args.hold)
+    level = getattr(args, "level", None) or "../levels/benchmark"
+    roster_note = "by label" if counts else f"{args.each} of each"
+    print(f"brawl: opening {level}, {roster_note}, on screen for {hold}s")
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "rts_validation.py",
+            "--scenario",
+            "warrior_brawl",
+            "--layout-dir",
+            level,
+            "--hold-seconds",
+            hold,
+            "--max-seconds",
+            "30",
+        ],
+        cwd=code_dir,
+        env=env,
+        check=False,
+    )
+    return proc.returncode
+
+
+def _confirm_brawl(args: argparse.Namespace) -> bool:
+    """Say the frames are ready, then start or change the brawl. Enter starts."""
+    menu = (
+        f"\n  ready. {args.each:g} of each warrior, on screen for {args.hold:g}s."
+        "\n  [enter] start the brawl"
+        "\n  [each <n>] copies of each warrior"
+        "\n  [hold <n>] seconds on screen"
+        "\n  [q] stop"
+    )
+    while True:
+        raw = ask(menu).strip()
+        answer = raw.lower()
+        if answer == "":
+            return True
+        if answer == "q":
+            print("brawl: not started")
+            return False
+        kind, _, value = answer.partition(" ")
+        if kind in {"each", "hold"} and value:
+            try:
+                number = float(value)
+            except ValueError:
+                print(f"  not a number: {value}")
+                continue
+            if kind == "each":
+                if number < 1 or not number.is_integer():
+                    print("  each must be a whole number, at least 1")
+                    continue
+                args.each = int(number)
+            else:
+                if number <= 0:
+                    print("  hold must be more than 0")
+                    continue
+                args.hold = number
+            print(f"  {args.each:g} of each, {args.hold:g}s")
+            continue
+        print(f"  not an option: {raw}")
+
+
+def cmd_all(args: argparse.Namespace) -> int:
+    """Animate every cut sprite, keep every clip, then ask before the brawl."""
+    auto = args.yes
+    if cmd_anim_all(args) != 0:
+        return 1
+    if not auto and not _confirm_brawl(args):
+        return 0
+    return cmd_brawl(args)
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -394,6 +698,14 @@ def main(argv: list[str] | None = None) -> int:
     cut.add_argument("--sheet", default=None)
     cut.set_defaults(func=cmd_cut)
 
+    stats = sub.add_parser("stats", help="score each cut warrior 1-10 from the sheet (one paid call)")
+    stats.add_argument("--session", required=True)
+    stats.add_argument("--sheet", default=None, help="the sheet cut used. Default <session>/sheet.png")
+    stats.add_argument("--stats-config", default=str(DEFAULT_STATS_CONFIG))
+    stats.add_argument("--model", default=None, help="overrides model in the stats config")
+    stats.add_argument("--force", action="store_true", help="ask again even if stats.json exists")
+    stats.set_defaults(func=cmd_stats)
+
     anim = sub.add_parser("anim", help="one sprite -> a Veo 3.1 clip for idle, move, and attack")
     _add_common(anim)
     anim.add_argument("--name", required=True)
@@ -405,12 +717,25 @@ def main(argv: list[str] | None = None) -> int:
     anim.add_argument("--audio", action="store_true")
     anim.set_defaults(func=cmd_anim)
 
+    anim_all = sub.add_parser("anim-all", help="every cut sprite, idle move and attack, auto-kept")
+    _add_common(anim_all)
+    anim_all.add_argument("--model", default=None, help="default veo-3.1-lite")
+    anim_all.add_argument("--seconds", type=int, default=None, help="4, 6, or 8. Default 4")
+    anim_all.add_argument("--width", type=int, default=None)
+    anim_all.add_argument("--height", type=int, default=None)
+    anim_all.add_argument("--audio", action="store_true")
+    anim_all.add_argument("--band", choices=("near", "center"), default="near",
+                          help="near is the bottom half. center is the middle 60 percent")
+    anim_all.set_defaults(func=cmd_anim_all, name=None, sprite=None, idle=None, move=None, attack=None)
+
     frames = sub.add_parser("frames", help="black sheets -> monster folders")
     _add_common(frames)
     frames.add_argument("--name", required=True)
     frames.add_argument("--idle", default=None)
     frames.add_argument("--move", default=None)
     frames.add_argument("--attack", default=None)
+    frames.add_argument("--band", choices=("near", "center"), default="near",
+                        help="near is the bottom half. center is the middle 60 percent")
     frames.set_defaults(func=cmd_frames)
 
     wire = sub.add_parser("wire", help="print monster_data and add one map object")
@@ -421,6 +746,40 @@ def main(argv: list[str] | None = None) -> int:
     wire.add_argument("--x", type=float, default=None)
     wire.add_argument("--y", type=float, default=None)
     wire.set_defaults(func=cmd_wire)
+
+    fight = sub.add_parser("fight", help="place each cut warrior on two hostile teams")
+    _add_common(fight)
+    fight.add_argument("--map", required=True)
+    fight.add_argument("--each", type=int, default=1, help="copies of each warrior. Default 1")
+    fight.add_argument("--template", default="tribey_spear")
+    fight.add_argument("--x", type=float, default=None)
+    fight.add_argument("--y", type=float, default=None)
+    fight.set_defaults(func=cmd_fight)
+
+    brawl = sub.add_parser("brawl", help="show the cut warriors fighting in the game")
+    _add_common(brawl)
+    brawl.add_argument("--each", type=int, default=1, help="multiplies the label counts. Without stats, copies of each warrior. Default 1")
+    brawl.add_argument("--hold", type=float, default=60, help="seconds the fight stays on screen")
+    brawl.add_argument("--template", default="tribey_spear")
+    brawl.add_argument("--level", default="../levels/benchmark",
+                       help="layout directory. Default is the black benchmark room")
+    brawl.set_defaults(func=cmd_brawl)
+
+    everything = sub.add_parser("all", help="animate every cut sprite, then show them fighting in the game")
+    _add_common(everything)
+    everything.add_argument("--each", type=int, default=1, help="copies of each warrior. Default 1")
+    everything.add_argument("--hold", type=float, default=60, help="seconds the fight stays on screen")
+    everything.add_argument("--template", default="tribey_spear")
+    everything.add_argument("--level", default="../levels/benchmark",
+                            help="layout directory. Default is the black benchmark room")
+    everything.add_argument("--model", default=None, help="default veo-3.1-lite")
+    everything.add_argument("--seconds", type=int, default=None, help="4, 6, or 8. Default 4")
+    everything.add_argument("--width", type=int, default=None)
+    everything.add_argument("--height", type=int, default=None)
+    everything.add_argument("--audio", action="store_true")
+    everything.add_argument("--band", choices=("near", "center"), default="near",
+                            help="near is the bottom half. center is the middle 60 percent")
+    everything.set_defaults(func=cmd_all, name=None, sprite=None, idle=None, move=None, attack=None)
 
     run = sub.add_parser("run", help="scene, sheet, cut, then stop")
     _add_common(run)
