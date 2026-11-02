@@ -1,6 +1,6 @@
 ---
 name: mask hit collision
-overview: "Every attack lands only where its pixels touch the target's pixels. One module (Code/hit_core.py) answers 'did this touch that' for every attack, and one resolver method (InteractionResolver.strike) applies flat-damage hits with one repeat rule: once per attack by default, or again every rehit_ms. Work happens on branch refactor/mask-hits."
+overview: "Every attack lands only where its pixels touch the target's pixels. One module (Code/hit_core.py) answers 'did this touch that' for every attack, and one resolver method (InteractionResolver.strike) applies flat-damage hits with one repeat rule: once per attack by default, or again every rehit_ms. Work happens on branch refactor/attack-mask-collision."
 todos:
   - id: core
     content: "Phase 1, steps 1-3: Code/hit_core.py (shapes, find_hits, bodies_near, ground_reach); collision_core.solid_mask; InteractionResolver.strike with the repeat rule."
@@ -9,7 +9,7 @@ todos:
     content: "Phase 2, steps 4-7: mesh boss hit_shape; build_body_mask docstring; server-side remote player mask; its entity-tree entry names its owner."
     status: pending
   - id: attack-sprites
-    content: "Phase 3, steps 8-14: Weapon art cache + mask + repeat rule; particle masks + repeat rule; rehit_ms from magic_data and ranged attacks; one shared loop that keeps arrows stopping; parry reset; EnemyPuppet docstring."
+    content: "Phase 3, steps 8-14: the AttackSprite contract; Weapon art cache + mask; particle masks; rehit_ms from magic_data and ranged attacks; one shared loop that reads the contract and keeps arrows stopping; parry reset; EnemyPuppet docstring."
     status: pending
   - id: abilities
     content: "Phase 4, steps 15-16: dash finds bodies through the entity tree; leap slam hits by ground circle with ground-distance falloff (fixes the snapshot bug in both)."
@@ -28,20 +28,11 @@ isProject: false
 
 # Mask hit collision
 
-## Before you start: commit the other work first
-
-When this plan was written, other sessions had uncommitted work in this checkout. A ranged-enemy session (retreat AI, arrow and stone projectiles that stop on hit) had edits in `Code/CombatStrategy.py`, `Code/Particles.py`, `Code/Level4_tmxdev.py` and `Code/Settings.py`. **Phases 3, 6 and 7 edit those same files.** The entity-pipeline session had edits in `tools/entity_pipeline/` and `tests/`.
-
-1. Commit that work on `feature/entity-pipeline-2d`, or decide to carry what stays uncommitted on top of the switch.
-2. `git branch -f refactor/mask-hits HEAD`. This moves the refactor branch up to that latest commit. It's safe while the branch has no commits of its own; check with `git log -1 refactor/mask-hits` that it is still on a commit of `feature/entity-pipeline-2d`.
-3. `git switch refactor/mask-hits`. Both branches are now on the same commit, so anything left uncommitted carries across without conflicts.
-
 ## Read this first
 
-- Branch: `refactor/mask-hits`, checked out in the shared folder `C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Private`. While it is checked out, every session in this folder is on this branch, and their commits land here too. Switch back to `feature/entity-pipeline-2d` when the refactor is merged.
-- Do not cut the branch again from `dev_tmxlevels`. The commits since then rewrote `Entity.py`, `collision_core.py` and `dash.py`, which this plan edits.
-- This branch sits on top of the untested entity-pipeline commits. Merge `feature/entity-pipeline-2d` into `dev_tmxlevels` first, or the refactor's merge carries those commits along.
-- Do the phases in order. The game keeps working after each one.
+- Branch: `refactor/attack-mask-collision`, cut from `main` at `2f7dead`. That commit already has everything this plan builds on: the `Entity.py` and `collision_core.py` rewrite, and the ranged-enemy work (`b8be8b6`: retreat AI, arrows and stones that stop on the first body they hit).
+- The branch is checked out in the shared folder `C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Private`. While it is, every session in this folder is on this branch, and their commits land here too. Switch back to `main` once the refactor is merged into it.
+- Do the phases in order and commit after each one. The game keeps working after each phase.
 - Find functions **by name** (`def player_attack_logic(`), not by line number. Line numbers move. Re-read a file right before you edit it.
 - Code in this plan is complete. Copy it as written. Do not rename anything, do not "improve" it, do not add features.
 
@@ -80,8 +71,9 @@ an attack: Weapon, spell or projectile sprite, an enemy swing, a dash, a ground 
    - Attack sprites (weapon, spells, projectiles) and ground blasts (meteor, leap slam) search `level.attackable_sprites`, as player attacks, projectiles and the meteor already do. Co-op puppets are in that group, so a joiner's hits on them still relay to the host.
    - Body attacks (an enemy's swing, a dash) search the entity tree around the attacker (`hit_core.bodies_near`), plus the swing's chosen target. Only nearby bodies are tested, so the cost doesn't grow with the number of units. The tree holds every moving entity, including the server's networked players (step 7). The chosen target covers anything without a tree entry, such as RTS workers spawned without a tree callback.
    - The ice clone keeps searching its own group.
+   - So a new kind of hittable entity has to be in both places: in `attackable_sprites` (its spawn groups) for sprite attacks and blasts, and in the entity tree with `owner=self` (`Entity.move` does this) for swings and dashes. The split exists because co-op puppets are in the group but must stay out of the tree, where they would collide.
 4. **No mask means the whole rect**, today's behaviour, so nothing gets harder to hit by accident. A mask that doesn't fit its rect also falls back to the rect, and the `collision_mask` debug channel names the class the first time.
-5. **The repeat rule: once per attack by default, configurable per attack.** Each attack keeps `hits`, a record of when it last hit each body (`Weapon.hits`, `ParticleEffect.hits`, `runtime["hits"]` for dash, `swing["hits"]` for melee). `rehit_ms` on the attack decides what happens while it keeps touching the same body:
+5. **The repeat rule: once per attack by default, configurable per attack.** Each attack keeps `hits`, a record of when it last hit each body (`AttackSprite.hits` on weapons and particles, `runtime["hits"]` for dash, `swing["hits"]` for melee). `rehit_ms` on the attack decides what happens while it keeps touching the same body:
    - absent or `None`: once per attack (the default);
    - a number: again after that many ms;
    - `0`: every frame.
@@ -130,6 +122,7 @@ These are AI decisions, not hits. Leave them as they are:
 4. Do not touch body bumping (`Entity.collision`, `body_contact`). Bumping already uses masks and is not an attack.
 5. Do not treat entity-tree items as entities. They are `HashableRect` snapshots; `hit_core.bodies_near` returns their owners.
 6. Do not iterate an attack-sprite group directly while hits can call `stop()`: `stop()` kills the sprite and takes it out of the group. Iterate a copy.
+7. Do not put a sprite in `attack_sprites` or `enemy_attack_sprites` unless it is an `AttackSprite` that called `init_attack()`. The hit loop reads its fields directly.
 
 ---
 
@@ -436,11 +429,48 @@ Side effect: a mesh boss bumping into this player now gets its real upright body
 
 ## Phase 3: attack sprites
 
-**Reminder:** this phase edits `Particles.py` and `Level4_tmxdev.py`. Check the ranged-enemy session's work on them is committed and on this branch ("Before you start"). Keep its arrow code (`_face_direction`, `stops`, `stop()`).
+**Reminder:** this phase edits `Particles.py` and `Level4_tmxdev.py`, which other sessions also work on. Run `git status` first; if another session has uncommitted edits in either file, get them committed before you start. Keep the arrow code (`_face_direction`, `stops`, `stop()`).
 
-### Step 8. `Code/Weapon.py`: load the art once, give it a mask and a repeat rule
+### Step 8. The attack-sprite contract, and `Code/Weapon.py`
 
-- Add `from Settings import weapon_data` after `import pygame`.
+`Weapon` and `ParticleEffect` are the only sprites that go into `attack_sprites` and `enemy_attack_sprites`. Today each sets its attack fields by hand, and the hit loops read them with `getattr` and a default, so a misspelt field quietly becomes the default. Give both one contract.
+
+Create `Code/attack_sprite.py`:
+
+```python
+"""What every attack sprite carries: the one contract the hit loop reads.
+
+Weapon and ParticleEffect are the only sprites in Level4's attack_sprites and
+enemy_attack_sprites groups. Each calls init_attack() in its __init__, and
+Level4._strike_with_attack_sprites reads these fields directly, so a sprite that skips
+init_attack fails loudly (AttributeError) instead of quietly hitting with defaults.
+"""
+
+
+class AttackSprite:
+    """Mixin for sprites that hit things. Call init_attack() in __init__."""
+
+    def init_attack(self, *, owner, source_team, source_kind, attack_type,
+                    amount=None, tags=(), rehit_ms=None, stops=False):
+        self.owner = owner
+        self.source_team = source_team
+        self.source_kind = source_kind
+        self.attack_type = attack_type
+        self.interaction_kind = "damage"
+        self.amount = amount
+        self.tags = set(tags)
+        # Repeat rule (InteractionResolver.strike): when this attack last hit each body,
+        # and how long before it may hit the same body again (None = once per attack).
+        self.hits = {}
+        self.rehit_ms = rehit_ms
+        # Stops at the first body it lands on (arrows, stones); the sprite defines stop().
+        self.stops = stops
+```
+
+In `Code/Weapon.py`:
+
+- Add `from Settings import weapon_data` and `from attack_sprite import AttackSprite` after `import pygame`.
+- Change `class Weapon(pygame.sprite.Sprite):` to `class Weapon(AttackSprite, pygame.sprite.Sprite):`.
 - Add above `class Weapon`:
 
 ```python
@@ -457,20 +487,36 @@ def _weapon_art(path):
     return art
 ```
 
-- In `Weapon.__init__`, after `self.amount = None`, add:
+- In `Weapon.__init__`, keep `self.sprite_type = "weapon"` and replace
 
 ```python
-        # Repeat rule (InteractionResolver.strike): when this swing last hit each body, and
-        # how long before it may hit the same body again (None = once per swing).
-        self.hits = {}
-        self.rehit_ms = weapon_data.get(player.weapon, {}).get("rehit_ms")
+        self.owner = player
+        self.source_team = getattr(player, "team_id", "player")
+        self.source_kind = "player_attack"
+        self.attack_type = "weapon"
+        self.interaction_kind = "damage"
+        self.tags = {"weapon", "player_attack"}
+        self.amount = None
+```
+
+  with
+
+```python
+        self.init_attack(
+            owner=player,
+            source_team=getattr(player, "team_id", "player"),
+            source_kind="player_attack",
+            attack_type="weapon",
+            tags={"weapon", "player_attack"},
+            rehit_ms=weapon_data.get(player.weapon, {}).get("rehit_ms"),
+        )
 ```
 
 - Replace `self.image = pygame.image.load(full_path).convert_alpha()` with `self.image, self.mask = _weapon_art(full_path)`.
 
-### Step 9. `Code/Particles.py`: particles carry masks and a repeat rule
+### Step 9. `Code/Particles.py`: particles carry masks and the attack contract
 
-- Add `import hit_core` after `from Support import import_folder`.
+- Add `import hit_core` and `from attack_sprite import AttackSprite` after `from Support import import_folder`.
 - At the end of `AnimationPlayer.__init__`, add `self.masks = {}`.
 - Add this method to `class AnimationPlayer`, directly before `def create_particles(`:
 
@@ -494,17 +540,45 @@ def _weapon_art(path):
                        masks=self._masks_for(animation_type, animation_frames),
 ```
 
+- Change `class ParticleEffect(pygame.sprite.Sprite):` to `class ParticleEffect(AttackSprite, pygame.sprite.Sprite):`.
 - In `ParticleEffect.__init__`, add `rehit_ms=None, masks=None` as the last parameters. Replace the commented line `#self.masks = convert_animations_to_masks(self.animations)` with:
 
 ```python
         # Hit masks, one per frame (AnimationPlayer._masks_for); None = the rect is the hit area.
         self.masks = masks
         self.mask = masks[0] if masks else None
-        # Repeat rule (InteractionResolver.strike): when this particle last hit each body,
-        # and how long before it may hit the same body again (None = once).
-        self.hits = {}
-        self.rehit_ms = rehit_ms
 ```
+
+- Further down `__init__`, keep `self.sprite_type = "magic"` and replace
+
+```python
+        self.owner = owner
+        self.source_team = source_team or getattr(owner, "team_id", None)
+        self.source_kind = source_kind or ("enemy_projectile" if self.source_team == "enemy" else "player_attack")
+        self.attack_type = attack_type or self.sprite_type
+        self.interaction_kind = "damage"
+        self.amount = amount
+        self.stops = stops
+        self.tags = set(interaction_tags or [])
+```
+
+  with
+
+```python
+        team = source_team or getattr(owner, "team_id", None)
+        self.init_attack(
+            owner=owner,
+            source_team=team,
+            source_kind=source_kind or ("enemy_projectile" if team == "enemy" else "player_attack"),
+            attack_type=attack_type or self.sprite_type,
+            amount=amount,
+            tags=interaction_tags or (),
+            rehit_ms=rehit_ms,
+            stops=stops,
+        )
+```
+
+  Particles that never attack (leaves, heal, aura) get the fields too; nothing reads them there.
 
 - In `ParticleEffect.update`, directly after `self.image = self.frames[self.frame_index]`, add:
 
@@ -551,20 +625,18 @@ Step 21 makes the monster AI pass each ranged attack's `rehit_ms` in.
 - `player_attack_logic` and `enemy_projectile_logic` sit next to each other. Replace both whole methods (their TODO comments and debug logging go too) with these three:
 
 ```python
-    def _strike_with_attack_sprites(self, group, *, default_owner, default_source_kind,
-                                    default_source_team, also_exclude=()):
+    def _strike_with_attack_sprites(self, group, also_exclude=()):
         """Every attack sprite in `group` hits each body its pixels touch.
 
-        An attack sprite (Weapon, ParticleEffect) carries what its hit needs: owner,
-        source_team, source_kind, attack_type, interaction_kind, amount, tags, and its repeat
-        rule (hits, rehit_ms; see InteractionResolver.strike). The defaults fill in whatever
-        a sprite leaves out. A sprite never hits its owner or itself; one without an owner
-        (a parried projectile) is its own source. A sprite with `stops` set (arrows, stones)
-        stops at the first body it lands on.
+        Each sprite is an AttackSprite (attack_sprite.py): it carries its owner, team, kind,
+        damage, tags and repeat rule (hits, rehit_ms; see InteractionResolver.strike). A
+        sprite never hits its owner or itself; one without an owner (a parried projectile)
+        is its own source. A sprite with `stops` set (arrows, stones) stops at the first
+        body it lands on.
         """
         # A copy: stop() kills the sprite, which takes it out of the group.
         for attack_sprite in list(group):
-            owner = getattr(attack_sprite, "owner", default_owner)
+            owner = attack_sprite.owner
             targets = hit_core.find_hits(
                 hit_core.shape_of(attack_sprite),
                 self.attackable_sprites,
@@ -572,23 +644,18 @@ Step 21 makes the monster AI pass each ranged attack's `rehit_ms` in.
             )
             if not targets:
                 continue
-            hits = getattr(attack_sprite, "hits", None)
-            rehit_ms = getattr(attack_sprite, "rehit_ms", None)
             fields = dict(
-                kind=getattr(attack_sprite, "interaction_kind", "damage"),
-                source_kind=getattr(attack_sprite, "source_kind", default_source_kind),
+                kind=attack_sprite.interaction_kind,
+                source_kind=attack_sprite.source_kind,
                 source=owner if owner is not None else attack_sprite,
                 owner=owner,
-                source_team=getattr(attack_sprite, "source_team", default_source_team),
-                amount=getattr(attack_sprite, "amount", None),
-                attack_type=getattr(
-                    attack_sprite,
-                    "attack_type",
-                    "weapon" if getattr(attack_sprite, "sprite_type", None) == "weapon" else "magic",
-                ),
-                tags=set(getattr(attack_sprite, "tags", set())),
+                source_team=attack_sprite.source_team,
+                amount=attack_sprite.amount,
+                attack_type=attack_sprite.attack_type,
+                tags=set(attack_sprite.tags),
             )
-            if getattr(attack_sprite, "stops", False):
+            hits, rehit_ms = attack_sprite.hits, attack_sprite.rehit_ms
+            if attack_sprite.stops:
                 for target in targets:
                     if self.interaction_resolver.strike([target], hits, rehit_ms, **fields):
                         attack_sprite.stop()
@@ -598,22 +665,11 @@ Step 21 makes the monster AI pass each ranged attack's `rehit_ms` in.
 
     def player_attack_logic(self):
         """The player's weapon swings and spells."""
-        self._strike_with_attack_sprites(
-            self.attack_sprites,
-            default_owner=self.player,
-            default_source_kind="player_attack",
-            default_source_team=getattr(self.player, "team_id", "player"),
-            also_exclude=(self.player,),
-        )
+        self._strike_with_attack_sprites(self.attack_sprites, also_exclude=(self.player,))
 
     def enemy_projectile_logic(self):
         """Enemy projectiles, and player projectiles a parry turned around."""
-        self._strike_with_attack_sprites(
-            self.enemy_attack_sprites,
-            default_owner=None,
-            default_source_kind="enemy_projectile",
-            default_source_team="enemy",
-        )
+        self._strike_with_attack_sprites(self.enemy_attack_sprites)
 ```
 
 The old `_hit_id` attribute is gone; nothing else reads it. The resolver still logs every hit and rejection on the `combat` channel.
@@ -888,7 +944,7 @@ with
 
 ## Phase 6: enemy melee
 
-**Reminder:** this phase edits `CombatStrategy.py`. Check the ranged-enemy session's work on it (`RangedCombatStrategy` retreat) is committed and on this branch ("Before you start").
+**Reminder:** this phase edits `CombatStrategy.py`, which other sessions also work on. Run `git status` first; if another session has uncommitted edits in it, get them committed before you start. Keep the `RangedCombatStrategy` retreat code.
 
 ### Step 20. `Code/CombatStrategy.py`: swings land on their hit frames
 
@@ -909,7 +965,8 @@ with
     def land_melee_swing(self, enemy, target, entity_tree):
         """Every tick: a swing hits each hostile body its frame touches, by its repeat rule.
 
-        animate() runs before actions(), so this checks the frame just drawn. Bodies come
+        With the clip restarted at frame 0 (start_melee_swing), every attack frame gets
+        checked whether animate() runs before or after actions(). Bodies come
         from the entity tree around the attacker (hit_core.bodies_near), plus the chosen
         target for anything without a tree entry; find_hits drops the duplicate.
         attack["hit_frames"] lists the attack-animation frames that can hit; without it
@@ -993,7 +1050,7 @@ A melee attack can now say which frames hit, for example `"melee_attacks": [{"da
 
 ## Phase 7: cleanup
 
-**Reminder:** this phase deletes code from `Level4_tmxdev.py`. Check the ranged-enemy session's work on it is committed and on this branch ("Before you start").
+**Reminder:** this phase deletes code from `Level4_tmxdev.py`, which other sessions also work on. Run `git status` first; if another session has uncommitted edits in it, get them committed before you start.
 
 ### Step 23. `Code/Level4_tmxdev.py`: delete the unused damage evaluators
 

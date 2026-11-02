@@ -87,7 +87,7 @@ def hitbox_from_center(center, size):
     return rect
 
 
-def _solid_mask(w, h):
+def solid_mask(w, h):
     key = (int(w), int(h))
     mask = _SOLID_MASKS.get(key)
     if mask is None:
@@ -109,7 +109,7 @@ def _overlaps(foot, fmask, items):
             continue
         mask = getattr(item, "mask", None)
         if mask is None:
-            mask = _solid_mask(rect.width, rect.height)
+            mask = solid_mask(rect.width, rect.height)
         if mask.overlap(fmask, (foot.x - rect.x, foot.y - rect.y)):
             return True
     return False

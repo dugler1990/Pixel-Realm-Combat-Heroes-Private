@@ -480,6 +480,33 @@ class InteractionResolver:
         self._record_resolved(ctx)
         return True
 
+    def strike(self, targets, hits=None, rehit_ms=None, **fields) -> list:
+        """Apply one flat-damage attack to every target it touched: team prefilter, the
+        attack's repeat rule, then apply.
+
+        `hits` is the attack's own record, target id -> time of its last hit (ms); None
+        keeps no record, so every call applies. With a record, `rehit_ms` None hits each
+        target once per attack, and a number lets the same target be hit again after that
+        many ms (0 = every frame). `fields` are InteractionContext fields; strike fills in
+        `target`. Returns the targets the attack landed on.
+        """
+        landed = []
+        kind = fields.get("kind", "damage")
+        source_team = fields.get("source_team")
+        now = self._now_ms()
+        for target in targets:
+            key = id(target)
+            if hits is not None and key in hits:
+                if rehit_ms is None or now - hits[key] < rehit_ms:
+                    continue
+            if not self.can_potentially_affect(source_team, getattr(target, "team_id", None), kind):
+                continue
+            if self.apply(InteractionContext(target=target, **fields)):
+                landed.append(target)
+                if hits is not None:
+                    hits[key] = now
+        return landed
+
     def _now_ms(self) -> int:
         try:
             import pygame  # local import to avoid hard dependency for non-game usages
