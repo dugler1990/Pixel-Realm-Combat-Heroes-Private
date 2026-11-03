@@ -211,10 +211,16 @@ class LayoutManager:
         time_string = f"{minutes:02}:{seconds:02}"
 
         if time_string != self._time_string:
+            if self._time_surface is not None:
+                backend.invalidate_texture(self._time_surface)
             self._time_string = time_string
             self._time_surface = self._time_font.render(time_string, True, (255, 255, 255))
 
-        backend.blit(self._time_surface, (backend.get_size()[0] / 2, 10))
+        backend.blit(
+            self._time_surface,
+            (backend.get_size()[0] / 2, 10),
+            cache_key=id(self._time_surface),
+        )
     
     
     def add_obstacle_sprite_to_quad_tree(self, obstacle_sprite, alive=True, remove_existing = True):

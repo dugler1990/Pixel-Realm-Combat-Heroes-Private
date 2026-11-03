@@ -20,6 +20,7 @@ FOCUS_BELT = 2
 _BELT_HUD_FONT = None
 _BELT_LABEL_SURFACES = None
 _BELT_QTY_SURFACES = {}
+_BELT_LOCK_SURFACE = None
 
 
 def _belt_hud_font():
@@ -47,6 +48,16 @@ def _belt_qty_surface(quantity):
         cached = _belt_hud_font().render(str(qty), True, (255, 255, 255))
         _BELT_QTY_SURFACES[qty] = cached
     return cached
+
+
+def _belt_lock_surface():
+    """One dim overlay for every locked slot. A new surface each frame would upload again."""
+    global _BELT_LOCK_SURFACE
+    if _BELT_LOCK_SURFACE is None:
+        surf = pygame.Surface((36, 36), pygame.SRCALPHA)
+        surf.fill((40, 40, 40, 180))
+        _BELT_LOCK_SURFACE = surf
+    return _BELT_LOCK_SURFACE
 
 
 def _item_is_stackable(item):
@@ -159,9 +170,8 @@ def draw_belt_hud(backend, player, inventory):
         src = inventory.slots[inventory.belt_start_index + i]
         backend.draw_rect((200, 160, 80), r, 2)
         if locked:
-            ov = pygame.Surface((r.width, r.height), pygame.SRCALPHA)
-            ov.fill((40, 40, 40, 180))
-            backend.blit(ov, r.topleft)
+            ov = _belt_lock_surface()
+            backend.blit(ov, r.topleft, cache_key=id(ov))
         elif src.item is not None and src.quantity > 0:
             ip = getattr(src.item, "image_path", None)
             if ip:
@@ -169,9 +179,9 @@ def draw_belt_hud(backend, player, inventory):
                 backend.blit(img, (r.x + 2, r.y + 2))
             if src.quantity > 1:
                 t = _belt_qty_surface(src.quantity)
-                backend.blit(t, (r.right - t.get_width() - 2, r.bottom - t.get_height() - 2))
+                backend.blit(t, (r.right - t.get_width() - 2, r.bottom - t.get_height() - 2), cache_key=id(t))
         lbl = label_surfaces[i]
-        backend.blit(lbl, (r.centerx - lbl.get_width() // 2, r.y - 14))
+        backend.blit(lbl, (r.centerx - lbl.get_width() // 2, r.y - 14), cache_key=id(lbl))
 
 
 class Inventory:

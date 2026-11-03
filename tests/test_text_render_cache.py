@@ -37,10 +37,12 @@ def clear_belt_text_caches():
     Inventory._BELT_HUD_FONT = None
     Inventory._BELT_LABEL_SURFACES = None
     Inventory._BELT_QTY_SURFACES.clear()
+    Inventory._BELT_LOCK_SURFACE = None
     yield
     Inventory._BELT_HUD_FONT = None
     Inventory._BELT_LABEL_SURFACES = None
     Inventory._BELT_QTY_SURFACES.clear()
+    Inventory._BELT_LOCK_SURFACE = None
 
 
 def test_ui_show_exp_renders_only_on_value_change(pygame_headless):
@@ -170,3 +172,14 @@ def test_draw_belt_hud_qty_cache_shared_across_slots(pygame_headless):
 
     # 4 slot labels + 1 shared qty surface for two slots both showing 3
     assert len(render_calls) == BELT_SLOT_COUNT + 1
+
+
+def test_draw_belt_hud_reuses_one_lock_surface(pygame_headless):
+    player = SimpleNamespace(has_belt=True, belt_capacity=1)
+    inventory = _belt_inventory(*([None] * BELT_SLOT_COUNT))
+    backend = CPUBackend(pygame_headless)
+    draw_belt_hud(backend, player, inventory)
+    first = Inventory._BELT_LOCK_SURFACE
+    draw_belt_hud(backend, player, inventory)
+    assert Inventory._BELT_LOCK_SURFACE is first
+    assert first is not None
