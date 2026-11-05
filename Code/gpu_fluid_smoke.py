@@ -5,6 +5,7 @@ Owns its GL resources; uses the active GPUBackend GL context. CPU backends no-op
 from __future__ import annotations
 
 import ctypes
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -378,6 +379,9 @@ class GpuFluidSmoke:
     DYE = 256
     PRESSURE_ITERS = 18
     MAX_SPLATS = 24
+    # Config: stop once the cloud is this fraction of the thickness it had at the last puff.
+    # The step count is computed from this and den_dissipation. Chosen as a faint ghost; not measured in game.
+    FADE_STOP = 0.02
 
     def __init__(self, backend=None):
         self.backend = backend
@@ -385,6 +389,10 @@ class GpuFluidSmoke:
         self._ready = False
         self._failed = False
         self._queue: list[_Splat] = []
+        self._steps_left = 0
+        # True when this frame's step wrote buffers worth drawing.
+        # The counter is already 0 on that last frame, so draw cannot use it alone.
+        self._show = False
         self._programs = {}
         self._vao = None
         self._vbo = None
@@ -397,6 +405,10 @@ class GpuFluidSmoke:
         # Tunables — keep curl modest; high vorticity confinement blows the dye into noise.
         self.vel_dissipation = 0.985
         self.den_dissipation = 0.968  # between soft fade and old chimney linger
+        self.fade_steps = max(
+            1,
+            math.ceil(math.log(self.FADE_STOP) / math.log(self.den_dissipation)),
+        )
         self.curl_strength = 24.0
         self.buoyancy = 1.22
         self.wind_scale = 0.10
@@ -428,9 +440,6 @@ class GpuFluidSmoke:
     def step(self, dt, weather, camera_offset, view_size):
         if self._failed:
             return
-        if not self._ready:
-            if not self._try_init():
-                return
         if dt is None or dt <= 0:
             dt = 1.0 / 30.0
         dt = min(float(dt), 0.05)
@@ -458,6 +467,18 @@ class GpuFluidSmoke:
             splats_uv.append((u, v, s.density, r, vu, vv))
         self._queue.clear()
 
+        if splats_uv:
+            self._steps_left = self.fade_steps
+        if self._steps_left <= 0:
+            self._show = False
+            return
+        self._steps_left -= 1
+
+        if not self._ready:
+            if not self._try_init():
+                self._show = False
+                return
+
         wx = wy = 0.0
         wind_mag = 0.0
         if weather is not None:
@@ -479,14 +500,15 @@ class GpuFluidSmoke:
             self.buoyancy * (1.0 + self.wind_buoyancy_gain * wind_mag),
         )
         self._gl_step(dt, aspect, splats_uv, wx, wy, curl_strength=curl, buoyancy=buoy)
+        self._show = True
 
     def draw_ground(self):
-        if not self._ready:
+        if not self._ready or not self._show:
             return
         self._draw_display(self._programs["display_ground"], self.ground_gain, rise=False)
 
     def draw_rise(self):
-        if not self._ready:
+        if not self._ready or not self._show:
             return
         self._draw_display(self._programs["display_rise"], self.rise_gain, rise=True)
 
