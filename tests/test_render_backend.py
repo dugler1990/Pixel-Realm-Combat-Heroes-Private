@@ -108,3 +108,38 @@ def test_gpu_backend_blit_smoke(monkeypatch):
     arr = np.flipud(np.frombuffer(raw, dtype=np.uint8).reshape(64, 64, 4))
     assert tuple(arr[14, 14, :3]) == (255, 0, 0)
     assert tuple(arr[34, 34, :3]) == (0, 255, 0)
+
+
+@requires_gl
+def test_gpu_backend_batches_imagecache_sprites(monkeypatch):
+    import numpy as np
+    from OpenGL.GL import GL_BACK, GL_RGBA, GL_UNSIGNED_BYTE, glReadBuffer, glReadPixels
+    from ImageCache import ImageCache
+
+    monkeypatch.setattr(render_backend, "RENDER_BACKEND", "gpu")
+    backend = create_backend(64, 64)
+    red = pygame.Surface((8, 8), pygame.SRCALPHA)
+    red.fill((255, 0, 0, 255))
+    blue = pygame.Surface((8, 8), pygame.SRCALPHA)
+    blue.fill((0, 0, 255, 255))
+    ImageCache.keep_frames(("test_atlas_batch", None), [red, blue])
+    draws = []
+    real_draw = render_backend.glDrawArrays
+    monkeypatch.setattr(
+        render_backend, "glDrawArrays", lambda *args: (draws.append(args), real_draw(*args))
+    )
+
+    backend.begin_frame((0, 0, 0))
+    backend.blit(red, (10, 10))
+    backend.blit(blue, (30, 30))
+    backend.fill((0, 255, 0), pygame.Rect(50, 50, 8, 8))
+    backend._flush_batch()
+
+    assert len(draws) == 1  # two ImageCache sprites and a fill: one draw call
+    glReadBuffer(GL_BACK)
+    raw = glReadPixels(0, 0, 64, 64, GL_RGBA, GL_UNSIGNED_BYTE)
+    arr = np.flipud(np.frombuffer(raw, dtype=np.uint8).reshape(64, 64, 4))
+    assert tuple(arr[14, 14, :3]) == (255, 0, 0)
+    assert tuple(arr[34, 34, :3]) == (0, 0, 255)
+    assert tuple(arr[54, 54, :3]) == (0, 255, 0)
+
