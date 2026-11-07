@@ -245,6 +245,103 @@ def _drop_caption_crumbs(image: Image.Image) -> Image.Image:
     return Image.fromarray(rgba, "RGBA")
 
 
+def cut_sprite(image: Image.Image) -> Image.Image:
+    """Remove a flat sheet without punching holes in light paint.
+
+    The sheet is whatever colour touches the border. White cloth and gold that
+    happen to be a similar colour stay, because they sit inside the outline.
+    A wide patch of the exact sheet colour showing through a frame is removed.
+    """
+    from scipy import ndimage
+
+    rgb_image = image.convert("RGB")
+    rgb = np.asarray(rgb_image, dtype=np.float32)
+    dist = distance_from(rgb, sheet_background(rgb))
+    background = dist < 75
+    labels, count = ndimage.label(background)
+    height, width = background.shape
+    border = np.zeros_like(background)
+    border[0, :] = border[-1, :] = border[:, 0] = border[:, -1] = True
+    clear = np.zeros_like(background)
+    for index in range(1, count + 1):
+        component = labels == index
+        if np.any(component & border):
+            clear |= component
+    pockets = (~clear) & (dist < 22)
+    pocket_labels, pocket_count = ndimage.label(pockets)
+    for index in range(1, pocket_count + 1):
+        component = pocket_labels == index
+        if int(component.sum()) >= 45:
+            clear |= component
+    rgba = np.array(rgb_image.convert("RGBA"))
+    rgba[clear, 3] = 0
+    # The sheet's anti-aliased crumbs sit outside the ink. Keep peeling them.
+    # The white cloth is inside that ink, so the peel stops at the outline.
+    for _pass in range(64):
+        transparent = rgba[:, :, 3] < 16
+        padded = np.pad(transparent, 1, constant_values=True)
+        touching = np.zeros_like(transparent)
+        for dy in range(3):
+            for dx in range(3):
+                if dy == 1 and dx == 1:
+                    continue
+                touching |= padded[dy:dy + height, dx:dx + width]
+        fringe = touching & (dist < 130) & (rgba[:, :, 3] >= 16)
+        if not fringe.any():
+            break
+        rgba[fringe, 3] = 0
+    # Gray crumbs left on the outline: low saturation, not the gold or the cloth.
+    for _pass in range(4):
+        transparent = rgba[:, :, 3] < 16
+        padded = np.pad(transparent, 1, constant_values=True)
+        touching = np.zeros_like(transparent)
+        for dy in range(3):
+            for dx in range(3):
+                if dy == 1 and dx == 1:
+                    continue
+                touching |= padded[dy:dy + height, dx:dx + width]
+        rgb = rgba[:, :, :3].astype(np.int16)
+        saturation = rgb.max(axis=2) - rgb.min(axis=2)
+        luminance = rgb.mean(axis=2)
+        crumbs = touching & (rgba[:, :, 3] >= 16) & (saturation <= 18) & (luminance >= 80)
+        if not crumbs.any():
+            break
+        rgba[crumbs, 3] = 0
+    # The remaining dotted ring is the light pixel on the outside of the ink.
+    transparent = rgba[:, :, 3] < 16
+    padded = np.pad(transparent, 1, constant_values=True)
+    touching = np.zeros_like(transparent)
+    for dy in range(3):
+        for dx in range(3):
+            if dy == 1 and dx == 1:
+                continue
+            touching |= padded[dy:dy + height, dx:dx + width]
+    luminance = rgba[:, :, :3].mean(axis=2)
+    rgba[touching & (rgba[:, :, 3] >= 16) & (luminance > 45), 3] = 0
+    # Dots sticking out of the silhouette: a pixel with almost no figure around it.
+    for _pass in range(6):
+        transparent = rgba[:, :, 3] < 16
+        padded = np.pad(transparent, 1, constant_values=True)
+        empty = np.zeros(transparent.shape, dtype=np.int16)
+        for dy in range(3):
+            for dx in range(3):
+                if dy == 1 and dx == 1:
+                    continue
+                empty += padded[dy:dy + height, dx:dx + width]
+        dots = (rgba[:, :, 3] >= 16) & (empty >= 6)
+        if not dots.any():
+            break
+        rgba[dots, 3] = 0
+    opaque = rgba[:, :, 3] >= 16
+    labels, count = ndimage.label(opaque)
+    if count:
+        sizes = ndimage.sum(np.ones_like(opaque), labels, index=np.arange(1, count + 1))
+        for index, size in enumerate(sizes, start=1):
+            if size < 24:
+                rgba[labels == index, 3] = 0
+    return Image.fromarray(rgba, "RGBA")
+
+
 def matte_parchment(image: Image.Image, colour: tuple[int, int, int] | np.ndarray) -> Image.Image:
     """Make the sheet colour transparent, the way matte_black_bg keys on black."""
     rgba = np.asarray(image.convert("RGBA")).copy()

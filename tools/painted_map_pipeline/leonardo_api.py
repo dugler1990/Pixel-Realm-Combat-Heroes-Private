@@ -537,6 +537,7 @@ def video_generation_payload(
     audio: bool = False,
     style_ids: list[str] | None = None,
     negative_prompt: str = "",
+    end_image_id: str | None = None,
 ) -> dict:
     """The v2 body for one Veo 3.1 clip that starts on an uploaded frame."""
     model = str(model)
@@ -550,13 +551,18 @@ def video_generation_payload(
             raise LeonardoApiError(f"kling-2.5 duration must be 5 seconds, not {seconds}")
     elif int(seconds) not in VEO31_SECONDS:
         raise LeonardoApiError(f"Veo 3.1 duration must be 4, 6, or 8 seconds, not {seconds}")
+    guidances = {
+        "start_frame": [
+            {"image": {"id": image_id, "type": "UPLOADED"}},
+        ],
+    }
+    if end_image_id:
+        guidances["end_frame"] = [
+            {"image": {"id": end_image_id, "type": "UPLOADED"}},
+        ]
     parameters = {
         "prompt": prompt,
-        "guidances": {
-            "start_frame": [
-                {"image": {"id": image_id, "type": "UPLOADED"}},
-            ],
-        },
+        "guidances": guidances,
         "duration": int(seconds),
         "motion_has_audio": bool(audio),
         "quantity": 1,
@@ -585,9 +591,16 @@ def generate_image_to_video(
     audio: bool = False,
     style_ids: list[str] | None = None,
     negative_prompt: str = "",
+    end_image: Path | None = None,
 ) -> dict:
     """Upload the start frame, ask Veo 3.1 for a clip, and save the mp4."""
     image_id = upload_init_image(input_image, config)
+    end_image_id = None
+    if end_image is not None:
+        if Path(end_image).resolve() == Path(input_image).resolve():
+            end_image_id = image_id
+        else:
+            end_image_id = upload_init_image(end_image, config)
     payload = video_generation_payload(
         prompt=prompt,
         image_id=image_id,
@@ -598,6 +611,7 @@ def generate_image_to_video(
         audio=audio,
         style_ids=style_ids if style_ids is not None else list(config.get("video_style_ids") or [GAME_2D_STYLE_ID]),
         negative_prompt=str(config.get("video_negative_prompt") or negative_prompt),
+        end_image_id=end_image_id,
     )
     api_key = _api_key(config)
     base = str(config.get("base_url") or DEFAULT_V2_BASE_URL).rstrip("/")

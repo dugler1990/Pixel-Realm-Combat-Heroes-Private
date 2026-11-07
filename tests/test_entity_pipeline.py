@@ -8,7 +8,13 @@ import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 
-from tools.entity_pipeline.figures import BOX_TOLERANCE_PX, box_deltas, cut_sheet, find_light_figures
+from tools.entity_pipeline.figures import (
+    BOX_TOLERANCE_PX,
+    box_deltas,
+    cut_sheet,
+    cut_sprite,
+    find_light_figures,
+)
 from tools.entity_pipeline.frames import fit_actions, foot_and_height, load_action, pack_monster
 from tools.entity_pipeline.wire import (
     add_placed_entity,
@@ -87,6 +93,21 @@ def test_veo_payload_starts_on_the_sprite_and_lasts_four_seconds():
     assert eight["parameters"]["duration"] == 8
     with pytest.raises(LeonardoApiError):
         video_generation_payload(prompt="walk", image_id="sprite-1", seconds=5)
+
+
+def test_sheet_flood_keeps_white_cloth_and_drops_paper_windows():
+    image = Image.new("RGB", (110, 70), (244, 236, 214))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle([10, 12, 42, 58], fill=(40, 30, 20))
+    draw.rectangle([13, 15, 39, 55], fill=(250, 248, 240))
+    draw.rectangle([58, 8, 102, 62], fill=(90, 60, 30))
+    draw.rectangle([70, 20, 90, 50], fill=(244, 236, 214))
+    sprite = np.asarray(cut_sprite(image))
+    assert sprite[0, 0, 3] == 0
+    assert sprite[35, 26, 3] == 255
+    assert sprite[35, 26, 0] > 200
+    assert sprite[35, 80, 3] == 0
+    assert sprite[35, 62, 3] == 255
 
 
 def test_black_sheet_splits_on_the_gaps(tmp_path: Path):
