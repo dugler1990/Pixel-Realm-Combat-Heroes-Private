@@ -14,15 +14,17 @@ Text that changes lives in a TextSlot: one surface per place on screen.
 
 import json
 import math
+import os
 import random
 
 import pygame
 
 from ImageCache import ImageCache
 
-KIT = "../Graphics/UI/kit/"
-BACKDROPS = "../Graphics/UI/backdrops/"
-FONT_DIR = "../Graphics/Font/"
+_GRAPHICS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Graphics")
+KIT = os.path.join(_GRAPHICS, "UI", "kit") + os.sep
+BACKDROPS = os.path.join(_GRAPHICS, "UI", "backdrops") + os.sep
+FONT_DIR = os.path.join(_GRAPHICS, "Font") + os.sep
 DESIGN_HEIGHT = 860  # the preview's stage, in its pixels
 
 GOLD = (240, 212, 138)

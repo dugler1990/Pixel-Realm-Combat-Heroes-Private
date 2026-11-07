@@ -2554,13 +2554,15 @@ class Level4:
 
         self.save_enemy_states(self.current_layout)  # mkght be a big inefficiency
         if not self.is_server:
-            self.layout_manager.display_time(self.backend)
+            # The HUD stays under nothing: not drawn while an overlay pauses the level.
+            if not self.game_paused:
+                self.layout_manager.display_time(self.backend)
             self._draw_gold_pickup_popup()
             rts_active = (
                 getattr(self, "rts_session", None) is not None
                 and self.rts_session.is_active()
             )
-            if not self.inventory_open:
+            if not self.game_paused:
                 draw_belt_hud(self.backend, self.player, self.player.inventory)
                 if getattr(self.player, "_charge_runtime", None) is not None:
                     draw_charge_bar(

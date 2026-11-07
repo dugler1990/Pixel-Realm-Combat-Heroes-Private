@@ -15,7 +15,8 @@ CODE_DIR = REPO_ROOT / "Code"
 if str(CODE_DIR) not in sys.path:
     sys.path.insert(0, str(CODE_DIR))
 
-import Inventory  # noqa: E402
+import legion_ui  # noqa: E402
+from ImageCache import ImageCache  # noqa: E402
 from Inventory import (  # noqa: E402
     BELT_SLOT_COUNT,
     InventorySlot,
@@ -33,68 +34,52 @@ def pygame_headless():
 
 
 @pytest.fixture(autouse=True)
-def clear_belt_text_caches():
-    Inventory._BELT_HUD_FONT = None
-    Inventory._BELT_LABEL_SURFACES = None
-    Inventory._BELT_QTY_SURFACES.clear()
-    Inventory._BELT_LOCK_SURFACE = None
+def fresh_kit():
+    """Each test starts with no kept text or pieces, so the first draw renders and the second
+    must not."""
+    ImageCache.clear()
+    legion_ui._KITS.clear()
     yield
-    Inventory._BELT_HUD_FONT = None
-    Inventory._BELT_LABEL_SURFACES = None
-    Inventory._BELT_QTY_SURFACES.clear()
-    Inventory._BELT_LOCK_SURFACE = None
+    ImageCache.clear()
+    legion_ui._KITS.clear()
 
 
-def test_ui_show_exp_renders_only_on_value_change(pygame_headless):
-    render_calls = []
+@pytest.fixture
+def rendered(monkeypatch):
+    """Every string legion_ui renders, in order."""
+    calls = []
+    real = legion_ui.render_text
 
-    def fake_render(text, antialias, color):
-        render_calls.append(text)
-        return pygame.Surface((40, 20), pygame.SRCALPHA)
+    def counting(font, text, colour, spacing=0, shadow=True):
+        calls.append(text)
+        return real(font, text, colour, spacing, shadow)
 
-    mock_font = mock.Mock()
-    mock_font.render.side_effect = fake_render
+    monkeypatch.setattr(legion_ui, "render_text", counting)
+    return calls
 
+
+def test_ui_show_exp_renders_only_on_value_change(pygame_headless, rendered):
     from UI import UI
 
-    ui = UI.__new__(UI)
-    ui.backend = CPUBackend(pygame_headless)
-    ui.font = mock_font
-    ui._exp_value = None
-    ui._exp_surface = None
-
+    ui = UI(CPUBackend(pygame_headless))
     ui.show_exp(100)
     ui.show_exp(100)
-    assert render_calls == ["100"]
+    assert rendered == ["100"]
 
     ui.show_exp(101)
-    assert render_calls == ["100", "101"]
+    assert rendered == ["100", "101"]
 
 
-def test_ui_show_level_renders_only_on_value_change(pygame_headless):
-    render_calls = []
-
-    def fake_render(text, antialias, color):
-        render_calls.append(text)
-        return pygame.Surface((60, 20), pygame.SRCALPHA)
-
-    mock_font = mock.Mock()
-    mock_font.render.side_effect = fake_render
-
+def test_ui_show_level_renders_only_on_value_change(pygame_headless, rendered):
     from UI import UI
 
-    ui = UI.__new__(UI)
-    ui.backend = CPUBackend(pygame_headless)
-    ui.font = mock_font
-    ui._level_value = None
-    ui._level_surface = None
-
+    ui = UI(CPUBackend(pygame_headless))
     ui.show_level(3)
     ui.show_level(3)
-    assert render_calls == ["Level: 3"]
+    assert rendered == ["LEVEL 3"]
 
     ui.show_level(4)
-    assert render_calls == ["Level: 3", "Level: 4"]
+    assert rendered == ["LEVEL 3", "LEVEL 4"]
 
 
 def test_display_time_renders_only_on_string_change(pygame_headless):
@@ -137,49 +122,43 @@ def _belt_inventory(*quantities):
     return SimpleNamespace(belt_start_index=0, slots=slots)
 
 
-def test_draw_belt_hud_label_cache(pygame_headless):
+def test_draw_belt_hud_label_cache(pygame_headless, rendered):
     player = SimpleNamespace(has_belt=True, belt_capacity=BELT_SLOT_COUNT)
     inventory = _belt_inventory(*([None] * BELT_SLOT_COUNT))
-    render_calls = []
+    backend = CPUBackend(pygame_headless)
+    draw_belt_hud(backend, player, inventory)
+    draw_belt_hud(backend, player, inventory)
 
-    def counting_render(text, antialias, color):
-        render_calls.append(text)
-        return pygame.Surface((8, 8), pygame.SRCALPHA)
-
-    with mock.patch("pygame.font.Font") as font_cls:
-        font_cls.return_value.render.side_effect = counting_render
-        backend = CPUBackend(pygame_headless)
-        draw_belt_hud(backend, player, inventory)
-        draw_belt_hud(backend, player, inventory)
-
-    assert len(render_calls) == BELT_SLOT_COUNT
+    assert rendered == [str(i + 1) for i in range(BELT_SLOT_COUNT)]
 
 
-def test_draw_belt_hud_qty_cache_shared_across_slots(pygame_headless):
+def test_draw_belt_hud_qty_cache_shared_across_slots(pygame_headless, rendered):
     player = SimpleNamespace(has_belt=True, belt_capacity=BELT_SLOT_COUNT)
     inventory = _belt_inventory(3, 3, None, None)
-    render_calls = []
+    backend = CPUBackend(pygame_headless)
+    draw_belt_hud(backend, player, inventory)
+    draw_belt_hud(backend, player, inventory)
 
-    def counting_render(text, antialias, color):
-        render_calls.append(text)
-        return pygame.Surface((8, 8), pygame.SRCALPHA)
-
-    with mock.patch("pygame.font.Font") as font_cls:
-        font_cls.return_value.render.side_effect = counting_render
-        backend = CPUBackend(pygame_headless)
-        draw_belt_hud(backend, player, inventory)
-        draw_belt_hud(backend, player, inventory)
-
-    # 4 slot labels + 1 shared qty surface for two slots both showing 3
-    assert len(render_calls) == BELT_SLOT_COUNT + 1
+    # 4 slot numbers + 1 shared count for the two slots both showing 3
+    assert sorted(rendered) == sorted([str(i + 1) for i in range(BELT_SLOT_COUNT)] + ["3"])
 
 
 def test_draw_belt_hud_reuses_one_lock_surface(pygame_headless):
     player = SimpleNamespace(has_belt=True, belt_capacity=1)
     inventory = _belt_inventory(*([None] * BELT_SLOT_COUNT))
     backend = CPUBackend(pygame_headless)
+    kit = legion_ui.kit_for(backend)
+    blitted = []
+    real_blit = backend.blit
+
+    def recording_blit(surface, dest, **kw):
+        blitted.append(surface)
+        return real_blit(surface, dest, **kw)
+
+    backend.blit = recording_blit
     draw_belt_hud(backend, player, inventory)
-    first = Inventory._BELT_LOCK_SURFACE
     draw_belt_hud(backend, player, inventory)
-    assert Inventory._BELT_LOCK_SURFACE is first
-    assert first is not None
+    side = kit.px(48)
+    lock = kit.dimmer(side, side)
+    # The three locked slots, drawn twice, all use the one kept shade.
+    assert sum(1 for s in blitted if s is lock) == 2 * (BELT_SLOT_COUNT - 1)

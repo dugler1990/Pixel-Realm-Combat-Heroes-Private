@@ -260,3 +260,27 @@ too.
 Seen, for Phase 5: the HUD (belt, timer) draws over the overlays and covers the upgrade's hint, as
 it did over the old screens. Seen, data: health shows "510 / 300" because the player's health is
 above the upgrade cap; the meter sits full.
+
+## 2026-11-07 — Phase 5: the HUD
+
+- **`UI.py`**: health as a `Meter` with the blood fill (300 x 26 preview px), energy with the new
+  energy fill (220 x 22), "Level N" top right and experience bottom right beside the gem, both
+  `TextSlot`s; the weapon and magic boxes in the slot frame **placed from the window's bottom edge**
+  (they were at a fixed y of 630, below a 648-px window), gold edge while switching is on
+  cooldown, their pictures through ImageCache and fitted once.
+- **`draw_belt_hud`**: slot frames, numbers and counts as kept labels, the kit's dimmer for locked
+  slots, pictures fitted and kept; the module's four belt text globals are gone.
+- **Level4**: the timer and the belt (with the charge bar, RTS overlay and interact prompt under
+  the same guard) are not drawn while an overlay pauses the level; they covered the upgrade's
+  hint before.
+- **`legion_ui`** finds the art relative to its own file, not the working folder.
+- **Tests**: `tests/test_text_render_cache.py` checked the old HUD's internals; it now checks the
+  same thing on the new code (text renders only when its value changes, belt numbers and counts
+  made once, one lock shade). 8 passed with `tests/test_image_cache_scaled.py`.
+- **Measured** (ice-200, grid 450, `Code/NOTES_performance.md`): before 369.0 and 391.7 ms;
+  after 473.4, 453.1 and 349.1 ms; draw calls per frame 684-701 before, 590-732 after. The spread
+  between runs of the same code is larger than anything the HUD could add. Counted directly: the
+  HUD and belt are 22 blits a frame, 20 batched, 2 own calls (the changing text), 0 uploaded.
+
+Mistake: one benchmark run was cut short by `Select-Object -First 3`, which closed the pipe and
+ended the game; no row was written for it. The re-run kept all output and filtered after.

@@ -18,53 +18,6 @@ FOCUS_BODY = 0
 FOCUS_BACKPACK = 1
 FOCUS_BELT = 2
 
-_BELT_HUD_FONT = None
-_BELT_LABEL_SURFACES = None
-_BELT_QTY_SURFACES = {}
-_BELT_LOCK_SURFACE = None
-
-
-def _belt_hud_font():
-    global _BELT_HUD_FONT
-    if _BELT_HUD_FONT is None:
-        _BELT_HUD_FONT = pygame.font.Font(None, 16)
-    return _BELT_HUD_FONT
-
-
-def _belt_label_surfaces():
-    global _BELT_LABEL_SURFACES
-    if _BELT_LABEL_SURFACES is None:
-        font = _belt_hud_font()
-        _BELT_LABEL_SURFACES = [
-            font.render(str(i + 1), True, (180, 180, 180))
-            for i in range(BELT_SLOT_COUNT)
-        ]
-    return _BELT_LABEL_SURFACES
-
-
-def _belt_qty_surface(quantity):
-    qty = int(quantity)
-    cached = _BELT_QTY_SURFACES.get(qty)
-    if cached is None:
-        cached = _belt_hud_font().render(str(qty), True, (255, 255, 255))
-        _BELT_QTY_SURFACES[qty] = cached
-    return cached
-
-
-def _belt_lock_surface():
-    """One dim overlay for every locked slot. A new surface each frame would upload again."""
-    global _BELT_LOCK_SURFACE
-    if _BELT_LOCK_SURFACE is None:
-        surf = pygame.Surface((36, 36), pygame.SRCALPHA)
-        surf.fill((40, 40, 40, 180))
-        _BELT_LOCK_SURFACE = surf
-    return _BELT_LOCK_SURFACE
-
-
-def _item_is_stackable(item):
-    return getattr(item, "effect_type", None) == "consumable"
-
-
 def _can_place_on_belt(item):
     return (
         getattr(item, "belt_allowed", False)
@@ -89,37 +42,34 @@ class InventorySlot:
 
 
 def draw_belt_hud(backend, player, inventory):
-    """Bottom-center belt bar during gameplay (inventory closed)."""
+    """Bottom-centre belt during gameplay: four slot frames with their numbers above, the item
+    and its count in each, locked slots greyed. Every piece is kept, so a frame makes none."""
     if not getattr(player, "has_belt", False):
         return
     cap = getattr(player, "belt_capacity", 0)
     if cap <= 0:
         return
-    slot_w, slot_h = 36, 36
-    gap = 8
-    total_w = BELT_SLOT_COUNT * slot_w + (BELT_SLOT_COUNT - 1) * gap
+    kit = L.kit_for(backend)
+    side, gap = kit.px(48), kit.px(10)
+    total_w = BELT_SLOT_COUNT * side + (BELT_SLOT_COUNT - 1) * gap
     W, H = backend.get_size()
     x0 = (W - total_w) // 2
-    y0 = H - slot_h - 18
-    label_surfaces = _belt_label_surfaces()
+    y0 = H - side - kit.px(18)
     for i in range(BELT_SLOT_COUNT):
-        r = pygame.Rect(x0 + i * (slot_w + gap), y0, slot_w, slot_h)
-        locked = i >= cap
+        r = pygame.Rect(x0 + i * (side + gap), y0, side, side)
         src = inventory.slots[inventory.belt_start_index + i]
-        backend.draw_rect((200, 160, 80), r, 2)
-        if locked:
-            ov = _belt_lock_surface()
-            backend.blit(ov, r.topleft, cache_key=id(ov))
+        L.draw(backend, kit.slot(side, side), r.topleft)
+        if i >= cap:
+            L.draw(backend, kit.dimmer(side, side), r.topleft)
         elif src.item is not None and src.quantity > 0:
-            ip = getattr(src.item, "image_path", None)
-            if ip:
-                img = ImageCache.load_scaled(ip, (slot_w - 4, slot_h - 4))
-                backend.blit(img, (r.x + 2, r.y + 2))
+            picture = src.picture(kit, round(side * 0.78), round(side * 0.78))
+            if picture is not None:
+                L.draw(backend, picture, (r.centerx - picture.get_width() // 2, r.centery - picture.get_height() // 2))
             if src.quantity > 1:
-                t = _belt_qty_surface(src.quantity)
-                backend.blit(t, (r.right - t.get_width() - 2, r.bottom - t.get_height() - 2), cache_key=id(t))
-        lbl = label_surfaces[i]
-        backend.blit(lbl, (r.centerx - lbl.get_width() // 2, r.y - 14), cache_key=id(lbl))
+                count = kit.label(str(int(src.quantity)), "medium", 12, L.TEXT)
+                L.draw(backend, count, (r.right - count.get_width() - kit.px(3), r.bottom - count.get_height()))
+        number = kit.label(str(i + 1), "body", 12, L.MUTED)
+        L.draw(backend, number, (r.centerx - number.get_width() // 2, r.y - number.get_height()))
 
 
 class Inventory:
