@@ -22,6 +22,7 @@ from .protocol import (
     MSG_JOIN,
     MSG_LEAVE,
     MSG_PICKUP_ITEM,
+    PROTOCOL_VERSION,
     pack_message,
     recv_message,
 )
@@ -33,6 +34,8 @@ class MultiplayerClient:
         self.inbox = queue.Queue()
         self._seq = 0
         self._closed = False
+        # True once the server side has gone (match over, kicked, network lost).
+        self.disconnected = False
 
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((host, port))
@@ -47,14 +50,19 @@ class MultiplayerClient:
             except (ConnectionError, OSError):
                 break
             self.inbox.put(message)
+        self.disconnected = True
 
     def send_join(self, character: str, x: float, y: float,
-                  hitbox_w: float = 0.0, hitbox_h: float = 0.0, wall_foot=None) -> None:
+                  hitbox_w: float = 0.0, hitbox_h: float = 0.0, wall_foot=None,
+                  ticket: str = None) -> None:
         """Announce this player at its hitbox centre (x, y), the same point every
         later report uses. `hitbox_w/h` and `wall_foot` (the footprint walls block,
         (dx, dy, w, h) relative to hitbox.topleft) let the server check reports
         against its own map's walls with the client's own collision code. Both
-        optional: a client that omits them is relayed unchecked."""
+        optional: a client that omits them is relayed unchecked.
+
+        `ticket` is the signed join ticket from the lobby; a match server admits nobody
+        without one (and takes this player's id and character from it)."""
         message = {
             "type": MSG_JOIN,
             "player_id": self.player_id,
@@ -66,6 +74,9 @@ class MultiplayerClient:
         }
         if wall_foot is not None:
             message["wall_foot"] = [int(v) for v in wall_foot]
+        message["protocol"] = PROTOCOL_VERSION
+        if ticket is not None:
+            message["ticket"] = ticket
         self._send(message)
 
     def send_state(self, x: float, y: float, move_x: float, move_y: float, attacking: bool,

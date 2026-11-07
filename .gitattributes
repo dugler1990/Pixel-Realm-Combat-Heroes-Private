@@ -1,0 +1,3 @@
+# Everything under deploy/ runs on Linux (bash, Docker, YAML). Keep LF line endings even
+# though this machine checks out with core.autocrlf=true.
+deploy/** text eol=lf

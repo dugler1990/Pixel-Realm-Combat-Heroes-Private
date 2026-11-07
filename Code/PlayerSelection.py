@@ -10,6 +10,7 @@ _game_flow_log.debug("%s", player_dir_dict)
 unlocked_player_positions = [(x['selection_position']["x"],x["selection_position"]["y"]) for x in player_dir_dict["Players"]]
 unlocked_player_directory = [x['player_info_dir'] for x in player_dir_dict["Players"]]
 unlocked_player_base_stats = [x['base_stats'] for x in player_dir_dict["Players"]]
+unlocked_player_names = [x['name'] for x in player_dir_dict["Players"]]
 unlocked_player_position_to_index = {
     pos: i for i, pos in enumerate(unlocked_player_positions)
 }

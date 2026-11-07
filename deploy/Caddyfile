@@ -1,0 +1,5 @@
+# Caddy gets and renews the HTTPS certificate for PUBLIC_HOST itself, and proxies
+# Nakama's API and websocket. Nakama's console is not proxied (SSH tunnel only).
+{$PUBLIC_HOST} {
+	reverse_proxy nakama:7350
+}
