@@ -1,10 +1,10 @@
 """Minimal OpenAI Images REST client (stdlib only).
 
-Mirrors leonardo_api.py in shape and dependencies. Only the edits endpoint is needed:
-it takes an image plus a mask, so the model repaints the masked region and leaves the
-rest alone. Measured behaviour on gpt-image-2 is a soft mask -- edits stay inside the
-mask apart from a bleed band a few hundred pixels wide, and beyond that the image is
-untouched. Callers must not assume byte-exact preservation.
+Mirrors leonardo_api.py in shape and dependencies. The edits endpoint takes an image plus
+a mask, so the model repaints the masked region and leaves the rest alone. Measured
+behaviour on gpt-image-2 is a soft mask -- edits stay inside the mask apart from a bleed
+band a few hundred pixels wide, and beyond that the image is untouched. Callers must not
+assume byte-exact preservation. The generations endpoint paints from the prompt alone.
 """
 
 from __future__ import annotations
@@ -117,6 +117,66 @@ def _post_multipart(url: str, api_key: str, body: bytes, boundary: str, timeout:
         raise OpenAIApiError(f"Invalid JSON from OpenAI API: {payload[:500]}") from exc
 
 
+def _check_prompt(prompt: str) -> None:
+    if not prompt.isascii():
+        offender = next((c for c in prompt if not c.isascii()), "")
+        raise OpenAIApiError(
+            f"prompt contains the non-ASCII character {offender!r}; the returned filename "
+            "is built from the prompt and a non-ASCII URL cannot be requested"
+        )
+
+
+def _write_first_image(result: dict, output_path: Path) -> None:
+    entries = result.get("data") or []
+    if not entries:
+        raise OpenAIApiError(f"No image in OpenAI response: {json.dumps(result)[:500]}")
+    encoded = entries[0].get("b64_json")
+    if not encoded:
+        raise OpenAIApiError(f"No b64_json in OpenAI response entry: {json.dumps(entries[0])[:500]}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(base64.b64decode(encoded))
+
+
+def generate_image(*, prompt: str, output_path: Path, width: int, height: int, config: dict) -> dict:
+    """Paint a new image from the prompt alone, and write it."""
+    validate_size(width, height, source=str(config.get("config_source") or ""))
+    _check_prompt(prompt)
+    api_key = _api_key(config)
+    base = str(config.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
+    model = str(config.get("model") or DEFAULT_MODEL)
+    fields = {"model": model, "prompt": prompt, "size": f"{int(width)}x{int(height)}"}
+    quality = config.get("quality")
+    if quality:
+        fields["quality"] = str(quality).lower()
+    url = f"{base}/images/generations"
+    req = request.Request(
+        url,
+        data=json.dumps(fields).encode("utf-8"),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    timeout = float(config.get("timeout_seconds", 900))
+    try:
+        with request.urlopen(req, timeout=timeout) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise OpenAIApiError(f"OpenAI API POST {url} failed ({exc.code}): {detail[:2000]}") from exc
+    except error.URLError as exc:
+        raise OpenAIApiError(f"OpenAI API POST {url} failed: {exc}") from exc
+    _write_first_image(result, output_path)
+    return {
+        "provider": "openai",
+        "model": model,
+        "output_path": str(output_path),
+        "width": int(width),
+        "height": int(height),
+        "quality": quality,
+        "usage": result.get("usage"),
+        "request": fields,
+    }
+
+
 def edit_image(
     *,
     prompt: str,
@@ -135,12 +195,7 @@ def edit_image(
             f"{len(input_images)} images supplied, gpt-image-2 accepts at most {MAX_IMAGES}"
         )
     validate_size(width, height, source=str(config.get("config_source") or ""))
-    if not prompt.isascii():
-        offender = next((c for c in prompt if not c.isascii()), "")
-        raise OpenAIApiError(
-            f"prompt contains the non-ASCII character {offender!r}; the returned filename "
-            "is built from the prompt and a non-ASCII URL cannot be requested"
-        )
+    _check_prompt(prompt)
 
     api_key = _api_key(config)
     base = str(config.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
@@ -169,16 +224,7 @@ def edit_image(
     body, boundary = _multipart(fields, files)
     timeout = float(config.get("timeout_seconds", 900))
     result = _post_multipart(f"{base}/images/edits", api_key, body, boundary, timeout)
-
-    entries = result.get("data") or []
-    if not entries:
-        raise OpenAIApiError(f"No image in OpenAI response: {json.dumps(result)[:500]}")
-    encoded = entries[0].get("b64_json")
-    if not encoded:
-        raise OpenAIApiError(f"No b64_json in OpenAI response entry: {json.dumps(entries[0])[:500]}")
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(base64.b64decode(encoded))
+    _write_first_image(result, output_path)
 
     return {
         "provider": "openai",
