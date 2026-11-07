@@ -198,3 +198,28 @@ Venv junctioned, 70 level-art files and the 20 raw kit paintings (`generated/ui_
 Mistake found: the first GPU screenshots had no settings panel. The backend batches atlas draws
 until `present()`, and the capture read the frame before that, so the frame's last draws were
 missing from the image. The capture now flushes the batch first; on screen nothing was wrong.
+
+## 2026-11-07 — Phase 2: choosing a hero and a level
+
+- **PlayerSelection**: the shrine; the hero on the dais (`legion_ui.Dais`: feet at 79 % of the
+  painting's height, 52 % tall, a floor shadow; the step-in is 8 kept frames of scale, light and
+  opacity over 1.1 s, 0.3 s after the pick); the roster as 64-px bars with head crops; the stats
+  with icons. Up/Down picks; the 4 x 3 grid and its crash on an empty cell are gone. Heroes gain
+  `display_name`, `painting` and `roster_stats` in `Graphics/PlayerSelectionDict.json`.
+- **PlayerConfiguration**: one class, drawn through the backend. Before the game Main2 gives it the
+  hero's name and `stage` (the shrine with the hero); at level-up it is a framed panel on black.
+  The stickman and the plus boxes are gone; keys unchanged (Enter spends, Backspace returns, Enter
+  on Ready finishes).
+- **LevelSelection**: the gate painting without rain; framed cards cropped to cover, with names
+  from the new `LEVEL_NAMES` in `level_layouts.py`; the chosen card's name as the heading; moves
+  only between cards. Enter starts `level_grow`: the picture grows from inside its card to cover
+  the window in 0.75 s, one full-size frame reaches the screen, then the level is built behind it.
+- GPU counters: player screen 68 blits, attributes 54, levels 42, grow 42, **0 uploaded per frame**
+  on each.
+
+Fixes found while checking: roster names ran past their bars (pygame's 12 px floor makes small
+text wider than the preview's), so the roster panel is 380 preview px and names are tracked
+tighter; hints overflowed narrow panels, so they wrap, and `Kit.lines` now measures letter spacing.
+
+Found, not this work: level 8 (`levels/Map8`) has no `map.tmx`, so choosing it crashes on `main`
+too.

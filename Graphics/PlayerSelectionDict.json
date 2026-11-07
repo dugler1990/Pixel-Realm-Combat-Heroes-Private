@@ -4,6 +4,7 @@
         {
             "selection_position": {"x":0,"y":0},
             "name":"Orange_Wizard",
+            "display_name": "Orange Wizard", "painting": "wizard.png", "roster_stats": ["magic", "speed"],
             "player_info_dir":"../Graphics/Orange_Wizard/",
             "evasion_loadout": ["slide", "create_ice_clone"],
              "base_stats":{"health": 1000,
@@ -21,6 +22,7 @@
                 {
             "selection_position": {"x":1,"y":0},
             "name":"barb",
+            "display_name": "Barbarian", "painting": "barbarian.png", "roster_stats": ["strength", "vitality"],
             "player_info_dir":"../Graphics/barb/",
             "evasion_loadout": ["slide", "leap_slam"],
              "base_stats":{"health": 2000,
@@ -38,6 +40,7 @@
         {
             "selection_position": {"x":2,"y":0},
             "name":"barb_small",
+            "display_name": "Barbarian, Small", "painting": "barbarian.png", "roster_stats": ["strength", "speed"],
             "player_info_dir":"../Graphics/barb_small/",
             "evasion_loadout": ["slide", "leap_slam"],
             "base_stats":{"health": 2000,

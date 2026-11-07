@@ -2364,9 +2364,7 @@ class Level4:
                 self.player.attack_selection.input()
                 self.player.update_derived_attributes()
             elif self.player_config_open:
-                overlay = self.backend.compose()
-                self.player.player_config.draw(overlay) # TODO: align naming convensions of these screens.
-                self.backend.blit(overlay, (0, 0))
+                self.player.player_config.draw(self.backend)
                 self.player.player_config.handle_events(self)
                 #self.player.stats = self.player.player_config.final_stats
                 

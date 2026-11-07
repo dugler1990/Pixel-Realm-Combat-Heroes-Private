@@ -13,7 +13,7 @@ from Settings import *
 from Level4_tmxdev import Level4
 from StartMenu import StartMenu
 from PlayerSelection import (PlayerSelection, unlocked_player_base_stats, unlocked_player_directory,
-                             unlocked_player_names)
+                             unlocked_player_display_names, unlocked_player_names)
 from inputManager import InputManager
 from LevelSelection import LevelSelection
 from PlayerConfiguration import PlayerConfiguration
@@ -31,7 +31,7 @@ from online import nakama
 from online.lobby_ops import OP_CHAT, OP_NOTICE, OP_SET_CHARACTER, OP_SET_READY, OP_START, OP_STATE, OP_TICKET
 from online.nakama import NakamaError
 from online_menus import CreateScreen, FindScreen, LobbyScreen, SignInScreen
-from legion_ui import Gate
+from legion_ui import Gate, Grow
 import psutil
 
 
@@ -52,6 +52,7 @@ class Game:
         self.HEIGHT = h
         # The painted gate: leaving the start menu, and after death (legion_ui.Gate).
         self.gate = Gate(self.backend)
+        self.grow = None  # the chosen level's card growing into it (legion_ui.Grow)
 
         self.clock = pygame.time.Clock()
         self.debug_info_surfaces = {} 
@@ -518,7 +519,7 @@ class Game:
             self.player_selection.draw()
         elif state == "player_configuration":
             self._draw_player_configuration()
-        elif state == "level_selection":
+        elif state in ("level_selection", "level_grow"):
             self.level_selection.draw()
         else:
             screen = {
@@ -565,12 +566,13 @@ class Game:
                 base_stats=selected_player_base_stats,
                 remaining_points=10,
                 game=self,
+                title=unlocked_player_display_names[self.player_selection.selected_option],
             )
+            # The attributes stand on the shrine beside the hero just picked.
+            self.player_configuration.stage = self.player_selection.draw_stage
 
     def _draw_player_configuration(self):
-        overlay = self.backend.compose()
-        self.player_configuration.draw(overlay)
-        self.backend.blit(overlay, (0, 0))
+        self.player_configuration.draw(self.backend)
 
     def _state_player_configuration(self, dt):
         self.player_configuration.handle_events()
@@ -586,7 +588,24 @@ class Game:
         self.level_selection.handle_events()
         self.level_selection.draw()
         if not self.in_level_selection:
-            self.start_level(self.level_selection.selected_level)
+            if self.level_selection.chosen is None:
+                self.start_level(self.level_selection.selected_level)
+                return
+            picture, card = self.level_selection.chosen
+            self.grow = Grow(self.level_selection._kit, picture, card)
+            self.set_state("level_grow")
+
+    def _state_level_grow(self, dt):
+        """The chosen card grows until it covers the window, then the level is built behind
+        it, so the build's stall shows the level's picture."""
+        self.level_selection.draw()
+        self.grow.draw(self.backend)
+        if self.grow.done:
+            if getattr(self.grow, "shown", False):
+                self.grow = None
+                self.start_level(self.level_selection.selected_level)
+            else:
+                self.grow.shown = True  # one frame at full size reaches the screen first
 
     def _state_level(self, dt):
         self.level.run(dt)

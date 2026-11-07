@@ -190,6 +190,32 @@ class Kit:
             return [render_text(font, text, colour, round(spacing * font.get_height()), shadow)]
         return _keep(key, build)[0]
 
+    def lines(self, text, role, size, colour, width, **kw):
+        """Fixed text wrapped at word breaks to fit `width` px: a list of kept labels."""
+        font = self.font(role, size)
+        step = round(kw.get("spacing", 0.0) * font.get_height())
+
+        def wide(s):
+            return font.size(s.upper() if kw.get("upper") else s)[0] + step * max(0, len(s) - 1)
+        rows, current = [], ""
+        for word in text.split():
+            trial = (current + " " + word).strip()
+            if current and wide(trial) > width:
+                rows.append(current)
+                current = word
+            else:
+                current = trial
+        rows.append(current)
+        return [self.label(row, role, size, colour, **kw) for row in rows]
+
+    def rule(self, width):
+        """A thin gold line between stat rows."""
+        def build():
+            line = pygame.Surface((max(1, width), 1), pygame.SRCALPHA)
+            line.fill((*GOLD, 72))
+            return [line]
+        return _keep(self.tag + ("rule", width), build)[0]
+
     def picture(self, name, height=None, width=None):
         """A kit picture smoothly scaled to a height or a width, keeping its shape."""
         path = KIT + name
@@ -244,6 +270,29 @@ class Kit:
             nine_slice(out, ImageCache.load_image(KIT + "frame.png"), self.numbers["frame-slice"], corner)
             return [out]
         return _keep(self.tag + ("panel", w, h, frame), build)[0]
+
+    def covered(self, path, w, h):
+        """Any picture cropped to cover w x h, kept: a level card."""
+        return _keep(self.tag + ("covered", path, w, h), lambda: [cover(ImageCache.load_image(path), (w, h))])[0]
+
+    def caption_shade(self, w, h):
+        """The dark fade under a card's caption, along its bottom."""
+        def build():
+            return [_gradient_alpha((w, h), lambda x, y: 0.78 * max(0.0, (y - 0.55) / 0.45))]
+        return _keep(self.tag + ("caption", w, h), build)[0]
+
+    def highlight(self, w, h):
+        """A gold edge and glow round a chosen card, `glow` px wider on each side."""
+        glow = self.px(10)
+
+        def build():
+            out = pygame.Surface((w + 2 * glow, h + 2 * glow), pygame.SRCALPHA)
+            for i in range(glow, 0, -1):
+                a = round(110 * (1 - i / glow) ** 2)
+                pygame.draw.rect(out, (*GOLD, a), (glow - i, glow - i, w + 2 * i, h + 2 * i), 1)
+            pygame.draw.rect(out, (*GOLD, 220), (glow - 2, glow - 2, w + 4, h + 4), 2)
+            return [out]
+        return _keep(self.tag + ("highlight", w, h), build)[0], glow
 
     def frame_over(self, w, h, frame=26):
         """The frame alone, to lay over a picture (a level card, the map)."""
@@ -305,13 +354,33 @@ class Kit:
             return frames
         return _keep(self.tag + ("glint", w, h), build)
 
-    def draw_bar(self, backend, rect, label, selected=False, value=None, pressed=False, t=None):
+    def icon(self, key, size):
+        """A stat icon (health, energy, attack, magic, speed, strength, vitality, agility,
+        charisma, exp) fitted in a `size` preview-px square."""
+        side = self.px(size)
+        base = ImageCache.load_image(f"{KIT}icon_{key}.png")
+        if base.get_height() >= base.get_width():
+            return self.picture(f"icon_{key}.png", height=side)
+        return self.picture(f"icon_{key}.png", width=side)
+
+    def head(self, painting, size):
+        """The top of a full-length painting cut square: a roster card's face."""
+        def build():
+            pic = self.picture(painting, width=size)
+            return [pic.subsurface((0, 0, size, min(size, pic.get_height()))).copy()]
+        return _keep(self.tag + ("head", painting, size), build)[0]
+
+    def draw_bar(self, backend, rect, label=None, selected=False, value=None, pressed=False, t=None, extra=()):
         """A bar with its label left and an optional value right, the light running along it
-        when selected, and 2 preview px lower while pressed."""
+        when selected, and 2 preview px lower while pressed. `extra` is more content as
+        (surface, (x, y)) from the left of the bar's inside and its top."""
         x, y = rect.x, rect.y + (self.px(2) if pressed else 0)
         draw(backend, self.bar(rect.w, rect.h, selected), (x, y))
         cap, pad = self.bar_cap(rect.h, selected), self.px(10)
-        draw(backend, label, (x + cap + pad, y + (rect.h - label.get_height()) // 2))
+        if label is not None:
+            draw(backend, label, (x + cap + pad, y + (rect.h - label.get_height()) // 2))
+        for surface, (ex, ey) in extra:
+            draw(backend, surface, (x + cap + pad + ex, y + ey))
         if value is not None:
             draw(backend, value, (x + rect.w - cap - pad - value.get_width(), y + (rect.h - value.get_height()) // 2))
         if selected:
@@ -523,6 +592,97 @@ class Scene:
 # The gate painting's torches: two flames and the reflection under the left one, measured from
 # the painting (ui_preview/PROCESS_ui_kit.md).
 GATE_TORCHES = ((51, 56), (84, 54), (51, 80))
+
+
+class Dais:
+    """A hero standing on the shrine's dais in the light shaft, and stepping into it when picked:
+    out of the dark, smaller and lower, up into the light over 1.1 s (the preview's step-in).
+    The step is eight kept frames, so nothing is scaled per frame."""
+
+    STEP, DELAY, FRAMES = 1.1, 0.3, 8
+
+    def __init__(self, kit, scene):
+        self.kit = kit
+        painting = scene.picture.get_rect(topleft=scene.at)
+        # Measured on the shrine painting: the dais's top at 79 % down, the shaft at 50 % across.
+        self.feet = (painting.centerx, painting.y + round(painting.h * 0.79))
+        self.height = round(painting.h * 0.52)
+        self.picked_at = now()
+
+    def pick(self):
+        self.picked_at = now()
+
+    def _frames(self, name):
+        kit, height = self.kit, self.height
+
+        def build():
+            figure = kit.picture(name, height=height)
+            frames = []
+            for k in range(self.FRAMES):
+                t = k / self.FRAMES
+                e = 1 - (1 - t) ** 3
+                scale = 0.88 + 0.12 * e
+                size = (max(1, round(figure.get_width() * scale)), max(1, round(height * scale)))
+                f = pygame.transform.smoothscale(figure, size)
+                light = round(255 * (0.12 + 0.88 * e))
+                f.fill((light, light, light, round(255 * min(1.0, t / 0.45))), special_flags=pygame.BLEND_RGBA_MULT)
+                frames.append((f, round((1 - e) * 0.04 * height)))
+            frames.append((figure, 0))
+            return frames
+        return _keep(kit.tag + ("dais", name, height), build)
+
+    def _floor(self, width):
+        def build():
+            w, h = round(width * 1.24), max(2, round(self.height * 0.06))
+            return [_gradient_alpha((w, h), lambda x, y: 0.8 * max(0.0, 1 - math.hypot(2 * x - 1, 2 * y - 1)))]
+        return _keep(self.kit.tag + ("dais-floor", width), build)[0]
+
+    def draw(self, backend, name):
+        t = now() - self.picked_at - self.DELAY
+        if t < 0:
+            return
+        frames = self._frames(name)
+        k = min(len(frames) - 1, int(t / self.STEP * self.FRAMES))
+        figure, drop = frames[k]
+        if k == len(frames) - 1:
+            floor = self._floor(figure.get_width())
+            draw(backend, floor, (self.feet[0] - floor.get_width() / 2, self.feet[1] - floor.get_height() / 2))
+        draw(backend, figure, (self.feet[0] - figure.get_width() / 2, self.feet[1] - figure.get_height() + drop))
+
+
+def _fit(size, box, cover):
+    """A rect of `size`'s shape centred on `box`: inside it, or covering it."""
+    s = (max if cover else min)(box.w / size[0], box.h / size[1])
+    r = pygame.Rect(0, 0, round(size[0] * s), round(size[1] * s))
+    r.center = box.center
+    return r
+
+
+class Grow:
+    """The chosen level's picture growing from its card until it covers the window (0.75 s),
+    then held there while the level is built. It keeps its own shape all the way, from inside
+    the card to covering the window. On the GPU backend blit_scaled with a cache key stretches
+    a kept texture; the CPU backend smooth-scales it for those 0.75 s."""
+
+    TIME = 0.75
+
+    def __init__(self, kit, picture, card):
+        self.kit, self.picture = kit, picture
+        self.start = _fit(picture.get_size(), pygame.Rect(card), cover=False)
+        self.end = _fit(picture.get_size(), pygame.Rect((0, 0), kit.size), cover=True)
+        self.t0 = now()
+
+    @property
+    def done(self):
+        return now() - self.t0 >= self.TIME
+
+    def draw(self, backend):
+        p = min(1.0, (now() - self.t0) / self.TIME)
+        e = 1 - (1 - p) ** 3
+        a, b = self.start, self.end
+        r = pygame.Rect(round(a.x + (b.x - a.x) * e), round(a.y + (b.y - a.y) * e),
+                        round(a.w + (b.w - a.w) * e), round(a.h + (b.h - a.h) * e))
+        backend.blit_scaled(self.picture, r, cache_key=id(self.picture))
 
 
 class Gate:

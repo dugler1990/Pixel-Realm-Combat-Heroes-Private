@@ -35,3 +35,14 @@ MP_LEVEL_NUMBER = 6
 # Maps a multiplayer match may use: level number -> name shown on the Create screen.
 # The launcher, the deploy script and the lobby's map list all read this one table.
 MP_MAPS = {6: "Level 6"}
+
+# Level number -> name shown on the level screen (LevelSelection). A new level gets its name here.
+LEVEL_NAMES = {
+    8: "Level 8",
+    7: "Level 7",
+    9: "Frostreach Gate",
+    10: "Frostreach Expanse",
+    11: "Sunspine Dunes",
+    6: "Level 6",
+    12: "Sunspine",
+}
