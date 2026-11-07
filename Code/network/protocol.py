@@ -33,11 +33,18 @@ Message shapes (see the multiplayer plan's "Wire protocol" section):
     # walls block, [dx, dy, w, h] relative to hitbox.topleft) let the server check
     # each report against its own map's walls with the client's collision code
     # (collision_core). Both optional -- omitting them yields an unchecked relay.
+    # `protocol` is PROTOCOL_VERSION. `ticket` is the signed join ticket the lobby
+    # handed this player (Server/tickets.py); a match server started by the launcher
+    # admits nobody without one and takes player_id + character from the ticket.
     {"type": "join", "player_id": "...", "character": "../Graphics/Orange_Wizard/",
      "x": ..., "y": ...,
      "hitbox_w": .., "hitbox_h": ..,
-     "wall_foot": [dx, dy, w, h]}
+     "wall_foot": [dx, dy, w, h],
+     "protocol": 1, "ticket": "..."}
     {"type": "leave", "player_id": "..."}
+
+    # server -> one client, then the socket closes: the join was refused.
+    {"type": "join_rejected", "reason": "ticket expired"}
 
     # server -> client, broadcast at tick rate (includes the receiver's own entry).
     # `host_id` is the id of the host client (first to join); a client is the
@@ -85,7 +92,15 @@ import struct
 
 import msgpack
 
+# Bump whenever a message shape changes; a match server refuses other versions.
+PROTOCOL_VERSION = 1
+
+# The largest frame the server reads from a client. Checked against the length prefix
+# before the payload is read, so a fake 4 GB prefix can't make the server wait or allocate.
+MAX_CLIENT_MESSAGE_BYTES = 64 * 1024
+
 MSG_JOIN = "join"
+MSG_JOIN_REJECTED = "join_rejected"
 MSG_LEAVE = "leave"
 MSG_INPUT = "input"
 MSG_STATE_UPDATE = "state_update"
@@ -127,10 +142,15 @@ def recv_exactly(sock, num_bytes: int) -> bytes:
     return b"".join(chunks)
 
 
-def recv_message(sock) -> dict:
-    """Read one length-prefixed msgpack frame and return the decoded dict."""
+def recv_message(sock, max_bytes: int = None) -> dict:
+    """Read one length-prefixed msgpack frame and return the decoded dict.
+
+    `max_bytes` caps the frame size (the server passes MAX_CLIENT_MESSAGE_BYTES); a
+    larger length prefix raises ConnectionError before any payload is read."""
     header = recv_exactly(sock, _LENGTH_PREFIX.size)
     (length,) = _LENGTH_PREFIX.unpack(header)
+    if max_bytes is not None and length > max_bytes:
+        raise ConnectionError(f"message too large ({length} bytes)")
     payload = recv_exactly(sock, length)
     return msgpack.unpackb(payload, raw=False)
 

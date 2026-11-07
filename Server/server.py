@@ -10,8 +10,17 @@ ok-lets-make-a-drifting-yeti.md), "Server design" / "Wire protocol" /
   GameState under its lock -- it never writes to a socket. The simulation
   loop is the sole socket writer: it copies a snapshot out from under the
   lock, releases it, then sends.
+
+Two modes:
+- Open (no ticket secret): anyone may join with any player_id. Only allowed on
+  127.0.0.1 -- the existing tests and the local "Local co-op (dev)" shortcut.
+- Match (started by Server/launcher.py with --match-id and GAME_TICKET_SECRET): one
+  match on one map. A join needs a valid signed ticket (Server/tickets.py); the
+  player's id and character come from the ticket. The process exits by itself when
+  the match is over.
 """
 
+import argparse
 import os
 import socket
 import sys
@@ -28,19 +37,23 @@ if _CODE_DIR not in sys.path:
     sys.path.insert(0, _CODE_DIR)
 
 from network.protocol import (  # noqa: E402
+    MAX_CLIENT_MESSAGE_BYTES,
     MSG_HIT_ENEMY,
     MSG_INPUT,
     MSG_JOIN,
+    MSG_JOIN_REJECTED,
     MSG_LEAVE,
     MSG_PICKUP_ITEM,
     MSG_PLAYER_JOINED,
     MSG_PLAYER_LEFT,
     MSG_STATE_UPDATE,
+    PROTOCOL_VERSION,
     pack_message,
     recv_message,
 )
 
 from common import GameState, ServerPlayerState  # noqa: E402
+import tickets  # noqa: E402
 
 # Broadcast rate. Clients render their own player live every frame but only
 # learn about remotes at this rate, so during motion a remote trails by up to
@@ -49,8 +62,19 @@ from common import GameState, ServerPlayerState  # noqa: E402
 TICK_RATE_HZ = 60
 TICK_DT = 1.0 / TICK_RATE_HZ
 
-# The co-op level the server loads (Code/level_layouts.py).
-from level_layouts import MP_LEVEL_NUMBER  # noqa: E402
+# The co-op level the server loads by default, and the maps a match may use
+# (Code/level_layouts.py).
+from level_layouts import MP_LEVEL_NUMBER, MP_MAPS  # noqa: E402
+
+# Match mode: a connection must send a valid join this soon after connecting, or it is
+# dropped -- otherwise idle connections could hold the match ports.
+JOIN_TIMEOUT_SECONDS = 5.0
+# Match mode, CLI only: when the process ends by itself.
+JOIN_WINDOW_SECONDS = 120.0     # nobody joined this long after the level loaded
+EMPTY_GRACE_SECONDS = 10.0      # everyone left and nobody came back
+DEFAULT_MAX_MATCH_SECONDS = 4 * 3600
+
+_LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
 
 
 def _wall_foot(raw):
@@ -61,9 +85,27 @@ def _wall_foot(raw):
 
 
 class GameServer:
-    def __init__(self, host="0.0.0.0", port=12345, run_world_sim=True):
+    def __init__(self, host="127.0.0.1", port=12345, run_world_sim=True,
+                 level_number=MP_LEVEL_NUMBER, match_id=None, ticket_secret=None,
+                 exit_when_done=False, max_match_seconds=DEFAULT_MAX_MATCH_SECONDS):
+        if ticket_secret is None and host not in _LOOPBACK_HOSTS:
+            raise ValueError("refusing open joins on a non-loopback address; "
+                             "give a match id and GAME_TICKET_SECRET")
+        if ticket_secret is not None and not match_id:
+            raise ValueError("a ticket secret needs a match id")
+        if level_number not in MP_MAPS:
+            raise ValueError(f"level {level_number} is not a multiplayer map (MP_MAPS)")
         self.host = host
         self.port = port
+        self.level_number = level_number
+        self.match_id = match_id
+        self.ticket_secret = ticket_secret
+        # Only the CLI sets this: os._exit would kill a test runner.
+        self.exit_when_done = exit_when_done
+        self.max_match_seconds = max_match_seconds
+        self._listening_at = None
+        self._ever_joined = False
+        self._empty_since = None
         # The real server runs the authoritative world sim (loads + ticks the
         # real Level4). Set False for a pure relay (the Stage A/B transport +
         # obstacle-collision layer, which is independent of the world sim) -- used
@@ -82,8 +124,17 @@ class GameServer:
         # client has joined; it loads its own map. None until then.
         self.server_level = None
 
+    @property
+    def match_mode(self):
+        return self.ticket_secret is not None
+
     def run(self):
-        print(f"[server] listening on {self.host}:{self.port}")
+        # Match mode loads the level BEFORE announcing "listening": the launcher treats an
+        # accepting port as "ready", so players never wait on the level build.
+        if self.match_mode and self.run_world_sim:
+            self._build_server_level()
+        self._listening_at = time.monotonic()
+        print(f"[server] listening on {self.host}:{self.port}", flush=True)
         threading.Thread(target=self._simulation_loop, daemon=True).start()
         self._accept_loop()
 
@@ -95,43 +146,106 @@ class GameServer:
 
     # -- per-client receiver thread: pure reader/mutator, never writes to a socket --
 
+    def _admit(self, message):
+        """Match mode: (player_id, character) from a valid ticket, or the refusal reason."""
+        if message.get("protocol") != PROTOCOL_VERSION:
+            return "Your game is out of date."
+        try:
+            payload = tickets.verify(self.ticket_secret, message.get("ticket"), self.match_id)
+        except tickets.TicketError as exc:
+            return str(exc)
+        user_id, character = payload.get("uid"), payload.get("chr")
+        if not isinstance(user_id, str) or not user_id or not isinstance(character, str):
+            return "malformed ticket"
+        return user_id, character
+
+    @staticmethod
+    def _reject(client_socket, reason):
+        # The one place a receiver thread writes to a socket. Safe: this socket was never
+        # put in client_sockets, so the sim loop (the sole writer otherwise) never sees it.
+        try:
+            client_socket.sendall(pack_message({"type": MSG_JOIN_REJECTED, "reason": reason}))
+        except OSError:
+            pass
+        print(f"[server] join rejected: {reason}", flush=True)
+
+    @staticmethod
+    def _drop_if_not_joined(client_socket, joined):
+        # Timer thread: wakes the blocked recv by shutting the socket down. A total
+        # deadline, so a client dribbling one byte every few seconds is dropped too.
+        if not joined.is_set():
+            try:
+                client_socket.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
     def _client_receiver(self, client_socket, addr):
         player_id = None
+        joined = threading.Event()
+        deadline = None
+        if self.match_mode:
+            deadline = threading.Timer(JOIN_TIMEOUT_SECONDS, self._drop_if_not_joined,
+                                       args=(client_socket, joined))
+            deadline.daemon = True
+            deadline.start()
         try:
             while True:
-                message = recv_message(client_socket)
+                message = recv_message(client_socket, max_bytes=MAX_CLIENT_MESSAGE_BYTES)
                 msg_type = message.get("type")
 
                 if msg_type == MSG_JOIN:
-                    player_id = message["player_id"]
+                    if player_id is not None:
+                        continue  # one join per connection
+                    if self.match_mode:
+                        admitted = self._admit(message)
+                        if isinstance(admitted, str):
+                            self._reject(client_socket, admitted)
+                            break
+                        new_id, character = admitted
+                    else:
+                        new_id, character = message["player_id"], message["character"]
                     player = ServerPlayerState(
-                        player_id=player_id,
-                        character=message["character"],
+                        player_id=new_id,
+                        character=character,
                         x=float(message["x"]),
                         y=float(message["y"]),
                         hitbox_w=float(message.get("hitbox_w", 0.0)),
                         hitbox_h=float(message.get("hitbox_h", 0.0)),
                         wall_foot=_wall_foot(message.get("wall_foot")),
                     )
+                    # Check and insert under one lock, so two connections with the same
+                    # ticket can't both get in.
                     with self.game_state.lock:
-                        self.game_state.players[player_id] = player
-                        self.client_sockets[player_id] = client_socket
-                        # Co-op (Stage C): first client to join is the host (runs
-                        # the real enemy sim + relays it). Each client learns its
-                        # role from host_id in state_update.
-                        if self.game_state.host_player_id is None:
-                            self.game_state.host_player_id = player_id
-                            print(f"[server] {player_id} is the host (enemy authority)")
-                        # Server-authoritative pivot: the server LOADS ITS OWN map
-                        # and runs the real Level4 -- it no longer accepts an enemy
-                        # spawn spec from clients.
-                        self.game_state.pending_events.append({
-                            "type": MSG_PLAYER_JOINED,
-                            "player_id": player_id,
-                            "character": player.character,
-                            "x": player.x,
-                            "y": player.y,
-                        })
+                        duplicate = self.match_mode and new_id in self.game_state.players
+                        if not duplicate:
+                            joined.set()
+                            player_id = new_id
+                            self._ever_joined = True
+                            self.game_state.players[player_id] = player
+                            self.client_sockets[player_id] = client_socket
+                            # Co-op (Stage C): first client to join is the host (runs
+                            # the real enemy sim + relays it). Each client learns its
+                            # role from host_id in state_update.
+                            if self.game_state.host_player_id is None:
+                                self.game_state.host_player_id = player_id
+                                print(f"[server] {player_id} is the host (enemy authority)")
+                            # Server-authoritative pivot: the server LOADS ITS OWN map
+                            # and runs the real Level4 -- it no longer accepts an enemy
+                            # spawn spec from clients.
+                            self.game_state.pending_events.append({
+                                "type": MSG_PLAYER_JOINED,
+                                "player_id": player_id,
+                                "character": player.character,
+                                "x": player.x,
+                                "y": player.y,
+                            })
+                    if duplicate:
+                        # player_id stays None, so the finally below can't drop the
+                        # player who is already connected under this id.
+                        self._reject(client_socket, "You are already in this match.")
+                        break
+                    if deadline is not None:
+                        deadline.cancel()
                     print(f"[server] {player_id} joined as {player.character}")
 
                 elif msg_type == MSG_INPUT:
@@ -156,17 +270,23 @@ class GameServer:
                 elif msg_type == MSG_HIT_ENEMY:
                     # CS3: a client's attack hit a (server-owned) enemy. Queue it
                     # for the sim loop, which applies it to the authoritative enemy.
-                    # Accepted from ANY client (every client renders puppets + can
-                    # attack); the server is the single apply-point now.
-                    with self.game_state.lock:
-                        self.game_state.pending_enemy_hits.append(dict(message))
+                    # Accepted from ANY joined client (every client renders puppets +
+                    # can attack); the server is the single apply-point now. The
+                    # connection's own id overwrites whatever player_id the client wrote.
+                    if player_id is not None:
+                        with self.game_state.lock:
+                            self.game_state.pending_enemy_hits.append(
+                                dict(message, player_id=player_id))
 
                 elif msg_type == MSG_PICKUP_ITEM:
                     # CS5b: a client claims a shared drop. Queue it for the sim loop,
                     # which arbitrates against the server's drop registry (first
-                    # claim wins) and broadcasts the item_removed award.
-                    with self.game_state.lock:
-                        self.game_state.pending_pickups.append(dict(message))
+                    # claim wins) and broadcasts the item_removed award -- to the
+                    # connection that asked, never to an id the client names.
+                    if player_id is not None:
+                        with self.game_state.lock:
+                            self.game_state.pending_pickups.append(
+                                dict(message, player_id=player_id))
 
                 # (CS5: there is no client-broadcast reward path anymore. The
                 #  SERVER is authoritative for deaths/loot and emits enemy_died/
@@ -209,6 +329,7 @@ class GameServer:
     def _simulation_loop(self):
         accumulator = 0.0
         last = time.monotonic()
+        next_over_check = 0.0
         while True:
             now = time.monotonic()
             accumulator += now - last
@@ -219,7 +340,32 @@ class GameServer:
                 self._step_world_sim()
                 self._broadcast_tick()
                 accumulator -= TICK_DT
+            if self.exit_when_done and now >= next_over_check:
+                next_over_check = now + 1.0
+                reason = self._match_over_reason(now)
+                if reason is not None:
+                    print(f"[server] match {self.match_id} over: {reason}", flush=True)
+                    # Not listen_socket.close(): on Linux that doesn't reliably wake a
+                    # blocked accept(). The launcher reaps the exit.
+                    os._exit(0)
             time.sleep(0.001)
+
+    def _match_over_reason(self, now):
+        """Match mode, CLI only: why this match should end now, or None."""
+        if self._listening_at is None:
+            return None
+        if now - self._listening_at > self.max_match_seconds:
+            return "time limit reached"
+        with self.game_state.lock:
+            have_players = bool(self.game_state.players)
+        if have_players:
+            self._empty_since = None
+            return None
+        if not self._ever_joined:
+            return "nobody joined" if now - self._listening_at > JOIN_WINDOW_SECONDS else None
+        if self._empty_since is None:
+            self._empty_since = now
+        return "everyone left" if now - self._empty_since > EMPTY_GRACE_SECONDS else None
 
     # -- check reported player positions against the walls --
     # Runs on the sim thread every tick, in relay mode too, before the world sim, so
@@ -304,14 +450,14 @@ class GameServer:
         # upload needed. Heavy import + load; runs on the sim-loop thread so all
         # pygame/sim work stays single-threaded.
         from headless_level import build_headless_level
-        self.server_level = build_headless_level(level_number=MP_LEVEL_NUMBER)
+        self.server_level = build_headless_level(level_number=self.level_number)
         # One map: reported positions are checked against the walls its enemies use.
         with self.game_state.lock:
             self.game_state.obstacle_quad_tree = self.server_level.layout_manager.obstacle_quad_tree
         # Park the sentinel off-map; networked players are added each tick.
         self.server_level.player.rect.center = self._SENTINEL_PARK
         self.server_level.player.hitbox.center = self._SENTINEL_PARK
-        print(f"[server] world sim online (real Level4, level {MP_LEVEL_NUMBER}): "
+        print(f"[server] world sim online (real Level4, level {self.level_number}): "
               f"{len(self.server_level.layout_manager.spawner.spawn_areas)} spawn areas")
 
     # -- snapshot-then-release: copy state out, send outside the lock (sole writer) --
@@ -343,5 +489,23 @@ class GameServer:
                 pass  # the receiver thread will notice and clean up
 
 
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Headless authoritative game server.")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=12345)
+    parser.add_argument("--map", type=int, default=MP_LEVEL_NUMBER, help="level number (MP_MAPS)")
+    parser.add_argument("--match-id", default=None,
+                        help="match mode: admit only tickets for this match, exit when it is over")
+    args = parser.parse_args(argv)
+    secret = None
+    if args.match_id:
+        # The secret only ever comes from the environment: `ps` shows argv to everyone.
+        secret = tickets.secret_from_env(os.environ.get("GAME_TICKET_SECRET"))
+    max_seconds = float(os.environ.get("MAX_MATCH_SECONDS", DEFAULT_MAX_MATCH_SECONDS))
+    GameServer(host=args.host, port=args.port, level_number=args.map, match_id=args.match_id,
+               ticket_secret=secret, exit_when_done=bool(args.match_id),
+               max_match_seconds=max_seconds).run()
+
+
 if __name__ == "__main__":
-    GameServer().run()
+    main()

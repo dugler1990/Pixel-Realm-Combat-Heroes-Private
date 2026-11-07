@@ -31,3 +31,7 @@ DEFAULT_LAYOUT = level_10_layout_path
 
 # The co-op level the multiplayer client and server load.
 MP_LEVEL_NUMBER = 6
+
+# Maps a multiplayer match may use: level number -> name shown on the Create screen.
+# The launcher, the deploy script and the lobby's map list all read this one table.
+MP_MAPS = {6: "Level 6"}

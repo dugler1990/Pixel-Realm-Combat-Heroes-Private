@@ -1,0 +1,79 @@
+# The whole online stack on one Linode. Values come from /opt/prch/.env (see .env.example).
+#
+# Docker-published ports bypass ufw, so only 80, 443 and the match ports are published.
+# Postgres, Nakama's API (7350) and gRPC (7349), and the launcher (8090) stay on this
+# compose network. The Nakama console (7351) is published to 127.0.0.1 only: reach it with
+# `ssh -L 7351:127.0.0.1:7351 prch`.
+name: prch
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nakama
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "nakama"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nakama:
+    build: ./nakama
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -ecx
+      - >
+        /nakama/nakama migrate up --database.address postgres:${POSTGRES_PASSWORD}@postgres:5432/nakama &&
+        exec /nakama/nakama --config /nakama/data/local.yml
+        --database.address postgres:${POSTGRES_PASSWORD}@postgres:5432/nakama
+    volumes:
+      - ./nakama/local.yml:/nakama/data/local.yml:ro
+    ports:
+      - "127.0.0.1:7351:7351"
+    healthcheck:
+      test: ["CMD", "/nakama/nakama", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [nakama]
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  launcher:
+    build: ./gameserver
+    restart: unless-stopped
+    command: ["python", "Server/launcher.py"]
+    environment:
+      LAUNCHER_KEY: ${LAUNCHER_KEY}
+      GAME_TICKET_SECRET: ${GAME_TICKET_SECRET}
+      PUBLIC_HOST: ${PUBLIC_HOST}
+      MATCH_PORT_FIRST: "7100"
+      MAX_MATCHES: ${MAX_MATCHES}
+    ports:
+      - "7100-7119:7100-7119"
+    volumes:
+      - match_logs:/game/logs/matches
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+  match_logs:
