@@ -43,6 +43,7 @@ class _FakeClient:
 
     def __init__(self, player_id):
         self.player_id = player_id
+        self.disconnected = False  # mirrors MultiplayerClient: the server is still there
         self._batches = []
 
     def queue(self, *messages):

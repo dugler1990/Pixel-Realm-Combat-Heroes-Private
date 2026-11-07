@@ -46,7 +46,7 @@ def _env_str(name: str, default: str) -> str:
     return str(raw) if raw is not None else default
 
 
-def _default_spawn_offset(player_id: str) -> tuple:
+def default_spawn_offset(player_id: str) -> tuple:
     """Deterministic, well-spread spawn offset (px) keyed by player_id.
 
     Every client bootstraps to the SAME fixed local spawn -- Level4 puts every
@@ -86,7 +86,7 @@ class MultiplayerRuntime:
 
 
 _player_id = _env_str("PRCH_MULTIPLAYER_PLAYER_ID", "player1")
-_default_dx, _default_dy = _default_spawn_offset(_player_id)
+_default_dx, _default_dy = default_spawn_offset(_player_id)
 
 MULTIPLAYER_RUNTIME = MultiplayerRuntime(
     enabled=_env_bool("PRCH_MULTIPLAYER_ENABLED", False),

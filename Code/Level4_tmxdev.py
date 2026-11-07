@@ -69,6 +69,7 @@ from network import (
     MSG_HIT_PLAYER,
     MSG_ITEM_DROPPED,
     MSG_ITEM_REMOVED,
+    MSG_JOIN_REJECTED,
     MSG_PLAYER_JOINED,
     MSG_PLAYER_LEFT,
     MSG_STATE_UPDATE,
@@ -1924,6 +1925,15 @@ class Level4:
                 # CS5b: a shared item left the world (server-arbitrated pickup) ->
                 # everyone clears the visual; only the awarded player (`to`) banks it.
                 self._handle_item_removed(message.get("drop_id"), message.get("to"))
+
+            elif mtype == MSG_JOIN_REJECTED:
+                # The match server refused this player's ticket; Main2 leaves the level.
+                self.mp_end_reason = "Could not join the match: " + str(message.get("reason", ""))
+
+        # The match server has gone (match over, or the network dropped). Main2 sees
+        # mp_end_reason after run() and takes the player back to the menus.
+        if self.mp_client.disconnected and not _msgs and getattr(self, "mp_end_reason", None) is None:
+            self.mp_end_reason = "The match has ended."
 
     def _spawn_remote_player(self, player_id, character, x, y):
         remote = RemotePlayer(
