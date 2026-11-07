@@ -1,0 +1,1869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixel Realm — UI preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Cormorant+Garamond:wght@500;600&family=Outfit:wght@340;480;560&display=swap" rel="stylesheet">
+<style>
+  /* Edit the look here. The frames stand in for the painted 9-slice kit. */
+  :root {
+    --ink: #0b0e12;
+    --bone: #e6d3b0;
+    --bone-dim: rgba(230, 211, 176, 0.38);
+    --paper: rgba(10, 13, 18, 0.92);
+    --text: #f4f1ea;
+    --muted: #aeb6be;
+    --blood: #8a3030;
+    --display: "Cinzel", Georgia, serif;
+    --body: "Outfit", "Segoe UI", sans-serif;
+  }
+  body[data-theme="vessel"] {
+    --ink: #07080b;
+    --bone: #c6a15a;
+    --bone-dim: rgba(198, 161, 90, 0.46);
+    --paper: rgba(8, 8, 10, 0.94);
+    --text: #efe6d6;
+    --muted: #9a907f;
+    --blood: #7a2430;
+    --display: "Cinzel", Georgia, serif;
+  }
+  body[data-theme="temple"] {
+    --ink: #061014;
+    --bone: #d4b36a;
+    --bone-dim: rgba(212, 179, 106, 0.5);
+    --paper: rgba(5, 14, 18, 0.94);
+    --text: #e7f2f4;
+    --muted: #8aa4a8;
+    --blood: #1f6f78;
+    --display: "Cinzel", Georgia, serif;
+  }
+  body[data-theme="covenant"] {
+    --ink: #12080c;
+    --bone: #e0c9a0;
+    --bone-dim: rgba(224, 201, 160, 0.42);
+    --paper: rgba(16, 7, 10, 0.94);
+    --text: #f3e6d8;
+    --muted: #b09a96;
+    --blood: #8e2a2a;
+    --display: "Cormorant Garamond", Georgia, serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--ink); color: var(--text); overflow: hidden; }
+  body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    font-family: var(--body);
+    font-weight: 340;
+    user-select: none;
+  }
+  button, input { font: inherit; color: inherit; }
+  button { background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+
+  .rail {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: #080a0d;
+    border-bottom: 1px solid rgba(230, 211, 176, 0.16);
+    flex-wrap: wrap;
+  }
+  .rail b {
+    font-size: 11px;
+    font-weight: 560;
+    letter-spacing: 0.18em;
+    color: var(--bone);
+    margin-right: 8px;
+  }
+  .rail button {
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    padding: 4px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .rail button.on { color: var(--text); background: rgba(230, 211, 176, 0.12); }
+  .rail .spacer { flex: 1; }
+
+  .stage { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+  .fill { position: absolute; inset: 0; }
+  .bg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  .scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, rgba(8,10,14,0.86) 0%, rgba(8,10,14,0.5) 38%, rgba(8,10,14,0.12) 72%);
+  }
+  .scrim.full { background: rgba(6, 8, 12, 0.72); }
+  .scrim.death { background: rgba(12, 6, 6, 0.78); }
+
+  .start-copy {
+    position: relative;
+    z-index: 1;
+    padding: 9vh 0 0 8vw;
+    width: min(440px, 86vw);
+  }
+  .kicker {
+    margin: 0;
+    font-size: 13px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--bone);
+  }
+  h1 {
+    margin: 10px 0 28px;
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: clamp(56px, 7vw, 84px);
+    line-height: 0.9;
+    letter-spacing: -0.02em;
+  }
+  h2 {
+    margin: 0 0 18px;
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: 40px;
+    line-height: 1;
+  }
+  .hint { margin-top: 28px; color: var(--muted); font-size: 13px; letter-spacing: 0.08em; }
+
+  .item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    padding: 11px 12px 11px 14px;
+    border-left: 2px solid transparent;
+    color: var(--muted);
+    font-size: 20px;
+    font-weight: 480;
+    letter-spacing: 0.03em;
+  }
+  .item.on { border-left-color: var(--bone); color: var(--text); background: rgba(230, 211, 176, 0.06); }
+  .item .val { color: var(--bone); font-size: 16px; }
+  .item.on .val { color: var(--text); }
+  .menu { width: min(360px, 100%); }
+
+  .sheet {
+    position: relative;
+    z-index: 1;
+    width: min(860px, calc(100% - 64px));
+    margin: 48px auto;
+    padding: 28px 32px 32px;
+    background: var(--paper);
+    border: 1px solid var(--bone-dim);
+  }
+  .center-menu {
+    position: relative;
+    z-index: 1;
+    width: min(360px, calc(100% - 48px));
+    margin: auto;
+    padding: 28px 28px 22px;
+    background: var(--paper);
+    border: 1px solid var(--bone-dim);
+  }
+  .dim {
+    position: absolute; inset: 0;
+    display: flex;
+    background: rgba(6, 8, 12, 0.72);
+  }
+  .dim .sheet, .dim .inv, .dim .center-menu {
+    margin: auto;
+    max-height: calc(100% - 36px);
+    overflow: auto;
+  }
+
+  .player {
+    display: grid;
+    grid-template-columns: 280px 1fr 300px;
+    height: 100%;
+    gap: 18px;
+    padding: 28px;
+  }
+  .roster, .stats {
+    background: rgba(10, 13, 18, 0.72);
+    border: 1px solid var(--bone-dim);
+    padding: 16px;
+    min-height: 0;
+  }
+  .stage-light {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: radial-gradient(ellipse at 50% 42%, #1c2632 0%, #0b0e12 68%);
+    border: 1px solid rgba(230, 211, 176, 0.14);
+    overflow: hidden;
+  }
+  .stage-light img {
+    max-width: 92%;
+    max-height: 92%;
+    object-fit: contain;
+    animation: rest 7s ease-in-out infinite;
+  }
+  @keyframes rest {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  .who {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 8px;
+    border-left: 2px solid transparent;
+    color: var(--muted);
+  }
+  .who.on { border-left-color: var(--bone); color: var(--text); background: rgba(230, 211, 176, 0.06); }
+  .who img { width: 54px; height: 54px; object-fit: cover; background: #111; }
+  .who strong { display: block; font-weight: 480; font-size: 16px; }
+  .who span { font-size: 12px; letter-spacing: 0.08em; color: var(--muted); }
+  .statline {
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 2px;
+    border-bottom: 1px solid rgba(230, 211, 176, 0.12);
+    font-size: 15px;
+  }
+  .statline b { font-weight: 480; color: var(--bone); }
+
+  .levels { padding: 28px 36px 18px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+  .levels .hint { margin-top: 12px; }
+  .cards {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: 1fr 1fr;
+    gap: 12px;
+  }
+  .card {
+    position: relative;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid rgba(230, 211, 176, 0.22);
+    padding: 0;
+    background: #111;
+  }
+  .card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card span {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 22px 10px 8px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.78));
+    color: var(--text);
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    text-align: left;
+  }
+  .card.on { outline: 2px solid var(--bone); outline-offset: -2px; }
+
+  .addr {
+    width: 100%;
+    margin-top: 16px;
+    padding: 10px 12px;
+    background: transparent;
+    border: 1px solid var(--bone-dim);
+    user-select: text;
+  }
+  .party { display: flex; gap: 12px; margin-bottom: 18px; }
+  .slot {
+    flex: 1;
+    padding: 14px;
+    border: 1px solid var(--bone-dim);
+    min-height: 92px;
+  }
+  .slot em { display: block; font-style: normal; color: var(--muted); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .thumbs { display: flex; gap: 8px; margin: 8px 0 18px; }
+  .thumbs button { width: 92px; height: 58px; padding: 0; border: 1px solid transparent; overflow: hidden; }
+  .thumbs button.on { border-color: var(--bone); }
+  .thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .hud {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 22px 24px;
+  }
+  .hp {
+    width: 220px; height: 8px; margin-top: 8px;
+    background: rgba(0,0,0,0.45);
+    border: 1px solid var(--bone-dim);
+  }
+  .hp span { display: block; height: 100%; width: 72%; background: var(--blood); }
+  .belt { display: flex; gap: 6px; }
+  .slotbox, .cell {
+    width: 58px; height: 48px;
+    border: 0;
+    background: rgba(8, 6, 4, .72);
+    box-shadow: inset 0 0 0 1px #120e0a, inset 0 0 0 2px #8a7355;
+    display: flex; align-items: flex-end; justify-content: flex-start;
+    padding: 4px;
+    font-size: 12px; letter-spacing: 0.04em; color: var(--bone);
+  }
+  .cell { width: 100%; height: 48px; }
+  .worn-row .label { margin: 0; }
+  .cell.empty, .slotbox.empty { color: transparent; }
+
+  .fit, .center-menu, .roster, .stats, .sheet, .start-copy .menu {
+    background-color: #1a120e;
+    background-image:
+      radial-gradient(circle at 14px 10px, #e6d3b0 1.4px, #6a543c 2.1px, transparent 2.6px),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.55'/></svg>"),
+      repeating-linear-gradient(90deg, rgba(255,220,170,.04) 0 1px, transparent 1px 5px),
+      linear-gradient(165deg, #5a4332 0%, #3a281c 12%, #24180f 42%, #140e0b 100%);
+    background-size: 26px 16px, 140px 140px, auto, auto;
+    background-repeat: repeat-x, repeat, repeat, no-repeat;
+    border: 3px solid #2a2118;
+    box-shadow:
+      inset 0 0 0 1px #0c0907,
+      inset 0 0 0 6px #7d654c,
+      inset 0 0 0 8px #1c140f,
+      inset 0 18px 40px rgba(0,0,0,.35),
+      0 16px 40px rgba(0,0,0,.45);
+  }
+  .fit {
+    position: absolute;
+    inset: 14px;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 18px 18px 14px;
+  }
+  .fit::before, .center-menu::before, .roster::before, .stats::before, .sheet::before {
+    content: "";
+    position: absolute;
+    inset: 8px;
+    pointer-events: none;
+    background:
+      linear-gradient(#c6a15a, #c6a15a) left 10px top 10px / 18px 3px no-repeat,
+      linear-gradient(#c6a15a, #c6a15a) left 10px top 10px / 3px 18px no-repeat,
+      linear-gradient(#c6a15a, #c6a15a) right 10px top 10px / 18px 3px no-repeat,
+      linear-gradient(#c6a15a, #c6a15a) right 10px top 10px / 3px 18px no-repeat,
+      linear-gradient(#c6a15a, #c6a15a) left 10px bottom 10px / 18px 3px no-repeat,
+      linear-gradient(#c6a15a, #c6a15a) left 10px bottom 10px / 3px 18px no-repeat,
+      linear-gradient(#c6a15a, #c6a15a) right 10px bottom 10px / 18px 3px no-repeat,
+      linear-gradient(#c6a15a, #c6a15a) right 10px bottom 10px / 3px 18px no-repeat;
+  }
+  .center-menu, .roster, .stats, .sheet { position: relative; }
+  .dim .fit { inset: 14px; }
+  .fit-head { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+  .fit h2 { margin: 0; font-size: 32px; }
+  .fit-head .item { width: auto; }
+  .dim .fit { overflow: hidden; }
+  .gold { color: var(--bone); letter-spacing: 0.08em; }
+  .inv-body {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+    gap: 22px;
+    align-items: stretch;
+    overflow: hidden;
+  }
+  .doll-col { display: flex; flex-direction: column; align-items: center; min-height: 0; height: 100%; }
+  .doll {
+    position: relative;
+    width: min(300px, 100%);
+    flex: 1;
+    min-height: 0;
+    background:
+      radial-gradient(ellipse at 50% 42%, rgba(90, 60, 36, .35), rgba(0,0,0,.45) 72%);
+    box-shadow: inset 0 0 0 2px #5c4632, inset 0 0 0 5px #120e0b, inset 0 0 30px rgba(0,0,0,.55);
+  }
+  .mannequin {
+    position: absolute;
+    left: 50%;
+    top: 4%;
+    width: 74%;
+    height: 92%;
+    transform: translateX(-50%);
+    object-fit: cover;
+    object-position: center 18%;
+    filter: drop-shadow(0 16px 12px rgba(0,0,0,.65));
+    pointer-events: none;
+  }
+  .socket {
+    position: absolute;
+    z-index: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 2px;
+    background: rgba(8, 6, 4, .42);
+    color: var(--bone);
+    font-size: 10px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    box-shadow: inset 0 0 0 1px #1a120c, inset 0 0 0 2px #8a7355, 0 0 0 1px #1a120c;
+  }
+  .socket i { font-style: normal; color: var(--muted); font-size: 9px; }
+  .socket b { font-weight: 480; background: rgba(0,0,0,.55); padding: 0 3px; }
+  .socket.helm { width: 18%; height: 13%; left: 50%; top: 1%; transform: translateX(-50%); }
+  .socket.glove.l { width: 12%; height: 10%; left: 14%; top: 34%; }
+  .socket.glove.r { width: 12%; height: 10%; right: 14%; top: 34%; }
+  .socket.armor { width: 26%; height: 14%; left: 50%; top: 40%; transform: translateX(-50%); }
+  .socket.weapon.l { width: 13%; height: 24%; left: 2%; top: 50%; }
+  .socket.weapon.r { width: 13%; height: 24%; right: 2%; top: 50%; }
+  .socket.waist { width: 24%; height: 7%; left: 50%; top: 74%; transform: translateX(-50%); }
+  .socket.boot.l { width: 16%; height: 9%; left: 28%; bottom: 3%; }
+  .socket.boot.r { width: 16%; height: 9%; right: 28%; bottom: 3%; }
+  .strap {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: linear-gradient(#4a3424, #2a1c12);
+    box-shadow: inset 0 0 0 2px #6a5340, inset 0 0 0 4px #140e0a;
+  }
+  .pack-col { align-self: stretch; display: flex; align-items: center; justify-content: center; min-height: 0; }
+  .bag {
+    padding: 12px 12px 14px;
+    background: rgba(0,0,0,.28);
+    box-shadow: inset 0 0 0 2px #6a5340, inset 0 0 0 5px #140e0a, inset 0 0 24px rgba(0,0,0,.45);
+  }
+  .pack {
+    flex: none;
+    display: grid;
+    grid-template-columns: repeat(3, 62px);
+    grid-template-rows: repeat(4, 62px);
+    gap: 5px;
+  }
+  .pack .cell { width: 62px; height: 62px; }
+  .belt-row { display: flex; gap: 6px; }
+  .lobby-main, .create-main {
+    flex: 1; min-height: 0;
+    display: grid;
+    gap: 14px;
+    margin-top: 10px;
+  }
+  .lobby-main { grid-template-columns: 1.15fr 0.85fr; }
+  .create-main { overflow: hidden; }
+  .maps button { min-height: 0; height: 100%; }
+  .seats { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+  .seat {
+    flex: 1; min-height: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    border: 1px solid var(--bone-dim);
+    padding: 0 12px;
+    color: var(--muted);
+  }
+  .seat.you { color: var(--text); border-color: var(--bone); }
+  .seat button { color: var(--bone); letter-spacing: 0.08em; font-size: 12px; }
+  .board {
+    display: flex; flex-direction: column; min-height: 0;
+    border: 1px solid var(--bone-dim);
+    padding: 8px 10px;
+  }
+  .log { flex: 1; min-height: 0; overflow: hidden; }
+  .log p { margin: 0 0 6px; font-size: 14px; }
+  .log b { font-weight: 480; color: var(--bone); }
+  .gamelist { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+  .game {
+    flex: 1; min-height: 0;
+    display: grid;
+    grid-template-columns: 1.4fr 0.7fr 1fr auto;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    border: 1px solid transparent;
+    border-left: 2px solid transparent;
+    padding: 0 12px;
+    color: var(--muted);
+  }
+  .game.on { border-color: var(--bone-dim); border-left-color: var(--bone); color: var(--text); }
+  .choices { display: flex; flex-wrap: wrap; gap: 8px; }
+  .choices button, .mini {
+    border: 1px solid var(--bone-dim);
+    padding: 8px 12px;
+    color: var(--muted);
+  }
+  .choices button.on, .mini.on { border-color: var(--bone); color: var(--text); }
+  .create-main { grid-template-columns: 1.1fr 0.9fr; }
+  .maps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: 1fr 1fr;
+    gap: 6px;
+    min-height: 0;
+    height: 100%;
+  }
+  .maps button { padding: 0; border: 1px solid transparent; overflow: hidden; min-height: 0; }
+  .maps button.on { border-color: var(--bone); }
+  .maps img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .advanced { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+  .advanced .addr { flex: 1; min-width: 140px; margin-top: 0; }
+  .map-col { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .label { margin-bottom: 6px; }
+  body[data-theme="vessel"] .fit,
+  body[data-theme="vessel"] .center-menu,
+  body[data-theme="vessel"] .roster,
+  body[data-theme="vessel"] .stats,
+  body[data-theme="vessel"] .sheet {
+    box-shadow: inset 0 0 0 1px rgba(198, 161, 90, 0.18);
+  }
+  body[data-theme="temple"] .fit,
+  body[data-theme="temple"] .center-menu,
+  body[data-theme="temple"] .roster,
+  body[data-theme="temple"] .stats,
+  body[data-theme="temple"] .sheet,
+  body[data-theme="temple"] .stage-light {
+    outline: 1px solid rgba(212, 179, 106, 0.45);
+    outline-offset: 4px;
+  }
+  body[data-theme="covenant"] .fit,
+  body[data-theme="covenant"] .center-menu,
+  body[data-theme="covenant"] .sheet { border-left: 3px solid var(--blood); }
+  .turntable-note {
+    position: absolute; left: 0; right: 0; bottom: 12px;
+    text-align: center; letter-spacing: 0.18em; font-size: 11px; color: var(--bone);
+  }
+  .upgrade-grid { display: grid; grid-template-columns: minmax(180px, 34%) 1fr; gap: 16px; height: 100%; min-height: 0; }
+  .upgrade-grid .stage-light { position: relative; min-height: 0; }
+  .label { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+
+  .map-sheet {
+    width: calc(100% - 40px);
+    height: calc(100% - 40px);
+    margin: auto;
+    border: 1px solid var(--bone-dim);
+    overflow: hidden;
+    cursor: grab;
+    background: #07090c;
+    position: relative;
+  }
+  .map-world { position: absolute; inset: 0; transform-origin: center center; }
+  .map-world img { width: 100%; height: 100%; object-fit: cover; }
+  .pin {
+    position: absolute; left: 48%; top: 56%;
+    width: 12px; height: 12px; margin: -6px;
+    border: 2px solid var(--bone);
+    border-radius: 50%;
+    background: #c46a4a;
+  }
+  .map-note {
+    position: absolute; left: 12px; bottom: 10px;
+    color: var(--bone); font-size: 12px; letter-spacing: 0.12em;
+  }
+
+  .bars { display: flex; flex-direction: column; gap: 12px; }
+  .bar { height: 8px; background: rgba(255,255,255,0.08); margin-top: 6px; }
+  .bar span { display: block; height: 100%; background: var(--bone); }
+  .spend {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 16px;
+    width: 100%;
+    padding: 8px 10px 10px;
+    border-left: 2px solid transparent;
+    color: var(--muted);
+  }
+  .spend .bar { grid-column: 1 / -1; margin-top: 0; }
+  .spend.on { border-left-color: var(--bone); color: var(--text); background: rgba(230, 211, 176, 0.06); }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; height: 100%; padding: 28px 36px; }
+  .portrait-col { display: flex; flex-direction: column; min-height: 0; }
+  .portrait-col .stage-light { flex: 1; }
+
+  .doors {
+    position: absolute;
+    z-index: 40;
+    left: 0; right: 0; bottom: 0;
+    top: 38px;
+    display: flex;
+    pointer-events: none;
+  }
+  .doors:not(.open) { pointer-events: auto; }
+  .door {
+    width: 50%;
+    height: 100%;
+    position: relative;
+    transition: transform 1.05s cubic-bezier(.16, .84, .32, 1);
+    background:
+      linear-gradient(#6b5340, #6b5340) 0 18% / 100% 7px no-repeat,
+      linear-gradient(#6b5340, #6b5340) 0 50% / 100% 9px no-repeat,
+      linear-gradient(#6b5340, #6b5340) 0 82% / 100% 7px no-repeat,
+      radial-gradient(circle at 18px 18%, #e6d3b0 1.5px, #5c4632 2.4px, transparent 3px) 0 18% / 36px 100% repeat-y,
+      radial-gradient(circle at 18px 50%, #e6d3b0 1.5px, #5c4632 2.4px, transparent 3px) 0 50% / 36px 100% repeat-y,
+      repeating-linear-gradient(90deg, rgba(255,220,170,.05) 0 1px, transparent 1px 4px),
+      linear-gradient(180deg, #4a3526, #1a120e 40%, #100c0a);
+    box-shadow: inset 0 0 0 8px #241910, inset 0 0 0 11px #7a6248, inset 0 0 50px rgba(0,0,0,.45);
+  }
+  .door.left { transform: translateX(-105%); border-right: 8px solid #8d7358; }
+  .door.right { transform: translateX(105%); border-left: 8px solid #8d7358; }
+  .doors:not(.open) .door {
+    transition-duration: 0.85s;
+    transition-timing-function: cubic-bezier(.55, .05, .85, .35);
+  }
+  .doors:not(.open) .door.left,
+  .doors:not(.open) .door.right { transform: translateX(0); }
+  .door .boss {
+    position: absolute;
+    top: 50%;
+    width: 28px; height: 64px;
+    margin-top: -32px;
+    background:
+      radial-gradient(circle at 50% 16px, #e6d3b0 2px, #5a4632 3px, transparent 4px),
+      radial-gradient(circle at 50% 48px, #e6d3b0 2px, #5a4632 3px, transparent 4px),
+      linear-gradient(#8a7358, #3a2c22);
+    box-shadow: inset 0 0 0 2px #1a120c;
+  }
+  .door.left .boss { right: 10px; }
+  .door.right .boss { left: 10px; }
+
+  body[data-theme="bound"] {
+    --ink: #100c0a;
+    --bone: #e4d2b0;
+    --bone-dim: rgba(228, 210, 176, 0.45);
+    --text: #f4efe6;
+    --muted: #c2b29a;
+    --blood: #8a3030;
+  }
+  body[data-theme="bound"] .fit,
+  body[data-theme="bound"] .center-menu,
+  body[data-theme="bound"] .roster,
+  body[data-theme="bound"] .stats,
+  body[data-theme="bound"] .sheet,
+  body[data-theme="bound"] .start-copy .menu,
+  body[data-theme="bound"] .doll,
+  body[data-theme="bound"] .bag,
+  body[data-theme="bound"] .board,
+  body[data-theme="bound"] .stage-light {
+    background: none;
+    border: 34px solid transparent;
+    border-image: url("assets/frame.jpg") 168 fill;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+  }
+  body[data-theme="bound"] .doll,
+  body[data-theme="bound"] .bag,
+  body[data-theme="bound"] .board { border-width: 22px; }
+  body[data-theme="bound"] .fit::before,
+  body[data-theme="bound"] .center-menu::before,
+  body[data-theme="bound"] .roster::before,
+  body[data-theme="bound"] .stats::before,
+  body[data-theme="bound"] .sheet::before { content: none; }
+  body[data-theme="bound"] .start-copy .menu { padding: 10px 8px; }
+  body[data-theme="bound"] .socket,
+  body[data-theme="bound"] .cell,
+  body[data-theme="bound"] .slotbox,
+  body[data-theme="bound"] .choices button,
+  body[data-theme="bound"] .mini,
+  body[data-theme="bound"] .game,
+  body[data-theme="bound"] .seat,
+  body[data-theme="bound"] .card {
+    background: none;
+    border: 12px solid transparent;
+    border-image: url("assets/slot.jpg") 190 fill;
+    box-shadow: none;
+  }
+  body[data-theme="bound"] .socket { border-width: 9px; }
+  body[data-theme="bound"] .item.on,
+  body[data-theme="bound"] .choices button.on,
+  body[data-theme="bound"] .game.on,
+  body[data-theme="bound"] .card.on,
+  body[data-theme="bound"] .seat.you {
+    box-shadow: inset 0 0 0 2px #e4d2b0;
+  }
+  body[data-theme="bound"] .door {
+    background-color: #1a120e;
+    background-image:
+      linear-gradient(#6e5844, #6e5844) 0 18% / 100% 8px no-repeat,
+      linear-gradient(#8a7358, #8a7358) 0 50% / 100% 11px no-repeat,
+      linear-gradient(#6e5844, #6e5844) 0 82% / 100% 8px no-repeat,
+      url("assets/leather.jpg");
+    background-size: auto, auto, auto, 340px;
+  }
+
+  body[data-theme="citadel"] {
+    --ink: #07080c;
+    --bone: #e7d3a8;
+    --bone-dim: rgba(231, 211, 168, 0.5);
+    --text: #f7f1e4;
+    --muted: #cbbda6;
+    --blood: #9a2e2e;
+  }
+  body[data-theme="citadel"] .stage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 8;
+    box-shadow: inset 0 0 160px 42px rgba(0, 0, 0, 0.66);
+  }
+  body[data-theme="citadel"] .scrim {
+    background: linear-gradient(90deg, rgba(4, 6, 10, 0.78) 0%, rgba(4, 6, 10, 0.22) 40%, rgba(4, 6, 10, 0.02) 100%);
+  }
+  body[data-theme="citadel"] .scrim.full { background: rgba(4, 6, 10, 0.34); }
+  body[data-theme="citadel"] .scrim.death { background: rgba(48, 4, 4, 0.42); }
+  body[data-theme="citadel"] .dim { background: rgba(0, 0, 0, 0.34); }
+  body[data-theme="citadel"] h1,
+  body[data-theme="citadel"] h2,
+  body[data-theme="citadel"] .kicker,
+  body[data-theme="citadel"] .hint,
+  body[data-theme="citadel"] .gold,
+  body[data-theme="citadel"] .label {
+    text-shadow: 0 2px 0 #000, 0 14px 28px rgba(0, 0, 0, 0.85);
+  }
+  body[data-theme="citadel"] h1 { text-shadow: 0 3px 0 #000, 0 22px 40px rgba(0, 0, 0, 0.9); }
+  body[data-theme="citadel"] .fit { inset: 28px 40px 24px; }
+  body[data-theme="citadel"] .player,
+  body[data-theme="citadel"] .split,
+  body[data-theme="citadel"] .levels { position: relative; z-index: 1; }
+  body[data-theme="citadel"] .fit,
+  body[data-theme="citadel"] .center-menu,
+  body[data-theme="citadel"] .roster,
+  body[data-theme="citadel"] .stats,
+  body[data-theme="citadel"] .sheet,
+  body[data-theme="citadel"] .start-copy .menu,
+  body[data-theme="citadel"] .doll,
+  body[data-theme="citadel"] .bag,
+  body[data-theme="citadel"] .board {
+    background: none;
+    border: 34px solid transparent;
+    border-image: url("assets/frame.jpg") 168 fill;
+    box-shadow: 0 22px 48px rgba(0, 0, 0, 0.72), 0 2px 0 rgba(255, 220, 170, 0.08);
+  }
+  body[data-theme="citadel"] .doll,
+  body[data-theme="citadel"] .bag,
+  body[data-theme="citadel"] .board,
+  body[data-theme="citadel"] .roster,
+  body[data-theme="citadel"] .stats { border-width: 22px; }
+  body[data-theme="citadel"] .stats { padding: 12px 14px; overflow: hidden; }
+  body[data-theme="citadel"] .stats h2 { font-size: 34px; margin-bottom: 8px; }
+  body[data-theme="citadel"] .statline { padding: 3px 2px; }
+  body[data-theme="citadel"] .fit::before,
+  body[data-theme="citadel"] .center-menu::before,
+  body[data-theme="citadel"] .roster::before,
+  body[data-theme="citadel"] .stats::before,
+  body[data-theme="citadel"] .sheet::before { content: none; }
+  body[data-theme="citadel"] .start-copy .menu { padding: 12px 10px; }
+  body[data-theme="citadel"] .stage-light {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+  body[data-theme="citadel"] .stage-light img {
+    filter: drop-shadow(0 28px 16px rgba(0, 0, 0, 0.8));
+  }
+  body[data-theme="citadel"] .socket,
+  body[data-theme="citadel"] .cell,
+  body[data-theme="citadel"] .slotbox,
+  body[data-theme="citadel"] .choices button,
+  body[data-theme="citadel"] .mini,
+  body[data-theme="citadel"] .game,
+  body[data-theme="citadel"] .seat,
+  body[data-theme="citadel"] .card {
+    background: none;
+    border: 12px solid transparent;
+    border-image: url("assets/slot.jpg") 190 fill;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.55);
+  }
+  body[data-theme="citadel"] .socket { border-width: 9px; }
+  body[data-theme="citadel"] .card { box-shadow: 0 14px 28px rgba(0, 0, 0, 0.65); }
+  body[data-theme="citadel"] .menu .item,
+  body[data-theme="citadel"] .who {
+    margin: 5px 2px;
+    text-shadow: 0 2px 0 #000;
+    background: linear-gradient(180deg, rgba(92, 70, 46, 0.55), rgba(16, 11, 8, 0.82));
+    border: 1px solid rgba(0, 0, 0, 0.72);
+    box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.32), 0 3px 0 #000, 0 8px 14px rgba(0, 0, 0, 0.4);
+  }
+  body[data-theme="citadel"] .menu .item.on,
+  body[data-theme="citadel"] .who.on,
+  body[data-theme="citadel"] .choices button.on,
+  body[data-theme="citadel"] .game.on,
+  body[data-theme="citadel"] .card.on,
+  body[data-theme="citadel"] .seat.you {
+    color: #fff6e4;
+    background: linear-gradient(180deg, rgba(156, 116, 58, 0.78), rgba(46, 28, 12, 0.92));
+    box-shadow: inset 0 1px 0 rgba(255, 236, 190, 0.7), 0 0 18px rgba(228, 190, 110, 0.38), 0 3px 0 #000;
+  }
+  body[data-theme="citadel"] .door {
+    background-color: #120e0c;
+    background-image:
+      linear-gradient(#6e5844, #6e5844) 0 18% / 100% 8px no-repeat,
+      linear-gradient(#8a7358, #8a7358) 0 50% / 100% 11px no-repeat,
+      linear-gradient(#6e5844, #6e5844) 0 82% / 100% 8px no-repeat,
+      url("assets/leather.jpg");
+    background-size: auto, auto, auto, 340px;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+  }
+
+  @keyframes drizzle {
+    from { background-position: 0 0, 0 0; }
+    to { background-position: -36px 320px, -64px 520px; }
+  }
+  body[data-theme="legion"] .stage::before {
+    content: "";
+    position: absolute;
+    inset: -30% -8%;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0.55;
+    background-image:
+      repeating-linear-gradient(104deg, transparent 0 16px, rgba(214, 226, 236, 0.28) 16px 17px, transparent 17px 34px),
+      repeating-linear-gradient(97deg, transparent 0 26px, rgba(186, 206, 222, 0.16) 26px 27px, transparent 27px 54px);
+    background-size: 160px 320px, 220px 520px;
+    animation: drizzle 1.35s linear infinite;
+  }
+  body[data-theme="legion"] .scrim { z-index: 1; }
+  body[data-theme="legion"] .start-copy,
+  body[data-theme="legion"] .fit,
+  body[data-theme="legion"] .dim,
+  body[data-theme="legion"] .player,
+  body[data-theme="legion"] .split,
+  body[data-theme="legion"] .levels,
+  body[data-theme="legion"] .hud { z-index: 4; }
+
+  body[data-theme="legion"] {
+    --ink: #05060a;
+    --bone: #f0d48a;
+    --bone-dim: rgba(240, 212, 138, 0.7);
+    --paper: rgba(6, 7, 10, 0.82);
+    --text: #f6f1e6;
+    --muted: #d5cbb8;
+    --blood: #c43838;
+    --display: "Cinzel", Georgia, serif;
+  }
+  body[data-theme="legion"] .stage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 8;
+    box-shadow: inset 0 0 90px 18px rgba(0, 0, 0, 0.72);
+  }
+  body[data-theme="legion"] .scrim {
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.74) 0%, rgba(0, 0, 0, 0.18) 36%, transparent 64%);
+  }
+  body[data-theme="legion"] .scrim.full { background: rgba(0, 0, 0, 0.28); }
+  body[data-theme="legion"] .scrim.death { background: rgba(60, 0, 0, 0.4); }
+  body[data-theme="legion"] .dim { background: rgba(0, 0, 0, 0.28); }
+  body[data-theme="legion"] .start-copy { padding-top: 5vh; }
+  body[data-theme="legion"] .start-copy .hint { margin-top: 14px; }
+  body[data-theme="legion"] .player,
+  body[data-theme="legion"] .split,
+  body[data-theme="legion"] .levels { position: relative; z-index: 1; }
+  body[data-theme="legion"] .fit { inset: 22px 28px 18px; }
+  body[data-theme="legion"] h1,
+  body[data-theme="legion"] h2 {
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    background: linear-gradient(180deg, #fff8e8 0%, #f2d48a 42%, #a56b28 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 2px 0 #120c06) drop-shadow(0 10px 12px rgba(0, 0, 0, 0.85));
+  }
+  body[data-theme="legion"] .kicker,
+  body[data-theme="legion"] .hint,
+  body[data-theme="legion"] .gold,
+  body[data-theme="legion"] .label {
+    color: #f0d48a;
+    letter-spacing: 0.22em;
+    text-shadow: 0 2px 0 #000;
+  }
+  body[data-theme="legion"] .fit,
+  body[data-theme="legion"] .center-menu,
+  body[data-theme="legion"] .roster,
+  body[data-theme="legion"] .stats,
+  body[data-theme="legion"] .sheet,
+  body[data-theme="legion"] .doll,
+  body[data-theme="legion"] .bag,
+  body[data-theme="legion"] .board {
+    background: rgba(6, 7, 10, 0.78);
+    border: 1px solid rgba(240, 212, 138, 0.85);
+    border-image: none;
+    box-shadow:
+      0 0 0 1px #000,
+      0 0 0 2px rgba(240, 212, 138, 0.28),
+      inset 0 1px 0 rgba(255, 248, 230, 0.55),
+      inset 0 -12px 24px rgba(0, 0, 0, 0.45),
+      0 10px 0 rgba(0, 0, 0, 0.38),
+      0 22px 34px rgba(0, 0, 0, 0.62);
+  }
+  body[data-theme="legion"] .inv-body { grid-template-columns: auto minmax(0, 1fr); }
+  body[data-theme="legion"] .doll {
+    width: auto;
+    height: 100%;
+    aspect-ratio: 260 / 480;
+    max-width: 100%;
+    background:
+      radial-gradient(ellipse at 50% 42%, rgba(90, 78, 56, 0.22), rgba(0, 0, 0, 0.15) 36%, rgba(0, 0, 0, 0.62) 78%);
+    box-shadow:
+      0 0 0 1px #000,
+      inset 0 0 0 1px rgba(240, 212, 138, 0.45),
+      inset 0 0 48px rgba(0, 0, 0, 0.72),
+      0 14px 24px rgba(0, 0, 0, 0.5);
+  }
+  body[data-theme="legion"] .silhouette {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    transform: none;
+    overflow: visible;
+    filter: drop-shadow(0 16px 8px rgba(0, 0, 0, 0.75));
+  }
+  body[data-theme="legion"] .socket.helm { top: 6%; width: 22%; height: 12%; }
+  body[data-theme="legion"] .socket.glove.l { left: 16%; top: 46%; width: 13%; height: 9%; }
+  body[data-theme="legion"] .socket.glove.r { right: 16%; top: 46%; width: 13%; height: 9%; }
+  body[data-theme="legion"] .socket.armor { top: 24%; width: 34%; height: 16%; }
+  body[data-theme="legion"] .socket.weapon.l { left: 1%; top: 34%; width: 13%; height: 20%; }
+  body[data-theme="legion"] .socket.weapon.r { right: 1%; top: 34%; width: 13%; height: 20%; }
+  body[data-theme="legion"] .socket.waist { top: 46%; width: 28%; height: 7%; }
+  body[data-theme="legion"] .socket.boot.l { left: 22%; bottom: 6%; width: 20%; height: 9%; }
+  body[data-theme="legion"] .socket.boot.r { right: 22%; bottom: 6%; width: 20%; height: 9%; }
+  body[data-theme="legion"] .socket { letter-spacing: 0.02em; font-size: 8px; }
+  body[data-theme="legion"] .socket i { display: none; }
+  body[data-theme="legion"] .socket b { font-size: 9px; letter-spacing: 0.06em; background: rgba(0, 0, 0, 0.72); }
+  body[data-theme="legion"] .pack-col { justify-content: flex-start; padding-left: 28px; }
+  body[data-theme="legion"] .fit::before,
+  body[data-theme="legion"] .center-menu::before,
+  body[data-theme="legion"] .roster::before,
+  body[data-theme="legion"] .stats::before,
+  body[data-theme="legion"] .sheet::before { content: none; }
+  body[data-theme="legion"] .start-copy .menu {
+    background: none;
+    border: 0;
+    border-image: none;
+    box-shadow: none;
+    padding: 0;
+    width: min(440px, 100%);
+  }
+  body[data-theme="legion"] .stage-light {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+  body[data-theme="legion"] .stage-light img {
+    filter: drop-shadow(0 18px 0 rgba(0, 0, 0, 0.45)) drop-shadow(0 28px 16px rgba(0, 0, 0, 0.75));
+  }
+  body[data-theme="legion"] .menu .item,
+  body[data-theme="legion"] .who,
+  body[data-theme="legion"] .choices button,
+  body[data-theme="legion"] .game,
+  body[data-theme="legion"] .seat,
+  body[data-theme="legion"] .mini {
+    background: url("assets/metal-plate.jpg") center / 100% 100% no-repeat;
+    border: 0;
+    border-image: none;
+    color: #f4ead4;
+    font-family: "Cinzel", Georgia, serif;
+    font-size: 16px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 0 #000, 0 2px 0 #000;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.42),
+      inset 0 -3px 0 rgba(0, 0, 0, 0.55),
+      0 4px 0 #05060a,
+      0 10px 16px rgba(0, 0, 0, 0.55);
+    margin: 6px 0;
+    min-height: 44px;
+  }
+  body[data-theme="legion"] .menu .item.on,
+  body[data-theme="legion"] .who.on,
+  body[data-theme="legion"] .choices button.on,
+  body[data-theme="legion"] .game.on,
+  body[data-theme="legion"] .seat.you,
+  body[data-theme="legion"] .mini.on {
+    color: #fff8dc;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 248, 220, 0.75),
+      inset 0 0 0 2px #f0d48a,
+      inset 0 -3px 0 rgba(0, 0, 0, 0.45),
+      0 0 18px rgba(240, 212, 138, 0.45),
+      0 4px 0 #05060a,
+      0 12px 18px rgba(0, 0, 0, 0.5);
+  }
+  body[data-theme="legion"] .socket,
+  body[data-theme="legion"] .cell,
+  body[data-theme="legion"] .slotbox,
+  body[data-theme="legion"] .card {
+    background: none;
+    border: 9px solid transparent;
+    border-image: url("assets/slot-sharp.jpg") 112 fill;
+    box-shadow: 0 5px 0 rgba(0, 0, 0, 0.55), 0 10px 14px rgba(0, 0, 0, 0.35);
+  }
+  body[data-theme="legion"] .card.on {
+    box-shadow: 0 0 0 1px #f0d48a, 0 0 16px rgba(240, 212, 138, 0.45), 0 8px 16px rgba(0, 0, 0, 0.55);
+  }
+  body[data-theme="legion"] .statline { padding: 4px 2px; border-bottom-color: rgba(240, 212, 138, 0.28); }
+  body[data-theme="legion"] .statline b { color: #f0d48a; text-shadow: 0 1px 0 #000; }
+  body[data-theme="legion"] .stats { padding: 14px 16px 10px; overflow: hidden; }
+  body[data-theme="legion"] .stats h2 { font-size: 32px; margin-bottom: 6px; }
+  body[data-theme="legion"] .door {
+    background: url("assets/metal-plate.jpg") center / cover no-repeat;
+    box-shadow: inset 0 0 0 3px #07080c, inset 0 0 0 5px #c5ccd6;
+  }
+
+  @media (max-width: 980px) {
+    .player, .split { grid-template-columns: 1fr; }
+    .cards { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body data-theme="vessel">
+<header class="rail" id="rail"></header>
+<main class="stage" id="stage"></main>
+<div class="doors open" id="doors" aria-hidden="true">
+  <div class="door left"><div class="boss"></div></div>
+  <div class="door right"><div class="boss"></div></div>
+</div>
+<script>
+const ART = "../Graphics/";
+const characters = [
+  {
+    name: "Orange Wizard",
+    role: "Magic 7  ·  Speed 20",
+    img: ART + "Orange_Wizard/selection_screen/0.png",
+    loadout: ["Slide", "Ice clone"],
+    stats: { health: 1000, energy: 60, attack: 10, magic: 7, speed: 20, strength: 5, vitality: 10, agility: 6, charisma: 3 }
+  },
+  {
+    name: "Barbarian",
+    role: "Strength 20  ·  Vitality 20",
+    img: ART + "barb/selection_screen/0.png",
+    loadout: ["Slide", "Leap slam"],
+    stats: { health: 2000, energy: 20, attack: 10, magic: 1, speed: 5, strength: 20, vitality: 20, agility: 4, charisma: 3 }
+  },
+  {
+    name: "Barbarian, Small",
+    role: "Strength 20  ·  Speed 7",
+    img: ART + "barb_small/selection_screen/0.png",
+    loadout: ["Slide", "Leap slam"],
+    stats: { health: 2000, energy: 20, attack: 10, magic: 1, speed: 7, strength: 20, vitality: 20, agility: 4, charisma: 3 }
+  }
+];
+const levels = [
+  { id: 8, name: "Level 8", file: "1_1.png" },
+  { id: 7, name: "Level 7", file: "1_2.png" },
+  { id: 9, name: "Frostreach Gate", file: "1_3.png" },
+  { id: 10, name: "Frostreach Expanse", file: "1_4.png" },
+  { id: 11, name: "Sunspine Dunes", file: "2_1.png" },
+  { id: 6, name: "Level 6", file: "2_2.png" },
+  { id: 12, name: "Sunspine", file: "2_3.png" }
+];
+const spendKeys = ["magic", "strength", "vitality", "agility", "charisma"];
+const upgradeKeys = [
+  { key: "health", max: 300 },
+  { key: "energy", max: 140 },
+  { key: "attack", max: 20 },
+  { key: "magic", max: 10 },
+  { key: "speed", max: 10 }
+];
+const pack = ["Bandage", "Torch", "", "Ration", "", "", "", "Key", "", "", "", ""];
+const belt = ["Bandage", "Torch", "", ""];
+const modes = ["Skirmish", "Hunt", "Covenant"];
+const seatChoices = [2, 4, 6];
+const games = [
+  { name: "Black Procession", mode: "Hunt", map: 3, seats: 4, filled: 3 },
+  { name: "Sunspine Watch", mode: "Skirmish", map: 4, seats: 6, filled: 2 },
+  { name: "Gate Vigil", mode: "Covenant", map: 2, seats: 2, filled: 1 }
+];
+const themes = [["vessel", "Vessel"], ["temple", "Temple"], ["covenant", "Covenant"], ["bound", "Bound"], ["citadel", "Citadel"], ["legion", "Legion"]];
+
+const state = {
+  screen: "start",
+  pause: null,
+  selected: 0,
+  character: 0,
+  level: 3,
+  points: 10,
+  statsFor: -1,
+  stats: null,
+  mpMode: null,
+  joined: 0,
+  theme: "vessel",
+  query: "",
+  gameName: "Night Offering",
+  mode: 1,
+  seats: 4,
+  privacy: "Open",
+  advanced: false,
+  friendlyFire: false,
+  dropIn: true,
+  password: "",
+  chat: [
+    ["Ash", "The gate is open."],
+    ["Mara", "Bring the key."]
+  ],
+  draft: "",
+  ready: false,
+  exp: 46,
+  upgrade: { health: 180, energy: 48, attack: 8, magic: 4, speed: 6 },
+  costs: { health: 20, energy: 16, attack: 24, magic: 30, speed: 18 },
+  settings: { music: 80, sfx: 70, env: 1, fps: 60, debug: false, outlines: false, gold: true },
+  map: { x: 0, y: 0, s: 1 }
+};
+
+const jumps = [
+  ["Start", "start"],
+  ["Settings", "settings"],
+  ["Find", "mp"],
+  ["Create", "create"],
+  ["Lobby", "lobby"],
+  ["Player", "player"],
+  ["Attributes", "attributes"],
+  ["Levels", "levels"],
+  ["World", "world"],
+  ["Pause", "pause"],
+  ["Inventory", "inventory"],
+  ["Map", "map"],
+  ["Upgrade", "upgrade"],
+  ["Death", "death"]
+];
+
+function visibleGames() {
+  const q = state.query.trim().toLowerCase();
+  return games.filter((g) => !q || (g.name + " " + g.mode).toLowerCase().includes(q));
+}
+function partyMeta() {
+  if (state.mpMode === "join") return games[state.joined] || games[0];
+  return { name: state.gameName, mode: modes[state.mode], map: state.level, seats: state.seats, filled: 1 };
+}
+function partySlots() {
+  const meta = partyMeta();
+  const others = ["Ash", "Mara", "Isk", "Nim", "Sol"];
+  const extra = state.mpMode === "join" ? Math.max(0, meta.filled - 1) : 0;
+  const slots = [{ name: hero().name, you: true, ready: state.ready }];
+  for (let i = 0; i < extra; i++) slots.push({ name: others[i], ready: i % 2 === 0 });
+  while (slots.length < meta.seats) slots.push({ open: true });
+  return slots;
+}
+function hero() { return characters[state.character]; }
+function land() { return levels[state.level]; }
+function img(file) { return ART + "Level/" + file; }
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function on(i) { return i === state.selected ? " on" : ""; }
+
+function ensureStats() {
+  if (state.statsFor === state.character) return;
+  state.statsFor = state.character;
+  state.stats = Object.assign({}, hero().stats);
+  state.points = 10;
+}
+
+function active() {
+  if (state.screen === "death") return "death";
+  if (state.screen === "world" && state.pause) return state.pause;
+  return state.screen;
+}
+
+let doorsBusy = false;
+function withDoors(apply) {
+  const doors = document.getElementById("doors");
+  if (!doors || doorsBusy) { apply(); return; }
+  doorsBusy = true;
+  doors.classList.remove("open");
+  setTimeout(() => {
+    apply();
+    setTimeout(() => {
+      doors.classList.add("open");
+      setTimeout(() => { doorsBusy = false; }, 1100);
+    }, 220);
+  }, 860);
+}
+
+function go(screen) {
+  withDoors(() => {
+    state.screen = screen;
+    state.pause = null;
+    state.selected = 0;
+    if (screen === "attributes") ensureStats();
+    render();
+  });
+}
+
+function jump(name) {
+  withDoors(() => {
+    state.selected = 0;
+    state.pause = null;
+    if (name === "pause") { state.screen = "world"; state.pause = "root"; }
+    else if (name === "inventory" || name === "map" || name === "upgrade") { state.screen = "world"; state.pause = name; }
+    else state.screen = name;
+    if (name === "attributes" || state.pause === "attributes") ensureStats();
+    render();
+  });
+}
+
+function item(i, label, value) {
+  const val = value == null ? "" : `<span class="val">${esc(value)}</span>`;
+  return `<button class="item${on(i)}" data-i="${i}"><span>${esc(label)}</span>${val}</button>`;
+}
+
+function settingsRows() {
+  const s = state.settings;
+  const rows = [
+    ["Music", s.music + "%"],
+    ["Effects", s.sfx + "%"],
+    ["Environment", s.env.toFixed(2) + "×"],
+    ["Frame cap", String(s.fps)],
+    ["Debug", s.debug ? "On" : "Off"],
+    ["Faction outlines", s.outlines ? "On" : "Off"],
+    ["Gold popup", s.gold ? "On" : "Off"]
+  ];
+  return rows.map((r, i) => item(i, r[0], r[1])).join("");
+}
+
+function stepSetting(dir) {
+  const s = state.settings;
+  const i = state.selected;
+  if (i === 0) s.music = clamp(s.music + dir * 5, 0, 100);
+  else if (i === 1) s.sfx = clamp(s.sfx + dir * 5, 0, 100);
+  else if (i === 2) s.env = clamp(Math.round((s.env + dir * 0.25) * 100) / 100, 0.25, 3);
+  else if (i === 3) s.fps = dir > 0 ? (s.fps === 30 ? 60 : 120) : (s.fps === 120 ? 60 : 30);
+  else if (i === 4) s.debug = !s.debug;
+  else if (i === 5) s.outlines = !s.outlines;
+  else if (i === 6) s.gold = !s.gold;
+}
+
+function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+
+function painted() { return state.theme === "citadel" || state.theme === "legion"; }
+
+function backdrop(kind) {
+  if (state.theme === "legion") {
+    const file = {
+      start: "assets/hall-sharp.jpg",
+      mp: "assets/warroom.jpg",
+      world: "assets/field.jpg",
+      shrine: "assets/shrine.jpg"
+    }[kind] || "assets/hall-sharp.jpg";
+    return `<img class="bg" src="${file}" alt="">`;
+  }
+  if (state.theme === "citadel") {
+    const file = {
+      start: "assets/hall.jpg",
+      mp: "assets/warroom.jpg",
+      world: "assets/field.jpg",
+      shrine: "assets/shrine.jpg"
+    }[kind] || "assets/hall.jpg";
+    return `<img class="bg" src="${file}" alt="">`;
+  }
+  const map = kind === "start" ? "1_4.png" : kind === "mp" ? "2_3.png" : land().file;
+  return `<img class="bg" src="${img(map)}" alt="">`;
+}
+
+function worldLayer(overlayClass) {
+  const frame = overlayClass === "center-menu" ? overlayClass : `fit ${overlayClass}`;
+  return `
+    ${backdrop("world")}
+    <div class="dim"><div class="${frame}">`;
+}
+
+function closeWorld() { return `</div></div>`; }
+
+function figure() {
+  if (state.theme !== "legion") return `<img class="mannequin" src="${hero().img}" alt="">`;
+  return `<svg class="silhouette" viewBox="-30 0 260 480" aria-hidden="true">
+    <defs>
+      <linearGradient id="flesh" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#6a5c48"/>
+        <stop offset="0.22" stop-color="#2a241c"/>
+        <stop offset="1" stop-color="#0c0b09"/>
+      </linearGradient>
+    </defs>
+    <ellipse cx="100" cy="466" rx="52" ry="8" fill="#000" opacity=".6"/>
+    <g fill="url(#flesh)" stroke="#e6d3b0" stroke-width="1.4" stroke-opacity=".55" stroke-linejoin="round">
+      <ellipse cx="100" cy="58" rx="18" ry="24"/>
+      <path d="M92 78 h16 l-2 22 h-12 z"/>
+      <path d="M52 112 Q100 92 148 112 L136 236 Q100 256 64 236 Z"/>
+      <path d="M56 114 C30 148 16 198 18 246 C36 254 44 228 46 186 C52 146 68 122 86 114 Z"/>
+      <path d="M144 114 C170 148 184 198 182 246 C164 254 156 228 154 186 C148 146 132 122 114 114 Z"/>
+      <ellipse cx="20" cy="250" rx="12" ry="10"/>
+      <ellipse cx="180" cy="250" rx="12" ry="10"/>
+      <path d="M72 228 L94 216 L90 404 L64 414 Z"/>
+      <path d="M128 228 L106 216 L110 404 L136 414 Z"/>
+      <path d="M56 398 L98 386 L102 450 L48 460 Z"/>
+      <path d="M144 398 L102 386 L98 450 L152 460 Z"/>
+    </g>
+  </svg>`;
+}
+
+function attributesBlock() {
+  ensureStats();
+  const rows = spendKeys.map((key, i) => {
+    return `<button class="spend${on(i)}" data-i="${i}"><span>${esc(cap(key))}</span><b>${state.stats[key]}</b></button>`;
+  }).join("");
+  const ready = state.points === 0 ? "Ready" : state.points + " points left";
+  const readyRow = state.pause ? "" : item(spendKeys.length, ready);
+  return `
+    <p class="kicker">Attributes</p>
+    <h2>${esc(hero().name)}</h2>
+    ${rows}
+    ${readyRow}
+    <p class="hint">Left and right spend a point. Esc steps back.</p>`;
+}
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function view() {
+  const a = active();
+  if (a === "start") {
+    return `
+      ${backdrop("start")}
+      <div class="scrim"></div>
+      <div class="start-copy">
+        <p class="kicker">Pixel Realm</p>
+        <h1>Combat<br>Heroes</h1>
+        <div class="menu">
+          ${item(0, "Start")}
+          ${item(1, "Multiplayer")}
+          ${item(2, "Settings")}
+        </div>
+        <p class="hint">Arrows move · Enter confirms · Esc steps back</p>
+      </div>`;
+  }
+  if (a === "settings" && !state.pause) {
+    return `
+      ${backdrop("start")}
+      <div class="scrim full"></div>
+      <div class="sheet">
+        <p class="kicker">Settings</p>
+        <h2>Options</h2>
+        <div class="menu">${settingsRows()}</div>
+        <p class="hint">Left and right change a value.</p>
+      </div>`;
+  }
+  if (a === "mp") {
+    const shown = visibleGames();
+    const rows = shown.map((g, i) => `
+      <button class="game${on(i)}" data-i="${i}">
+        <span>${esc(g.name)}</span>
+        <span>${esc(g.mode)}</span>
+        <span>${esc(levels[g.map].name)}</span>
+        <span>${g.filled}/${g.seats}</span>
+      </button>`).join("");
+    return `
+      ${backdrop("mp")}
+      <div class="scrim full"></div>
+      <div class="fit">
+        <div class="fit-head">
+          <div><p class="kicker">Multiplayer</p><h2>Find a game</h2></div>
+        </div>
+        <input class="addr" id="q" value="${esc(state.query)}" placeholder="Search name or mode" spellcheck="false" aria-label="Search">
+        <div class="gamelist">${rows || `<p class="hint">No games match.</p>`}</div>
+        ${item(shown.length, "Create a game")}
+      </div>`;
+  }
+  if (a === "create") {
+    const modeBtns = modes.map((name, i) => `<button data-mode="${i}" class="${i === state.mode ? "on" : ""}">${name}</button>`).join("");
+    const seatBtns = seatChoices.map((n) => `<button data-seats="${n}" class="${n === state.seats ? "on" : ""}">${n} players</button>`).join("");
+    const privacy = ["Open", "Private"].map((name) => `<button data-privacy="${name}" class="${name === state.privacy ? "on" : ""}">${name}</button>`).join("");
+    const maps = levels.map((lv, i) => `
+      <button data-level="${i}" class="${i === state.level ? "on" : ""}"><img src="${img(lv.file)}" alt="${esc(lv.name)}"></button>`).join("");
+    const advanced = state.advanced ? `
+      <div class="advanced">
+        <button class="mini" data-flag="friendlyFire">Friendly fire · ${state.friendlyFire ? "On" : "Off"}</button>
+        <button class="mini" data-flag="dropIn">Join in progress · ${state.dropIn ? "On" : "Off"}</button>
+        <input class="addr" id="pw" value="${esc(state.password)}" placeholder="Password, optional" spellcheck="false" aria-label="Password">
+      </div>` : "";
+    return `
+      ${backdrop("mp")}
+      <div class="scrim full"></div>
+      <div class="fit">
+        <div class="fit-head">
+          <div><p class="kicker">Multiplayer</p><h2>Create a game</h2></div>
+          ${item(1, "Open lobby")}
+        </div>
+        <input class="addr" id="gname" value="${esc(state.gameName)}" spellcheck="false" aria-label="Game name">
+        <div class="create-main">
+          <div>
+            <p class="label">Mode · left and right</p>
+            <div class="choices">${modeBtns}</div>
+            <p class="label">Players</p>
+            <div class="choices">${seatBtns}</div>
+            <p class="label">Door</p>
+            <div class="choices">${privacy}</div>
+          </div>
+          <div class="map-col">
+            <p class="label">Map · ${esc(land().name)}</p>
+            <div class="maps">${maps}</div>
+          </div>
+        </div>
+        ${item(0, "Advanced", state.advanced ? "Open" : "Closed")}
+        ${advanced}
+      </div>`;
+  }
+  if (a === "player") {
+    const h = hero();
+    const roster = characters.map((c, i) => `
+      <button class="who${on(i)}" data-i="${i}">
+        <img src="${c.img}" alt="">
+        <span><strong>${esc(c.name)}</strong><span>${esc(c.role)}</span></span>
+      </button>`).join("");
+    const lines = ["health", "energy", "attack", "magic", "speed", "strength", "vitality", "agility", "charisma"]
+      .map((k) => `<div class="statline"><span>${cap(k)}</span><b>${h.stats[k]}</b></div>`).join("");
+    return `
+      ${painted() ? backdrop("shrine") : ""}
+      <div class="player">
+        <div class="roster">
+          <p class="label">Roster</p>
+          ${roster}
+        </div>
+        <div class="stage-light"><img src="${h.img}" alt=""></div>
+        <div class="stats">
+          <p class="kicker">${state.mpMode ? "Multiplayer" : "Single player"}</p>
+          <h2>${esc(h.name)}</h2>
+          ${lines}
+        </div>
+      </div>`;
+  }
+  if (a === "attributes" && !state.pause) {
+    return `
+      ${painted() ? backdrop("shrine") : ""}
+      <div class="split">
+        <div class="portrait-col">
+          <div class="stage-light"><img src="${hero().img}" alt=""></div>
+        </div>
+        <div class="stats">${attributesBlock()}</div>
+      </div>`;
+  }
+  if (a === "levels") {
+    const cards = levels.map((lv, i) => `
+      <button class="card${on(i)}" data-i="${i}">
+        <img src="${img(lv.file)}" alt="">
+        <span>${esc(lv.name)}</span>
+      </button>`).join("");
+    return `${painted() ? backdrop("start") : ""}<div class="levels"><p class="kicker">Level ${land().id}</p><h2>${esc(land().name)}</h2><div class="cards">${cards}</div><p class="hint">Enter begins the level.</p></div>`;
+  }
+  if (a === "lobby") {
+    const meta = partyMeta();
+    const slots = partySlots().map((s) => {
+      if (s.open) return `<div class="seat"><span>Open</span></div>`;
+      const change = s.you ? `<button data-change="1">Change</button>` : `<span>${s.ready ? "Ready" : ""}</span>`;
+      return `<div class="seat${s.you ? " you" : ""}"><span>${esc(s.name)}</span>${change}</div>`;
+    }).join("");
+    const lines = state.chat.map(([who, text]) => `<p><b>${esc(who)}</b>  ${esc(text)}</p>`).join("");
+    const used = partySlots().filter((s) => !s.open).length;
+    return `
+      ${backdrop("mp")}
+      <div class="scrim full"></div>
+      <div class="fit">
+        <div class="fit-head">
+          <div>
+            <p class="kicker">${esc(meta.mode)} · ${esc(levels[meta.map].name)}</p>
+            <h2>${esc(meta.name)}</h2>
+          </div>
+          <div class="gold">${used} / ${meta.seats}</div>
+        </div>
+        <div class="lobby-main">
+          <div class="seats">${slots}</div>
+          <div class="board">
+            <p class="label">Board</p>
+            <div class="log">${lines}</div>
+            <input class="addr" id="say" value="${esc(state.draft)}" placeholder="Say something" spellcheck="false" aria-label="Message">
+          </div>
+        </div>
+        <div class="menu">
+          ${item(0, "Ready", state.ready ? "Yes" : "No")}
+          ${item(1, "Start")}
+        </div>
+      </div>`;
+  }
+  if (a === "world") {
+    const h = hero();
+    const beltHtml = belt.map((name) => `<div class="slotbox${name ? "" : " empty"}">${esc(name || ".")}</div>`).join("");
+    return `
+      ${backdrop("world")}
+      <div class="hud">
+        <div>
+          <div>${esc(h.name)} · ${esc(land().name)}</div>
+          <div class="hp"><span></span></div>
+        </div>
+        <div class="belt">${beltHtml}</div>
+      </div>`;
+  }
+  if (a === "root") {
+    return worldLayer("center-menu") + `
+      <p class="kicker">Paused</p>
+      <h2>Hold</h2>
+      <div class="menu">
+        ${item(0, "Resume")}
+        ${item(1, "Inventory")}
+        ${item(2, "Map")}
+        ${item(3, "Attributes")}
+        ${item(4, "Attacks")}
+        ${item(5, "Upgrade")}
+        ${item(6, "Settings")}
+        ${item(7, "Main menu")}
+      </div>` + closeWorld();
+  }
+  if (a === "inventory") {
+    const cells = pack.map((name) => `<div class="cell${name ? "" : " empty"}">${esc(name || ".")}</div>`).join("");
+    const beltHtml = belt.map((name) => `<div class="slotbox${name ? "" : " empty"}">${esc(name || ".")}</div>`).join("");
+    return worldLayer("") + `
+      <div class="fit-head"><h2>Inventory</h2><div class="gold">128 gold</div></div>
+      <div class="inv-body">
+        <div class="doll-col">
+          <div class="doll">
+            ${figure()}
+            <div class="socket helm"><i>Helm</i></div>
+            <div class="socket glove l"><i>Arm</i></div>
+            <div class="socket glove r"><i>Arm</i></div>
+            <div class="socket armor"><b>Coat</b></div>
+            <div class="socket weapon l"><b>Staff</b></div>
+            <div class="socket weapon r"><i>Hand</i></div>
+            <div class="socket waist"><i>Belt</i></div>
+            <div class="socket boot l"><i>Boot</i></div>
+            <div class="socket boot r"><i>Boot</i></div>
+          </div>
+          <div class="strap">${beltHtml}</div>
+        </div>
+        <div class="pack-col">
+          <div class="bag">
+            <p class="label">Pack</p>
+            <div class="pack">${cells}</div>
+          </div>
+        </div>
+      </div>` + closeWorld();
+  }
+  if (a === "map") {
+    return `
+      <div class="dim">
+        <div class="map-sheet" id="map-view">
+          <div class="map-world" id="map-world">
+            <img src="${img(land().file)}" alt="">
+            <i class="pin"></i>
+          </div>
+          <div class="map-note">Drag to move · wheel to zoom · Esc closes</div>
+        </div>
+      </div>`;
+  }
+  if (a === "attacks") {
+    const rows = hero().loadout.map((name, i) => item(i, name)).join("");
+    return worldLayer("center-menu") + `<p class="kicker">Attacks</p><h2>${esc(hero().name)}</h2><div class="menu">${rows}</div>` + closeWorld();
+  }
+  if (a === "upgrade") {
+    const rows = upgradeKeys.map((u, i) => {
+      const cur = state.upgrade[u.key];
+      const pct = Math.round(cur / u.max * 100);
+      return `<button class="spend${on(i)}" data-i="${i}"><span>${cap(u.key)} · ${state.costs[u.key]} exp</span><span>${Math.round(cur)} / ${u.max}</span><div class="bar"><span style="width:${pct}%"></span></div></button>`;
+    }).join("");
+    return worldLayer("") + `
+      <div class="upgrade-grid">
+        <div class="stage-light">
+          <img src="${hero().img}" alt="">
+          <div class="turntable-note">Figure</div>
+        </div>
+        <div style="min-height:0;overflow:hidden">
+          <p class="kicker">${state.exp} exp</p>
+          <h2>Upgrade</h2>
+          <div class="bars">${rows}</div>
+        </div>
+      </div>` + closeWorld();
+  }
+  if (a === "settings") {
+    return worldLayer("sheet") + `<p class="kicker">Paused</p><h2>Settings</h2><div class="menu">${settingsRows()}</div>` + closeWorld();
+  }
+  if (a === "attributes") {
+    return worldLayer("sheet") + attributesBlock() + closeWorld();
+  }
+  if (a === "death") {
+    return `
+      ${backdrop("start")}
+      <div class="scrim death"></div>
+      <div class="dim" style="background:transparent">
+        <div class="center-menu">
+          <p class="kicker">Fallen</p>
+          <h2>You died</h2>
+          <div class="menu">
+            ${item(0, "Restart")}
+            ${item(1, "Main menu")}
+            ${item(2, "Exit")}
+          </div>
+        </div>
+      </div>`;
+  }
+  return "";
+}
+
+function nav() {
+  const a = active();
+  if (a === "start") return { n: 3, cols: 1 };
+  if (a === "settings") return { n: 7, cols: 1 };
+  if (a === "mp") return { n: visibleGames().length + 1, cols: 1 };
+  if (a === "create") return { n: 2, cols: 1 };
+  if (a === "player") return { n: 3, cols: 1 };
+  if (a === "attributes") return { n: state.pause ? 5 : 6, cols: 1 };
+  if (a === "levels") return { n: levels.length, cols: 4 };
+  if (a === "lobby") return { n: 2, cols: 1 };
+  if (a === "root") return { n: 8, cols: 1 };
+  if (a === "attacks") return { n: hero().loadout.length, cols: 1 };
+  if (a === "upgrade") return { n: upgradeKeys.length, cols: 1 };
+  if (a === "death") return { n: 3, cols: 1 };
+  return null;
+}
+
+function move(key) {
+  const info = nav();
+  if (!info) return;
+  let i = state.selected;
+  if (key === "ArrowRight" && info.cols > 1) i = Math.min(info.n - 1, i + 1);
+  else if (key === "ArrowLeft" && info.cols > 1) i = Math.max(0, i - 1);
+  else if (key === "ArrowDown") i = Math.min(info.n - 1, i + info.cols);
+  else if (key === "ArrowUp") i = Math.max(0, i - info.cols);
+  else return;
+  state.selected = i;
+  if (active() === "levels") state.level = i;
+  if (active() === "player") state.character = i;
+  render();
+}
+
+function spend(dir) {
+  ensureStats();
+  const key = spendKeys[state.selected];
+  if (!key) return;
+  if (dir > 0 && state.points > 0) { state.stats[key] += 1; state.points -= 1; }
+  if (dir < 0 && state.stats[key] > hero().stats[key]) { state.stats[key] -= 1; state.points += 1; }
+  render();
+}
+
+function activate() {
+  const a = active();
+  const i = state.selected;
+  if (a === "start") {
+    if (i === 0) { state.mpMode = null; go("player"); }
+    else if (i === 1) go("mp");
+    else go("settings");
+  } else if (a === "mp") {
+    const shown = visibleGames();
+    if (i >= shown.length) go("create");
+    else { state.joined = games.indexOf(shown[i]); state.mpMode = "join"; go("lobby"); }
+  } else if (a === "create") {
+    if (i === 0) { state.advanced = !state.advanced; render(); }
+    else { state.mpMode = "host"; go("lobby"); }
+  } else if (a === "player") {
+    state.character = i;
+    if (state.mpMode) go("lobby");
+    else go("attributes");
+  } else if (a === "attributes") {
+    if (!state.pause && i === spendKeys.length && state.points === 0) go("levels");
+    else spend(1);
+  } else if (a === "levels") {
+    state.level = i;
+    go("world");
+  } else if (a === "lobby") {
+    if (i === 0) { state.ready = !state.ready; render(); }
+    else if (state.ready) go("world");
+  } else if (a === "root") {
+    const pages = [null, "inventory", "map", "attributes", "attacks", "upgrade", "settings"];
+    if (i === 0) { state.pause = null; render(); }
+    else if (i === 7) go("start");
+    else withDoors(() => { state.pause = pages[i]; state.selected = 0; if (state.pause === "attributes") ensureStats(); render(); });
+  } else if (a === "upgrade") {
+    const u = upgradeKeys[i];
+    const cost = state.costs[u.key];
+    if (state.exp >= cost && state.upgrade[u.key] < u.max) {
+      state.exp -= cost;
+      state.upgrade[u.key] = Math.min(u.max, state.upgrade[u.key] * 1.2);
+      state.costs[u.key] = Math.round(cost * 1.4);
+      render();
+    }
+  } else if (a === "settings") {
+    stepSetting(1);
+    render();
+  } else if (a === "death") {
+    if (i === 0) go("world");
+    else go("start");
+  }
+}
+
+function back() {
+  const a = active();
+  if (state.pause && state.pause !== "root") { state.pause = "root"; state.selected = 0; render(); return; }
+  if (state.pause === "root") { state.pause = null; render(); return; }
+  const prev = {
+    settings: "start",
+    mp: "start",
+    player: state.mpMode ? "lobby" : "start",
+    attributes: "player",
+    levels: "attributes",
+    create: "mp",
+    lobby: "mp",
+    world: "pause-open",
+    death: "world"
+  }[a];
+  if (prev === "pause-open") { state.screen = "world"; state.pause = "root"; state.selected = 0; render(); }
+  else if (prev) go(prev);
+}
+
+function bind() {
+  document.querySelectorAll("[data-i]").forEach((el) => {
+    el.addEventListener("mouseenter", () => {
+      const i = Number(el.dataset.i);
+      if (i === state.selected) return;
+      state.selected = i;
+      if (active() === "player") state.character = i;
+      if (active() === "levels") state.level = i;
+      document.querySelectorAll("[data-i]").forEach((n) => n.classList.toggle("on", Number(n.dataset.i) === i));
+      const title = document.querySelector(".levels h2");
+      if (title && active() === "levels") title.textContent = land().name;
+      const kicker = document.querySelector(".levels .kicker");
+      if (kicker && active() === "levels") kicker.textContent = "Level " + land().id;
+      if (active() === "player") {
+        const h = hero();
+        const name = document.querySelector(".stats h2");
+        if (name) name.textContent = h.name;
+        const imgEl = document.querySelector(".stage-light img");
+        if (imgEl) imgEl.src = h.img;
+        const lines = document.querySelectorAll(".statline b");
+        ["health", "energy", "attack", "magic", "speed", "strength", "vitality", "agility", "charisma"]
+          .forEach((k, n) => { if (lines[n]) lines[n].textContent = h.stats[k]; });
+      }
+    });
+    el.addEventListener("click", () => {
+      state.selected = Number(el.dataset.i);
+      if (active() === "levels") {
+        state.level = state.selected;
+        const title = document.querySelector(".levels h2");
+        if (title) title.textContent = land().name;
+        const kicker = document.querySelector(".levels .kicker");
+        if (kicker) kicker.textContent = "Level " + land().id;
+        document.querySelectorAll("[data-i]").forEach((n) => n.classList.toggle("on", Number(n.dataset.i) === state.selected));
+        return;
+      }
+      activate();
+    });
+  });
+  document.querySelectorAll("[data-level]").forEach((el) => {
+    el.addEventListener("click", () => {
+      state.level = Number(el.dataset.level);
+      render();
+    });
+  });
+  document.querySelectorAll("[data-mode]").forEach((el) => {
+    el.addEventListener("click", () => { state.mode = Number(el.dataset.mode); render(); });
+  });
+  document.querySelectorAll("[data-seats]").forEach((el) => {
+    el.addEventListener("click", () => { state.seats = Number(el.dataset.seats); render(); });
+  });
+  document.querySelectorAll("[data-privacy]").forEach((el) => {
+    el.addEventListener("click", () => { state.privacy = el.dataset.privacy; render(); });
+  });
+  document.querySelectorAll("[data-flag]").forEach((el) => {
+    el.addEventListener("click", () => {
+      state[el.dataset.flag] = !state[el.dataset.flag];
+      render();
+    });
+  });
+  const change = document.querySelector("[data-change]");
+  if (change) change.addEventListener("click", () => go("player"));
+  const keep = (id, key) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", () => {
+      state[key] = el.value;
+      if (id !== "q") return;
+      const pos = el.selectionStart;
+      render();
+      const again = document.getElementById("q");
+      if (again) { again.focus(); again.setSelectionRange(pos, pos); }
+    });
+  };
+  keep("q", "query");
+  keep("gname", "gameName");
+  keep("pw", "password");
+  keep("say", "draft");
+  const view = document.getElementById("map-view");
+  const world = document.getElementById("map-world");
+  if (view && world) {
+    const apply = () => { world.style.transform = `translate(${state.map.x}px, ${state.map.y}px) scale(${state.map.s})`; };
+    apply();
+    view.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      state.map.s = clamp(state.map.s * (e.deltaY < 0 ? 1.08 : 0.92), 1, 4);
+      apply();
+    }, { passive: false });
+    let drag = null;
+    view.addEventListener("pointerdown", (e) => {
+      drag = { x: e.clientX, y: e.clientY, ox: state.map.x, oy: state.map.y };
+      view.setPointerCapture(e.pointerId);
+    });
+    view.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      state.map.x = drag.ox + e.clientX - drag.x;
+      state.map.y = drag.oy + e.clientY - drag.y;
+      apply();
+    });
+    view.addEventListener("pointerup", () => { drag = null; });
+  }
+}
+
+function renderRail() {
+  const a = active();
+  document.body.dataset.theme = state.theme;
+  const screens = jumps.map(([label, name]) => {
+    const here = name === a || (name === "pause" && a === "root") || (name === "settings" && a === "settings");
+    return `<button data-jump="${name}" class="${here ? "on" : ""}">${label}</button>`;
+  }).join("");
+  const looks = themes.map(([id, label]) => `<button data-look="${id}" class="${state.theme === id ? "on" : ""}">${label}</button>`).join("");
+  document.getElementById("rail").innerHTML = `<b>PREVIEW</b>${screens}<span class="spacer"></span><b>LOOK</b>${looks}`;
+  document.querySelectorAll("[data-jump]").forEach((el) => {
+    el.addEventListener("click", () => jump(el.dataset.jump));
+  });
+  document.querySelectorAll("[data-look]").forEach((el) => {
+    el.addEventListener("click", () => { state.theme = el.dataset.look; render(); });
+  });
+}
+
+function render() {
+  if (state.selected < 0) state.selected = 0;
+  const info = nav();
+  if (info && state.selected > info.n - 1) state.selected = info.n - 1;
+  document.getElementById("stage").innerHTML = view();
+  bind();
+  renderRail();
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") {
+    if (e.target.id === "say" && e.key === "Enter") {
+      e.preventDefault();
+      const v = e.target.value.trim();
+      if (v) state.chat.push(["You", v]);
+      state.draft = "";
+      render();
+      return;
+    }
+    if (e.key === "Escape") e.target.blur();
+    return;
+  }
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " ", "Enter", "Escape"].includes(e.key)) e.preventDefault();
+  const a = active();
+  if (e.key === "Escape") { back(); return; }
+  if (a === "world") return;
+  if ((a === "settings") && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    stepSetting(e.key === "ArrowRight" ? 1 : -1);
+    render();
+    return;
+  }
+  if (a === "attributes" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { spend(e.key === "ArrowRight" ? 1 : -1); return; }
+  if (a === "create" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    state.mode = (state.mode + (e.key === "ArrowRight" ? 1 : 2)) % 3;
+    render();
+    return;
+  }
+  if (e.key === "Enter" || e.key === " ") { activate(); return; }
+  move(e.key);
+});
+
+render();
+</script>
+</body>
+</html>
