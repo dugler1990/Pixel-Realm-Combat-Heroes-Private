@@ -31,6 +31,7 @@ from online import nakama
 from online.lobby_ops import OP_CHAT, OP_NOTICE, OP_SET_CHARACTER, OP_SET_READY, OP_START, OP_STATE, OP_TICKET
 from online.nakama import NakamaError
 from online_menus import CreateScreen, FindScreen, LobbyScreen, SignInScreen
+from legion_ui import Gate
 import psutil
 
 
@@ -49,6 +50,8 @@ class Game:
         self.backend = create_backend(w, h)
         self.WIDTH = w
         self.HEIGHT = h
+        # The painted gate: leaving the start menu, and after death (legion_ui.Gate).
+        self.gate = Gate(self.backend)
 
         self.clock = pygame.time.Clock()
         self.debug_info_surfaces = {} 
@@ -493,14 +496,51 @@ class Game:
         if callable(handler):
             handler(dt)
 
+    def _draw_screen_only(self, dt):
+        """The current screen's picture with no input: under the settings overlay."""
+        state = self.state
+        if state == "level" and self.level and hasattr(self.level, "display_surface"):
+            self.level.display_surface.fill((0, 0, 0))
+            rts_session = getattr(self.level, "rts_session", None)
+            camera_focus = (
+                rts_session.camera_focus()
+                if rts_session is not None and rts_session.is_active()
+                else self.level.player
+            )
+            self.level.layout_manager.visible_sprites.custom_draw(
+                self.level.player, dt, 0, 0.5, camera_focus=camera_focus
+            )
+        elif state == "death_menu":
+            self.death_menu.draw()
+        elif state == "start_menu":
+            self.start_menu.draw()
+        elif state == "player_selection":
+            self.player_selection.draw()
+        elif state == "player_configuration":
+            self._draw_player_configuration()
+        elif state == "level_selection":
+            self.level_selection.draw()
+        else:
+            screen = {
+                "online_signin": self.signin_screen,
+                "online_find": self.find_screen,
+                "online_create": self.create_screen,
+                "online_lobby": self.lobby_screen,
+            }.get(state)
+            if screen is not None:
+                self._draw_screen(screen)
+
     def _state_start_menu(self, dt):
         self.start_menu.handle_events()
         if self.state != "start_menu":
-            return  # "Play online" switched to an online screen
+            # "Play online" switched to an online screen: the gate closes over the title.
+            self.gate.start(self.start_menu.draw)
+            return
         self.start_menu.draw()
         if not self.in_start_menu:
             self.set_state("player_selection")
             self.in_player_selection = True
+            self.gate.start(self.start_menu.draw)
 
     def _state_player_selection(self, dt):
         self.player_selection.handle_events()
@@ -527,11 +567,14 @@ class Game:
                 game=self,
             )
 
-    def _state_player_configuration(self, dt):
-        self.player_configuration.handle_events()
+    def _draw_player_configuration(self):
         overlay = self.backend.compose()
         self.player_configuration.draw(overlay)
         self.backend.blit(overlay, (0, 0))
+
+    def _state_player_configuration(self, dt):
+        self.player_configuration.handle_events()
+        self._draw_player_configuration()
         _game_flow_log.debug(
             "in main finished indicattor: %s", self.player_configuration.finished
         )
@@ -562,23 +605,28 @@ class Game:
             # Restarting would load a fresh single-player level and leave the match
             # socket open; a match is left the same way as "main menu".
             action = "main_menu"
+        # Restart and main menu go through the gate; a level is built while it is shut.
         if action == "restart":
             if self.current_level_number is not None:
-                self.start_level(self.current_level_number)
+                level_number = self.current_level_number
+                self.gate.start(self.death_menu.draw, lambda: self.start_level(level_number))
         elif action == "main_menu" and in_match:
-            self._end_match("")
+            self.gate.start(self.death_menu.draw, lambda: self._end_match(""))
         elif action == "main_menu":
-            self.level = None
-            self.in_start_menu = True
-            self.in_player_selection = False
-            self.in_level_selection = False
-            self.start_menu.selected_option = 0
-            self.level_selection.selected_level = None
-            self.set_state("start_menu")
+            self.gate.start(self.death_menu.draw, self._death_to_start_menu)
         elif action == "exit":
             self._close_multiplayer()
             pygame.quit()
             sys.exit()
+
+    def _death_to_start_menu(self):
+        self.level = None
+        self.in_start_menu = True
+        self.in_player_selection = False
+        self.in_level_selection = False
+        self.start_menu.selected_option = 0
+        self.level_selection.selected_level = None
+        self.set_state("start_menu")
 
     #@profile
     def run(self):
@@ -598,6 +646,9 @@ class Game:
         while True:
            # print(f" state in main : {self.state}")
             events = pygame.event.get()
+            if self.gate.busy:
+                # No input while the gate runs; key releases still pass, so held keys let go.
+                events = [e for e in events if e.type in (pygame.KEYUP, pygame.QUIT)]
             self._handle_global_shortcuts(events)
             self.input_manager.update(events)
 
@@ -614,22 +665,14 @@ class Game:
                 self.settings_menu.handle_events(events)
 
             self.apply_settings()
+            self.gate.update()
 
             if self.settings_menu.visible:
                 # Pause normal state handlers while settings menu is active.
-                if self.state == "level" and self.level and hasattr(self.level, "display_surface"):
-                    self.level.display_surface.fill((0, 0, 0))
-                    rts_session = getattr(self.level, "rts_session", None)
-                    camera_focus = (
-                        rts_session.camera_focus()
-                        if rts_session is not None and rts_session.is_active()
-                        else self.level.player
-                    )
-                    self.level.layout_manager.visible_sprites.custom_draw(
-                        self.level.player, dt, 0, 0.5, camera_focus=camera_focus
-                    )
-                elif self.state == "death_menu":
-                    self.death_menu.draw()
+                self._draw_screen_only(dt)
+            elif self.gate.closing:
+                # The old screen, with no input, until the leaves meet.
+                self.gate.behind()
             else:
                 self._dispatch_state(dt)
 
@@ -637,10 +680,8 @@ class Game:
                 self.update_debug_info()
                 self.display_debug_info()
 
-            if self.settings_menu.visible:
-                overlay = self.backend.compose()
-                self.settings_menu.draw(overlay)
-                self.backend.blit(overlay, (0, 0))
+            self.settings_menu.draw(self.backend)
+            self.gate.draw()
 
             self._maybe_save_shot()
             self.backend.present()

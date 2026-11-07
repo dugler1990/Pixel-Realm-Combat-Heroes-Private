@@ -150,3 +150,51 @@ halves (2.1 MB each).
 
 Not UI and left alone: the Frostreach Gate level picture is a debug tile map and Level 6 is a
 plain snow texture; those come from `Graphics/Level/`.
+
+# In the game
+
+Plan: `.cursor/plans/legion_ui_ingame.plan.md`. Worktree `..\Pixel-Realm-legion-ingame`, branch
+`feat/legion-ingame` from `main` (8dea3cf) with `feat/online-foundation` merged in: no conflicts.
+Venv junctioned, 70 level-art files and the 20 raw kit paintings (`generated/ui_kit`) hard-linked.
+
+## 2026-11-07 — Phase 0: the kit in the game
+
+- **Art in one place.** `ui_preview/assets/kit/` moved to `Graphics/UI/kit/`, the four backdrops to
+  `Graphics/UI/backdrops/`, `slot-sharp.jpg` to `Graphics/UI/kit/slot.jpg` (git mv). The preview's
+  36 references point at `../Graphics/UI/`; `metal-plate.jpg`, `frame.jpg`, `leather.jpg`,
+  `slot.jpg` and `hall.jpg` stay with the other looks.
+- **`make_kit.py`** writes to `Graphics/UI/kit/` and also writes `kit.json` (the same numbers as
+  `kit.css`, plus the slot frame's slice, 112). A re-cut after the move left every existing piece
+  byte-identical.
+- **Energy fill**: new piece `fill_energy`, 1536 x 512, painted in 36.8 s, cut with the same band
+  finder as the gold and blood fills (now one function, `band_strip`): 1344 x 202.
+- **Fonts**: Google's variable Cinzel and Outfit (OFL) instanced with fontTools 4.64 into static
+  `Cinzel-SemiBold.ttf` (wght 600), `Outfit-Regular.ttf` (400), `Outfit-Medium.ttf` (500), with the
+  two licence files. Pygame can't choose a weight in a variable font.
+- **`ImageCache.load_smooth`**: smoothscale, its own cache key; `load_scaled` callers untouched.
+- **`Code/legion_ui.py`**: `kit_for(backend)`; sizes from `u = window height / 860` (0.753 at
+  1152 x 648: bars 35 px, the start column 331 px); panels (frame 9-sliced over the stone), slot
+  boxes, three-part bars with the travelling light kept at six strengths, meters that cut each fill
+  width once, `TextSlot`, fixed labels with letter spacing and the preview's hard shadow, the scene
+  with two scrolling rain tiles and torch-lit drops as 10 kept frames per torch, and the gate.
+  Rendered headless first: every builder matched the preview's pieces.
+
+## 2026-11-07 — Phase 1: start, settings, death, and the gate
+
+- **StartMenu**: the gate painting with rain and warm torches, the left shade and vignette, the
+  logo, four steel bars, the hint, the notice line. Settings opens the overlay (it used to only log).
+- **SettingsMenu**: framed panel of seven bars with their values, drawn through the backend over a
+  dim; Main2 now draws every screen beneath it (`_draw_screen_only`), not only a level or death.
+- **DeathMenu**: the gate painting under the red shade, a framed panel, three bars.
+- **The gate** (`legion_ui.Gate`, Main2): leaving the start menu, and after death. The state
+  switches at once; while the leaves close Main2 draws only the old screen; restart, main menu and
+  leaving a match run while the leaves are shut; input is dropped (key releases pass) until they
+  are open.
+- Checked in the real game loop (scripted keys, `drive_game.py` in the session scratchpad), CPU
+  backend headless and GPU in a window. GPU, from the backend's own counters: start menu 78 blits
+  a frame, 88 % from the atlas, **0 uploaded per frame**; settings over it 103 blits, 0 uploaded;
+  the gate 66 blits, 0 uploaded; 30 fps at the cap.
+
+Mistake found: the first GPU screenshots had no settings panel. The backend batches atlas draws
+until `present()`, and the capture read the frame before that, so the frame's last draws were
+missing from the image. The capture now flushes the batch first; on screen nothing was wrong.
