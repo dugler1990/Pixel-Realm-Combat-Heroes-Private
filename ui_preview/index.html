@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Cormorant+Garamond:wght@500;600&family=Outfit:wght@340;480;560&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/kit/kit.css">
+<link rel="stylesheet" href="../Graphics/UI/kit/kit.css">
 <style>
   /* Edit the look here. The frames stand in for the painted 9-slice kit. */
   :root {
@@ -909,8 +909,8 @@
     --frame-w: 44px;
     border: solid transparent;
     border-width: calc(var(--frame-w) * var(--frame-edge));
-    border-image: url("assets/kit/frame.png") var(--frame-slice) / var(--frame-w) stretch;
-    background: linear-gradient(rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.32)), url("assets/kit/stone.png") center / cover;
+    border-image: url("../Graphics/UI/kit/frame.png") var(--frame-slice) / var(--frame-w) stretch;
+    background: linear-gradient(rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.32)), url("../Graphics/UI/kit/stone.png") center / cover;
     background-clip: padding-box;
     box-shadow: 0 18px 34px rgba(0, 0, 0, 0.65);
   }
@@ -933,7 +933,7 @@
   body[data-theme="legion"] .socket {
     transform: none;
     border: 9px solid transparent;
-    border-image: url("assets/slot-sharp.jpg") 112;
+    border-image: url("../Graphics/UI/kit/slot.jpg") 112;
     background: rgba(4, 5, 8, 0.3);
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
     letter-spacing: 0.02em;
@@ -941,7 +941,7 @@
   }
   body[data-theme="legion"] .socket.helm {
     left: 37%; top: 2%; width: 26%; height: 15%;
-    background: linear-gradient(rgba(4, 5, 8, 0.5), rgba(4, 5, 8, 0.5)), url("assets/kit/sigil.png") center / auto 72% no-repeat;
+    background: linear-gradient(rgba(4, 5, 8, 0.5), rgba(4, 5, 8, 0.5)), url("../Graphics/UI/kit/sigil.png") center / auto 72% no-repeat;
   }
   body[data-theme="legion"] .socket.armor { left: 35%; top: 21%; width: 30%; height: 17%; }
   body[data-theme="legion"] .socket.waist { left: 35%; top: 39.5%; width: 30%; height: 6.5%; }
@@ -961,7 +961,7 @@
     width: min(100cqw - 56px, (100cqh - 40px) * 1.25);
     aspect-ratio: 5 / 4;
     padding: 5% 6%;
-    background: url("assets/kit/slab.png") 0 0 / 100% 100% no-repeat;
+    background: url("../Graphics/UI/kit/slab.png") 0 0 / 100% 100% no-repeat;
     border: 0;
     box-shadow: 0 24px 48px rgba(0, 0, 0, 0.7);
   }
@@ -1047,7 +1047,7 @@
     padding: 0 14px;
     border: solid transparent;
     border-width: calc(18px * var(--frame-edge));
-    border-image: url("assets/kit/frame.png") var(--frame-slice) / 18px stretch;
+    border-image: url("../Graphics/UI/kit/frame.png") var(--frame-slice) / 18px stretch;
     background: rgba(0, 0, 0, 0.62);
     background-clip: padding-box;
     box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.8);
@@ -1061,9 +1061,9 @@
   body[data-theme="legion"] .hp {
     --bar-h: 24px;
     --cap: var(--gauge-cap);
-    --art-l: url("assets/kit/gauge_l.png");
-    --art-r: url("assets/kit/gauge_r.png");
-    --art-c: url("assets/kit/gauge_c.png");
+    --art-l: url("../Graphics/UI/kit/gauge_l.png");
+    --art-r: url("../Graphics/UI/kit/gauge_r.png");
+    --art-c: url("../Graphics/UI/kit/gauge_c.png");
     position: relative;
     margin: 0;
   }
@@ -1074,12 +1074,12 @@
     top: calc(var(--gauge-in-top) * 100%);
     bottom: calc(var(--gauge-in-bottom) * 100%);
     height: auto;
-    background: url("assets/kit/fill_gold.png") left center / auto 400% repeat-x;
+    background: url("../Graphics/UI/kit/fill_gold.png") left center / auto 400% repeat-x;
     box-shadow: 2px 0 6px rgba(255, 214, 140, 0.55);
   }
   body[data-theme="legion"] .hp { --bar-h: 28px; width: 320px; }
   body[data-theme="legion"] .hp span {
-    background-image: url("assets/kit/fill_blood.png");
+    background-image: url("../Graphics/UI/kit/fill_blood.png");
     background-size: auto 100%;
     filter: brightness(1.5) saturate(1.2);
     box-shadow: 2px 0 6px rgba(255, 90, 60, 0.5);
@@ -1093,9 +1093,9 @@
   body[data-theme="legion"] .spend {
     --bar-h: 46px;
     --cap: var(--bar-cap);
-    --art-l: url("assets/kit/bar_l.png");
-    --art-r: url("assets/kit/bar_r.png");
-    --art-c: url("assets/kit/bar_c.png");
+    --art-l: url("../Graphics/UI/kit/bar_l.png");
+    --art-r: url("../Graphics/UI/kit/bar_r.png");
+    --art-c: url("../Graphics/UI/kit/bar_c.png");
     flex: none;
     padding: 0 10px;
     filter: drop-shadow(0 6px 5px rgba(0, 0, 0, 0.6));
@@ -1158,16 +1158,16 @@
   body[data-theme="legion"] .mini.on,
   body[data-theme="legion"] .spend.on {
     --cap: var(--bar-on-cap);
-    --art-l: url("assets/kit/bar_on_l.png");
-    --art-r: url("assets/kit/bar_on_r.png");
-    --art-c: url("assets/kit/bar_on_c.png");
+    --art-l: url("../Graphics/UI/kit/bar_on_l.png");
+    --art-r: url("../Graphics/UI/kit/bar_on_r.png");
+    --art-c: url("../Graphics/UI/kit/bar_on_c.png");
     color: #fff8dc;
   }
   body[data-theme="legion"] .cell,
   body[data-theme="legion"] .slotbox {
     background: none;
     border: 9px solid transparent;
-    border-image: url("assets/slot-sharp.jpg") 112 fill;
+    border-image: url("../Graphics/UI/kit/slot.jpg") 112 fill;
     box-shadow: 0 5px 0 rgba(0, 0, 0, 0.55), 0 10px 14px rgba(0, 0, 0, 0.35);
   }
   body[data-theme="legion"] .card,
@@ -1181,7 +1181,7 @@
     inset: 0;
     pointer-events: none;
     border: 0 solid transparent;
-    border-image: url("assets/kit/frame.png") var(--frame-slice) / 26px stretch;
+    border-image: url("../Graphics/UI/kit/frame.png") var(--frame-slice) / 26px stretch;
   }
   body[data-theme="legion"] .map-sheet::after { border-image-width: 44px; }
   body[data-theme="legion"] .card.on,
@@ -1197,10 +1197,10 @@
      comes off the seam, the seal kindles, and light shows at the seam before they part. */
   body[data-theme="legion"] .door {
     border: 0;
-    background: #050506 url("assets/kit/gate_l.png") right center / cover no-repeat;
+    background: #050506 url("../Graphics/UI/kit/gate_l.png") right center / cover no-repeat;
     box-shadow: none;
   }
-  body[data-theme="legion"] .door.right { background-image: url("assets/kit/gate_r.png"); background-position: left center; }
+  body[data-theme="legion"] .door.right { background-image: url("../Graphics/UI/kit/gate_r.png"); background-position: left center; }
   body[data-theme="legion"] .door .boss { display: none; }
   body[data-theme="legion"] .door.left::after {
     content: "";
@@ -1323,7 +1323,7 @@ const characters = [
     name: "Orange Wizard",
     role: "Magic 7  ·  Speed 20",
     img: ART + "Orange_Wizard/selection_screen/0.png",
-    full: "assets/kit/wizard.png",
+    full: "../Graphics/UI/kit/wizard.png",
     loadout: ["Slide", "Ice clone"],
     stats: { health: 1000, energy: 60, attack: 10, magic: 7, speed: 20, strength: 5, vitality: 10, agility: 6, charisma: 3 }
   },
@@ -1331,7 +1331,7 @@ const characters = [
     name: "Barbarian",
     role: "Strength 20  ·  Vitality 20",
     img: ART + "barb/selection_screen/0.png",
-    full: "assets/kit/barbarian.png",
+    full: "../Graphics/UI/kit/barbarian.png",
     loadout: ["Slide", "Leap slam"],
     stats: { health: 2000, energy: 20, attack: 10, magic: 1, speed: 5, strength: 20, vitality: 20, agility: 4, charisma: 3 }
   },
@@ -1339,7 +1339,7 @@ const characters = [
     name: "Barbarian, Small",
     role: "Strength 20  ·  Speed 7",
     img: ART + "barb_small/selection_screen/0.png",
-    full: "assets/kit/barbarian.png",
+    full: "../Graphics/UI/kit/barbarian.png",
     loadout: ["Slide", "Leap slam"],
     stats: { health: 2000, energy: 20, attack: 10, magic: 1, speed: 7, strength: 20, vitality: 20, agility: 4, charisma: 3 }
   }
@@ -1556,10 +1556,10 @@ function painted() { return state.theme === "citadel" || state.theme === "legion
 // Legion backdrops. Rain only falls outdoors; torches are flame and wet-stone reflection
 // positions in percent of the painting, measured from the image.
 const scenes = {
-  start: { file: "assets/hall-sharp.jpg", rain: true, torches: [[51, 56], [84, 54], [51, 80]] },
-  mp: { file: "assets/warroom.jpg" },
-  world: { file: "assets/field.jpg", rain: true },
-  shrine: { file: "assets/shrine.jpg" }
+  start: { file: "../Graphics/UI/backdrops/hall-sharp.jpg", rain: true, torches: [[51, 56], [84, 54], [51, 80]] },
+  mp: { file: "../Graphics/UI/backdrops/warroom.jpg" },
+  world: { file: "../Graphics/UI/backdrops/field.jpg", rain: true },
+  shrine: { file: "../Graphics/UI/backdrops/shrine.jpg" }
 };
 
 function rainTile(w, h, count, len, width, color, blur, seed, faintest = 0.35) {
@@ -1599,9 +1599,9 @@ function backdrop(kind) {
   if (state.theme === "citadel") {
     const file = {
       start: "assets/hall.jpg",
-      mp: "assets/warroom.jpg",
-      world: "assets/field.jpg",
-      shrine: "assets/shrine.jpg"
+      mp: "../Graphics/UI/backdrops/warroom.jpg",
+      world: "../Graphics/UI/backdrops/field.jpg",
+      shrine: "../Graphics/UI/backdrops/shrine.jpg"
     }[kind] || "assets/hall.jpg";
     return `<img class="bg" src="${file}" alt="">`;
   }
@@ -1612,7 +1612,7 @@ function backdrop(kind) {
 function figureSrc(c) { return state.theme === "legion" ? c.full : c.img; }
 
 function statIcon(key) {
-  return state.theme === "legion" ? `<img class="icon" src="assets/kit/icon_${key}.png" alt="">` : "";
+  return state.theme === "legion" ? `<img class="icon" src="../Graphics/UI/kit/icon_${key}.png" alt="">` : "";
 }
 
 function heroFigure() {
@@ -1623,7 +1623,7 @@ function heroFigure() {
 function itemMark(name) {
   if (!name) return ".";
   if (state.theme !== "legion") return esc(name);
-  return `<img class="mark" src="assets/kit/${name.toLowerCase()}.png" alt="${esc(name)}" title="${esc(name)}">`;
+  return `<img class="mark" src="../Graphics/UI/kit/${name.toLowerCase()}.png" alt="${esc(name)}" title="${esc(name)}">`;
 }
 
 function worldLayer(overlayClass) {
@@ -1637,7 +1637,7 @@ function closeWorld() { return `</div></div>`; }
 
 function figure() {
   if (state.theme !== "legion") return `<img class="mannequin" src="${hero().img}" alt="">`;
-  return `<img class="doll-figure" src="assets/kit/doll.png" alt="">`;
+  return `<img class="doll-figure" src="../Graphics/UI/kit/doll.png" alt="">`;
 }
 
 function attributesBlock() {
@@ -1665,7 +1665,7 @@ function view() {
       <div class="scrim"></div>
       <div class="start-copy">
         <p class="kicker">Pixel Realm</p>
-        ${state.theme === "legion" ? `<h1 class="logo"><img src="assets/kit/logo.png" alt="Combat Heroes"></h1>` : "<h1>Combat<br>Heroes</h1>"}
+        ${state.theme === "legion" ? `<h1 class="logo"><img src="../Graphics/UI/kit/logo.png" alt="Combat Heroes"></h1>` : "<h1>Combat<br>Heroes</h1>"}
         <div class="menu">
           ${item(0, "Start")}
           ${item(1, "Multiplayer")}
