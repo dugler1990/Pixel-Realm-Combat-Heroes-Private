@@ -223,3 +223,16 @@ tighter; hints overflowed narrow panels, so they wrap, and `Kit.lines` now measu
 
 Found, not this work: level 8 (`levels/Map8`) has no `map.tmx`, so choosing it crashes on `main`
 too.
+
+## 2026-11-07 — Phase 3: the online screens
+
+- **`menu_widgets.py`** draws through `legion_ui` and the backend; input untouched. Buttons and
+  choices are steel bars (gold with focus, the choice's value on the right), text fields are framed
+  plaques (`Kit.plaque`) with the gold highlight when focused, list rows are bars, `panel()` is the
+  framed stone panel over the window. Fixed words are kept labels; typed text, list cells, notices
+  and chat lines each have one `TextSlot` per place (`text_slot`). Heights are preview px.
+- **Lobby**: seats as 60-px bars (yours gold, character under the name, "Ready" right; 52 px was
+  too short for two lines at the 12-px floor), the chat board as a framed panel.
+- **Main2._draw_screen**: the war-room painting and the dim instead of a flat colour.
+- Checked by rendering the four screens with sample lobbies, seats and chat (no server in this
+  folder: "Play online" shows its notice, and no gate runs because the state doesn't change).

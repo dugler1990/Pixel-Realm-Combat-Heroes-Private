@@ -1,7 +1,7 @@
 """The online screens: sign in, Find a game, Create a game, Lobby.
 
-Laid out like ui_preview/index.html (its mp / create / lobby screens), drawn plainly with
-menu_widgets. Screens are pure UI: `handle(events)` returns an action tuple or None, and
+Laid out like ui_preview/index.html (its mp / create / lobby screens), drawn in the Legion
+look with menu_widgets and legion_ui. Screens are pure UI: `handle(events)` returns an action tuple or None, and
 Main2 does the network calls and feeds the results back (set_lobbies, set_state, ...).
 """
 
@@ -10,8 +10,9 @@ import time
 
 import pygame
 
-from menu_widgets import (ACCENT, BORDER, BOX, DIM, ERROR, TEXT, Button, Choice, Form, Label,
-                          ListView, TextField, draw_text, fit, panel)
+import legion_ui as L
+from menu_widgets import (ACCENT, DIM, ERROR, TEXT, Button, Choice, Form, Label, ListView,
+                          TextField, fit, panel, text_slot)
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,20}$")
 FIND_REFRESH_SECONDS = 5.0
@@ -66,9 +67,9 @@ class SignInScreen:
             return ("register", name, email, password)
         return ("signin", email, password)
 
-    def draw(self, surface):
-        x, y, width = panel(surface, "Multiplayer", "Sign in")
-        self.form.draw(surface, x, y, width)
+    def draw(self, backend):
+        x, y, width = panel(backend, "Multiplayer", "Sign in")
+        self.form.draw(backend, x, y, width)
 
 
 class FindScreen:
@@ -146,9 +147,9 @@ class FindScreen:
             return ("refresh",)
         return None
 
-    def draw(self, surface):
-        x, y, width = panel(surface, "Multiplayer", "Find a game")
-        self.form.draw(surface, x, y, width)
+    def draw(self, backend):
+        x, y, width = panel(backend, "Multiplayer", "Find a game")
+        self.form.draw(backend, x, y, width)
 
 
 class CreateScreen:
@@ -200,9 +201,9 @@ class CreateScreen:
                            "private": bool(self.door.value),
                            "password": self.password.text if self.door.value else ""})
 
-    def draw(self, surface):
-        x, y, width = panel(surface, "Multiplayer", "Create a game")
-        self.form.draw(surface, x, y, width)
+    def draw(self, backend):
+        x, y, width = panel(backend, "Multiplayer", "Create a game")
+        self.form.draw(backend, x, y, width)
 
 
 class LobbyScreen:
@@ -282,38 +283,46 @@ class LobbyScreen:
                 return name
         return "-"
 
-    def draw(self, surface):
+    def draw(self, backend):
+        kit = L.kit_for(backend)
         state = self.state or {}
         seats = state.get("seats", [])
         seats_max = state.get("seats_max", len(seats) or 2)
-        x, y, width = panel(surface, state.get("map_name", "Multiplayer"), state.get("name", "Lobby"),
+        x, y, width = panel(backend, state.get("map_name", "Multiplayer"), state.get("name", "Lobby"),
                             f"{len(seats)} / {seats_max}" if state else "")
-        seat_w = int(width * 0.42)
+        # The seats as steel bars, yours gold; the chat board as a framed panel beside them.
+        seat_w, seat_h, gap = int(width * 0.5), kit.px(60), kit.px(8)
         for i in range(seats_max):
-            rect = pygame.Rect(x, y + i * 56, seat_w, 48)
-            pygame.draw.rect(surface, BOX, rect)
-            pygame.draw.rect(surface, BORDER, rect, 2)
+            rect = pygame.Rect(x, y + i * (seat_h + gap), seat_w, seat_h)
             if i < len(seats):
                 seat = seats[i]
                 you = seat["user_id"] == self.my_user_id
                 name = seat["username"] + (" (host)" if seat.get("host") else "") + ("  - you" if you else "")
-                draw_text(surface, fit(name, 28, seat_w - 120), (rect.x + 12, rect.centery - 9), 28,
-                          ACCENT if you else TEXT, "midleft")
-                draw_text(surface, self._character_name(seat.get("character")),
-                          (rect.x + 12, rect.centery + 12), 22, DIM, "midleft")
-                if seat.get("ready") and not seat.get("host"):
-                    draw_text(surface, "Ready", (rect.right - 12, rect.centery), 26, ACCENT, "midright")
+                colour = L.TEXT_ON if you else TEXT
+                shown = text_slot(self, ("seat", i, colour), backend, kit, "display", 14, colour, 0.08).surface(
+                    fit(kit, name, "display", 14, seat_w - kit.px(150)))
+                character = text_slot(self, ("character", i), backend, kit, "body", 12, DIM).surface(
+                    self._character_name(seat.get("character")))
+                top = (seat_h - shown.get_height() - character.get_height()) // 2
+                ready = (kit.label("Ready", "medium", 14, ACCENT)
+                         if seat.get("ready") and not seat.get("host") else None)
+                kit.draw_bar(backend, rect, None, you, value=ready,
+                             extra=[(shown, (0, top)), (character, (0, top + shown.get_height()))])
             else:
-                draw_text(surface, "Open", (rect.x + 12, rect.centery), 28, DIM, "midleft")
+                kit.draw_bar(backend, rect, kit.label("Open", "display", 14, DIM, spacing=0.12, upper=True))
 
-        board = pygame.Rect(x + seat_w + 24, y, width - seat_w - 24, max(seats_max * 56 - 8, 220))
-        draw_text(surface, "BOARD", (board.x, board.y - 26), 22, DIM)
-        pygame.draw.rect(surface, BORDER, board, 2)
+        label_h = kit.px(20)
+        board = pygame.Rect(x + seat_w + kit.px(24), y + label_h, width - seat_w - kit.px(24),
+                            max(seats_max * (seat_h + gap) - gap - label_h, kit.px(200)))
+        L.draw(backend, kit.label("Board", "body", 12, DIM, spacing=0.14, upper=True), (board.x, y))
+        L.draw(backend, kit.panel(board.w, board.h, frame=30), board.topleft)
+        pad, line_h = kit.px(16), kit.px(22)
         lines = state.get("chat", [])
-        room = (board.height - 16) // 26
+        room = max(1, (board.height - 2 * pad) // line_h)
         for n, line in enumerate(lines[-room:]):
             text = f'{line["username"]}  {line["text"]}'
-            draw_text(surface, fit(text, 24, board.width - 20), (board.x + 10, board.y + 8 + n * 26), 24, TEXT)
+            text_slot(self, ("chat", n), backend, kit, "body", 14, TEXT).draw(
+                fit(kit, text, "body", 14, board.width - 2 * pad), (board.x + pad, board.y + pad + n * line_h))
 
-        menu_y = y + max(seats_max * 56, board.height + 8) + 16
-        self.form.draw(surface, x, menu_y, width)
+        menu_y = y + max(seats_max * (seat_h + gap), board.bottom - y + gap) + kit.px(10)
+        self.form.draw(backend, x, menu_y, width)

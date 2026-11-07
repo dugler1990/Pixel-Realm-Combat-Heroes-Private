@@ -294,6 +294,20 @@ class Kit:
             return [out]
         return _keep(self.tag + ("highlight", w, h), build)[0], glow
 
+    def plaque(self, w, h):
+        """A text field: a small copy of the frame round a sunken dark well."""
+        def build():
+            out = pygame.Surface((w, h), pygame.SRCALPHA)
+            corner = self.px(18)
+            edge = round(corner * self.numbers["frame-edge"])
+            well = pygame.Rect(edge, edge, w - 2 * edge, h - 2 * edge)
+            out.fill((0, 0, 0, 158), well)
+            shadow = _gradient_alpha(well.size, lambda x, y: 0.8 * max(0.0, 1 - y / 0.3))
+            out.blit(shadow, well)
+            nine_slice(out, ImageCache.load_image(KIT + "frame.png"), self.numbers["frame-slice"], corner)
+            return [out]
+        return _keep(self.tag + ("plaque", w, h), build)[0]
+
     def frame_over(self, w, h, frame=26):
         """The frame alone, to lay over a picture (a level card, the map)."""
         def build():

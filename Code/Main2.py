@@ -26,11 +26,11 @@ from multiplayer_runtime import MULTIPLAYER_RUNTIME, default_spawn_offset
 from network import MultiplayerClient
 from level_layouts import DEFAULT_LAYOUT, LEVEL_TO_LAYOUT, MP_LEVEL_NUMBER
 from render_backend import create_backend
-from menu_widgets import BACKGROUND
 from online import nakama
 from online.lobby_ops import OP_CHAT, OP_NOTICE, OP_SET_CHARACTER, OP_SET_READY, OP_START, OP_STATE, OP_TICKET
 from online.nakama import NakamaError
 from online_menus import CreateScreen, FindScreen, LobbyScreen, SignInScreen
+import legion_ui
 from legion_ui import Gate, Grow
 import psutil
 
@@ -254,10 +254,13 @@ class Game:
             self.set_state("online_signin")
 
     def _draw_screen(self, screen):
-        surface = self.backend.compose()
-        surface.fill(BACKGROUND)
-        screen.draw(surface)
-        self.backend.blit(surface, (0, 0))
+        """An online screen on the war-room painting."""
+        kit = legion_ui.kit_for(self.backend)
+        if getattr(self, "_online_scene", None) is None:
+            self._online_scene = legion_ui.Scene(kit, "warroom.jpg")
+        self._online_scene.draw(self.backend)
+        legion_ui.draw(self.backend, kit.shade("dim"), (0, 0))
+        screen.draw(self.backend)
 
     def _back_to_start_menu(self):
         self.in_start_menu = True
