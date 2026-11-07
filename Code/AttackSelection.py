@@ -1,4 +1,7 @@
 import pygame
+from ImageCache import ImageCache
+import legion_ui as L
+
 
 class AttackSlot:
     def __init__(self, rect, attack_type="general", angle=0, icon_path = None):
@@ -7,51 +10,8 @@ class AttackSlot:
         self.angle = angle
         self.attack = None
         self.icon_path = icon_path
-        self.attack_icon = pygame.image.load(self.icon_path).convert_alpha() if self.icon_path else None
-
-
-    def draw(self, screen, selected = False, held_icon=None):
-
-
-
-        # Handle slot rotation CHAT GPT DECIDED TO COMPLICATE STUFF WITH ROTATION HERE AND I DIDNT REALIZE, SICK
-        if self.angle != 0:
-            # Create a surface for the slot with transparency
-            slot_surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
-            # Determine the color based on the attack type
-            color = (0, 255, 0) if self.attack_type == "magic" else (255, 255, 255)
-            # Draw the rectangle on the slot surface with the determined color
-            pygame.draw.rect(slot_surface, color, slot_surface.get_rect())
-            # Rotate the slot surface according to the angle
-            rotated_slot = pygame.transform.rotate(slot_surface, self.angle)
-            # Blit the rotated slot surface to the screen at the slot's center
-            screen.blit(rotated_slot, rotated_slot.get_rect(center=self.rect.center))
-        else:
-            # If the slot is not rotated, determine the color and draw the rectangle directly on the screen
-            color = (0, 255, 0) if self.attack_type == "magic" else (255, 255, 255)
-            pygame.draw.rect(screen, color, self.rect, 2)  # The thickness of 2 is arbitrary, adjust as needed
-
-        # Draw attack icon if it exists
-        if self.attack_icon:  # Use self.attack_icon directly
-            # No need to reload the icon here, just use the one loaded in __init__
-            attack_icon_scaled = pygame.transform.scale(self.attack_icon, (self.rect.width, self.rect.height))
-            if self.angle != 0:
-                # Rotate the scaled attack icon as well if there's an angle
-                attack_icon_scaled = pygame.transform.rotate(attack_icon_scaled, self.angle)
-                # Blit the rotated attack icon to the screen at the slot's center
-                screen.blit(attack_icon_scaled, attack_icon_scaled.get_rect(center=self.rect.center))
-            else:
-                # Blit the scaled icon to the top left corner of the slot if no rotation
-                screen.blit(attack_icon_scaled, self.rect.topleft)
-
-        if selected:
-            pygame.draw.rect(screen, (0, 0, 0), self.rect, 3)  # Draw a thicker black border for selected slot
-
-                # Draw a smaller version of the held icon at the top right if this slot is selected
-        if selected and held_icon:
-            mini_icon = pygame.transform.scale(held_icon, (25, 25))  # Scale down the icon
-            mini_icon_rect = mini_icon.get_rect(topright=self.rect.topright)
-            screen.blit(mini_icon, mini_icon_rect)
+        # Held by ImageCache for the run, so its id is stable and its fitted copy can be kept.
+        self.attack_icon = ImageCache.load_image(self.icon_path) if self.icon_path else None
 
 
 class AttackSelection:
@@ -98,34 +58,54 @@ class AttackSelection:
     def toggle_visibility(self):
         self.visible = not self.visible
 
-    def display(self, screen):
-        if self.visible:
-            # Draw background for attack selection area
-            bg_rect = pygame.Rect(20, 20, 750, 500)
-            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
-            bg_surface.fill((128, 128, 128, 100))
-            screen.blit(bg_surface, bg_rect.topleft)
-
-            # Iterate through all slots to draw them
-            for i, slot in enumerate(self.slots):
-                selected = False
-                if self.in_magic_slots and i < self.magic_slots:
-                     # If we are in magic slots and it's one of the first three slots
-                    selected = (i == self.selected_row)
-                elif not self.in_magic_slots and i >= self.magic_slots:
-                    # If we are in the grid, adjust the index for the grid starting point
-                    grid_index = i - self.magic_slots
-                    row = grid_index // self.grid_columns  # Determine the row in the grid
-                    col = grid_index % self.grid_columns   # Determine the column in the grid
-                    selected = (row == self.selected_row and col == self.selected_col)
-
-                # Draw the slot with the selected state
-                slot.draw(screen, selected=selected, held_icon=self.held_icon if selected else None)
-
-            # Display title for magic selection
-            font = pygame.font.Font(None, 36)
-            title = font.render("Select Your Magic Attack", True, (255, 0, 0))
-            screen.blit(title, (320, 50))
+    def display(self, backend):
+        """A framed panel: the magic slots in a row on the left, the 4 x 4 grid on the right,
+        each in the slot frame with its attack's icon."""
+        if not self.visible:
+            return
+        kit = L.kit_for(backend)
+        side, grid_side, gap = kit.px(96), kit.px(80), kit.px(10)
+        pad = kit.px(30)
+        kicker = kit.label("Attacks", "body", 13, L.GOLD, spacing=0.22, upper=True)
+        title = kit.label("Magic", "display", 32, L.GOLD)
+        hint = kit.label("Arrows move \u00b7 Enter picks up and sets down \u00b7 Esc closes", "body", 12, L.GOLD, spacing=0.06)
+        label_h = kit.font("body", 12).get_height() + kit.px(8)
+        row_w = self.magic_slots * side + (self.magic_slots - 1) * gap
+        grid_w = self.grid_columns * grid_side + (self.grid_columns - 1) * gap
+        grid_h = self.grid_rows * grid_side + (self.grid_rows - 1) * gap
+        width = 2 * pad + max(row_w + kit.px(40) + grid_w, hint.get_width())
+        height = 2 * pad + kicker.get_height() + title.get_height() + kit.px(12) + label_h + grid_h + kit.px(14) + hint.get_height()
+        panel = pygame.Rect(0, 0, width, height)
+        panel.center = (kit.width // 2, kit.height // 2)
+        L.draw(backend, kit.panel(panel.w, panel.h), panel.topleft)
+        x, y = panel.x + pad, panel.y + pad
+        L.draw(backend, kicker, (x, y))
+        L.draw(backend, title, (x, y + kicker.get_height()))
+        y += kicker.get_height() + title.get_height() + kit.px(12)
+        grid_x = x + row_w + kit.px(40)
+        L.draw(backend, kit.label("Equipped", "body", 12, L.GOLD, spacing=0.14, upper=True), (x, y))
+        L.draw(backend, kit.label("Stored", "body", 12, L.GOLD, spacing=0.14, upper=True), (grid_x, y))
+        y += label_h
+        for i, slot in enumerate(self.slots):
+            if i < self.magic_slots:
+                slot.rect = pygame.Rect(x + i * (side + gap), y, side, side)
+            else:
+                k = i - self.magic_slots
+                row, col = divmod(k, self.grid_columns)
+                slot.rect = pygame.Rect(grid_x + col * (grid_side + gap), y + row * (grid_side + gap), grid_side, grid_side)
+            r = slot.rect
+            selected = self.is_slot_selected(i)
+            if selected:
+                edge, glow = kit.highlight(r.w, r.h)
+                L.draw(backend, edge, (r.x - glow, r.y - glow))
+            L.draw(backend, kit.slot(r.w, r.h), r.topleft)
+            if slot.attack_icon is not None:
+                icon = kit.fitted(slot.attack_icon, round(r.w * 0.78), round(r.h * 0.78), id(slot.attack_icon))
+                L.draw(backend, icon, (r.centerx - icon.get_width() // 2, r.centery - icon.get_height() // 2))
+            if selected and self.held_icon is not None:
+                held = kit.fitted(self.held_icon, kit.px(30), kit.px(30), id(self.held_icon))
+                L.draw(backend, held, (r.right - held.get_width() // 2, r.y - held.get_height() // 2))
+        L.draw(backend, hint, (x, panel.bottom - pad - hint.get_height()))
 
     def is_slot_selected(self, index):
         if self.in_magic_slots and index < self.magic_slots:

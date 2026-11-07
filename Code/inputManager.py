@@ -8,8 +8,11 @@ class InputManager:
         self.current_key_states = {}
         self.previous_key_states = {}
         self.key_press_events = {}
+        # This frame's raw events, for widgets that need TEXTINPUT (menu_widgets.TextField).
+        self.events = []
 
     def update(self, events):
+        self.events = list(events)
         self.previous_key_states = self.current_key_states.copy()
         self.key_press_events = {}
 

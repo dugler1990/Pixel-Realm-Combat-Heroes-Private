@@ -69,6 +69,7 @@ from network import (
     MSG_HIT_PLAYER,
     MSG_ITEM_DROPPED,
     MSG_ITEM_REMOVED,
+    MSG_JOIN_REJECTED,
     MSG_PLAYER_JOINED,
     MSG_PLAYER_LEFT,
     MSG_STATE_UPDATE,
@@ -1925,6 +1926,15 @@ class Level4:
                 # everyone clears the visual; only the awarded player (`to`) banks it.
                 self._handle_item_removed(message.get("drop_id"), message.get("to"))
 
+            elif mtype == MSG_JOIN_REJECTED:
+                # The match server refused this player's ticket; Main2 leaves the level.
+                self.mp_end_reason = "Could not join the match: " + str(message.get("reason", ""))
+
+        # The match server has gone (match over, or the network dropped). Main2 sees
+        # mp_end_reason after run() and takes the player back to the menus.
+        if self.mp_client.disconnected and not _msgs and getattr(self, "mp_end_reason", None) is None:
+            self.mp_end_reason = "The match has ended."
+
     def _spawn_remote_player(self, player_id, character, x, y):
         remote = RemotePlayer(
             player_id=player_id,
@@ -2340,23 +2350,17 @@ class Level4:
             if self.upgrade_menu_open:
                 self.upgrade.display()
             elif self.inventory_open:
-                overlay = self.backend.compose()
-                self.player.inventory.display(overlay)
-                self.backend.blit(overlay, (0, 0))
+                self.player.inventory.display(self.backend)
                 self.player.inventory.input()
                 for sprite in self.layout_manager.visible_sprites:
                     if isinstance(sprite, ItemVisual):
                         sprite.update(dt)
             elif self.attack_selection_open:
-                overlay = self.backend.compose()
-                self.player.attack_selection.display(overlay)
-                self.backend.blit(overlay, (0, 0))
+                self.player.attack_selection.display(self.backend)
                 self.player.attack_selection.input()
                 self.player.update_derived_attributes()
             elif self.player_config_open:
-                overlay = self.backend.compose()
-                self.player.player_config.draw(overlay) # TODO: align naming convensions of these screens.
-                self.backend.blit(overlay, (0, 0))
+                self.player.player_config.draw(self.backend)
                 self.player.player_config.handle_events(self)
                 #self.player.stats = self.player.player_config.final_stats
                 
@@ -2550,13 +2554,15 @@ class Level4:
 
         self.save_enemy_states(self.current_layout)  # mkght be a big inefficiency
         if not self.is_server:
-            self.layout_manager.display_time(self.backend)
+            # The HUD stays under nothing: not drawn while an overlay pauses the level.
+            if not self.game_paused:
+                self.layout_manager.display_time(self.backend)
             self._draw_gold_pickup_popup()
             rts_active = (
                 getattr(self, "rts_session", None) is not None
                 and self.rts_session.is_active()
             )
-            if not self.inventory_open:
+            if not self.game_paused:
                 draw_belt_hud(self.backend, self.player, self.player.inventory)
                 if getattr(self.player, "_charge_runtime", None) is not None:
                     draw_charge_bar(

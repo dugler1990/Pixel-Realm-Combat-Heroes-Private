@@ -24,3 +24,7 @@ pytest>=8.0
 
 # Attack-test reel. Ships a small ffmpeg so the clips can be joined by copy.
 imageio-ffmpeg>=0.5
+
+# Online play (Code/online): Nakama's web API and its lobby websocket.
+requests>=2.32,<3.0
+websocket-client>=1.8,<2.0

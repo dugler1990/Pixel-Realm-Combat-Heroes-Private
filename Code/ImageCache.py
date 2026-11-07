@@ -89,3 +89,19 @@ class ImageCache:
             ImageCache._scaled_cache[key] = cached
             ImageCache._held_ids.add(id(cached))
         return cached
+
+    @staticmethod
+    def load_smooth(path, size):
+        """Like load_scaled, but filtered smoothly (smoothscale): for painted art shown at a
+        size other than it was painted at, which nearest-neighbour scaling leaves jagged."""
+        scale = ImageCache._scale_key(size)
+        if scale is None:
+            raise ValueError("size is required for load_smooth")
+        key = (ImageCache._normalize_path(path), scale, "smooth")
+        cached = ImageCache._scaled_cache.get(key)
+        if cached is None:
+            base = ImageCache.load_image(path)
+            cached = pygame.transform.smoothscale(base, tuple(scale))
+            ImageCache._scaled_cache[key] = cached
+            ImageCache._held_ids.add(id(cached))
+        return cached

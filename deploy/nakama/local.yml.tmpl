@@ -1,0 +1,23 @@
+# Rendered on the Linode by remote_deploy.sh (envsubst from /opt/prch/.env) into local.yml,
+# which never leaves the server. Every Nakama default key is replaced here.
+name: nakama1
+logger:
+  level: INFO
+session:
+  encryption_key: "${NAKAMA_SESSION_KEY}"
+  refresh_encryption_key: "${NAKAMA_REFRESH_KEY}"
+  token_expiry_sec: 7200
+  refresh_token_expiry_sec: 1209600
+  single_socket: true
+socket:
+  server_key: "${NAKAMA_SERVER_KEY}"
+runtime:
+  http_key: "${NAKAMA_HTTP_KEY}"
+  js_entrypoint: "build/index.js"
+  env:
+    - "LAUNCHER_URL=http://launcher:8090"
+    - "LAUNCHER_KEY=${LAUNCHER_KEY}"
+console:
+  username: "${NAKAMA_CONSOLE_USER}"
+  password: "${NAKAMA_CONSOLE_PASSWORD}"
+  signing_key: "${NAKAMA_CONSOLE_SIGNING_KEY}"

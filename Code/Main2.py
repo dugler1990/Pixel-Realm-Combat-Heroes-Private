@@ -12,7 +12,8 @@ _game_flow_log = get_debug_logger("game_flow")
 from Settings import *
 from Level4_tmxdev import Level4
 from StartMenu import StartMenu
-from PlayerSelection import PlayerSelection, unlocked_player_base_stats, unlocked_player_directory
+from PlayerSelection import (PlayerSelection, unlocked_player_base_stats, unlocked_player_directory,
+                             unlocked_player_display_names, unlocked_player_names)
 from inputManager import InputManager
 from LevelSelection import LevelSelection
 from PlayerConfiguration import PlayerConfiguration
@@ -21,10 +22,16 @@ from SettingsMenu import SettingsMenu
 from DeathMenu import DeathMenu
 from benchmark_runtime import BENCHMARK_RUNTIME
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
-from multiplayer_runtime import MULTIPLAYER_RUNTIME
+from multiplayer_runtime import MULTIPLAYER_RUNTIME, default_spawn_offset
 from network import MultiplayerClient
 from level_layouts import DEFAULT_LAYOUT, LEVEL_TO_LAYOUT, MP_LEVEL_NUMBER
 from render_backend import create_backend
+from online import nakama
+from online.lobby_ops import OP_CHAT, OP_NOTICE, OP_SET_CHARACTER, OP_SET_READY, OP_START, OP_STATE, OP_TICKET
+from online.nakama import NakamaError
+from online_menus import CreateScreen, FindScreen, LobbyScreen, SignInScreen
+import legion_ui
+from legion_ui import Gate, Grow
 import psutil
 
 
@@ -43,6 +50,9 @@ class Game:
         self.backend = create_backend(w, h)
         self.WIDTH = w
         self.HEIGHT = h
+        # The painted gate: leaving the start menu, and after death (legion_ui.Gate).
+        self.gate = Gate(self.backend)
+        self.grow = None  # the chosen level's card growing into it (legion_ui.Grow)
 
         self.clock = pygame.time.Clock()
         self.debug_info_surfaces = {} 
@@ -56,7 +66,20 @@ class Game:
         self.player_selection = PlayerSelection(self, self.input_manager)
         self.in_start_menu = True
         self.in_player_selection = False
-        self.multiplayer_pending = False  # set by the "Multiplayer (dev)" menu entry
+        self.multiplayer_pending = False  # set by the "Local co-op (dev)" menu entry
+        # Online play (Play online): the Nakama session, the lobby websocket, and the
+        # four screens. The network calls live here; the screens are pure UI.
+        self.online = None
+        self.lobby_socket = None
+        self.lobby_match_id = None
+        self.online_character = unlocked_player_directory[0] if unlocked_player_directory else None
+        self.signin_screen = SignInScreen()
+        self.find_screen = FindScreen()
+        self.create_screen = CreateScreen()
+        self.lobby_screen = LobbyScreen([
+            (path, name.replace("_", " "))
+            for path, name in zip(unlocked_player_directory, unlocked_player_names)
+        ])
         self.state = "start_menu"  # Managing game states using a state variable
         pygame.mixer.set_num_channels(max(16, pygame.mixer.get_num_channels()))
         pygame.mixer.set_reserved(1)
@@ -131,16 +154,20 @@ class Game:
 
     def _bootstrap_multiplayer_run(self):
         # Env-var launch path (PRCH_MULTIPLAYER_ENABLED=1): character/player_id
-        # come from MULTIPLAYER_RUNTIME. The "Multiplayer (dev)" menu entry uses
+        # come from MULTIPLAYER_RUNTIME. The "Local co-op (dev)" menu entry uses
         # the same _start_multiplayer_session with a menu-picked character.
         if not unlocked_player_directory:
             raise RuntimeError("Multiplayer requires at least one selectable player.")
         self._start_multiplayer_session(MULTIPLAYER_RUNTIME.character, MULTIPLAYER_RUNTIME.player_id)
 
-    def _start_multiplayer_session(self, character_dir, player_id):
+    def _start_multiplayer_session(self, character_dir, player_id, host=None, port=None,
+                                   level_number=MP_LEVEL_NUMBER, ticket=None):
         """Build a zero-point config for `character_dir`, load the co-op level, and
-        connect+join the server as `player_id`. Shared by the env-var bootstrap
-        and the menu entry so the connect logic lives in exactly one place."""
+        connect+join the server as `player_id`. Shared by the env-var bootstrap, the
+        Local co-op (dev) entry and online play, so the connect logic lives in one place.
+
+        Online play passes the match server's host/port, its map, and the signed ticket
+        from the lobby; the dev paths use MULTIPLAYER_RUNTIME's host/port and no ticket."""
         if character_dir in unlocked_player_directory:
             character_index = unlocked_player_directory.index(character_dir)
         else:
@@ -159,7 +186,7 @@ class Game:
         self.in_player_selection = False
         self.in_level_selection = False
         self.multiplayer_pending = False
-        self.start_level(MP_LEVEL_NUMBER)
+        self.start_level(level_number)
 
         # Apply the per-player spawn offset to the ACTUAL local player, not just
         # the position we report. Every client bootstraps to the same fixed
@@ -168,9 +195,13 @@ class Game:
         # where a player really is and where remotes saw them. Offset is <1 tile
         # (TILESIZE=150), so it stays on the open spawn area.
         player = self.level.player
-        if MULTIPLAYER_RUNTIME.spawn_x or MULTIPLAYER_RUNTIME.spawn_y:
-            player.rect.centerx += int(MULTIPLAYER_RUNTIME.spawn_x)
-            player.rect.centery += int(MULTIPLAYER_RUNTIME.spawn_y)
+        if ticket is not None:
+            spawn_x, spawn_y = default_spawn_offset(player_id)
+        else:
+            spawn_x, spawn_y = MULTIPLAYER_RUNTIME.spawn_x, MULTIPLAYER_RUNTIME.spawn_y
+        if spawn_x or spawn_y:
+            player.rect.centerx += int(spawn_x)
+            player.rect.centery += int(spawn_y)
             player.hitbox.center = player.rect.center
 
         # The hitbox centre, the same point every later report uses.
@@ -182,18 +213,18 @@ class Game:
         # own player and renders the server's enemies as puppets.
         hitbox_w, hitbox_h = player.hitbox.size
         wall_foot = player.wall_foot()
-        self.level.mp_client = MultiplayerClient(
-            MULTIPLAYER_RUNTIME.host, MULTIPLAYER_RUNTIME.port, player_id
-        )
+        host = host or MULTIPLAYER_RUNTIME.host
+        port = port or MULTIPLAYER_RUNTIME.port
+        self.level.mp_client = MultiplayerClient(host, port, player_id)
         self.level.mp_client.send_join(
             character_dir, join_x, join_y,
-            hitbox_w=hitbox_w, hitbox_h=hitbox_h, wall_foot=wall_foot,
+            hitbox_w=hitbox_w, hitbox_h=hitbox_h, wall_foot=wall_foot, ticket=ticket,
         )
         # The server owns enemies now -> drop any this client spawned during level
         # load before mp_client was set (the spawner is suppressed from here on).
         self.level._clear_local_enemies()
         print(
-            f"[multiplayer] connected to {MULTIPLAYER_RUNTIME.host}:{MULTIPLAYER_RUNTIME.port} "
+            f"[multiplayer] connected to {host}:{port} "
             f"as {player_id} ({character_dir}) at ({join_x}, {join_y}); "
             f"hitbox=({hitbox_w}x{hitbox_h}), wall_foot={wall_foot}"
         )
@@ -206,6 +237,193 @@ class Game:
         if client is not None:
             client.close()
             level.mp_client = None
+
+    # -- online play: sign in -> Find / Create -> Lobby -> ticket -> match -> Find --
+
+    def open_online(self):
+        """Start menu "Play online": the Find screen if signed in, else sign in."""
+        if self.online is None:
+            self.online = nakama.from_config()
+        if self.online is None:
+            self.start_menu.notice = "Online play is not set up yet (Code/online/config.json)."
+            return
+        self.start_menu.notice = ""
+        if self.online.signed_in:
+            self._enter_find()
+        else:
+            self.set_state("online_signin")
+
+    def _draw_screen(self, screen):
+        """An online screen on the war-room painting."""
+        kit = legion_ui.kit_for(self.backend)
+        if getattr(self, "_online_scene", None) is None:
+            self._online_scene = legion_ui.Scene(kit, "warroom.jpg")
+        self._online_scene.draw(self.backend)
+        legion_ui.draw(self.backend, kit.shade("dim"), (0, 0))
+        screen.draw(self.backend)
+
+    def _back_to_start_menu(self):
+        self.in_start_menu = True
+        self.start_menu.selected_option = 0
+        self.set_state("start_menu")
+
+    def _enter_find(self, notice=""):
+        self.find_screen.reset(notice)
+        self._refresh_lobbies()
+        self.set_state("online_find")
+
+    def _refresh_lobbies(self):
+        try:
+            reply = self.online.rpc("lobby_list", {"search": self.find_screen.search_text()})
+            self.find_screen.set_lobbies(reply.get("lobbies", []))
+        except NakamaError as exc:
+            self.find_screen.set_notice(str(exc))
+
+    def _join_lobby(self, match_id, password, report):
+        """Open the lobby socket if needed and join `match_id`; `report(text)` shows a failure."""
+        try:
+            if self.lobby_socket is None:
+                self.lobby_socket = self.online.open_socket()
+            self.lobby_socket.join_match(match_id, {"character": self.online_character,
+                                                    "password": password})
+        except NakamaError as exc:
+            report(str(exc))
+            return
+        self.lobby_match_id = match_id
+        self.lobby_screen.reset(self.online.user_id, self.online_character)
+        self.set_state("online_lobby")
+
+    def _leave_lobby(self):
+        if self.lobby_socket is not None and self.lobby_match_id is not None:
+            try:
+                self.lobby_socket.leave_match(self.lobby_match_id)
+            except NakamaError:
+                pass  # the lobby drops a gone socket by itself
+        self.lobby_match_id = None
+
+    def _drop_lobby_socket(self):
+        if self.lobby_socket is not None:
+            self.lobby_socket.close()
+        self.lobby_socket = None
+        self.lobby_match_id = None
+
+    def _state_online_signin(self, dt):
+        action = self.signin_screen.handle(self.input_manager.events)
+        if action is not None:
+            if action[0] == "back":
+                self._back_to_start_menu()
+                return
+            try:
+                if action[0] == "signin":
+                    self.online.login(action[1], action[2])
+                else:
+                    self.online.register(action[1], action[2], action[3])
+            except NakamaError as exc:
+                self.signin_screen.set_error(str(exc))
+            else:
+                self._enter_find()
+                return
+        self._draw_screen(self.signin_screen)
+
+    def _state_online_find(self, dt):
+        action = self.find_screen.handle(self.input_manager.events)
+        if action is not None:
+            kind = action[0]
+            if kind == "back":
+                self._drop_lobby_socket()
+                self._back_to_start_menu()
+                return
+            if kind == "refresh":
+                self._refresh_lobbies()
+            elif kind == "join":
+                self._join_lobby(action[1], action[2], self.find_screen.set_notice)
+                if self.state != "online_find":
+                    return
+            elif kind == "create":
+                try:
+                    maps = self.online.rpc("lobby_maps", {}).get("maps", [])
+                except NakamaError as exc:
+                    self.find_screen.set_notice(str(exc))
+                else:
+                    self.create_screen.reset(self.online.username, maps)
+                    self.set_state("online_create")
+                    return
+        self._draw_screen(self.find_screen)
+
+    def _state_online_create(self, dt):
+        action = self.create_screen.handle(self.input_manager.events)
+        if action is not None:
+            if action[0] == "back":
+                self._enter_find()
+                return
+            params = action[1]
+            try:
+                match_id = self.online.rpc("lobby_create", params)["match_id"]
+            except NakamaError as exc:
+                self.create_screen.set_error(str(exc))
+            else:
+                self._join_lobby(match_id, params["password"], self.create_screen.set_error)
+                if self.state != "online_create":
+                    return
+        self._draw_screen(self.create_screen)
+
+    def _state_online_lobby(self, dt):
+        for event in self.lobby_socket.poll():
+            if event[0] != "match_data":
+                # closed / error: the websocket is gone.
+                self._drop_lobby_socket()
+                self._enter_find("Lost connection to the lobby.")
+                return
+            _, op, body = event
+            if op == OP_STATE:
+                self.lobby_screen.set_state(body)
+            elif op == OP_NOTICE:
+                self.lobby_screen.set_notice(body.get("text", ""))
+            elif op == OP_TICKET:
+                self._start_online_match(body)
+                return
+        action = self.lobby_screen.handle(self.input_manager.events)
+        if action is not None:
+            kind = action[0]
+            if kind == "leave":
+                self._leave_lobby()
+                self._enter_find()
+                return
+            if kind == "character":
+                self.online_character = action[1]
+                self.lobby_socket.send(self.lobby_match_id, OP_SET_CHARACTER, {"character": action[1]})
+            elif kind == "ready":
+                self.lobby_socket.send(self.lobby_match_id, OP_SET_READY, {"ready": action[1]})
+            elif kind == "chat":
+                self.lobby_socket.send(self.lobby_match_id, OP_CHAT, {"text": action[1]})
+            elif kind == "start":
+                self.lobby_socket.send(self.lobby_match_id, OP_START, {})
+        self._draw_screen(self.lobby_screen)
+
+    def _start_online_match(self, ticket):
+        """The lobby handed us a ticket: leave the lobby, load the map, join the match."""
+        seat = self.lobby_screen.my_seat()
+        character = (seat or {}).get("character") or self.online_character
+        self._leave_lobby()
+        self._drop_lobby_socket()
+        try:
+            self._start_multiplayer_session(character, self.online.user_id,
+                                            host=ticket["host"], port=int(ticket["port"]),
+                                            level_number=int(ticket["map"]), ticket=ticket["ticket"])
+        except OSError:
+            self._close_multiplayer()
+            self.level = None
+            self._enter_find("Could not reach the match server.")
+
+    def _end_match(self, reason):
+        """The match server is gone or refused us: back to Find (online) or the start menu."""
+        self._close_multiplayer()
+        self.level = None
+        if self.online is not None and self.online.signed_in:
+            self._enter_find(reason)
+        else:
+            self.start_menu.notice = reason
+            self._back_to_start_menu()
 
     def _handle_global_shortcuts(self, events):
         for event in events:
@@ -282,19 +500,58 @@ class Game:
         if callable(handler):
             handler(dt)
 
+    def _draw_screen_only(self, dt):
+        """The current screen's picture with no input: under the settings overlay."""
+        state = self.state
+        if state == "level" and self.level and hasattr(self.level, "display_surface"):
+            self.level.display_surface.fill((0, 0, 0))
+            rts_session = getattr(self.level, "rts_session", None)
+            camera_focus = (
+                rts_session.camera_focus()
+                if rts_session is not None and rts_session.is_active()
+                else self.level.player
+            )
+            self.level.layout_manager.visible_sprites.custom_draw(
+                self.level.player, dt, 0, 0.5, camera_focus=camera_focus
+            )
+        elif state == "death_menu":
+            self.death_menu.draw()
+        elif state == "start_menu":
+            self.start_menu.draw()
+        elif state == "player_selection":
+            self.player_selection.draw()
+        elif state == "player_configuration":
+            self._draw_player_configuration()
+        elif state in ("level_selection", "level_grow"):
+            self.level_selection.draw()
+        else:
+            screen = {
+                "online_signin": self.signin_screen,
+                "online_find": self.find_screen,
+                "online_create": self.create_screen,
+                "online_lobby": self.lobby_screen,
+            }.get(state)
+            if screen is not None:
+                self._draw_screen(screen)
+
     def _state_start_menu(self, dt):
         self.start_menu.handle_events()
+        if self.state != "start_menu":
+            # "Play online" switched to an online screen: the gate closes over the title.
+            self.gate.start(self.start_menu.draw)
+            return
         self.start_menu.draw()
         if not self.in_start_menu:
             self.set_state("player_selection")
             self.in_player_selection = True
+            self.gate.start(self.start_menu.draw)
 
     def _state_player_selection(self, dt):
         self.player_selection.handle_events()
         self.player_selection.draw()
         if not self.in_player_selection:
             if self.multiplayer_pending:
-                # "Multiplayer (dev)" path: skip stat-config / level-selection
+                # "Local co-op (dev)" path: skip stat-config / level-selection
                 # screens, go straight to level 6 + connect with the just-picked
                 # character. player_id must be unique per process (two clients
                 # sharing an id = the server treats them as one player).
@@ -312,13 +569,17 @@ class Game:
                 base_stats=selected_player_base_stats,
                 remaining_points=10,
                 game=self,
+                title=unlocked_player_display_names[self.player_selection.selected_option],
             )
+            # The attributes stand on the shrine beside the hero just picked.
+            self.player_configuration.stage = self.player_selection.draw_stage
+
+    def _draw_player_configuration(self):
+        self.player_configuration.draw(self.backend)
 
     def _state_player_configuration(self, dt):
         self.player_configuration.handle_events()
-        overlay = self.backend.compose()
-        self.player_configuration.draw(overlay)
-        self.backend.blit(overlay, (0, 0))
+        self._draw_player_configuration()
         _game_flow_log.debug(
             "in main finished indicattor: %s", self.player_configuration.finished
         )
@@ -330,31 +591,64 @@ class Game:
         self.level_selection.handle_events()
         self.level_selection.draw()
         if not self.in_level_selection:
-            self.start_level(self.level_selection.selected_level)
+            if self.level_selection.chosen is None:
+                self.start_level(self.level_selection.selected_level)
+                return
+            picture, card = self.level_selection.chosen
+            self.grow = Grow(self.level_selection._kit, picture, card)
+            self.set_state("level_grow")
+
+    def _state_level_grow(self, dt):
+        """The chosen card grows until it covers the window, then the level is built behind
+        it, so the build's stall shows the level's picture."""
+        self.level_selection.draw()
+        self.grow.draw(self.backend)
+        if self.grow.done:
+            if getattr(self.grow, "shown", False):
+                self.grow = None
+                self.start_level(self.level_selection.selected_level)
+            else:
+                self.grow.shown = True  # one frame at full size reaches the screen first
 
     def _state_level(self, dt):
         self.level.run(dt)
+        end_reason = getattr(self.level, "mp_end_reason", None)
+        if end_reason:
+            self._end_match(end_reason)
+            return
         if getattr(self.level, "player_dead", False):
             self.set_state("death_menu")
 
     def _state_death_menu(self, dt):
         self.death_menu.draw()
         action = self.death_menu.handle_events()
+        in_match = getattr(self.level, "mp_client", None) is not None
+        if action == "restart" and in_match:
+            # Restarting would load a fresh single-player level and leave the match
+            # socket open; a match is left the same way as "main menu".
+            action = "main_menu"
+        # Restart and main menu go through the gate; a level is built while it is shut.
         if action == "restart":
             if self.current_level_number is not None:
-                self.start_level(self.current_level_number)
+                level_number = self.current_level_number
+                self.gate.start(self.death_menu.draw, lambda: self.start_level(level_number))
+        elif action == "main_menu" and in_match:
+            self.gate.start(self.death_menu.draw, lambda: self._end_match(""))
         elif action == "main_menu":
-            self.level = None
-            self.in_start_menu = True
-            self.in_player_selection = False
-            self.in_level_selection = False
-            self.start_menu.selected_option = 0
-            self.level_selection.selected_level = None
-            self.set_state("start_menu")
+            self.gate.start(self.death_menu.draw, self._death_to_start_menu)
         elif action == "exit":
             self._close_multiplayer()
             pygame.quit()
             sys.exit()
+
+    def _death_to_start_menu(self):
+        self.level = None
+        self.in_start_menu = True
+        self.in_player_selection = False
+        self.in_level_selection = False
+        self.start_menu.selected_option = 0
+        self.level_selection.selected_level = None
+        self.set_state("start_menu")
 
     #@profile
     def run(self):
@@ -374,6 +668,9 @@ class Game:
         while True:
            # print(f" state in main : {self.state}")
             events = pygame.event.get()
+            if self.gate.busy:
+                # No input while the gate runs; key releases still pass, so held keys let go.
+                events = [e for e in events if e.type in (pygame.KEYUP, pygame.QUIT)]
             self._handle_global_shortcuts(events)
             self.input_manager.update(events)
 
@@ -390,22 +687,14 @@ class Game:
                 self.settings_menu.handle_events(events)
 
             self.apply_settings()
+            self.gate.update()
 
             if self.settings_menu.visible:
                 # Pause normal state handlers while settings menu is active.
-                if self.state == "level" and self.level and hasattr(self.level, "display_surface"):
-                    self.level.display_surface.fill((0, 0, 0))
-                    rts_session = getattr(self.level, "rts_session", None)
-                    camera_focus = (
-                        rts_session.camera_focus()
-                        if rts_session is not None and rts_session.is_active()
-                        else self.level.player
-                    )
-                    self.level.layout_manager.visible_sprites.custom_draw(
-                        self.level.player, dt, 0, 0.5, camera_focus=camera_focus
-                    )
-                elif self.state == "death_menu":
-                    self.death_menu.draw()
+                self._draw_screen_only(dt)
+            elif self.gate.closing:
+                # The old screen, with no input, until the leaves meet.
+                self.gate.behind()
             else:
                 self._dispatch_state(dt)
 
@@ -413,10 +702,8 @@ class Game:
                 self.update_debug_info()
                 self.display_debug_info()
 
-            if self.settings_menu.visible:
-                overlay = self.backend.compose()
-                self.settings_menu.draw(overlay)
-                self.backend.blit(overlay, (0, 0))
+            self.settings_menu.draw(self.backend)
+            self.gate.draw()
 
             self._maybe_save_shot()
             self.backend.present()

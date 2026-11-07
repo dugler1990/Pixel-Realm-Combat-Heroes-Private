@@ -150,3 +150,152 @@ halves (2.1 MB each).
 
 Not UI and left alone: the Frostreach Gate level picture is a debug tile map and Level 6 is a
 plain snow texture; those come from `Graphics/Level/`.
+
+# In the game
+
+Plan: `.cursor/plans/legion_ui_ingame.plan.md`. Worktree `..\Pixel-Realm-legion-ingame`, branch
+`feat/legion-ingame` from `main` (8dea3cf) with `feat/online-foundation` merged in: no conflicts.
+Venv junctioned, 70 level-art files and the 20 raw kit paintings (`generated/ui_kit`) hard-linked.
+
+## 2026-11-07 — Phase 0: the kit in the game
+
+- **Art in one place.** `ui_preview/assets/kit/` moved to `Graphics/UI/kit/`, the four backdrops to
+  `Graphics/UI/backdrops/`, `slot-sharp.jpg` to `Graphics/UI/kit/slot.jpg` (git mv). The preview's
+  36 references point at `../Graphics/UI/`; `metal-plate.jpg`, `frame.jpg`, `leather.jpg`,
+  `slot.jpg` and `hall.jpg` stay with the other looks.
+- **`make_kit.py`** writes to `Graphics/UI/kit/` and also writes `kit.json` (the same numbers as
+  `kit.css`, plus the slot frame's slice, 112). A re-cut after the move left every existing piece
+  byte-identical.
+- **Energy fill**: new piece `fill_energy`, 1536 x 512, painted in 36.8 s, cut with the same band
+  finder as the gold and blood fills (now one function, `band_strip`): 1344 x 202.
+- **Fonts**: Google's variable Cinzel and Outfit (OFL) instanced with fontTools 4.64 into static
+  `Cinzel-SemiBold.ttf` (wght 600), `Outfit-Regular.ttf` (400), `Outfit-Medium.ttf` (500), with the
+  two licence files. Pygame can't choose a weight in a variable font.
+- **`ImageCache.load_smooth`**: smoothscale, its own cache key; `load_scaled` callers untouched.
+- **`Code/legion_ui.py`**: `kit_for(backend)`; sizes from `u = window height / 860` (0.753 at
+  1152 x 648: bars 35 px, the start column 331 px); panels (frame 9-sliced over the stone), slot
+  boxes, three-part bars with the travelling light kept at six strengths, meters that cut each fill
+  width once, `TextSlot`, fixed labels with letter spacing and the preview's hard shadow, the scene
+  with two scrolling rain tiles and torch-lit drops as 10 kept frames per torch, and the gate.
+  Rendered headless first: every builder matched the preview's pieces.
+
+## 2026-11-07 — Phase 1: start, settings, death, and the gate
+
+- **StartMenu**: the gate painting with rain and warm torches, the left shade and vignette, the
+  logo, four steel bars, the hint, the notice line. Settings opens the overlay (it used to only log).
+- **SettingsMenu**: framed panel of seven bars with their values, drawn through the backend over a
+  dim; Main2 now draws every screen beneath it (`_draw_screen_only`), not only a level or death.
+- **DeathMenu**: the gate painting under the red shade, a framed panel, three bars.
+- **The gate** (`legion_ui.Gate`, Main2): leaving the start menu, and after death. The state
+  switches at once; while the leaves close Main2 draws only the old screen; restart, main menu and
+  leaving a match run while the leaves are shut; input is dropped (key releases pass) until they
+  are open.
+- Checked in the real game loop (scripted keys, `drive_game.py` in the session scratchpad), CPU
+  backend headless and GPU in a window. GPU, from the backend's own counters: start menu 78 blits
+  a frame, 88 % from the atlas, **0 uploaded per frame**; settings over it 103 blits, 0 uploaded;
+  the gate 66 blits, 0 uploaded; 30 fps at the cap.
+
+Mistake found: the first GPU screenshots had no settings panel. The backend batches atlas draws
+until `present()`, and the capture read the frame before that, so the frame's last draws were
+missing from the image. The capture now flushes the batch first; on screen nothing was wrong.
+
+## 2026-11-07 — Phase 2: choosing a hero and a level
+
+- **PlayerSelection**: the shrine; the hero on the dais (`legion_ui.Dais`: feet at 79 % of the
+  painting's height, 52 % tall, a floor shadow; the step-in is 8 kept frames of scale, light and
+  opacity over 1.1 s, 0.3 s after the pick); the roster as 64-px bars with head crops; the stats
+  with icons. Up/Down picks; the 4 x 3 grid and its crash on an empty cell are gone. Heroes gain
+  `display_name`, `painting` and `roster_stats` in `Graphics/PlayerSelectionDict.json`.
+- **PlayerConfiguration**: one class, drawn through the backend. Before the game Main2 gives it the
+  hero's name and `stage` (the shrine with the hero); at level-up it is a framed panel on black.
+  The stickman and the plus boxes are gone; keys unchanged (Enter spends, Backspace returns, Enter
+  on Ready finishes).
+- **LevelSelection**: the gate painting without rain; framed cards cropped to cover, with names
+  from the new `LEVEL_NAMES` in `level_layouts.py`; the chosen card's name as the heading; moves
+  only between cards. Enter starts `level_grow`: the picture grows from inside its card to cover
+  the window in 0.75 s, one full-size frame reaches the screen, then the level is built behind it.
+- GPU counters: player screen 68 blits, attributes 54, levels 42, grow 42, **0 uploaded per frame**
+  on each.
+
+Fixes found while checking: roster names ran past their bars (pygame's 12 px floor makes small
+text wider than the preview's), so the roster panel is 380 preview px and names are tracked
+tighter; hints overflowed narrow panels, so they wrap, and `Kit.lines` now measures letter spacing.
+
+Found, not this work: level 8 (`levels/Map8`) has no `map.tmx`, so choosing it crashes on `main`
+too.
+
+## 2026-11-07 — Phase 3: the online screens
+
+- **`menu_widgets.py`** draws through `legion_ui` and the backend; input untouched. Buttons and
+  choices are steel bars (gold with focus, the choice's value on the right), text fields are framed
+  plaques (`Kit.plaque`) with the gold highlight when focused, list rows are bars, `panel()` is the
+  framed stone panel over the window. Fixed words are kept labels; typed text, list cells, notices
+  and chat lines each have one `TextSlot` per place (`text_slot`). Heights are preview px.
+- **Lobby**: seats as 60-px bars (yours gold, character under the name, "Ready" right; 52 px was
+  too short for two lines at the 12-px floor), the chat board as a framed panel.
+- **Main2._draw_screen**: the war-room painting and the dim instead of a flat colour.
+- Checked by rendering the four screens with sample lobbies, seats and chat (no server in this
+  folder: "Play online" shows its notice, and no gate runs because the state doesn't change).
+
+## 2026-11-07 — Phase 4: the overlays in a level
+
+- **Upgrade (P)**: a framed 3:2 panel; the hero standing in a pool of warm light (painting found by
+  the level's `selected_player_info_dir`; `PlayerSelection` imported inside the call, because the
+  headless server loads levels without the menus); one 74-px steel bar per stat with its icon,
+  name, cost beside the gem, value and a gold `Meter`; experience top right beside the gem. **Input
+  change**: Up/Down move (the rows are stacked), Space buys, P closes; the buy rule moved from
+  `UpgradeColumn` into `Upgrade.trigger`, unchanged.
+- **Inventory (I)**: the slab at its own 5:4, the doll with the nine body slots placed on it by
+  `DOLL_SLOTS` (shares of `doll.png`), the sigil faint in an empty helmet slot, the pack 3 wide x 4
+  tall as before, the belt of four under the doll, gold top right. Slot rects are set at each
+  display, so the held item follows the focused slot. Item pictures load through ImageCache and
+  are fitted and kept by path: the old code loaded the held item from disk every frame
+  (`_draw_hand_ghost`), and a per-slot image cache with `_clear_slot_visual` in seven places is
+  gone with it.
+- **Attack selection (Alt+Q)**: a framed panel, the three magic slots in a row ("Equipped") and the
+  4 x 4 grid ("Stored") in the slot frame; icons load through ImageCache (stable ids), fitted once
+  and kept, instead of rescaled every draw.
+- Checked in a real level (Frostreach Gate) with scripted keys: I, P (and Down), Alt+Q.
+
+Seen, for Phase 5: the HUD (belt, timer) draws over the overlays and covers the upgrade's hint, as
+it did over the old screens. Seen, data: health shows "510 / 300" because the player's health is
+above the upgrade cap; the meter sits full.
+
+## 2026-11-07 — Phase 5: the HUD
+
+- **`UI.py`**: health as a `Meter` with the blood fill (300 x 26 preview px), energy with the new
+  energy fill (220 x 22), "Level N" top right and experience bottom right beside the gem, both
+  `TextSlot`s; the weapon and magic boxes in the slot frame **placed from the window's bottom edge**
+  (they were at a fixed y of 630, below a 648-px window), gold edge while switching is on
+  cooldown, their pictures through ImageCache and fitted once.
+- **`draw_belt_hud`**: slot frames, numbers and counts as kept labels, the kit's dimmer for locked
+  slots, pictures fitted and kept; the module's four belt text globals are gone.
+- **Level4**: the timer and the belt (with the charge bar, RTS overlay and interact prompt under
+  the same guard) are not drawn while an overlay pauses the level; they covered the upgrade's
+  hint before.
+- **`legion_ui`** finds the art relative to its own file, not the working folder.
+- **Tests**: `tests/test_text_render_cache.py` checked the old HUD's internals; it now checks the
+  same thing on the new code (text renders only when its value changes, belt numbers and counts
+  made once, one lock shade). 8 passed with `tests/test_image_cache_scaled.py`.
+- **Measured** (ice-200, grid 450, `Code/NOTES_performance.md`): before 369.0 and 391.7 ms;
+  after 473.4, 453.1 and 349.1 ms; draw calls per frame 684-701 before, 590-732 after. The spread
+  between runs of the same code is larger than anything the HUD could add. Counted directly: the
+  HUD and belt are 22 blits a frame, 20 batched, 2 own calls (the changing text), 0 uploaded.
+
+Mistake: one benchmark run was cut short by `Select-Object -First 3`, which closed the pipe and
+ended the game; no row was written for it. The re-run kept all output and filtered after.
+
+## 2026-11-07 — Test run and a fix
+
+- Engine tests (`tests`, without `tests/painted_map_pipeline`), full run on the branch and on its
+  base `a7e9144`, the same way: the base has 23 failed and 7 errors of its own (terrain-height data,
+  mesh contact, render-backend, co-op and others that the online and earlier branches carry).
+- **Mistake**: Phase 5's cut of the old belt text helpers also removed `_item_is_stackable`, which
+  sat between them and `_can_place_on_belt`; `tests/test_inventory_room.py` caught it (4 failures,
+  NameError), and picking up a stackable item would have crashed. Restored; every other function
+  removed from the rewritten files was checked to have no callers left.
+- Also a mistake in checking: running only the 34 failing tests crashes (a segfault in
+  `test_sam3_obstacle_runtime`), so a subset run on the base looked clean when it had stopped.
+  Only full runs of both commits were compared.
+- After the fix: **23 failed, 467 passed, 7 errors on both; nothing fails on the branch that
+  doesn't fail on its base.**

@@ -1,0 +1,10 @@
+{
+  "bar-cap": 0.5134,
+  "bar-on-cap": 0.5171,
+  "gauge-cap": 0.8376,
+  "gauge-in-top": 0.2437,
+  "gauge-in-bottom": 0.2386,
+  "frame-slice": 137,
+  "frame-edge": 0.2591,
+  "slot-slice": 112
+}

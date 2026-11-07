@@ -4,8 +4,10 @@
     python ui_preview/make_kit.py logo bar_on   repaint just these, then cut
     python ui_preview/make_kit.py --cut         re-cut the saved paintings, no API calls
 
-Paintings go to generated/ui_kit/<piece>.png (kept out of git); the cut pieces the preview
-loads go to ui_preview/assets/kit/. Every call is appended to generated/ui_kit/calls.jsonl.
+Paintings go to generated/ui_kit/<piece>.png (kept out of git); the cut pieces go to
+Graphics/UI/kit/, where both the game and the preview load them, with the measured numbers in
+kit.json (the game) and kit.css (the preview). Every call is appended to
+generated/ui_kit/calls.jsonl.
 gpt-image-2 cannot paint a transparent background, so cut-out pieces are painted on flat
 green and keyed here with a soft edge.
 """
@@ -28,7 +30,9 @@ sys.path.insert(0, str(ROOT))
 from tools.painted_map_pipeline.openai_api import edit_image, generate_image  # noqa: E402
 
 RAW = ROOT / "generated" / "ui_kit"
-KIT = ROOT / "ui_preview" / "assets" / "kit"
+KIT = ROOT / "Graphics" / "UI" / "kit"
+# The slot frame (slot.jpg) is 9-sliced 112 px in from each edge of its 1024 px square.
+SLOT_SLICE = 112
 CONFIG = {"model": "gpt-image-2", "quality": "high"}
 ART = ROOT / "Graphics"
 
@@ -203,6 +207,16 @@ PIECES: dict[str, dict] = {
             "band is even along its length so it can be repeated, with no ends, frames or text."
         ),
     },
+    "fill_energy": {
+        "size": (1536, 512),
+        "prompt": STYLE + (
+            "One horizontal band for filling a game meter, spanning the full width of the image edge "
+            "to edge, with a thin black margin above and below it. The band is cold blue-white arcane "
+            "energy, like lightning held in glass, with slow swirls and a bright highlight along its top "
+            "edge, in the same painted finish as a molten-gold meter fill. Even along its length so it "
+            "can be repeated, with no ends, frames or text."
+        ),
+    },
     "icons": {
         "size": (1920, 768),
         "prompt": STYLE + (
@@ -336,6 +350,19 @@ def seamless_x(strip: np.ndarray, fade: int) -> np.ndarray:
     return tile
 
 
+def band_strip(rows: np.ndarray) -> Image.Image:
+    """The meter band in a painting of one, cut to its rows and made to repeat left to right."""
+    # Rows of the band, by their strongest channel: a deep red band is dark in luminance, and
+    # its bright top highlight would otherwise be all that passes. The longest unbroken run, so
+    # a bright line in a rim around it is left out.
+    glow = rows.max(axis=2).mean(axis=1)
+    labels, count = ndimage.label(glow > 0.45 * np.percentile(glow, 90))
+    sizes = ndimage.sum(labels > 0, labels, index=np.arange(1, count + 1))
+    band = np.nonzero(labels == 1 + int(np.argmax(sizes)))[0]
+    strip = rows[band.min() + 6:band.max() - 5]
+    return Image.fromarray(seamless_x(strip, strip.shape[1] // 8).round().astype(np.uint8), "RGB")
+
+
 def frame_slices(frame: Image.Image) -> tuple[int, float]:
     """A square frame's 9-slice: corner size in source pixels, and the plain edge's depth over it."""
     alpha = np.asarray(frame)[..., 3] > 128
@@ -413,16 +440,10 @@ def cut() -> None:
         sheet = np.asarray(Image.open(RAW / "fills.png").convert("RGB")).astype(np.float32)
         h = sheet.shape[0]
         for index, name in enumerate(("fill_gold", "fill_blood")):
-            half = sheet[index * h // 2:(index + 1) * h // 2]
-            # Rows of the band, by their strongest channel: a deep red band is dark in luminance,
-            # and its bright top highlight would otherwise be all that passes.
-            # The longest unbroken run, so a bright line in the stone rim around it is left out.
-            glow = half.max(axis=2).mean(axis=1)
-            labels, count = ndimage.label(glow > 0.45 * np.percentile(glow, 90))
-            sizes = ndimage.sum(labels > 0, labels, index=np.arange(1, count + 1))
-            band = np.nonzero(labels == 1 + int(np.argmax(sizes)))[0]
-            strip = half[band.min() + 6:band.max() - 5]
-            keep(Image.fromarray(seamless_x(strip, strip.shape[1] // 8).round().astype(np.uint8), "RGB"), name)
+            keep(band_strip(sheet[index * h // 2:(index + 1) * h // 2]), name)
+    if "fill_energy" in have:
+        keep(band_strip(np.asarray(Image.open(RAW / "fill_energy.png").convert("RGB")).astype(np.float32)),
+             "fill_energy")
     if "items" in have:
         sheet = key_out_green(Image.open(RAW / "items.png"))
         half_w, half_h = sheet.width // 2, sheet.height // 2
@@ -440,6 +461,10 @@ def cut() -> None:
             "/* Written by make_kit.py from the paintings: end caps as a share of height, the meter's\n"
             "   opening as shares of its height, the frame's 9-slice in source pixels. */\n"
             ":root {\n" + "".join(f"  --{k}: {v};\n" for k, v in css.items()) + "}\n", encoding="utf-8")
+        # The same numbers for the game, plus the slot frame's fixed slice.
+        numbers = {k: float(v) if "." in v else int(v) for k, v in css.items()}
+        numbers["slot-slice"] = SLOT_SLICE
+        (KIT / "kit.json").write_text(json.dumps(numbers, indent=2) + "\n", encoding="utf-8")
     print("cut:", ", ".join(sorted(have)) or "nothing painted yet")
     print("measured:", css)
 
