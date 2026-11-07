@@ -35,6 +35,9 @@ levels/Frostreach/expanse/export/**
 # it is what the generations were paid for and it cannot be rebuilt for free.
 generated/world_levels/**
 
+# ── UI kit paintings: ui_preview/make_kit.py cuts them into ui_preview/assets/kit/ ──
+generated/ui_kit/**
+
 # ── Painted-map art: managed outside git ──────────────────────────────────────
 # The map art is hundreds of MB per level and git keeps every version of it forever,
 # so none of it lives here -- including the images the .tmx files point at. A fresh
