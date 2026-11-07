@@ -284,3 +284,18 @@ above the upgrade cap; the meter sits full.
 
 Mistake: one benchmark run was cut short by `Select-Object -First 3`, which closed the pipe and
 ended the game; no row was written for it. The re-run kept all output and filtered after.
+
+## 2026-11-07 — Test run and a fix
+
+- Engine tests (`tests`, without `tests/painted_map_pipeline`), full run on the branch and on its
+  base `a7e9144`, the same way: the base has 23 failed and 7 errors of its own (terrain-height data,
+  mesh contact, render-backend, co-op and others that the online and earlier branches carry).
+- **Mistake**: Phase 5's cut of the old belt text helpers also removed `_item_is_stackable`, which
+  sat between them and `_can_place_on_belt`; `tests/test_inventory_room.py` caught it (4 failures,
+  NameError), and picking up a stackable item would have crashed. Restored; every other function
+  removed from the rewritten files was checked to have no callers left.
+- Also a mistake in checking: running only the 34 failing tests crashes (a segfault in
+  `test_sam3_obstacle_runtime`), so a subset run on the base looked clean when it had stopped.
+  Only full runs of both commits were compared.
+- After the fix: **23 failed, 467 passed, 7 errors on both; nothing fails on the branch that
+  doesn't fail on its base.**

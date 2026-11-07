@@ -18,6 +18,10 @@ FOCUS_BODY = 0
 FOCUS_BACKPACK = 1
 FOCUS_BELT = 2
 
+def _item_is_stackable(item):
+    return getattr(item, "effect_type", None) == "consumable"
+
+
 def _can_place_on_belt(item):
     return (
         getattr(item, "belt_allowed", False)
