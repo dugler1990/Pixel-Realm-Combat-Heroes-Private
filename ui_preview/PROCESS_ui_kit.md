@@ -236,3 +236,27 @@ too.
 - **Main2._draw_screen**: the war-room painting and the dim instead of a flat colour.
 - Checked by rendering the four screens with sample lobbies, seats and chat (no server in this
   folder: "Play online" shows its notice, and no gate runs because the state doesn't change).
+
+## 2026-11-07 — Phase 4: the overlays in a level
+
+- **Upgrade (P)**: a framed 3:2 panel; the hero standing in a pool of warm light (painting found by
+  the level's `selected_player_info_dir`; `PlayerSelection` imported inside the call, because the
+  headless server loads levels without the menus); one 74-px steel bar per stat with its icon,
+  name, cost beside the gem, value and a gold `Meter`; experience top right beside the gem. **Input
+  change**: Up/Down move (the rows are stacked), Space buys, P closes; the buy rule moved from
+  `UpgradeColumn` into `Upgrade.trigger`, unchanged.
+- **Inventory (I)**: the slab at its own 5:4, the doll with the nine body slots placed on it by
+  `DOLL_SLOTS` (shares of `doll.png`), the sigil faint in an empty helmet slot, the pack 3 wide x 4
+  tall as before, the belt of four under the doll, gold top right. Slot rects are set at each
+  display, so the held item follows the focused slot. Item pictures load through ImageCache and
+  are fitted and kept by path: the old code loaded the held item from disk every frame
+  (`_draw_hand_ghost`), and a per-slot image cache with `_clear_slot_visual` in seven places is
+  gone with it.
+- **Attack selection (Alt+Q)**: a framed panel, the three magic slots in a row ("Equipped") and the
+  4 x 4 grid ("Stored") in the slot frame; icons load through ImageCache (stable ids), fitted once
+  and kept, instead of rescaled every draw.
+- Checked in a real level (Frostreach Gate) with scripted keys: I, P (and Down), Alt+Q.
+
+Seen, for Phase 5: the HUD (belt, timer) draws over the overlays and covers the upgrade's hint, as
+it did over the old screens. Seen, data: health shows "510 / 300" because the player's health is
+above the upgrade cap; the meter sits full.

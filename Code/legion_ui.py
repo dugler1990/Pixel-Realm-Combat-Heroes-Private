@@ -281,6 +281,48 @@ class Kit:
             return [_gradient_alpha((w, h), lambda x, y: 0.78 * max(0.0, (y - 0.55) / 0.45))]
         return _keep(self.tag + ("caption", w, h), build)[0]
 
+    def pool(self, w, h):
+        """A pool of warm light for a hero to stand in."""
+        def build():
+            return [_gradient_alpha((w, h), lambda x, y: 0.3 * max(0.0, 1 - math.hypot(2 * x - 1, (y - 0.8) / 0.4)),
+                                    (255, 190, 110))]
+        return _keep(self.tag + ("pool", w, h), build)[0]
+
+    def socket(self, w, h):
+        """A body slot on the doll: the slot frame's iron edge round a faint dark well, so the
+        painted figure shows through."""
+        def build():
+            out = pygame.Surface((w, h), pygame.SRCALPHA)
+            out.fill((4, 5, 8, 76))
+            nine_slice(out, ImageCache.load_image(KIT + "slot.jpg"), self.numbers["slot-slice"], self.px(9))
+            return [out]
+        return _keep(self.tag + ("socket", w, h), build)[0]
+
+    def fitted(self, surface, w, h, key):
+        """`surface` (an item or attack picture) fitted inside w x h keeping its shape, kept under
+        `key` (its path, or its id when it lives as long as the screen)."""
+        def build():
+            sw, sh = surface.get_size()
+            s = min(w / sw, h / sh)
+            return [pygame.transform.smoothscale(surface.convert_alpha(), (max(1, round(sw * s)), max(1, round(sh * s))))]
+        return _keep(self.tag + ("fitted", key, w, h), build)[0]
+
+    def faint(self, name, height):
+        """A kit picture at half strength: the sigil in an empty helmet slot."""
+        def build():
+            pic = self.picture(name, height=height).copy()
+            pic.fill((255, 255, 255, 128), special_flags=pygame.BLEND_RGBA_MULT)
+            return [pic]
+        return _keep(self.tag + ("faint", name, height), build)[0]
+
+    def dimmer(self, w, h):
+        """Grey shade over a locked slot."""
+        def build():
+            out = pygame.Surface((w, h), pygame.SRCALPHA)
+            out.fill((40, 40, 40, 160))
+            return [out]
+        return _keep(self.tag + ("dimmer", w, h), build)[0]
+
     def highlight(self, w, h):
         """A gold edge and glow round a chosen card, `glow` px wider on each side."""
         glow = self.px(10)

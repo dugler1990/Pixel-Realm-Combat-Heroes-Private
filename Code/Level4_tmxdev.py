@@ -2350,17 +2350,13 @@ class Level4:
             if self.upgrade_menu_open:
                 self.upgrade.display()
             elif self.inventory_open:
-                overlay = self.backend.compose()
-                self.player.inventory.display(overlay)
-                self.backend.blit(overlay, (0, 0))
+                self.player.inventory.display(self.backend)
                 self.player.inventory.input()
                 for sprite in self.layout_manager.visible_sprites:
                     if isinstance(sprite, ItemVisual):
                         sprite.update(dt)
             elif self.attack_selection_open:
-                overlay = self.backend.compose()
-                self.player.attack_selection.display(overlay)
-                self.backend.blit(overlay, (0, 0))
+                self.player.attack_selection.display(self.backend)
                 self.player.attack_selection.input()
                 self.player.update_derived_attributes()
             elif self.player_config_open:
