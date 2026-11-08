@@ -81,15 +81,17 @@ drawn by the real engine code path.
 
 ### Generated views: `view_gate.py`
 
-Draws a view through Leonardo (`view_gate.json`, `LEONARDO_API_KEY`) and checks it from the images alone before
-it goes to TRELLIS. `front`: the bare concept dressed in armour must cover the bare outline (sent as image 2).
-`back`: the approved front seen from behind must fill the front's mirrored outline (image 2), per body band.
-`side`: drawn from the front and back; only its size and place are checked (depth has nothing to compare with
-in the images). `[r1]` redraws with the miss marked (`tools/painted_map_pipeline/shape_gate.py`, the same overlay
-and retry as the level and interiors gates); `[rb]` redraws asking for armour big enough for his chest.
+Draws a view and checks it from the images alone before it goes to TRELLIS. Front and back are drawn as the
+interiors are: one gpt-image edit (`openai.gpt-image-2.json`, `OPENAI_API_KEY`) with the target outline as the
+mask, the raw return scored against it, then pasted back inside it, so the silhouette is the mask's.
+`front`: the bare concept, masked to his outline grown by `--margin` (head left out), dressed in armour inside it.
+`back`: the front's mirrored outline as a black placeholder, the approved front as image 2; IoU and body bands.
+`side`: a Leonardo draw (`view_gate.json`, `LEONARDO_API_KEY`); only its size and place are checked (depth has
+nothing to compare with in the images). `[r1]` draws again with the miss marked
+(`tools/painted_map_pipeline/shape_gate.py`, the same overlay and retry as the level and interiors gates).
 Accept writes the view cut out for TRELLIS and `gate_<view>.json`.
 
-    python -m tools.boss_sprite_pipeline.view_gate front --input <bare.jpg> --out <dir>
+    python -m tools.boss_sprite_pipeline.view_gate front --input <bare.jpg> --out <dir> [--margin 0.005]
     python -m tools.boss_sprite_pipeline.view_gate back  --front <front.jpg> --out <dir>
     python -m tools.boss_sprite_pipeline.view_gate side  --front <front.png> --back <back.png> --out <dir>
 
