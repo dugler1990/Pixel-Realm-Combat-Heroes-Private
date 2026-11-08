@@ -554,7 +554,7 @@ and does **not** survive a new pod; log in on the box with `hf auth login` (old 
 
 **rembg / opaque input:** TRELLIS `preprocess_image` uses the alpha channel **only if** it exists *and* is not all-255
 *(verified upstream)*. The round2 PNGs are opaque (alpha all 255), so TRELLIS falls to the rembg branch. Either feed
-real-alpha cutouts, or apply `_mesh_skip_rembg_restart.py`'s patch (`if rembg_model is None: output = input.convert('RGBA')`).
+real-alpha cutouts (`tools.sprite_assets.cut_sheet.figure_cutout`, which `view_gate.py` writes on accept), or apply `_mesh_skip_rembg_restart.py`'s patch (`if rembg_model is None: output = input.convert('RGBA')`).
 `--no_rembg` is a **paint** flag; it does nothing for TRELLIS.
 
 **Generate + remesh:**
@@ -583,9 +583,10 @@ Four characters, one 48 GB A6000 with 200 GB disk, mesh→paint→bake→rig all
 Everything below is a place where following §4/§6 literally does **not** work.
 
 **Cut the reference to real alpha first.** The gpt-image references are opaque black-background
-JPGs. §6 says a black opaque background gets built into the mesh, and it does. `scratchpad/
-cutout.py` flood-fills from the four corners (not a global threshold — he is mostly dark, a
-threshold eats him) and writes RGBA. Unexpected bonus: cutting the gaps between arm and torso
+JPGs. §6 says a black opaque background gets built into the mesh, and it does. The cut-out is
+`tools.sprite_assets.cut_sheet.figure_cutout`: it clears the background connected to the border (not a
+global threshold — he is mostly dark, a threshold eats him) and writes RGBA; it was a scratchpad
+`cutout.py` then. Unexpected bonus: cutting the gaps between arm and torso
 gave TRELLIS **separated arms**, so these rigs need no `ARM_ELEV_CAP` at all — arms go fully
 overhead with no armpit web. That single defect drove a week of demon workarounds.
 
