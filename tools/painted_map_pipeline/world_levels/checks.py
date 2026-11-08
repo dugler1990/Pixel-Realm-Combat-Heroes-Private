@@ -17,6 +17,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from ..shape_gate import mark_shape_error, shape_note
+
 Image.MAX_IMAGE_PIXELS = None
 
 # A join is invisible when the edge energy sitting on it is no stronger than the edge energy
@@ -101,13 +103,10 @@ def padding_seam(image: Image.Image, locked_mask: Image.Image, pending_mask: Ima
     }
 
 
-# What the overlay's two colours mean, and what to do about them. Kept next to the code that
-# draws it so the wording and the colours cannot drift apart, and reused verbatim as the note
-# sent back to the model when the overlay is attached to a retry.
-FOOTPRINT_OVERLAY_NOTE = (
-    "your previous attempt with its shape error marked: magenta is where you left it black "
-    "and it should be painted, cyan is where you painted and it should be black"
-)
+# What the overlay's two colours mean, and what to do about them, reused verbatim as the note
+# sent back to the model when the overlay is attached to a retry. The colours, the marking and
+# the note's wording live in ``shape_gate``, shared by the level, interiors and view gates.
+FOOTPRINT_OVERLAY_NOTE = shape_note("black")
 # The standing instruction that goes with it. Kept here rather than at the call site so the
 # picture, the words describing it and the demand made of it stay one thing.
 FOOTPRINT_OVERLAY_DIRECTIVE = (
@@ -117,9 +116,6 @@ FOOTPRINT_OVERLAY_DIRECTIVE = (
     "important directive it takes precedence over any other contradictory statements earlier "
     "in the prompt, thanks."
 )
-OVERLAY_MISSING = (255, 60, 255)
-OVERLAY_SPILLED = (60, 255, 255)
-OVERLAY_STRENGTH = 0.55
 
 
 def footprint_overlay(image: Image.Image, generation_mask: Image.Image,
@@ -142,13 +138,11 @@ def footprint_overlay(image: Image.Image, generation_mask: Image.Image,
 
     limit = CONTENT_LUMA_THRESHOLD if content_luma_threshold is None else content_luma_threshold
     missing_limit = limit if missing_luma_threshold is None else missing_luma_threshold
-    rgb = image.convert("RGB")
-    summed = np.asarray(rgb).sum(axis=2)
+    summed = np.asarray(image.convert("RGB")).sum(axis=2)
     mask = np.asarray(generation_mask.convert("L")) > 0
-    marked = np.asarray(rgb).copy()
-    marked[mask & ~(summed > missing_limit)] = OVERLAY_MISSING
-    marked[(summed > limit) & ~mask] = OVERLAY_SPILLED
-    return Image.blend(rgb, Image.fromarray(marked), OVERLAY_STRENGTH)
+    # Painted, asked inside the mask at the shortfall threshold and outside it at the spill one.
+    has = (mask & (summed > missing_limit)) | (~mask & (summed > limit))
+    return mark_shape_error(image, mask, has)
 
 
 def footprint(image: Image.Image, generation_mask: Image.Image, *, minimum: float,
