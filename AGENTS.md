@@ -23,6 +23,22 @@ and leave the user in charge of it.
   do it.
 - If the normal way is blocked (a folder is busy, a merge conflicts), stop and say so. Don't
   get around git with low-level commands (`commit-tree`, `update-ref`, temporary index files).
+- Facing a decision about how the repo is handled (a workaround, leaving something behind):
+  stop and tell the user first.
+
+## Process docs
+Every initiative keeps one: `PROCESS_*.md` or `NOTES_*.md` in its folder. Read it before
+starting. Terse lines, no narrative: facts, commands, numbers.
+- **Method that works**: exact steps, commands, settings to repeat.
+- **Known errors**: symptom, cause, fix.
+- **Log**: dated steps, commands, numbers.
+- **Tried and dropped**, the doc's last section: every tool, model or approach tried for this
+  task (e.g. multi-image TRELLIS), with result and why. One not tied to a task goes in
+  `docs/TRIED.md`. Before proposing an option, search these for it; if it was tried, say so
+  and what is different this time.
+
+Maintain it as you go, don't just append: a retry with small changes merges into its existing
+line; a wrong claim is replaced; what proved out moves into Method.
 
 ## Say exactly where things stand
 - End every task with: the branch, its commits, what is pushed, and anything left uncommitted
