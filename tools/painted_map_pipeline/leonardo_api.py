@@ -196,7 +196,10 @@ def create_v2_generation(
     init_image_ids: list[str],
     config: dict,
     capture: dict | None = None,
+    strengths: list[str] | None = None,
 ) -> str:
+    """`strengths`: one image-reference strength per init image (LOW / MID / HIGH); default the config's
+    ``reference_strength`` for every image."""
     api_key = _api_key(config)
     base = _generation_base_url(config)
     model = str(config.get("model") or DEFAULT_NANO_BANANA_2_MODEL)
@@ -217,11 +220,13 @@ def create_v2_generation(
             f"the known-good size for this pipeline is 5056x3392"
         )
 
+    if strengths is not None and len(strengths) != len(init_image_ids):
+        raise LeonardoApiError(f"{len(strengths)} strengths for {len(init_image_ids)} reference images")
     image_refs = []
-    for image_id in init_image_ids:
+    for i, image_id in enumerate(init_image_ids):
         entry: dict = {"image": {"id": image_id, "type": "UPLOADED"}}
         if supports_reference_strength:
-            entry["strength"] = reference_strength
+            entry["strength"] = str(strengths[i]).upper() if strengths is not None else reference_strength
         image_refs.append(entry)
 
     parameters: dict = {
@@ -459,6 +464,7 @@ def generate_with_image_reference(
     width: int,
     height: int,
     config: dict,
+    strengths: list[str] | None = None,
 ) -> dict:
     if not input_images:
         raise LeonardoApiError("v2 image reference requires at least one input image")
@@ -471,6 +477,7 @@ def generate_with_image_reference(
         init_image_ids=init_image_ids,
         config=config,
         capture=capture,
+        strengths=strengths,
     )
     result = wait_for_generation(generation_id, config)
     urls = _extract_image_urls(result)

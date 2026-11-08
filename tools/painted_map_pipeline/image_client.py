@@ -32,12 +32,15 @@ class ImageClient:
         input_images: list[str],
         output_path: str,
         mask: str | None = None,
+        strengths: list[str] | None = None,
     ):
         """Generate or edit an image.
 
         ``mask`` is a path to the canonical ``pending_mask.png`` -- white means repaint.
         Each client converts to whatever its provider expects; the pipeline never does.
         Providers without a mask concept accept the argument and ignore it.
+        ``strengths``: one reference strength per input image (Leonardo v2: LOW / MID / HIGH),
+        else the config's ``reference_strength`` for all. Providers without it ignore it.
         """
         raise NotImplementedError
 
@@ -48,7 +51,8 @@ class CopyImageClient(ImageClient):
     This proves the filesystem/TMX loop without requiring an image API key.
     """
 
-    def generate(self, prompt: str, input_images: list[str], output_path: str, mask: str | None = None):
+    def generate(self, prompt: str, input_images: list[str], output_path: str, mask: str | None = None,
+                 strengths: list[str] | None = None):
         if not input_images:
             raise ImageClientError("copy backend requires at least one input image")
         src = Path(input_images[0])
@@ -63,7 +67,8 @@ class CopyImageClient(ImageClient):
 class ManifestOnlyImageClient(ImageClient):
     """Dry-run backend: writes request JSON and does not produce images."""
 
-    def generate(self, prompt: str, input_images: list[str], output_path: str, mask: str | None = None):
+    def generate(self, prompt: str, input_images: list[str], output_path: str, mask: str | None = None,
+                 strengths: list[str] | None = None):
         request_path = Path(output_path).with_suffix(".request.json")
         request_path.parent.mkdir(parents=True, exist_ok=True)
         request_path.write_text(
@@ -141,7 +146,8 @@ class LeonardoImageClient(ImageClient):
     def __init__(self, config: dict):
         self.config = dict(config)
 
-    def generate(self, prompt: str, input_images: list[str], output_path: str, mask: str | None = None):
+    def generate(self, prompt: str, input_images: list[str], output_path: str, mask: str | None = None,
+                 strengths: list[str] | None = None):
         # Leonardo v2 image_reference has no mask concept; accepted and ignored.
         if not input_images:
             raise ImageClientError("leonardo backend requires at least one input image")
@@ -187,6 +193,7 @@ class LeonardoImageClient(ImageClient):
                         width=gen_w,
                         height=gen_h,
                         config=self.config,
+                        strengths=strengths,
                     )
                 except LeonardoApiError as exc:
                     raise ImageClientError(str(exc)) from exc
@@ -239,7 +246,8 @@ class OpenAIImageClient(ImageClient):
     def __init__(self, config: dict):
         self.config = dict(config)
 
-    def generate(self, prompt: str, input_images: list[str], output_path: str, mask: str | None = None):
+    def generate(self, prompt: str, input_images: list[str], output_path: str, mask: str | None = None,
+                 strengths: list[str] | None = None):
         if not input_images:
             raise ImageClientError("openai backend requires at least one input image")
         sources = [Path(path) for path in input_images]
