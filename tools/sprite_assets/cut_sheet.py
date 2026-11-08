@@ -164,6 +164,62 @@ def distance_from(rgb: np.ndarray, background: tuple) -> np.ndarray:
     return np.abs(rgb - np.asarray(background, dtype=np.float32)).max(axis=2)
 
 
+def flat_background(rgb: np.ndarray, pockets: bool = True) -> np.ndarray:
+    """The flat sheet a figure is drawn on, as a boolean mask.
+
+    The sheet is whatever colour touches the border: every region near that colour that reaches
+    the border. With `pockets`, also patches of almost exactly that colour (45 px or more) inside
+    the outline, taken as sheet showing through a gap -- right for flat sprite sheets, wrong for
+    polished steel on white, whose highlights are that colour. Light paint of a similar colour
+    otherwise stays, because it sits inside the outline.
+    """
+    from scipy import ndimage
+
+    rgb = np.asarray(rgb, dtype=np.float32)
+    dist = distance_from(rgb, sheet_background(rgb))
+    labels, _ = ndimage.label(dist < 75)
+    edge = np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
+    clear = np.isin(labels, edge[edge > 0])
+    if not pockets:
+        return clear
+    pocket_labels, count = ndimage.label(~clear & (dist < 22))
+    if count:
+        sizes = ndimage.sum(np.ones_like(clear), pocket_labels, index=np.arange(1, count + 1))
+        clear |= np.isin(pocket_labels, np.arange(1, count + 1)[sizes >= 45])
+    return clear
+
+
+def _largest_figure(image: Image.Image) -> np.ndarray:
+    from scipy import ndimage
+
+    # No pockets: on a character view they are highlights on steel, not sheet. The gaps between
+    # arm and torso in these poses open onto the border, so the border cut clears them anyway.
+    figure = ~flat_background(np.asarray(image.convert("RGB")), pockets=False)
+    labels, count = ndimage.label(figure)
+    if not count:
+        return figure
+    sizes = ndimage.sum(figure, labels, index=np.arange(1, count + 1))
+    return labels == int(np.argmax(sizes)) + 1
+
+
+def figure_cutout(image: Image.Image) -> Image.Image:
+    """One figure on a flat background, cut out: the figure opaque, the sheet transparent.
+
+    Holes are NOT filled: the gaps between arm and torso stay transparent, which is what lets
+    TRELLIS build separated arms (tools/boss_sprite_pipeline/PROCESS.md, 6b).
+    """
+    rgba = np.array(image.convert("RGBA"))
+    rgba[..., 3] = np.where(_largest_figure(image), 255, 0)
+    return Image.fromarray(rgba, "RGBA")
+
+
+def score_mask(image: Image.Image) -> np.ndarray:
+    """The figure's whole outline, holes filled: what a shape check compares, never a cut-out."""
+    from scipy import ndimage
+
+    return ndimage.binary_fill_holes(_largest_figure(image))
+
+
 def _is_text_or_rule(w: int, h: int, text_h: int) -> bool:
     """Headings, captions and divider lines: a flat wide strip, or hairline thin."""
     if min(w, h) <= 4:
