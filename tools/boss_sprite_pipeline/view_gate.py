@@ -1,87 +1,51 @@
-"""A generated view of a character, checked against the outline it must have, before it goes to TRELLIS.
+"""A back view generated from an approved front view, checked against the front's outline before TRELLIS.
 
-    python -m tools.boss_sprite_pipeline.view_gate front --input <bare concept> --body <base_rigged.glb> --out <dir>
-    python -m tools.boss_sprite_pipeline.view_gate back  --input <approved front> --out <dir> [--body <base_rigged.glb>]
+    python -m tools.boss_sprite_pipeline.view_gate --front <approved front> --out <dir>
         [--config tools/boss_sprite_pipeline/view_gate.json]
 
-Two targets, one scoring path. Both views send two images, the second being the outline to hit:
-- front (dress the bare concept in armour): his body's outline (body_silhouette.py on the rigged base,
-  lined up with the concept's figure), grown by MARGIN. The armour must cover it, head and soles left
-  out (the head stays bare, the soles stand on the floor); reaching past it is fine. Only what is
-  missing counts, and the overlay marks only that.
-- back (the approved front seen from behind): the front's outline mirrored left to right -- from straight
-  behind, that is his outline. Missing and spilled both count. With --body, his body from behind is
-  printed as a cover check, not a pass.
-Sides have no outline to derive and are not handled; none goes to the pod unchecked.
-
-Each draw is lined up with the target as explode2's outline_check did (scale to its height, head top on its
-head top, body centre on its centre), scored per band, and marked with shape_gate's overlay on the lined-up
-draw. [r1] redraws with that overlay and this view's own note and directive, through the same retry parser and
-console gate as the interiors. Images are made through Leonardo's API (view_gate.json; quantity 1: the client
-keeps only the first image of a batch). Accept writes <out>/<view>.png (figure_cutout, ready for TRELLIS) and
-<out>/gate.json.
+From straight behind his outline is the front's outline mirrored left to right. That mirrored outline is the
+target: it is sent as image 2 with the front as image 1, and each back view drawn is lined up with it (scale to
+its height, head top on its head top, body centre on its centre, as explode2's outline_check did), scored per
+band, and marked with shape_gate's overlay: magenta where it should have drawn, cyan where it spilled. [r1]
+redraws with that overlay through the same retry parser and console gate as the interiors. Images are made
+through Leonardo's API (view_gate.json; quantity 1: the client keeps only the first image of a batch).
+Accept writes <out>/front.png and <out>/back.png, both cut out for multi-view TRELLIS, and <out>/gate.json.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from tools.boss_sprite_pipeline import bpy_python
 from tools.painted_map_pipeline.image_client import make_image_client
 from tools.painted_map_pipeline.review_gate import ask, sent, show, with_criticism
 from tools.painted_map_pipeline.shape_gate import mark_shape_error, shape_note, shape_scores
 from tools.painted_map_pipeline.world_levels.retry import parse_gate_retry
 from tools.sprite_assets.cut_sheet import figure_cutout, score_mask
 
-HERE = Path(__file__).resolve().parent
-CONFIG = HERE / "view_gate.json"
+CONFIG = Path(__file__).resolve().parent / "view_gate.json"
 
 # Heights above the floor, as a share of the figure's height (explode2/outline_check.py). Below the hips a band
 # measures one leg: the right half of the figure.
 BANDS = [("shoulder", .80), ("chest", .72), ("waist", .60), ("hips", .52), ("thigh", .42), ("knee", .30),
          ("calf", .20), ("ankle", .08)]
-MARGIN = 0.005            # front: plate must clear his body by this share of his height
-HEAD, SOLES = 0.13, 0.02  # front: left out of the score (bare head; feet on the floor)
 # Pass rules, from the 2026-11-08 measurements (explode2/PROCESS_explode2.md):
-BACK_MIN_IOU = 0.95       # nano-banana-2.1 back with the outline as image 2: 0.964; gpt-image backs 0.919, 0.916
-BACK_MAX_BAND = 1.0       # % h; that back: +0.41 at worst; the gpt backs -1.22 (shoulder), -1.72 (hips)
-FRONT_MAX_MISSING = 0.01  # the front in use leaves 6.67 % of his outline uncovered and 32 % of his skin
-                          # outside it in 3D: failing it is correct
+MIN_IOU = 0.95     # nano-banana-2.1 back with the outline as image 2: 0.964; gpt-image backs 0.919, 0.916
+MAX_BAND = 1.0     # % h; that back: +0.41 at worst; the gpt backs -1.22 (shoulder), -1.72 (hips)
 
-PROMPTS = {
-    "front": (
-        "Dress the man in Image 1 in a full suit of steel plate armour worn over a thick padded gambeson. Keep his "
-        "pose, proportions, head, beard, framing, camera and white background identical. The armour sits over his "
-        "body: every plate stands clear of the skin by about a finger's width, so the armoured outline is larger "
-        "than his bare outline everywhere, including shoulders, arms, chest, waist, hips, legs and feet. If unsure, "
-        "make the armour slightly too big rather than too tight. No skin visible except the head. Image 2 is the "
-        "outline his armour must cover: every part of the black shape is inside the armour; the armour may reach "
-        "past it."),
-    "back": (
-        "Draw the man in Image 1 seen from behind. Image 2 is his exact outline from behind: fill it exactly, with "
-        "the same pose, size and position, nothing outside it and no gaps. Show his back, hair bun, backplate, the "
-        "backs of his arms, legs and heels. Same armour, white background."),
-}
-FRONT_SHAPE_NOTE = (
-    "your previous attempt with its shape error marked: magenta is where his body (the black shape in image 2) is "
-    "not covered by the armour")
-FRONT_SHAPE_DIRECTIVE = (
-    "This image shows where your armour leaves his body uncovered. Every part of the black shape in image 2 must be "
-    "inside the armour; the armour may always be bigger, never smaller. If it is not covered the image is not valid "
-    "and cannot be used, this is the most important directive it takes precedence over any other contradictory "
-    "statements earlier in the prompt, thanks.")
-BACK_SHAPE_DIRECTIVE = (
+PROMPT = (
+    "Draw the man in Image 1 seen from behind. Image 2 is his exact outline from behind: fill it exactly, with the "
+    "same pose, size and position, nothing outside it and no gaps. Show his back, hair bun, backplate, the backs of "
+    "his arms, legs and heels. Same armour, white background.")
+SHAPE_DIRECTIVE = (
     "This image represents how you have differed from his outline in image 2, which your drawing must fill exactly, "
     "this shape needs to be pixel perfect relative to that outline, if not the image is not valid and cannot be "
     "used, this is the most important directive it takes precedence over any other contradictory statements "
     "earlier in the prompt, thanks.")
-TEXTS = {"front": (FRONT_SHAPE_NOTE, FRONT_SHAPE_DIRECTIVE), "back": (shape_note("white"), BACK_SHAPE_DIRECTIVE)}
 
 
 def frame(mask: np.ndarray) -> tuple[int, int, int, float]:
@@ -107,49 +71,17 @@ def line_up(image: Image.Image, mask: np.ndarray, target: np.ndarray) -> tuple[I
     return out_image, np.asarray(out_mask) > 127
 
 
-def outline_png(mask: np.ndarray, path: Path) -> Path:
-    """A mask as a black shape on white: the outline sent as image 2."""
-    Image.fromarray(np.where(mask, 0, 255).astype(np.uint8)).convert("RGB").save(path)
-    return path
-
-
-def body_outline(body_glb: Path, view: str, out: Path) -> np.ndarray:
-    """His body's outline from `view`, rendered by body_silhouette.py through the Blender venv."""
-    subprocess.run([str(bpy_python(HERE)), str(HERE / "body_silhouette.py"), str(body_glb.resolve()),
-                    str(out.resolve()), view], check=True, capture_output=True)
-    return score_mask(Image.open(out / f"body_{view}.png"))
-
-
-def grown(mask: np.ndarray, pixels: int) -> np.ndarray:
-    from scipy import ndimage
-
-    return ndimage.binary_dilation(mask, iterations=max(1, pixels))
-
-
-def band_rows(target: np.ndarray):
-    top, bottom, height, cx = frame(target)
-    return [(name, int(bottom - f * height), slice(int(cx), None) if f < .5 else slice(None)) for name, f in BANDS]
-
-
-def score(view: str, target: np.ndarray, has: np.ndarray) -> tuple[dict, np.ndarray]:
-    """Scores of a lined-up draw. Front: `should` is the target with head and soles left out, only missing counts.
-    Back: the whole target, IoU and every band."""
-    top, bottom, height, _ = frame(target)
-    should = target.copy()
-    if view == "front":
-        should[: int(top + HEAD * height)] = False
-        should[int(bottom - SOLES * height):] = False
-    s = shape_scores(should, has, band_rows(target))
+def score(target: np.ndarray, has: np.ndarray) -> dict:
+    """IoU and every band of a lined-up back view against the target; band widths in % of height."""
+    _, bottom, height, cx = frame(target)
+    rows = [(name, int(bottom - f * height), slice(int(cx), None) if f < .5 else slice(None)) for name, f in BANDS]
+    s = shape_scores(target, has, rows)
     s["bands"] = {k: {kk: round(vv / height * 100, 2) for kk, vv in v.items()} for k, v in s["bands"].items()}
-    if view == "front":
-        s["passed"] = s["missing"] <= FRONT_MAX_MISSING
-        s["failing"] = [] if s["passed"] else [f"missing {s['missing'] * 100:.2f} %"]
-    else:
-        bad = [k for k, v in s["bands"].items() if abs(v["diff"]) > BACK_MAX_BAND]
-        s["passed"] = s["iou"] >= BACK_MIN_IOU and not bad
-        s["failing"] = ([] if s["iou"] >= BACK_MIN_IOU else [f"IoU {s['iou']:.3f}"]) + [
-            f"{k} {s['bands'][k]['diff']:+.2f} % h" for k in bad]
-    return s, should
+    bad = [k for k, v in s["bands"].items() if abs(v["diff"]) > MAX_BAND]
+    s["passed"] = s["iou"] >= MIN_IOU and not bad
+    s["failing"] = ([] if s["iou"] >= MIN_IOU else [f"IoU {s['iou']:.3f}"]) + [
+        f"{k} {s['bands'][k]['diff']:+.2f} % h" for k in bad]
+    return s
 
 
 def sheet(target: np.ndarray, drawn: Image.Image, overlay: Image.Image, lines: list[str], path: Path) -> Path:
@@ -171,37 +103,23 @@ def sheet(target: np.ndarray, drawn: Image.Image, overlay: Image.Image, lines: l
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("view", choices=("front", "back"))
-    ap.add_argument("--input", required=True, type=Path)
-    ap.add_argument("--body", type=Path)
+    ap.add_argument("--front", required=True, type=Path)
     ap.add_argument("--config", type=Path, default=CONFIG)
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
-    if a.view == "front" and not a.body:
-        ap.error("front needs --body: the target is his body's outline")
     a.out.mkdir(parents=True, exist_ok=True)
-    source = Image.open(a.input)
-    source_mask = score_mask(source)
+    front = Image.open(a.front)
+    target = score_mask(front)[:, ::-1]
+    outline = a.out / "target_outline.png"
+    Image.fromarray(np.where(target, 0, 255).astype(np.uint8)).convert("RGB").save(outline)
 
-    if a.view == "front":
-        body = body_outline(a.body, "front", a.out)
-        _, body = line_up(Image.new("RGB", body.shape[::-1]), body, source_mask)   # into the concept's frame
-        target = grown(body, round(MARGIN * frame(body)[2]))
-    else:
-        target = source_mask[:, ::-1]
-    image2 = outline_png(target, a.out / "target_outline.png")
-    cover_back = None
-    if a.view == "back" and a.body:
-        cover_back = body_outline(a.body, "back", a.out)
-
-    config = json.loads(a.config.read_text(encoding="utf-8"))
-    client = make_image_client(config)
-    base_prompt, inputs = PROMPTS[a.view], [a.input.resolve(), image2.resolve()]
+    client = make_image_client(json.loads(a.config.read_text(encoding="utf-8")))
+    inputs = [a.front.resolve(), outline.resolve()]
     criticism, attach, attempts, n = "", [], [], 0
     while True:
         n += 1
         tag = a.out / f"attempt_{n:02d}"
-        prompt = with_criticism(base_prompt, criticism, attach, first_index=3)
+        prompt = with_criticism(PROMPT, criticism, attach, first_index=3)
         images = inputs + [Path(p) for p in attach]
         tag.with_name(tag.name + "_prompt.txt").write_text(prompt, encoding="utf-8")
         sent(prompt, [(f"image {i + 1}", p) for i, p in enumerate(images)])
@@ -209,17 +127,12 @@ def main() -> None:
         client.generate(prompt, [str(p) for p in images], str(draw_path))
         drawn = Image.open(draw_path)
         lined, has = line_up(drawn, score_mask(drawn), target)
-        s, should = score(a.view, target, has)
-        if cover_back is not None:
-            _, back_body = line_up(Image.new("RGB", cover_back.shape[::-1]), cover_back, target)
-            uncovered = grown(back_body, round(MARGIN * frame(back_body)[2])) & ~has
-            s["cover_back"] = float(uncovered.sum() / max(int(back_body.sum()), 1))
-        overlay = mark_shape_error(lined, should | has, has) if a.view == "front" else mark_shape_error(lined, should, has)
+        s = score(target, has)
         shape_png = tag.with_name(tag.name + "_shape.png")
+        overlay = mark_shape_error(lined, target, has)
         overlay.save(shape_png)
-        lines = [f"{a.view} attempt {n}: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
-                 f"IoU {s['iou']:.3f}  missing {s['missing'] * 100:.2f} %  spilled {s['spilled'] * 100:.2f} %"
-                 + (f"  his back uncovered {s['cover_back'] * 100:.2f} %" if "cover_back" in s else ""),
+        lines = [f"back attempt {n}: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
+                 f"IoU {s['iou']:.3f}  missing {s['missing'] * 100:.2f} %  spilled {s['spilled'] * 100:.2f} %",
                  "  ".join(f"{k} {v['diff']:+.2f}" for k, v in s["bands"].items()) + "  (% h, draw minus target)"]
         sheet_png = sheet(target, lined, overlay, lines, tag.with_name(tag.name + "_sheet.png"))
         attempts.append({"attempt": n, "draw": str(draw_path), "prompt": str(tag.with_name(tag.name + "_prompt.txt")),
@@ -240,15 +153,16 @@ def main() -> None:
             continue
         if raw:
             try:
-                criticism, attach = parse_gate_retry(raw, shape_png, *TEXTS[a.view])
+                criticism, attach = parse_gate_retry(raw, shape_png, shape_note("white"), SHAPE_DIRECTIVE)
             except FileNotFoundError as exc:
                 print(f"  {exc}", file=sys.stderr)
             continue
-        figure_cutout(drawn).save(a.out / f"{a.view}.png")
+        figure_cutout(front).save(a.out / "front.png")
+        figure_cutout(drawn).save(a.out / "back.png")
         (a.out / "gate.json").write_text(json.dumps(
-            {"view": a.view, "input": str(a.input), "body": str(a.body) if a.body else None, "config": str(a.config),
-             "target": str(image2), "attempts": attempts, "accepted": n}, indent=1), encoding="utf-8")
-        print(f"  accepted attempt {n}: {a.out / (a.view + '.png')}")
+            {"front": str(a.front), "config": str(a.config), "target": str(outline), "attempts": attempts,
+             "accepted": n}, indent=1), encoding="utf-8")
+        print(f"  accepted attempt {n}: {a.out / 'front.png'}, {a.out / 'back.png'}")
         return
 
 
