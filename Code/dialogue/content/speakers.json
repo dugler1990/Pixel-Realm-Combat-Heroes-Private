@@ -1,0 +1,8 @@
+{
+  "Eskimo": {
+    "graph": "eskimo_intro",
+    "name": "Eskimo",
+    "barks": ["cold"],
+    "margin": 64
+  }
+}

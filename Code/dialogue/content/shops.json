@@ -1,0 +1,11 @@
+{
+  "eskimo": {
+    "name": "Eskimo",
+    "goods": [
+      {"item_id": "frozen_fish", "name": "Frozen fish", "price": 8, "sell": 4},
+      {"item_id": "frost_potion", "name": "Frost potion", "price": 15, "sell": 7},
+      {"item_id": "snowflake_charm", "name": "Snowflake charm", "price": 30, "sell": 15},
+      {"item_id": "arctic_feather", "name": "Arctic feather", "price": 12, "sell": 6}
+    ]
+  }
+}

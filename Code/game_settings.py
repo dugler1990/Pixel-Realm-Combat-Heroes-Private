@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 from Settings import DEBUG_DRAW_FACTION_OUTLINES
 
@@ -27,6 +28,9 @@ class GameSettings:
     debug_mode: bool = False
     debug_faction_outlines: bool = DEBUG_DRAW_FACTION_OUTLINES
     gold_pickup_popup: bool = True
+    speech_bubbles: bool = True
+    conversation_text: bool = True
+    voice_enabled: bool = True
 
     MENU_ROWS: tuple[str, ...] = (
         "music_volume",
@@ -36,6 +40,18 @@ class GameSettings:
         "debug_mode",
         "debug_faction_outlines",
         "gold_pickup_popup",
+        "speech_bubbles",
+        "conversation_text",
+        "voice_enabled",
+    )
+
+    _TOGGLES: ClassVar[tuple[str, ...]] = (
+        "debug_mode",
+        "debug_faction_outlines",
+        "gold_pickup_popup",
+        "speech_bubbles",
+        "conversation_text",
+        "voice_enabled",
     )
 
     @property
@@ -61,12 +77,8 @@ class GameSettings:
         self._step(setting_id, 1)
 
     def activate_row(self, setting_id: str) -> None:
-        if setting_id == "debug_mode":
-            self.debug_mode = not self.debug_mode
-        elif setting_id == "debug_faction_outlines":
-            self.debug_faction_outlines = not self.debug_faction_outlines
-        elif setting_id == "gold_pickup_popup":
-            self.gold_pickup_popup = not self.gold_pickup_popup
+        if setting_id in self._TOGGLES:
+            setattr(self, setting_id, not getattr(self, setting_id))
 
     def _step(self, setting_id: str, direction: int) -> None:
         if setting_id == "music_volume":
@@ -89,14 +101,8 @@ class GameSettings:
                 self.fps_cap_index + direction, self.fps_cap_options
             )
             return
-        if setting_id == "debug_mode" and direction != 0:
-            self.debug_mode = not self.debug_mode
-            return
-        if setting_id == "debug_faction_outlines" and direction != 0:
-            self.debug_faction_outlines = not self.debug_faction_outlines
-            return
-        if setting_id == "gold_pickup_popup" and direction != 0:
-            self.gold_pickup_popup = not self.gold_pickup_popup
+        if setting_id in self._TOGGLES and direction != 0:
+            setattr(self, setting_id, not getattr(self, setting_id))
 
     def _clamp_index(self, idx: int, options: list) -> int:
         return max(0, min(len(options) - 1, idx))
