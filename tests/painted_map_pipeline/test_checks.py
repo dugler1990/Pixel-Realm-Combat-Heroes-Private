@@ -456,3 +456,16 @@ def test_coverage_fails_when_the_generation_is_smaller_than_its_polygon():
     exact = Image.new("RGB", (200, 200), (0, 0, 0))
     ImageDraw.Draw(exact).rectangle((20, 20, 180, 180), fill=(180, 140, 90))
     assert coverage(exact, mask)["passed"]
+
+
+def test_parse_gate_retry_r1_attaches_the_overlay_with_the_gates_own_texts(tmp_path):
+    """Every gate (interiors, views) parses `r1` here and passes its own note and directive."""
+    from tools.painted_map_pipeline.world_levels.retry import parse_gate_retry
+
+    overlay = tmp_path / "attempt_01_shape.png"
+    Image.new("RGB", (8, 8)).save(overlay)
+    criticism, attach = parse_gate_retry("r1 the left arm", overlay, "the note", "the directive")
+    assert attach == [overlay]
+    assert criticism == "the note. the directive the left arm"
+    criticism, attach = parse_gate_retry("r too dark", overlay, "the note", "the directive")
+    assert (criticism, attach) == ("too dark", [])
