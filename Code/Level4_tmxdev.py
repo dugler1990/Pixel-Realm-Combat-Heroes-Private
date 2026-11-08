@@ -60,6 +60,7 @@ from tmx_layout_manager import LayoutManager
 from benchmark_runtime import BENCHMARK_RUNTIME
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
 from Interaction import InteractionContext, InteractionResolver
+from dialogue.session import DialogueSession
 from rts import RtsSession, RtsWorldSim
 from rts.world_adapter import RtsWorldAdapter
 from Support import resolve_env_interactable_path
@@ -325,6 +326,7 @@ class Level4:
         self._interact_font = pygame.font.Font(None, 28)
         self._interact_surfaces = {}
         self._interact_prompt_text = "[Space] Interact"
+        self.dialogue = DialogueSession()
         self.attack_selection_open = False 
         self.player_config_open = False
         self._frame_number = 0
@@ -1050,11 +1052,17 @@ class Level4:
         return cached
 
     def _draw_interact_prompt(self):
-        if not getattr(self, "_show_interact_prompt", False):
-            return
         if getattr(self, "game_paused", False) or self.inventory_open:
             return
-        text = getattr(self, "_interact_prompt_text", "[Space] Interact")
+        dialogue = getattr(self, "dialogue", None)
+        if dialogue is not None:
+            text = dialogue.focus_prompt()
+            if not text:
+                return
+        else:
+            if not getattr(self, "_show_interact_prompt", False):
+                return
+            text = getattr(self, "_interact_prompt_text", "[Space] Interact")
         surf = self._interact_prompt_surface(text)
         rect = surf.get_rect()
         # Above draw_belt_hud (slots ~H-54..H-18 plus slot labels)
@@ -1064,6 +1072,31 @@ class Level4:
         )
         self.backend.blit(surf, rect)
 
+    def _tick_dialogue(self, dt):
+        dialogue = getattr(self, "dialogue", None)
+        if dialogue is None or getattr(self, "is_server", False):
+            return
+        sprites = self.layout_manager.visible_sprites.sprites()
+        env = getattr(self.layout_manager, "environment_interactables", None) or []
+        dialogue.update_world(
+            self.player,
+            sprites,
+            env,
+            pygame.time.get_ticks(),
+            dt,
+            getattr(self, "game_settings", None),
+        )
+
+    def _draw_dialogue(self):
+        dialogue = getattr(self, "dialogue", None)
+        if dialogue is None:
+            return
+        dialogue.draw(
+            self.backend,
+            self.layout_manager.visible_sprites.offset,
+            getattr(self, "game_settings", None),
+        )
+
     def try_interact_nearby_environment(self):
         if not self.input_manager.is_key_just_pressed(pygame.K_SPACE):
             return False
@@ -1071,12 +1104,28 @@ class Level4:
             return False
         if getattr(self, "inventory_open", False):
             return False
+        dialogue = getattr(self, "dialogue", None)
+        if dialogue is not None and dialogue.blocks_gameplay():
+            return False
         rts_session = getattr(self, "rts_session", None)
         if rts_session is not None and rts_session.is_active():
             rts_session.exit(request_stand=True)
             return True
         if self._stand_from_seat():
             return True
+        if dialogue is not None and not getattr(self, "is_server", False):
+            focus = dialogue.focus
+            if focus is None:
+                return False
+            if focus.kind == "talk":
+                return dialogue.try_start_focused()
+            obj = focus.target
+            if focus.kind == "loot_container":
+                self._open_loot_container(obj)
+                return True
+            if focus.kind == "seat":
+                return self._sit_on_seat(obj)
+            return False
         lm = self.layout_manager
         env = getattr(lm, "environment_interactables", None)
         if not env:
@@ -1537,6 +1586,9 @@ class Level4:
 
     def player_attack_logic(self):
         """The player's weapon swings and spells."""
+        dialogue = getattr(self, "dialogue", None)
+        if dialogue is not None and dialogue.blocks_gameplay():
+            return
         self._strike_with_attack_sprites(self.attack_sprites, also_exclude=(self.player,))
 
     def enemy_projectile_logic(self):
@@ -2365,8 +2417,8 @@ class Level4:
                 #self.player.stats = self.player.player_config.final_stats
                 
         else:
-            
-            
+            self._tick_dialogue(dt_real)
+
             if self.layout_manager.daytime_layout:
                 if self.game_settings:
                     self.weather.time_speed_multiplier = self.game_settings.environment_speed
@@ -2574,6 +2626,7 @@ class Level4:
                     self.rts_session.draw()
                 else:
                     self._draw_interact_prompt()
+            self._draw_dialogue()
         self.player_dead = getattr(self.player, "is_dead", False)
 
         # Multiplayer (additive, inert unless PRCH_MULTIPLAYER_ENABLED=1 -- see

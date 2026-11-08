@@ -76,6 +76,19 @@ def test_warrior_brawl_is_opt_in():
             os.environ["PRCH_ENTITY_BRAWL"] = roster
 
 
+def test_dialogue_talk_is_opt_in():
+    from rts_validation_runtime import RTS_VALIDATION_RUNTIME
+
+    previous = list(RTS_VALIDATION_RUNTIME.scenario_filter)
+    try:
+        RTS_VALIDATION_RUNTIME.scenario_filter = ["all"]
+        assert "dialogue_talk" not in RtsValidationDriver()._filtered_names()
+        RTS_VALIDATION_RUNTIME.scenario_filter = ["dialogue_talk"]
+        assert RtsValidationDriver()._filtered_names() == ["dialogue_talk"]
+    finally:
+        RTS_VALIDATION_RUNTIME.scenario_filter = previous
+
+
 def test_explicit_terrain_name_is_included():
     from rts_validation_runtime import RTS_VALIDATION_RUNTIME
 

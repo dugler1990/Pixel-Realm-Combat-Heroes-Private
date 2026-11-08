@@ -1,0 +1,26 @@
+{
+  "id": "eskimo_intro",
+  "start": "hello",
+  "nodes": {
+    "hello": {
+      "speaker": "Eskimo",
+      "text": "Cold out. You need something?",
+      "command": "set_flag:met_eskimo=1",
+      "next": "ask"
+    },
+    "ask": {
+      "speaker": "Eskimo",
+      "choices": [
+        {"text": "Need any work?", "next": "job", "command": "offer_quest:ice_hunt"},
+        {"text": "Trade", "next": "ask", "command": "open_shop:eskimo"},
+        {"text": "Bye.", "next": "end"}
+      ]
+    },
+    "job": {
+      "speaker": "Eskimo",
+      "text": "Ice bears have been bold.",
+      "next": "end"
+    },
+    "end": {"end": true}
+  }
+}

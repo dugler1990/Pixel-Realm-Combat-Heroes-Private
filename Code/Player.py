@@ -401,10 +401,21 @@ class BasePlayer(Entity):
             self.direction.x = 0
 
     def input(self):
+        dialogue = getattr(getattr(self, "level", None), "dialogue", None)
+        if dialogue is not None and dialogue.blocks_gameplay():
+            dialogue.handle_input(self.input_manager)
+            self.attacking = False
+            self.direction.x = 0
+            self.direction.y = 0
+            return
         interact_fn = getattr(self.level, "try_interact_nearby_environment", None)
         if interact_fn is None:
             interact_fn = getattr(self.level, "try_open_nearby_chest", None)
         if interact_fn and interact_fn():
+            if dialogue is not None and dialogue.blocks_gameplay():
+                self.attacking = False
+                self.direction.x = 0
+                self.direction.y = 0
             return
         if self.status.startswith("sit_") or self.seated_object is not None:
             self.attacking = False

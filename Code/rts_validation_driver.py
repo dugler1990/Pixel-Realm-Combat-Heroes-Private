@@ -220,6 +220,50 @@ def _spawn_warrior_brawl(level):
     return f"spawned {spawned}"
 
 
+def _spawn_dialogue_eskimo(level):
+    """Wall ring on the empty benchmark map, then one standing Eskimo beside the player."""
+    runtime = getattr(level, "benchmark_runtime", None)
+    if runtime is not None:
+        runtime.grass_benchmark_enabled = False
+    if not getattr(level, "_benchmark_walls_spawned", False):
+        level._spawn_benchmark_boundaries()
+        level._benchmark_walls_spawned = True
+    player = getattr(level, "player", None)
+    spawner = getattr(level, "spawner", None)
+    if player is None or getattr(player, "hitbox", None) is None or spawner is None:
+        return "fail: no player"
+    origin = player.hitbox.center
+    before = len(getattr(spawner, "neutral_characters", []))
+    spawner.spawn_neutral({
+        "type": "eskimo",
+        "pos": ((origin[0] + 220) / TILESIZE, origin[1] / TILESIZE),
+        "attributes": {"interactable_tile_types": []},
+    })
+    spawned = list(getattr(spawner, "neutral_characters", []))[before:]
+    if not spawned:
+        return "fail: eskimo did not spawn"
+    eskimo = spawned[-1]
+    eskimo.roam_walk_chance = 0
+    eskimo.status = "idle"
+    eskimo.direction = pygame.math.Vector2()
+    if int(getattr(player, "gold", 0) or 0) < 40:
+        player.gold = 40
+    _seed_trade_pack(player)
+    return "eskimo ready"
+
+
+def _seed_trade_pack(player):
+    """One food and one piece of gear, so the pack side of the shop is not empty."""
+    inventory = getattr(player, "inventory", None)
+    if inventory is None or not hasattr(inventory, "add_item"):
+        return
+    from dialogue.trade import make_item
+    for item_id in ("frozen_fish", "arctic_feather"):
+        item = make_item(item_id)
+        if item is not None:
+            inventory.add_item(item)
+
+
 class RtsValidationDriver:
     WARMUP_FRAMES = 30
     DT = 0.05
@@ -246,6 +290,7 @@ class RtsValidationDriver:
         "terrain_sprite_tilt": 14.0,
         "terrain_shadow_slope": 14.0,
         "warrior_brawl": 20.0,
+        "dialogue_talk": 0.0,
     }
 
     DEFAULT_SCENARIO_NAMES = (
@@ -274,6 +319,8 @@ class RtsValidationDriver:
     # Not in the default list. The entity pipeline launches this one on its own
     # so the generated warriors fight in the visible game window.
     BRAWL_SCENARIO_NAMES = ("warrior_brawl",)
+    # Not in the default list. tests/test_dialogue_play.py opens this one.
+    PLAY_SCENARIO_NAMES = ("dialogue_talk",)
     TERRAIN_WALK_FRAMES_FAST = 8
     TERRAIN_WALK_FRAMES_VISIBLE = 70
     TERRAIN_SLOPE_LAPS = 3
@@ -315,6 +362,8 @@ class RtsValidationDriver:
         self._feet_wall_sign = 1
         self._feet_wall_axis = "x"
         self._brawl_spawned = False
+        self._dialogue_spawned = False
+        self._dialogue_details = ""
 
     def _filtered_names(self):
         requested = [
@@ -326,6 +375,7 @@ class RtsValidationDriver:
             list(self.DEFAULT_SCENARIO_NAMES)
             + list(self.TERRAIN_SCENARIO_NAMES)
             + list(self.BRAWL_SCENARIO_NAMES)
+            + list(self.PLAY_SCENARIO_NAMES)
         )
         if not requested:
             return list(self.DEFAULT_SCENARIO_NAMES)
@@ -345,6 +395,19 @@ class RtsValidationDriver:
         total = len(names)
         elapsed = time.time() - self._scenario_started if self._scenario_started else 0.0
         limit = self._max_seconds_for(name, runtime)
+        if name == "dialogue_talk":
+            runtime.set_overlay(
+                [
+                    "DIALOGUE",
+                    "Walk to the Eskimo.",
+                    "Space talks. Up and Down choose.",
+                    "His icons are on the left. Your inventory is on the right.",
+                    "E changes his tabs. Tab moves between them. Space buys or sells.",
+                    "Close the window to finish.",
+                ],
+                phase=phase,
+            )
+            return
         lines = [
             "RTS VALIDATION",
             f"scenario {idx}/{total}: {name}",
@@ -423,6 +486,9 @@ class RtsValidationDriver:
                 self._feet_wall_axis = "x"
             if name == "warrior_brawl":
                 self._brawl_spawned = False
+            if name == "dialogue_talk":
+                self._dialogue_spawned = False
+                self._dialogue_details = ""
             if name.startswith("terrain_"):
                 self._terrain_phase = None
                 self._terrain_walk_frames = 0
@@ -436,6 +502,7 @@ class RtsValidationDriver:
 
         elapsed = time.time() - self._scenario_started
         limit = self._max_seconds_for(name, runtime)
+        stay_open = name == "dialogue_talk" and runtime.visible_mode
 
         # Complete post-pass hold even when runner returns done=False on later frames.
         if self._hold_started is not None and self._pending_result is not None:
@@ -457,7 +524,7 @@ class RtsValidationDriver:
             return False
 
         self._scenario_frame += 1
-        if elapsed > limit:
+        if not stay_open and elapsed > limit:
             runtime.record(name, False, f"timeout after {limit}s", elapsed * 1000)
             self._advance(level)
             return False
@@ -547,6 +614,17 @@ class RtsValidationDriver:
         if details.startswith("fail:"):
             return True, False, details
         return True, True, details, "probe"
+
+    def _run_dialogue_talk(self, level):
+        """Black benchmark room, wall ring, one Eskimo. Stays up until the window closes."""
+        if self._scenario_frame < 2:
+            return False, False, ""
+        if not self._dialogue_spawned:
+            self._dialogue_spawned = True
+            self._dialogue_details = _spawn_dialogue_eskimo(level)
+            if self._dialogue_details.startswith("fail:"):
+                return True, False, self._dialogue_details
+        return False, False, self._dialogue_details
 
     def _run_map_entities_loaded(self, level):
         if self._scenario_frame < 2:
