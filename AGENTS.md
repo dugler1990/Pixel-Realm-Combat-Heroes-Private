@@ -30,11 +30,12 @@ and leave the user in charge of it.
 Every initiative keeps one: `PROCESS_*.md` or `NOTES_*.md` in its folder. Read it before
 starting. Terse lines, no narrative: facts, commands, numbers.
 - **Method that works**: exact steps, commands, settings to repeat.
-- **Tried and dropped**: every tool, model or approach tried for this task (e.g. multi-image
-  TRELLIS), with result and why. Before proposing an option, search the process docs for it;
-  if it was tried, say so and what is different this time.
 - **Known errors**: symptom, cause, fix.
 - **Log**: dated steps, commands, numbers.
+- **Tried and dropped**, the doc's last section: every tool, model or approach tried for this
+  task (e.g. multi-image TRELLIS), with result and why. One not tied to a task goes in
+  `docs/TRIED.md`. Before proposing an option, search these for it; if it was tried, say so
+  and what is different this time.
 
 Maintain it as you go, don't just append: a retry with small changes merges into its existing
 line; a wrong claim is replaced; what proved out moves into Method.

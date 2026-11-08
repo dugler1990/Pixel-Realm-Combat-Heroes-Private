@@ -118,6 +118,8 @@ Each whole 4495x3065 chunk goes to SAM (shrunk to 560 px); `sam3/merge_polygon_o
 joins the chunks over the 640 px halo into `levels/Frostreach/sunspine_7x6_play/map_sam3_objects.tmx`.
 Rocks come out whole. Its output: `levels/Frostreach/sunspine_7x6_play/export/sam3_obstacle/chunk_*`.
 
-**Tried and dropped**: the tiled pass (560 px windows inside each chunk, confidence applied per
-window, used by `review_all.py` from 2026-10-31): cuts rocks at window edges and paints
-window-sized squares. `review_all.py` takes `--no-tile`; pass it.
+## Tried and dropped
+
+- **Tiled SAM3 level pass** (560 px windows inside each chunk, confidence applied per window,
+  used by `review_all.py` from 2026-10-31): cuts rocks at window edges and paints window-sized
+  squares. `review_all.py` takes `--no-tile`; pass it.
