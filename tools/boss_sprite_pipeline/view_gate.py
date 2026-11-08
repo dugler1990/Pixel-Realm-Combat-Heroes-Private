@@ -30,6 +30,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from tools.painted_map_pipeline.building_interiors import paste_back
 from tools.painted_map_pipeline.image_client import make_image_client
 from tools.painted_map_pipeline.review_gate import ask, sent, show, with_criticism
 from tools.painted_map_pipeline.shape_gate import mark_shape_error, shape_note, shape_scores
@@ -314,7 +315,12 @@ def main() -> None:
             sent_prompt = with_criticism(EDIT_PROMPTS[a.view], criticism, attach, first_index=3)
             images, strengths = [last, Path(image2).resolve()] + [Path(p) for p in attach], None
             sent(sent_prompt, [(f"image {i + 1}", p) for i, p in enumerate(images)] + [("mask", mask_sent)])
-            result = editor.generate(sent_prompt, [str(p) for p in images], str(draw_path), mask=str(mask_sent))
+            raw_path = tag.with_name(tag.name + "_raw.png")
+            result = editor.generate(sent_prompt, [str(p) for p in images], str(raw_path), mask=str(mask_sent))
+            # As in the interiors: the model repaints the whole picture and obeys the mask only roughly, so its
+            # return is kept inside the mask and the last attempt everywhere else.
+            paste_back(Image.open(raw_path), Image.open(last),
+                       np.asarray(Image.open(mask_sent).convert("L")) > 127).convert("RGB").save(draw_path)
         tag.with_name(tag.name + "_prompt.txt").write_text(sent_prompt, encoding="utf-8")
         # Exactly what went to the image API (the request payload, generation id, cost).
         tag.with_name(tag.name + "_request.json").write_text(json.dumps(
