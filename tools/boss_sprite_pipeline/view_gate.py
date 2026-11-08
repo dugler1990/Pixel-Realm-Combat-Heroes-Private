@@ -37,6 +37,9 @@ from tools.painted_map_pipeline.world_levels.retry import parse_gate_retry
 from tools.sprite_assets.cut_sheet import figure_cutout, score_mask
 
 CONFIG = Path(__file__).resolve().parent / "view_gate.json"
+# [r1] is an edit, as in the interiors: gpt-image-2 repaints only the masked area of the last attempt, so the
+# style and the armour design stay. A fresh Leonardo draw would start over.
+EDIT_CONFIG = Path(__file__).resolve().parents[1] / "painted_map_pipeline" / "openai.gpt-image-2.json"
 
 # Heights above the floor, as a share of the figure's height (explode2/outline_check.py). Below the hips a band
 # measures one leg: the right half of the figure.
@@ -54,6 +57,20 @@ MARK_PX = 4               # the overlay's error marks are widened by this many p
 # Reference strength per image sent to Leonardo: the front and the outline are to be followed; the marked copy of
 # the last attempt is only a hint of where it went wrong -- at HIGH the model copies its own mistake.
 INPUT_STRENGTH, ATTACHED_STRENGTH = "HIGH", "LOW"
+EDIT_PX = 12              # [r1] repaints the error and this many pixels round it
+EDIT_MIN_PX = 3           # [r1] ignores error thinner than about twice this (the outline's edge)
+
+EDIT_PROMPTS = {
+    "front": (
+        "Image 1 is your drawing of this man in armour. Repaint only the masked area so that the armour covers "
+        "every part of the black shape in image 2, continuing the same armour plates outward. Keep everything else "
+        "exactly as it is: the same armour design, colours, lighting and painting style."),
+    "back": (
+        "Image 1 is your drawing of this man seen from behind. Repaint only the masked area so that his figure "
+        "exactly fills the black outline in image 2: add armour where the outline is not filled, and plain white "
+        "background where the drawing goes outside it. Keep everything else exactly as it is: the same armour "
+        "design, colours, lighting and painting style."),
+}
 
 BIGGER = ("Make the armour realistically big enough to cover his large chest, shoulders and arms: thick plate "
           "standing well clear of his muscles everywhere, never tight to the body.")
@@ -101,19 +118,28 @@ def frame(mask: np.ndarray) -> tuple[int, int, int, float]:
     return top, bottom, height, float(xs[ys < top + 0.3 * height].mean())
 
 
-def line_up(image: Image.Image, mask: np.ndarray, target: np.ndarray) -> tuple[Image.Image, np.ndarray]:
-    """The image and its figure mask moved onto the target's frame: same height (NEAREST for the mask), head top on
-    the target's head top, body centre on the target's."""
-    top, _, height, cx = frame(mask)
-    t_top, _, t_height, t_cx = frame(target)
+def _placement(figure: np.ndarray, onto: np.ndarray, shape) -> tuple[tuple[int, int], tuple[int, int]]:
+    """Size and offset that put `figure` on `onto`: same height, head top on its head top, body centre on its."""
+    top, _, height, cx = frame(figure)
+    t_top, _, t_height, t_cx = frame(onto)
     s = t_height / height
-    size = (round(mask.shape[1] * s), round(mask.shape[0] * s))
-    at = (round(t_cx - cx * s), round(t_top - top * s))
-    out_mask = Image.new("L", target.shape[::-1], 0)
-    out_mask.paste(Image.fromarray((mask * 255).astype(np.uint8)).resize(size, Image.NEAREST), at)
+    return (round(shape[1] * s), round(shape[0] * s)), (round(t_cx - cx * s), round(t_top - top * s))
+
+
+def move(mask: np.ndarray, figure: np.ndarray, onto: np.ndarray) -> np.ndarray:
+    """A mask drawn in `figure`'s frame, moved into `onto`'s frame (NEAREST)."""
+    size, at = _placement(figure, onto, mask.shape)
+    out = Image.new("L", onto.shape[::-1], 0)
+    out.paste(Image.fromarray((mask * 255).astype(np.uint8)).resize(size, Image.NEAREST), at)
+    return np.asarray(out) > 127
+
+
+def line_up(image: Image.Image, mask: np.ndarray, target: np.ndarray) -> tuple[Image.Image, np.ndarray]:
+    """The image and its figure mask moved onto the target's frame."""
+    size, at = _placement(mask, target, mask.shape)
     out_image = Image.new("RGB", target.shape[::-1], (255, 255, 255))
     out_image.paste(image.convert("RGB").resize(size, Image.BILINEAR), at)
-    return out_image, np.asarray(out_mask) > 127
+    return out_image, move(mask, mask, target)
 
 
 def outline_image(mask: np.ndarray) -> Image.Image:
@@ -191,7 +217,9 @@ def marked(image: Image.Image, missing: np.ndarray, spilled: np.ndarray) -> Imag
 
 
 def evaluate(view: str, drawn: Image.Image, target: np.ndarray, tag: Path) -> tuple[dict, list[str], Path, Path]:
-    """Score one draw. Returns the scores, the lines for the sheet, the sheet and the overlay (None for a side)."""
+    """Score one draw. Returns the scores, the lines for the sheet, the sheet and the overlay (None for a side).
+    For front and back it also writes <tag>_edit_mask.png: the error in the draw's own frame, widened by EDIT_PX,
+    white = repaint -- the mask an [r1] edit uses."""
     if view == "side":
         s = score_side(target, score_mask(drawn))
         lines = [f"side: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
@@ -200,7 +228,8 @@ def evaluate(view: str, drawn: Image.Image, target: np.ndarray, tag: Path) -> tu
         top, bottom, _, _ = frame(target)
         return s, lines, sheet([outline_image(target), drawn], lines, tag.with_name(tag.name + "_sheet.png"),
                                (top, bottom)), None
-    lined, has = line_up(drawn, score_mask(drawn), target)
+    figure = score_mask(drawn)
+    lined, has = line_up(drawn, figure, target)
     if view == "front":
         s, should = score_front(target, has)
         overlay = marked(lined, should & ~has, np.zeros_like(has))
@@ -212,6 +241,14 @@ def evaluate(view: str, drawn: Image.Image, target: np.ndarray, tag: Path) -> tu
         lines = [f"back: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
                  f"IoU {s['iou']:.3f}  missing {s['missing'] * 100:.2f} %  spilled {s['spilled'] * 100:.2f} %"]
     lines.append("  ".join(f"{k} {v['diff']:+.2f}" for k, v in s["bands"].items()) + "  (% h, draw minus target)")
+    from scipy import ndimage
+
+    error = (should & ~has) if view == "front" else (target ^ has)
+    # Only real misses: the outline's 1-3 px anti-aliased edge differs everywhere and is not one.
+    error = ndimage.binary_opening(error, iterations=EDIT_MIN_PX)
+    edit = move(error, has, figure)
+    edit = ndimage.binary_dilation(edit, iterations=EDIT_PX) if edit.any() else edit
+    Image.fromarray((edit * 255).astype(np.uint8)).save(tag.with_name(tag.name + "_edit_mask.png"))
     shape_png = tag.with_name(tag.name + "_shape.png")
     overlay.save(shape_png)
     return s, lines, sheet([outline_image(target), lined, overlay], lines, tag.with_name(tag.name + "_sheet.png")), shape_png
@@ -225,6 +262,7 @@ def main() -> None:
     ap.add_argument("--back", type=Path, help="side: the approved back")
     ap.add_argument("--side", choices=("left", "right"), default="left")
     ap.add_argument("--config", type=Path, default=CONFIG)
+    ap.add_argument("--edit-config", type=Path, default=EDIT_CONFIG, help="[r1]: the image edit model")
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
     need = {"front": ["input"], "back": ["front"], "side": ["front", "back"]}[a.view]
@@ -253,32 +291,44 @@ def main() -> None:
         outline_image(target).save(image2)
 
     client = make_image_client(json.loads(a.config.read_text(encoding="utf-8")))
+    editor = None
     inputs = [image1.resolve(), Path(image2).resolve()]
     # A rerun into the same folder carries on numbering: earlier attempts stay on disk.
     done = [int(p.stem.rsplit("_", 1)[1]) for p in a.out.glob(f"{a.view}_attempt_[0-9][0-9].png")]
     criticism, attach, attempts, n = "", [], [], max(done, default=0)
+    edit_of = None              # [r1]: (attempt, mask) to edit next, instead of a fresh draw
     while True:
         n += 1
         tag = a.out / f"{a.view}_attempt_{n:02d}"
-        sent_prompt = with_criticism(prompt, criticism, attach, first_index=3)
-        images = inputs + [Path(p) for p in attach]
-        tag.with_name(tag.name + "_prompt.txt").write_text(sent_prompt, encoding="utf-8")
-        strengths = [INPUT_STRENGTH] * len(inputs) + [ATTACHED_STRENGTH] * len(attach)
-        sent(sent_prompt, [(f"image {i + 1} {st}", p) for i, (p, st) in enumerate(zip(images, strengths))])
         draw_path = tag.with_suffix(".png")
-        result = client.generate(sent_prompt, [str(p) for p in images], str(draw_path), strengths=strengths)
-        # Exactly what went to the image API (Leonardo: the request payload, generation id, cost).
+        if edit_of is None:
+            kind, mask_sent = "draw", None
+            sent_prompt = with_criticism(prompt, criticism, attach, first_index=3)
+            images = inputs + [Path(p) for p in attach]
+            strengths = [INPUT_STRENGTH] * len(inputs) + [ATTACHED_STRENGTH] * len(attach)
+            sent(sent_prompt, [(f"image {i + 1} {st}", p) for i, (p, st) in enumerate(zip(images, strengths))])
+            result = client.generate(sent_prompt, [str(p) for p in images], str(draw_path), strengths=strengths)
+        else:
+            kind, (last, mask_sent) = "edit", edit_of
+            editor = editor or make_image_client(json.loads(a.edit_config.read_text(encoding="utf-8")))
+            sent_prompt = with_criticism(EDIT_PROMPTS[a.view], criticism, attach, first_index=3)
+            images, strengths = [last, Path(image2).resolve()] + [Path(p) for p in attach], None
+            sent(sent_prompt, [(f"image {i + 1}", p) for i, p in enumerate(images)] + [("mask", mask_sent)])
+            result = editor.generate(sent_prompt, [str(p) for p in images], str(draw_path), mask=str(mask_sent))
+        tag.with_name(tag.name + "_prompt.txt").write_text(sent_prompt, encoding="utf-8")
+        # Exactly what went to the image API (the request payload, generation id, cost).
         tag.with_name(tag.name + "_request.json").write_text(json.dumps(
-            {"images": [str(p) for p in images], "strengths": strengths, "result": result}, indent=1, default=str),
+            {"kind": kind, "images": [str(p) for p in images], "strengths": strengths,
+             "mask": str(mask_sent) if mask_sent else None, "result": result}, indent=1, default=str),
             encoding="utf-8")
         drawn = Image.open(draw_path)
         s, lines, sheet_png, shape_png = evaluate(a.view, drawn, target, tag)
-        attempts.append({"attempt": n, "draw": str(draw_path), "prompt": str(tag.with_name(tag.name + "_prompt.txt")),
+        attempts.append({"attempt": n, "kind": kind, "draw": str(draw_path), "prompt": str(tag.with_name(tag.name + "_prompt.txt")),
                          "images_sent": [str(p) for p in images], "scores": s,
                          "shape": str(shape_png) if shape_png else None})
         print("\n  " + "\n  ".join(lines) + f"\n  {sheet_png}")
         show(sheet_png)
-        criticism, attach = "", []
+        criticism, attach, edit_of = "", [], None
         while True:
             raw = ask("\n  [enter] accept   [r] draw again   [r1] redraw showing this draw's shape error"
                       "\n  [rb] redraw asking for bigger armour   [r <why> @img] redraw with criticism"
@@ -300,6 +350,8 @@ def main() -> None:
                     raise FileNotFoundError("a side has no shape error to show -- use [r <why>]")
                 note, directive = TEXTS[a.view] if a.view in TEXTS else ("", "")
                 criticism, attach = parse_gate_retry(raw, shape_png, note, directive)
+                if raw[:2].lower() == "r1":
+                    edit_of = (draw_path.resolve(), tag.with_name(tag.name + "_edit_mask.png").resolve())
             except FileNotFoundError as exc:
                 print(f"  {exc}", file=sys.stderr)
             continue
