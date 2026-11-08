@@ -50,6 +50,10 @@ HEAD, SOLES = 0.13, 0.02  # front: left out of the score
 FRONT_MAX_MISSING = 0.02  # uncovered, head and soles out: flare_3_extrahigh 1.37 %; flare_2 2.74, flare_4 3.52,
                           # flare_1 4.81, the first fitted front 5.38. A width check only: depth is not in the image
 SIDE_MAX_OFF = 0.02       # side: head top, feet and height each within this share of the front's height
+MARK_PX = 4               # the overlay's error marks are widened by this many pixels each side to be seen at 1024
+# Reference strength per image sent to Leonardo: the front and the outline are to be followed; the marked copy of
+# the last attempt is only a hint of where it went wrong -- at HIGH the model copies its own mistake.
+INPUT_STRENGTH, ATTACHED_STRENGTH = "HIGH", "LOW"
 
 BIGGER = ("Make the armour realistically big enough to cover his large chest, shoulders and arms: thick plate "
           "standing well clear of his muscles everywhere, never tight to the body.")
@@ -177,6 +181,15 @@ def sheet(panels: list[Image.Image], lines: list[str], path: Path, rows: tuple =
     return path
 
 
+def marked(image: Image.Image, missing: np.ndarray, spilled: np.ndarray) -> Image.Image:
+    """shape_gate's overlay with the error widened by MARK_PX, so a rim a few pixels wide is visible to the model.
+    Only the picture is widened; the scores count the real pixels."""
+    from scipy import ndimage
+
+    grow = lambda m: ndimage.binary_dilation(m, iterations=MARK_PX) if m.any() else m  # noqa: E731
+    return mark_shape_error(image, grow(missing), grow(spilled))
+
+
 def evaluate(view: str, drawn: Image.Image, target: np.ndarray, tag: Path) -> tuple[dict, list[str], Path, Path]:
     """Score one draw. Returns the scores, the lines for the sheet, the sheet and the overlay (None for a side)."""
     if view == "side":
@@ -190,12 +203,12 @@ def evaluate(view: str, drawn: Image.Image, target: np.ndarray, tag: Path) -> tu
     lined, has = line_up(drawn, score_mask(drawn), target)
     if view == "front":
         s, should = score_front(target, has)
-        overlay = mark_shape_error(lined, should | has, has)
+        overlay = marked(lined, should & ~has, np.zeros_like(has))
         lines = [f"front: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
                  f"bare outline uncovered {s['missing'] * 100:.2f} % (head, soles left out)"]
     else:
         s = score_back(target, has)
-        overlay = mark_shape_error(lined, target, has)
+        overlay = marked(lined, target & ~has, has & ~target)
         lines = [f"back: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
                  f"IoU {s['iou']:.3f}  missing {s['missing'] * 100:.2f} %  spilled {s['spilled'] * 100:.2f} %"]
     lines.append("  ".join(f"{k} {v['diff']:+.2f}" for k, v in s["bands"].items()) + "  (% h, draw minus target)")
@@ -241,16 +254,23 @@ def main() -> None:
 
     client = make_image_client(json.loads(a.config.read_text(encoding="utf-8")))
     inputs = [image1.resolve(), Path(image2).resolve()]
-    criticism, attach, attempts, n = "", [], [], 0
+    # A rerun into the same folder carries on numbering: earlier attempts stay on disk.
+    done = [int(p.stem.rsplit("_", 1)[1]) for p in a.out.glob(f"{a.view}_attempt_[0-9][0-9].png")]
+    criticism, attach, attempts, n = "", [], [], max(done, default=0)
     while True:
         n += 1
         tag = a.out / f"{a.view}_attempt_{n:02d}"
         sent_prompt = with_criticism(prompt, criticism, attach, first_index=3)
         images = inputs + [Path(p) for p in attach]
         tag.with_name(tag.name + "_prompt.txt").write_text(sent_prompt, encoding="utf-8")
-        sent(sent_prompt, [(f"image {i + 1}", p) for i, p in enumerate(images)])
+        strengths = [INPUT_STRENGTH] * len(inputs) + [ATTACHED_STRENGTH] * len(attach)
+        sent(sent_prompt, [(f"image {i + 1} {st}", p) for i, (p, st) in enumerate(zip(images, strengths))])
         draw_path = tag.with_suffix(".png")
-        client.generate(sent_prompt, [str(p) for p in images], str(draw_path))
+        result = client.generate(sent_prompt, [str(p) for p in images], str(draw_path), strengths=strengths)
+        # Exactly what went to the image API (Leonardo: the request payload, generation id, cost).
+        tag.with_name(tag.name + "_request.json").write_text(json.dumps(
+            {"images": [str(p) for p in images], "strengths": strengths, "result": result}, indent=1, default=str),
+            encoding="utf-8")
         drawn = Image.open(draw_path)
         s, lines, sheet_png, shape_png = evaluate(a.view, drawn, target, tag)
         attempts.append({"attempt": n, "draw": str(draw_path), "prompt": str(tag.with_name(tag.name + "_prompt.txt")),
