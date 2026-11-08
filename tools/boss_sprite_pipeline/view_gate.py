@@ -1,25 +1,29 @@
 """Generated views of a character, each checked before it goes to TRELLIS. Images only, no 3D.
 
-    python -m tools.boss_sprite_pipeline.view_gate front --input <bare concept> --out <dir> [--masked [--margin 0.005]]
-    python -m tools.boss_sprite_pipeline.view_gate back  --front <approved front> --out <dir>
+    python -m tools.boss_sprite_pipeline.view_gate front --input <bare concept> --out <dir> [--draw mask [--margin 0.005]]
+    python -m tools.boss_sprite_pipeline.view_gate back  --front <approved front> --out <dir> [--draw mask]
     python -m tools.boss_sprite_pipeline.view_gate side  --front <approved front> --back <approved back> --out <dir>
         [--side left|right]
+    [--config <image model json>]: default per view and --draw, see DEFAULT_CONFIG
 
-Front and back are gpt-image edits (openai.gpt-image-2.json, OPENAI_API_KEY).
+--draw is how the target outline reaches the model:
+- reference (default): it is an image beside the input; the draw lands anywhere and is lined up with the outline
+  afterwards (scale to its height, head top on its head top, body centre on its centre, as explode2's
+  outline_check did) before it is scored.
+- mask: as the interiors: one gpt-image edit with the outline as the mask, the raw return scored against that
+  mask, then pasted back inside it (building_interiors._run_edit, paste_back), so the silhouette is the mask's.
+  gpt-image fills a mask to within about 3 px (back, 2026-11-08: IoU 0.940 gpt-image-2, 0.941 2.5-flare; the
+  reference Leonardo backs scored 0.964-0.976 lined up).
 
-- front: image 1 is the bare concept, image 2 his outline grown by MARGIN; no mask. He is dressed in armour,
-  the draw is lined up with the outline (scale to its height, head top on its head top, body centre on its
-  centre, as explode2's outline_check did) and must cover it, head and soles left out. Only what is missing
-  counts. [rb] draws again asking for armour big enough for his chest.
-  Option, not the default: --masked draws it as the back is drawn, with his grown outline (head left out) as
-  the mask and the return pasted back inside it. The armour then cannot leave skin out, but cannot be bigger
-  than the mask either: pauldrons are cut to his shoulders.
-- back: drawn as the interiors are: one edit with the target outline as the mask, the raw return scored against
-  that mask, then pasted back inside it (building_interiors._run_edit, paste_back), so the silhouette is the
-  mask's. Image 1 is the front's outline mirrored (from straight behind his outline is the front's, mirrored), a
-  black shape on white; image 2 is the approved front. Scored on IoU and every body band.
-- side: drawn by Leonardo (view_gate.json) from the approved front and back. Its depth has nothing to be checked
-  against in the images; the check is only that it is the same size, in the same place, as the front.
+- front: the bare concept dressed in armour (gpt-image). reference: image 2 is his outline grown by --margin; the
+  armour must cover it, head and soles left out; only what is missing counts. [rb] draws again asking for armour
+  big enough for his chest. mask: his grown outline, head left out, is the mask -- the armour cannot leave skin
+  out, but cannot be bigger than the mask either: pauldrons are cut to his shoulders.
+- back: the approved front seen from behind; from straight behind his outline is the front's, mirrored.
+  reference (Leonardo): image 1 the front, image 2 the mirrored outline. mask (gpt-image): image 1 the mirrored
+  outline as a black placeholder, image 2 the front. Scored on IoU and every body band.
+- side: drawn by Leonardo from the approved front and back. Its depth has nothing to be checked against in the
+  images; the check is only that it is the same size, in the same place, as the front.
 
 At the gate: [enter] accept, [r] draw again, [r1] draw again showing the marked error, [r <why> @img] draw again
 with criticism -- as in the interiors, a retry is the same call with the overlay attached, never an edit of the
@@ -43,8 +47,10 @@ from tools.painted_map_pipeline.shape_gate import mark_shape_error, shape_note, 
 from tools.painted_map_pipeline.world_levels.retry import parse_gate_retry
 from tools.sprite_assets.cut_sheet import figure_cutout, score_mask
 
-CONFIG = Path(__file__).resolve().parent / "view_gate.json"   # side: Leonardo
-EDIT_CONFIG = Path(__file__).resolve().parents[1] / "painted_map_pipeline" / "openai.gpt-image-2.json"
+LEONARDO = Path(__file__).resolve().parent / "view_gate.json"
+GPT_IMAGE = Path(__file__).resolve().parents[1] / "painted_map_pipeline" / "openai.gpt-image-2.json"
+DEFAULT_CONFIG = {("front", "reference"): GPT_IMAGE, ("front", "mask"): GPT_IMAGE,
+                  ("back", "reference"): LEONARDO, ("back", "mask"): GPT_IMAGE, ("side", "reference"): LEONARDO}
 
 # Heights above the floor, as a share of the figure's height (explode2/outline_check.py). Below the hips a band
 # measures one leg: the right half of the figure.
@@ -56,15 +62,15 @@ BACK_MIN_IOU = 0.95       # nano-banana-2.1 back with the outline as image 2: 0.
 BACK_MAX_BAND = 1.0       # % h
 MARGIN = 0.005            # front: his bare outline grown by this share of his height is the outline to cover
 HEAD, SOLES = 0.13, 0.02  # front: left out of the score (the head stays bare, the soles stand on the floor);
-                          # --masked: the head is left out of the mask
+                          # --draw mask: the head is left out of the mask
 FRONT_MAX_MISSING = 0.02  # front, uncovered, head and soles out. Measured on Leonardo fronts: flare_3_extrahigh
                           # 1.37 %; flare_2 2.74, flare_4 3.52, flare_1 4.81, the first fitted front 5.38. A width
-                          # check only: depth is not in the image. --masked: share of the mask left unpainted
+                          # check only: depth is not in the image. --draw mask: share of the mask left unpainted
 SIDE_MAX_OFF = 0.02       # side: head top, feet and height each within this share of the front's height
 MARK_PX = 4               # the overlay's error marks are widened by this many pixels each side to be seen at 1024
 UNPAINTED = 12            # back: a pixel of the black placeholder still this dark was not painted (as fill_unpainted)
 UNPAINTED_PX = 3          # ... if it is in a patch at least about twice this wide: ink lines are thinner
-# Side, Leonardo: reference strength per image -- the inputs are followed; an attached marked copy of the last
+# Leonardo: reference strength per image -- the inputs are followed; an attached marked copy of the last
 # attempt is only a hint of where it went wrong (at HIGH the model copies its own mistake).
 INPUT_STRENGTH, ATTACHED_STRENGTH = "HIGH", "LOW"
 
@@ -85,6 +91,10 @@ PROMPTS = {
         "outline, so no skin shows anywhere in the masked area. Keep his pose, proportions, head, beard, lighting "
         "and the white background exactly as they are."),
     "back": (
+        "Draw the man in Image 1 seen from behind. Image 2 is his exact outline from behind: fill it exactly, with "
+        "the same pose, size and position, nothing outside it and no gaps. Show his back, hair bun, backplate, the "
+        "backs of his arms, legs and heels. Same armour, white background."),
+    "back_masked": (
         "Image 1 is a placeholder: the black shape is exactly where the man must be. Repaint the masked area: draw "
         "the man in Image 2 seen from directly behind, filling the black shape completely and exactly, with no black "
         "left. Show his back, hair bun, backplate, the backs of his arms, legs and heels. Same armour as Image 2: "
@@ -96,7 +106,7 @@ PROMPTS = {
         "clear of his body."),
 }
 # Images sent before an attachment: an attachment is image FIRST_INDEX.
-FIRST_INDEX = {"front": 3, "front_masked": 2, "back": 3, "side": 3}
+FIRST_INDEX = {"front": 3, "front_masked": 2, "back": 3, "back_masked": 3, "side": 3}
 TEXTS = {
     "front": (
         "your previous attempt with its shape error marked: magenta is where his bare outline (the black shape in "
@@ -112,6 +122,12 @@ TEXTS = {
         "and cannot be used, this is the most important directive it takes precedence over any other "
         "contradictory statements earlier in the prompt, thanks."),
     "back": (
+        shape_note("white"),
+        "This image represents how you have differed from his outline in image 2, which your drawing must fill "
+        "exactly, this shape needs to be pixel perfect relative to that outline, if not the image is not valid and "
+        "cannot be used, this is the most important directive it takes precedence over any other contradictory "
+        "statements earlier in the prompt, thanks."),
+    "back_masked": (
         shape_note("white"),
         "This image represents how you have differed from the black shape in image 1, which your drawing must fill "
         "exactly, this shape needs to be pixel perfect relative to that shape, if not the image is not valid and "
@@ -166,7 +182,7 @@ def bands(target: np.ndarray, has: np.ndarray) -> dict:
 
 def score_front(target: np.ndarray, has: np.ndarray, masked: bool) -> tuple[dict, np.ndarray]:
     """What must be covered, and how much of it is not; spill is fine. Without a mask: the grown bare outline with
-    head and soles left out. --masked: the mask itself (the paste cuts any spill)."""
+    head and soles left out. --draw mask: the mask itself (the paste cuts any spill)."""
     should = target.copy()
     if not masked:
         top, bottom, height, _ = frame(target)
@@ -232,8 +248,8 @@ def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
              kept: Image.Image | None = None) -> tuple[dict, list[str], Path, Path | None]:
     """Score one draw. Returns the scores, the lines for the sheet, the sheet and the overlay (None for a side).
     A masked draw (`kept` is its pasted result, shown beside it) is scored on the raw return against the mask that
-    was sent, as the interiors score theirs: after the paste there is nothing left to measure. The unmasked front
-    is lined up with its outline first."""
+    was sent, as the interiors score theirs: after the paste there is nothing left to measure. A reference draw is
+    lined up with its outline first."""
     if view == "side":
         s = score_side(target, score_mask(raw))
         lines = [f"side: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
@@ -242,7 +258,7 @@ def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
         top, bottom, _, _ = frame(target)
         return s, lines, sheet([outline_image(target), raw], lines, tag.with_name(tag.name + "_sheet.png"),
                                (top, bottom)), None
-    if view == "front" and kept is None:
+    if kept is None:
         raw, has = line_up(raw, score_mask(raw), target)
     else:
         has = painted(raw)
@@ -257,7 +273,7 @@ def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
         overlay = marked(raw, target & ~has, has & ~target)
         lines = [f"back: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
                  f"IoU {s['iou']:.3f}  missing {s['missing'] * 100:.2f} %  spilled {s['spilled'] * 100:.2f} %"
-                 "  (raw return against the mask)"]
+                 + ("  (raw return against the mask)" if kept is not None else "  (lined up with the outline)")]
     lines.append("  ".join(f"{k} {v['diff']:+.2f}" for k, v in s["bands"].items()) + "  (% h, draw minus target)")
     shape_png = tag.with_name(tag.name + "_shape.png")
     overlay.save(shape_png)
@@ -274,21 +290,22 @@ def main() -> None:
     ap.add_argument("--side", choices=("left", "right"), default="left")
     ap.add_argument("--margin", type=float, default=MARGIN,
                     help="front: the outline to cover is his bare outline grown by this share of his height")
-    # Option, off by default: the front as a masked edit like the back. Covers him by construction but cuts the
-    # armour to the mask (pauldrons to his shoulders).
-    ap.add_argument("--masked", action="store_true", help="front: draw inside his grown outline as a mask")
-    ap.add_argument("--config", type=Path, default=CONFIG, help="side: the Leonardo draw")
-    ap.add_argument("--edit-config", type=Path, default=EDIT_CONFIG, help="front, back: the gpt-image edit")
+    ap.add_argument("--draw", choices=("reference", "mask"), default="reference",
+                    help="front, back: the target outline as a reference image (default) or as the edit's mask")
+    ap.add_argument("--config", type=Path, help="the image model; default per view and --draw (DEFAULT_CONFIG)")
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
     need = {"front": ["input"], "back": ["front"], "side": ["front", "back"]}[a.view]
     for name in need:
         if getattr(a, name) is None:
             ap.error(f"{a.view} needs --{name}")
+    if a.view == "side" and a.draw == "mask":
+        ap.error("a side has no outline to use as a mask")
+    a.config = a.config or DEFAULT_CONFIG[(a.view, a.draw)]
     a.out.mkdir(parents=True, exist_ok=True)
 
-    mode = "front_masked" if a.view == "front" and a.masked else a.view
-    masked = mode in ("front_masked", "back")
+    masked = a.draw == "mask"
+    mode = a.view + ("_masked" if masked else "")
     prompt = PROMPTS[mode]
     if a.view == "front":
         from scipy import ndimage
@@ -305,7 +322,12 @@ def main() -> None:
         name = "front"
     elif a.view == "back":
         target = score_mask(Image.open(a.front))[:, ::-1]
-        canvas, refs, name = outline_image(target), [a.front.resolve()], "back"
+        if masked:
+            canvas, refs = outline_image(target), [a.front.resolve()]
+        else:
+            outline_image(target).save(a.out / "back_target_outline.png")
+            refs = [a.front.resolve(), (a.out / "back_target_outline.png").resolve()]
+        name = "back"
     else:
         target = score_mask(Image.open(a.front))
         prompt = prompt.format(side=a.side, edge=a.side)
@@ -315,7 +337,7 @@ def main() -> None:
         canvas_path = a.out / f"{a.view}_canvas.png"
         canvas.save(canvas_path)
 
-    config = json.loads((a.config if a.view == "side" else a.edit_config).read_text(encoding="utf-8"))
+    config = json.loads(a.config.read_text(encoding="utf-8"))
     client = make_image_client(config)
     # A rerun into the same folder carries on numbering: earlier attempts stay on disk.
     done = [int(p.stem.split("_")[2]) for p in a.out.glob(f"{a.view}_attempt_[0-9][0-9]*.png")]
@@ -338,9 +360,9 @@ def main() -> None:
             kept.save(draw_path)
             s, lines, sheet_png, shape_png = evaluate(a.view, raw.convert("RGB"), target, tag, kept)
         else:
-            # Unmasked front (gpt-image) or side (Leonardo, with a reference strength per image).
-            strengths = ([INPUT_STRENGTH] * len(refs) + [ATTACHED_STRENGTH] * len(attach)) if a.view == "side" \
-                else None
+            # Leonardo takes a reference strength per image; gpt-image has none.
+            strengths = ([INPUT_STRENGTH] * len(refs) + [ATTACHED_STRENGTH] * len(attach)) \
+                if config.get("provider") == "leonardo" else None
             sent(sent_prompt, [(f"image {i + 1}" + (f" {strengths[i]}" if strengths else ""), p)
                                for i, p in enumerate(extra)])
             result = client.generate(sent_prompt, [str(p) for p in extra], str(draw_path), strengths=strengths)
@@ -385,8 +407,7 @@ def main() -> None:
             figure_cutout(Image.open(a.front)).save(a.out / "front.png")
         figure_cutout(Image.open(draw_path)).save(a.out / f"{name}.png")
         (a.out / f"gate_{a.view}.json").write_text(json.dumps(
-            {"view": a.view, "masked": masked, "refs": [str(p) for p in refs],
-             "config": str(a.config if a.view == "side" else a.edit_config),
+            {"view": a.view, "draw": a.draw, "refs": [str(p) for p in refs], "config": str(a.config),
              "attempts": attempts, "accepted": n}, indent=1), encoding="utf-8")
         print(f"  accepted attempt {n}: {a.out / (name + '.png')}")
         return
