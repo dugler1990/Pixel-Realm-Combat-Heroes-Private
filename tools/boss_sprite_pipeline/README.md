@@ -79,15 +79,19 @@ drawn by the real engine code path.
 - **B** `review.composite_on_level(...)` — one frame on the painted level at game scale.
 - **C** `logs/boss_sprite_8dir_strip.png` — engine-drawn, every direction.
 
-### Back view: `view_gate.py`
+### Generated views: `view_gate.py`
 
-Draws the back view of an approved front through Leonardo (`view_gate.json`, `LEONARDO_API_KEY`) and checks it
-before it goes to multi-view TRELLIS: from straight behind his outline is the front's outline mirrored, so that is
-sent as image 2 and each draw is scored against it per body band. `[r1]` redraws with the miss marked
-(`tools/painted_map_pipeline/shape_gate.py`, the same overlay and retry as the level and interiors gates).
-Accept writes `<out>/front.png` and `<out>/back.png`, cut out for TRELLIS, and `gate.json`.
+Draws a view through Leonardo (`view_gate.json`, `LEONARDO_API_KEY`) and checks it from the images alone before
+it goes to TRELLIS. `front`: the bare concept dressed in armour must cover the bare outline (sent as image 2).
+`back`: the approved front seen from behind must fill the front's mirrored outline (image 2), per body band.
+`side`: drawn from the front and back; only its size and place are checked (depth has nothing to compare with
+in the images). `[r1]` redraws with the miss marked (`tools/painted_map_pipeline/shape_gate.py`, the same overlay
+and retry as the level and interiors gates); `[rb]` redraws asking for armour big enough for his chest.
+Accept writes the view cut out for TRELLIS and `gate_<view>.json`.
 
-    python -m tools.boss_sprite_pipeline.view_gate --front <front.jpg> --out <dir>
+    python -m tools.boss_sprite_pipeline.view_gate front --input <bare.jpg> --out <dir>
+    python -m tools.boss_sprite_pipeline.view_gate back  --front <front.jpg> --out <dir>
+    python -m tools.boss_sprite_pipeline.view_gate side  --front <front.png> --back <back.png> --out <dir>
 
 ## Status
 
