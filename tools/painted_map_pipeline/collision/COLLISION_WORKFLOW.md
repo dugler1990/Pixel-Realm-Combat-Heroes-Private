@@ -105,3 +105,19 @@ Legacy aliases still work: `run_sam3_chunk`, `run_sam3_all`.
 Output per chunk: `levels/Frostreach/expanse/export/sam3_obstacle/chunk_XX_YY/` (`workflow_response.json`, `polygons.json`, `overlay_preview.png`).
 
 Config: [`sam3/sam3.config.example.json`](sam3/sam3.config.example.json) — `workspace_name`, `workflow_id`, `input_name`. SAM3 keywords/threshold live in the Roboflow UI workflow, not here.
+
+## SAM3 level pass with sam3local
+
+**Method that works** (sunspine_7x6, 2026-08-29), run in `C:\Users\Douglas\sam3local`:
+
+```
+python scripts\run_all.py --manifest config\sunspine_chunks.json --prompts <game>\tools\painted_map_pipeline\collision\sam3\sam3.sunspine_7x6.json --no-tile
+```
+
+Each whole 4495x3065 chunk goes to SAM (shrunk to 560 px); `sam3/merge_polygon_obstacles.py`
+joins the chunks over the 640 px halo into `levels/Frostreach/sunspine_7x6_play/map_sam3_objects.tmx`.
+Rocks come out whole. Its output: `levels/Frostreach/sunspine_7x6_play/export/sam3_obstacle/chunk_*`.
+
+**Tried and dropped**: the tiled pass (560 px windows inside each chunk, confidence applied per
+window, used by `review_all.py` from 2026-10-31): cuts rocks at window edges and paints
+window-sized squares. `review_all.py` takes `--no-tile`; pass it.

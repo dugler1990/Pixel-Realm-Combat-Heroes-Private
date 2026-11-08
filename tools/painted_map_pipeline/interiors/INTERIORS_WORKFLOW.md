@@ -71,3 +71,10 @@ other SAM pieces overlapping it still cover the wall away from the door.
 (`DOOR_TOUCH_PX`). `emit.assert_passage_open` runs the walk test (`emit.walk_in`) in place of
 the 1 px line, so a shut entrance is refused rather than written. The accept screen's walls
 overlay shows the walk in green, as in panels 4 and 5.
+
+## Tried and dropped
+
+- **Line of sight inside a building** (ray-cast fan + black stone, 2026-10-30): buggy and
+  overengineered; it left stone outside the chamber unenclosed. Replaced by black over the
+  whole building outline + fog of war (`Code/interior_visibility.py`). Last version with it:
+  967ef7b. The chamber is the enter/exit trigger only; interior art never goes past it.
