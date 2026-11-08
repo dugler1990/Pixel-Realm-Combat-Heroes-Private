@@ -15,7 +15,9 @@
   gpt-image fills a mask to within about 3 px (back, 2026-11-08: IoU 0.940 gpt-image-2, 0.941 2.5-flare; the
   reference Leonardo backs scored 0.964-0.976 lined up).
 
-- front: the bare concept dressed in armour (gpt-image). reference: image 2 is his outline grown by --margin; the
+- front: the bare concept dressed in armour (gpt-image). His outline is the concept's, or with --outline his real
+  body's (a front silhouette of the 3D body, lined up onto the concept). reference: image 2 is that outline grown
+  by --margin; the
   armour must cover it, head and soles left out; only what is missing counts. [rb] draws again asking for armour
   big enough for his chest. mask: his grown outline, head left out, is the mask -- the armour cannot leave skin
   out, but cannot be bigger than the mask either: pauldrons are cut to his shoulders.
@@ -290,6 +292,9 @@ def main() -> None:
     ap.add_argument("--side", choices=("left", "right"), default="left")
     ap.add_argument("--margin", type=float, default=MARGIN,
                     help="front: the outline to cover is his bare outline grown by this share of his height")
+    ap.add_argument("--outline", type=Path,
+                    help="front: the outline to cover, if not the concept's own -- his 3D body seen from the front "
+                         "(body_silhouette.py)")
     ap.add_argument("--draw", choices=("reference", "mask"), default="reference",
                     help="front, back: the target outline as a reference image (default) or as the edit's mask")
     ap.add_argument("--config", type=Path, help="the image model; default per view and --draw (DEFAULT_CONFIG)")
@@ -311,6 +316,11 @@ def main() -> None:
         from scipy import ndimage
 
         bare = score_mask(Image.open(a.input))
+        if a.outline:
+            # His real body's outline, moved onto the concept's frame: the armour must fit the body it goes on,
+            # and the concept is not that body (barb: the 3D body is 1.2-2.5 % h wider, legs further apart).
+            body = score_mask(Image.open(a.outline))
+            bare = line_up(Image.fromarray(np.where(body, 0, 255).astype(np.uint8)), body, bare)[1]
         top, _, height, _ = frame(bare)
         target = ndimage.binary_dilation(bare, iterations=max(1, round(a.margin * height)))
         if masked:
