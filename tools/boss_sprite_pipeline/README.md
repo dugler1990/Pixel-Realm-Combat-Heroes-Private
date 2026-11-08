@@ -81,17 +81,20 @@ drawn by the real engine code path.
 
 ### Generated views: `view_gate.py`
 
-Draws a view and checks it from the images alone before it goes to TRELLIS. Front and back are drawn as the
-interiors are: one gpt-image edit (`openai.gpt-image-2.json`, `OPENAI_API_KEY`) with the target outline as the
-mask, the raw return scored against it, then pasted back inside it, so the silhouette is the mask's.
-`front`: the bare concept, masked to his outline grown by `--margin` (head left out), dressed in armour inside it.
-`back`: the front's mirrored outline as a black placeholder, the approved front as image 2; IoU and body bands.
+Draws a view and checks it from the images alone before it goes to TRELLIS. Front and back are gpt-image edits
+(`openai.gpt-image-2.json`, `OPENAI_API_KEY`).
+`front`: the bare concept dressed in armour, no mask; it must cover his bare outline (sent as image 2), lined up
+afterwards; `[rb]` draws again asking for bigger armour. Option `--masked`: his grown outline is the mask, as for
+the back -- covers him by construction, but cuts the armour to the mask.
+`back`: drawn as the interiors are: the front's mirrored outline as a black placeholder and as the mask, the
+approved front as image 2, the raw return scored against the mask (IoU, body bands), then pasted back inside it,
+so the silhouette is the mask's.
 `side`: a Leonardo draw (`view_gate.json`, `LEONARDO_API_KEY`); only its size and place are checked (depth has
 nothing to compare with in the images). `[r1]` draws again with the miss marked
 (`tools/painted_map_pipeline/shape_gate.py`, the same overlay and retry as the level and interiors gates).
 Accept writes the view cut out for TRELLIS and `gate_<view>.json`.
 
-    python -m tools.boss_sprite_pipeline.view_gate front --input <bare.jpg> --out <dir> [--margin 0.005]
+    python -m tools.boss_sprite_pipeline.view_gate front --input <bare.jpg> --out <dir> [--masked [--margin 0.005]]
     python -m tools.boss_sprite_pipeline.view_gate back  --front <front.jpg> --out <dir>
     python -m tools.boss_sprite_pipeline.view_gate side  --front <front.png> --back <back.png> --out <dir>
 

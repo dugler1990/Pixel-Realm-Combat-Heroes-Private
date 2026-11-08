@@ -1,26 +1,30 @@
 """Generated views of a character, each checked before it goes to TRELLIS. Images only, no 3D.
 
-    python -m tools.boss_sprite_pipeline.view_gate front --input <bare concept> --out <dir> [--margin 0.005]
+    python -m tools.boss_sprite_pipeline.view_gate front --input <bare concept> --out <dir> [--masked [--margin 0.005]]
     python -m tools.boss_sprite_pipeline.view_gate back  --front <approved front> --out <dir>
     python -m tools.boss_sprite_pipeline.view_gate side  --front <approved front> --back <approved back> --out <dir>
         [--side left|right]
 
-Front and back are drawn the way the interiors are: one gpt-image edit (openai.gpt-image-2.json,
-OPENAI_API_KEY) with the target outline as the mask, the raw return scored against that mask, then pasted back
-inside it (building_interiors._run_edit, paste_back). The silhouette is the mask's by construction; the check is
-whether the model filled it.
+Front and back are gpt-image edits (openai.gpt-image-2.json, OPENAI_API_KEY).
 
-- front: image 1 is the bare concept; the mask is his outline grown by --margin, head left out (it stays as
-  drawn). He is dressed in armour inside the mask, so the armour covers him and is no bigger than the mask.
-- back: image 1 is the front's outline mirrored (from straight behind his outline is the front's, mirrored), a
+- front: image 1 is the bare concept, image 2 his outline grown by MARGIN; no mask. He is dressed in armour,
+  the draw is lined up with the outline (scale to its height, head top on its head top, body centre on its
+  centre, as explode2's outline_check did) and must cover it, head and soles left out. Only what is missing
+  counts. [rb] draws again asking for armour big enough for his chest.
+  Option, not the default: --masked draws it as the back is drawn, with his grown outline (head left out) as
+  the mask and the return pasted back inside it. The armour then cannot leave skin out, but cannot be bigger
+  than the mask either: pauldrons are cut to his shoulders.
+- back: drawn as the interiors are: one edit with the target outline as the mask, the raw return scored against
+  that mask, then pasted back inside it (building_interiors._run_edit, paste_back), so the silhouette is the
+  mask's. Image 1 is the front's outline mirrored (from straight behind his outline is the front's, mirrored), a
   black shape on white; image 2 is the approved front. Scored on IoU and every body band.
 - side: drawn by Leonardo (view_gate.json) from the approved front and back. Its depth has nothing to be checked
   against in the images; the check is only that it is the same size, in the same place, as the front.
 
 At the gate: [enter] accept, [r] draw again, [r1] draw again showing the marked error, [r <why> @img] draw again
-with criticism -- as in the interiors, a retry is the same edit of the same image 1 with the overlay attached,
-never an edit of the last attempt. Accept writes the view cut out for TRELLIS (front.png / back.png /
-side_<left|right>.png) and gate_<view>.json.
+with criticism -- as in the interiors, a retry is the same call with the overlay attached, never an edit of the
+last attempt. Accept writes the view cut out for TRELLIS (front.png / back.png / side_<left|right>.png) and
+gate_<view>.json.
 """
 from __future__ import annotations
 
@@ -50,9 +54,12 @@ BANDS = [("shoulder", .80), ("chest", .72), ("waist", .60), ("hips", .52), ("thi
 # masked edits land in the target's own frame, so these are a starting point until measured on them.
 BACK_MIN_IOU = 0.95       # nano-banana-2.1 back with the outline as image 2: 0.964-0.973
 BACK_MAX_BAND = 1.0       # % h
-MARGIN = 0.005            # front: the mask is his bare outline grown by this share of his height
-HEAD = 0.13               # front: the top of the figure left out of the mask: the head stays as drawn
-FRONT_MAX_MISSING = 0.02  # front: share of the mask left unpainted
+MARGIN = 0.005            # front: his bare outline grown by this share of his height is the outline to cover
+HEAD, SOLES = 0.13, 0.02  # front: left out of the score (the head stays bare, the soles stand on the floor);
+                          # --masked: the head is left out of the mask
+FRONT_MAX_MISSING = 0.02  # front, uncovered, head and soles out. Measured on Leonardo fronts: flare_3_extrahigh
+                          # 1.37 %; flare_2 2.74, flare_4 3.52, flare_1 4.81, the first fitted front 5.38. A width
+                          # check only: depth is not in the image. --masked: share of the mask left unpainted
 SIDE_MAX_OFF = 0.02       # side: head top, feet and height each within this share of the front's height
 MARK_PX = 4               # the overlay's error marks are widened by this many pixels each side to be seen at 1024
 UNPAINTED = 12            # back: a pixel of the black placeholder still this dark was not painted (as fill_unpainted)
@@ -61,8 +68,18 @@ UNPAINTED_PX = 3          # ... if it is in a patch at least about twice this wi
 # attempt is only a hint of where it went wrong (at HIGH the model copies its own mistake).
 INPUT_STRENGTH, ATTACHED_STRENGTH = "HIGH", "LOW"
 
+BIGGER = ("Make the armour realistically big enough to cover his large chest, shoulders and arms: thick plate "
+          "standing well clear of his muscles everywhere, never tight to the body.")
 PROMPTS = {
     "front": (
+        "Dress the man in Image 1 in a full suit of steel plate armour worn over a thick padded gambeson. Keep his "
+        "pose, proportions, head, beard, framing, camera and white background identical. The armour sits over his "
+        "body: every plate stands clear of the skin by about a finger's width, so the armoured outline is larger "
+        "than his bare outline everywhere, including shoulders, arms, chest, waist, hips, legs and feet. If unsure, "
+        "make the armour slightly too big rather than too tight. No skin visible except the head. Image 2 is the "
+        "outline his armour must cover: every part of the black shape is inside the armour; the armour may reach "
+        "past it."),
+    "front_masked": (
         "Image 1 is a man. Repaint the masked area: dress him in a full suit of steel plate armour worn over a thick "
         "padded gambeson. The armour fills the whole masked area right up to its edge: its outline is the mask's "
         "outline, so no skin shows anywhere in the masked area. Keep his pose, proportions, head, beard, lighting "
@@ -79,9 +96,16 @@ PROMPTS = {
         "clear of his body."),
 }
 # Images sent before an attachment: an attachment is image FIRST_INDEX.
-FIRST_INDEX = {"front": 2, "back": 3, "side": 3}
+FIRST_INDEX = {"front": 3, "front_masked": 2, "back": 3, "side": 3}
 TEXTS = {
     "front": (
+        "your previous attempt with its shape error marked: magenta is where his bare outline (the black shape in "
+        "image 2) is not covered by the armour",
+        "This image shows where your armour leaves his body uncovered. Every part of the black shape in image 2 must "
+        "be inside the armour; the armour may always be bigger, never smaller. If it is not covered the image is "
+        "not valid and cannot be used, this is the most important directive it takes precedence over any other "
+        "contradictory statements earlier in the prompt, thanks."),
+    "front_masked": (
         "your previous attempt with its shape error marked: magenta is where the masked area was not filled with "
         "armour",
         "Fill the whole masked area with armour, right up to its edge. If it is not filled the image is not valid "
@@ -102,6 +126,21 @@ def frame(mask: np.ndarray) -> tuple[int, int, int, float]:
     top, bottom = int(ys.min()), int(ys.max())
     height = bottom - top
     return top, bottom, height, float(xs[ys < top + 0.3 * height].mean())
+
+
+def line_up(image: Image.Image, mask: np.ndarray, target: np.ndarray) -> tuple[Image.Image, np.ndarray]:
+    """The image and its figure mask moved onto the target's frame: same height (NEAREST for the mask), head top on
+    the target's head top, body centre on the target's. For a draw made without a mask, which lands anywhere."""
+    top, _, height, cx = frame(mask)
+    t_top, _, t_height, t_cx = frame(target)
+    s = t_height / height
+    size = (round(mask.shape[1] * s), round(mask.shape[0] * s))
+    at = (round(t_cx - cx * s), round(t_top - top * s))
+    out_mask = Image.new("L", target.shape[::-1], 0)
+    out_mask.paste(Image.fromarray((mask * 255).astype(np.uint8)).resize(size, Image.NEAREST), at)
+    out_image = Image.new("RGB", target.shape[::-1], (255, 255, 255))
+    out_image.paste(image.convert("RGB").resize(size, Image.BILINEAR), at)
+    return out_image, np.asarray(out_mask) > 127
 
 
 def outline_image(mask: np.ndarray) -> Image.Image:
@@ -125,13 +164,19 @@ def bands(target: np.ndarray, has: np.ndarray) -> dict:
     return s
 
 
-def score_front(mask: np.ndarray, has: np.ndarray) -> dict:
-    """The mask must be filled; spill does not count, the paste cuts it."""
-    s = bands(mask, has)
-    s["missing"] = float((mask & ~has).sum() / max(int(mask.sum()), 1))
+def score_front(target: np.ndarray, has: np.ndarray, masked: bool) -> tuple[dict, np.ndarray]:
+    """What must be covered, and how much of it is not; spill is fine. Without a mask: the grown bare outline with
+    head and soles left out. --masked: the mask itself (the paste cuts any spill)."""
+    should = target.copy()
+    if not masked:
+        top, bottom, height, _ = frame(target)
+        should[: int(top + HEAD * height)] = False
+        should[int(bottom - SOLES * height):] = False
+    s = bands(target, has)
+    s["missing"] = float((should & ~has).sum() / max(int(should.sum()), 1))
     s["passed"] = s["missing"] <= FRONT_MAX_MISSING
-    s["failing"] = [] if s["passed"] else [f"unfilled {s['missing'] * 100:.2f} %"]
-    return s
+    s["failing"] = [] if s["passed"] else [f"{'unfilled' if masked else 'uncovered'} {s['missing'] * 100:.2f} %"]
+    return s, should
 
 
 def score_back(target: np.ndarray, has: np.ndarray) -> dict:
@@ -186,8 +231,9 @@ def marked(image: Image.Image, missing: np.ndarray, spilled: np.ndarray) -> Imag
 def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
              kept: Image.Image | None = None) -> tuple[dict, list[str], Path, Path | None]:
     """Score one draw. Returns the scores, the lines for the sheet, the sheet and the overlay (None for a side).
-    Front and back are scored on the raw return against the mask that was sent, as the interiors score theirs:
-    after the paste there is nothing left to measure. `kept` is the pasted result, shown beside it."""
+    A masked draw (`kept` is its pasted result, shown beside it) is scored on the raw return against the mask that
+    was sent, as the interiors score theirs: after the paste there is nothing left to measure. The unmasked front
+    is lined up with its outline first."""
     if view == "side":
         s = score_side(target, score_mask(raw))
         lines = [f"side: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
@@ -196,19 +242,23 @@ def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
         top, bottom, _, _ = frame(target)
         return s, lines, sheet([outline_image(target), raw], lines, tag.with_name(tag.name + "_sheet.png"),
                                (top, bottom)), None
-    has = painted(raw)
+    if view == "front" and kept is None:
+        raw, has = line_up(raw, score_mask(raw), target)
+    else:
+        has = painted(raw)
     if view == "front":
-        s = score_front(target, has)
-        overlay = marked(raw, target & ~has, np.zeros_like(has))
+        s, should = score_front(target, has, masked=kept is not None)
+        overlay = marked(raw, should & ~has, np.zeros_like(has))
         lines = [f"front: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
-                 f"mask unfilled {s['missing'] * 100:.2f} %  (raw return; spill is cut by the paste)"]
+                 f"mask unfilled {s['missing'] * 100:.2f} %  (raw return; spill is cut by the paste)" if kept
+                 is not None else f"bare outline uncovered {s['missing'] * 100:.2f} % (head, soles left out)"]
     else:
         s = score_back(target, has)
         overlay = marked(raw, target & ~has, has & ~target)
         lines = [f"back: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
                  f"IoU {s['iou']:.3f}  missing {s['missing'] * 100:.2f} %  spilled {s['spilled'] * 100:.2f} %"
                  "  (raw return against the mask)"]
-    lines.append("  ".join(f"{k} {v['diff']:+.2f}" for k, v in s["bands"].items()) + "  (% h, raw minus mask)")
+    lines.append("  ".join(f"{k} {v['diff']:+.2f}" for k, v in s["bands"].items()) + "  (% h, draw minus target)")
     shape_png = tag.with_name(tag.name + "_shape.png")
     overlay.save(shape_png)
     panels = [outline_image(target), overlay] + ([kept] if kept is not None else [])
@@ -223,9 +273,12 @@ def main() -> None:
     ap.add_argument("--back", type=Path, help="side: the approved back")
     ap.add_argument("--side", choices=("left", "right"), default="left")
     ap.add_argument("--margin", type=float, default=MARGIN,
-                    help="front: the mask is his bare outline grown by this share of his height")
+                    help="front: the outline to cover is his bare outline grown by this share of his height")
+    # Option, off by default: the front as a masked edit like the back. Covers him by construction but cuts the
+    # armour to the mask (pauldrons to his shoulders).
+    ap.add_argument("--masked", action="store_true", help="front: draw inside his grown outline as a mask")
     ap.add_argument("--config", type=Path, default=CONFIG, help="side: the Leonardo draw")
-    ap.add_argument("--edit-config", type=Path, default=EDIT_CONFIG, help="front, back: the masked edit")
+    ap.add_argument("--edit-config", type=Path, default=EDIT_CONFIG, help="front, back: the gpt-image edit")
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
     need = {"front": ["input"], "back": ["front"], "side": ["front", "back"]}[a.view]
@@ -234,15 +287,22 @@ def main() -> None:
             ap.error(f"{a.view} needs --{name}")
     a.out.mkdir(parents=True, exist_ok=True)
 
-    prompt = PROMPTS[a.view]
+    mode = "front_masked" if a.view == "front" and a.masked else a.view
+    masked = mode in ("front_masked", "back")
+    prompt = PROMPTS[mode]
     if a.view == "front":
         from scipy import ndimage
 
         bare = score_mask(Image.open(a.input))
         top, _, height, _ = frame(bare)
         target = ndimage.binary_dilation(bare, iterations=max(1, round(a.margin * height)))
-        target[: int(top + HEAD * height)] = False
-        canvas, refs, name = Image.open(a.input).convert("RGB"), [], "front"
+        if masked:
+            target[: int(top + HEAD * height)] = False
+            canvas, refs = Image.open(a.input).convert("RGB"), []
+        else:
+            outline_image(target).save(a.out / "front_target_outline.png")
+            refs = [a.input.resolve(), (a.out / "front_target_outline.png").resolve()]
+        name = "front"
     elif a.view == "back":
         target = score_mask(Image.open(a.front))[:, ::-1]
         canvas, refs, name = outline_image(target), [a.front.resolve()], "back"
@@ -250,12 +310,12 @@ def main() -> None:
         target = score_mask(Image.open(a.front))
         prompt = prompt.format(side=a.side, edge=a.side)
         refs, name = [a.front.resolve(), a.back.resolve()], f"side_{a.side}"
-    if a.view != "side":
+    if masked:
         outline_image(target).save(a.out / f"{a.view}_target_mask.png")
         canvas_path = a.out / f"{a.view}_canvas.png"
         canvas.save(canvas_path)
 
-    config = json.loads((a.edit_config if a.view != "side" else a.config).read_text(encoding="utf-8"))
+    config = json.loads((a.config if a.view == "side" else a.edit_config).read_text(encoding="utf-8"))
     client = make_image_client(config)
     # A rerun into the same folder carries on numbering: earlier attempts stay on disk.
     done = [int(p.stem.split("_")[2]) for p in a.out.glob(f"{a.view}_attempt_[0-9][0-9]*.png")]
@@ -263,30 +323,31 @@ def main() -> None:
     while True:
         n += 1
         tag = a.out / f"{a.view}_attempt_{n:02d}"
-        sent_prompt = with_criticism(prompt, criticism, attach, first_index=FIRST_INDEX[a.view])
+        draw_path = tag.with_suffix(".png")
+        sent_prompt = with_criticism(prompt, criticism, attach, first_index=FIRST_INDEX[mode])
         tag.with_name(tag.name + "_prompt.txt").write_text(sent_prompt, encoding="utf-8")
         extra = refs + [Path(p) for p in attach]
-        if a.view == "side":
-            draw_path = tag.with_suffix(".png")
-            strengths = [INPUT_STRENGTH] * len(refs) + [ATTACHED_STRENGTH] * len(attach)
-            sent(sent_prompt, [(f"image {i + 1} {st}", p) for i, (p, st) in enumerate(zip(extra, strengths))])
-            result = client.generate(sent_prompt, [str(p) for p in extra], str(draw_path), strengths=strengths)
-            tag.with_name(tag.name + "_request.json").write_text(json.dumps(
-                {"images": [str(p) for p in extra], "strengths": strengths, "result": result}, indent=1,
-                default=str), encoding="utf-8")
-            raw = Image.open(draw_path)
-            s, lines, sheet_png, shape_png = evaluate(a.view, raw, target, tag)
-        else:
+        if masked:
             sent(sent_prompt, [("image 1", canvas_path)] + [(f"image {i + 2}", p) for i, p in enumerate(extra)]
                  + [("mask", a.out / f"{a.view}_target_mask.png")])
             # As in the interiors: writes <tag>_input.png, <tag>_mask.png and <tag>_raw.png.
             raw = _run_edit(client, config, sent_prompt, canvas, target, a.out, tag.name, extra_images=extra)
-            draw_path = tag.with_suffix(".png")
             # The model repaints the whole picture and obeys the mask only roughly: its return is kept inside the
             # mask and image 1 everywhere else.
             kept = paste_back(raw, canvas, target).convert("RGB")
             kept.save(draw_path)
             s, lines, sheet_png, shape_png = evaluate(a.view, raw.convert("RGB"), target, tag, kept)
+        else:
+            # Unmasked front (gpt-image) or side (Leonardo, with a reference strength per image).
+            strengths = ([INPUT_STRENGTH] * len(refs) + [ATTACHED_STRENGTH] * len(attach)) if a.view == "side" \
+                else None
+            sent(sent_prompt, [(f"image {i + 1}" + (f" {strengths[i]}" if strengths else ""), p)
+                               for i, p in enumerate(extra)])
+            result = client.generate(sent_prompt, [str(p) for p in extra], str(draw_path), strengths=strengths)
+            tag.with_name(tag.name + "_request.json").write_text(json.dumps(
+                {"images": [str(p) for p in extra], "strengths": strengths, "result": result}, indent=1,
+                default=str), encoding="utf-8")
+            s, lines, sheet_png, shape_png = evaluate(a.view, Image.open(draw_path), target, tag)
         attempts.append({"attempt": n, "draw": str(draw_path), "prompt": str(tag.with_name(tag.name + "_prompt.txt")),
                          "images_sent": [str(p) for p in extra], "scores": s,
                          "shape": str(shape_png) if shape_png else None})
@@ -295,7 +356,8 @@ def main() -> None:
         criticism, attach = "", []
         while True:
             raw_answer = ask("\n  [enter] accept   [r] draw again   [r1] draw again showing this draw's shape error"
-                             "\n  [r <why> @img] draw again with criticism   [s] show again   [q] stop", "").strip()
+                             "\n  [rb] draw again asking for bigger armour (not with a mask)"
+                             "   [r <why> @img] draw again with criticism   [s] show again   [q] stop", "").strip()
             if raw_answer.lower() == "s":
                 show(sheet_png)
                 continue
@@ -304,11 +366,17 @@ def main() -> None:
             return
         if raw_answer.lower() == "r":
             continue
+        if raw_answer.lower() == "rb":
+            if masked:
+                print("  the mask sets the size -- use --margin", file=sys.stderr)
+            else:
+                criticism = BIGGER
+            continue
         if raw_answer:
             try:
                 if raw_answer[:2].lower() == "r1" and a.view == "side":
                     raise FileNotFoundError("a side has no shape error to show -- use [r <why>]")
-                note, directive = TEXTS[a.view] if a.view in TEXTS else ("", "")
+                note, directive = TEXTS[mode] if mode in TEXTS else ("", "")
                 criticism, attach = parse_gate_retry(raw_answer, shape_png, note, directive)
             except FileNotFoundError as exc:
                 print(f"  {exc}", file=sys.stderr)
@@ -317,8 +385,8 @@ def main() -> None:
             figure_cutout(Image.open(a.front)).save(a.out / "front.png")
         figure_cutout(Image.open(draw_path)).save(a.out / f"{name}.png")
         (a.out / f"gate_{a.view}.json").write_text(json.dumps(
-            {"view": a.view, "refs": [str(p) for p in refs], "config": str(a.edit_config if a.view != "side"
-                                                                            else a.config),
+            {"view": a.view, "masked": masked, "refs": [str(p) for p in refs],
+             "config": str(a.config if a.view == "side" else a.edit_config),
              "attempts": attempts, "accepted": n}, indent=1), encoding="utf-8")
         print(f"  accepted attempt {n}: {a.out / (name + '.png')}")
         return
