@@ -72,6 +72,14 @@ SIDE_MAX_OFF = 0.02       # side: head top, feet and height each within this sha
 MARK_PX = 4               # the overlay's error marks are widened by this many pixels each side to be seen at 1024
 UNPAINTED = 12            # back: a pixel of the black placeholder still this dark was not painted (as fill_unpainted)
 UNPAINTED_PX = 3          # ... if it is in a patch at least about twice this wide: ink lines are thinner
+# --display-joints: joint heights from pose_heights.py (its own venv), drawn as labelled lines on the images sent
+POSE_PYTHON = Path(__file__).resolve().parent / ".venv-pose" / "Scripts" / "python.exe"
+POSE_SCRIPT = Path(__file__).resolve().parent / "pose_heights.py"
+JOINT_COLOURS = {"shoulder": (0, 160, 255), "hip": (255, 0, 255), "knee": (0, 200, 0), "ankle": (255, 140, 0)}
+JOINT_MAX_OFF = 1.5       # % of his height, draw minus image 1; judged on hip and knee only -- the shoulder point
+JOINT_JUDGED = ("hip", "knee")  # rises with the pauldrons (+3 % h on armoured fronts that keep his shoulders)
+JOINT_NOTE = ("The coloured lines labelled SHOULDER, HIP, KNEE and ANKLE across the images mark his joint heights. "
+              "Keep his shoulders, hips, knees and ankles exactly on those lines. Do not draw the lines or the labels.")
 # Leonardo: reference strength per image -- the inputs are followed; an attached marked copy of the last
 # attempt is only a hint of where it went wrong (at HIGH the model copies its own mistake).
 INPUT_STRENGTH, ATTACHED_STRENGTH = "HIGH", "LOW"
@@ -161,6 +169,36 @@ def line_up(image: Image.Image, mask: np.ndarray, target: np.ndarray) -> tuple[I
     return out_image, np.asarray(out_mask) > 127
 
 
+def joint_heights(images: list[Path]) -> dict:
+    """pose_heights.py on each image: {path: {joint: {"y", "height_pct", "score"}} or None}."""
+    import subprocess
+    import tempfile
+
+    if not POSE_PYTHON.exists():
+        sys.exit(f"--display-joints needs the pose venv: {POSE_PYTHON} (see pose_heights.py)")
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "joints.json"
+        subprocess.run([str(POSE_PYTHON), str(POSE_SCRIPT), *map(str, images), "--json", str(out)], check=True,
+                       stdout=subprocess.DEVNULL)
+        return json.loads(out.read_text(encoding="utf-8"))
+
+
+def with_joint_lines(src: Path, joints: dict, out: Path) -> Path:
+    """`src` with a labelled horizontal line at each joint's height."""
+    im = Image.open(src).convert("RGB")
+    draw = ImageDraw.Draw(im)
+    try:
+        font = ImageFont.truetype("arialbd.ttf", 22)
+    except OSError:
+        font = ImageFont.load_default()
+    for name, v in joints.items():
+        y = round(v["y"])
+        draw.line([(0, y), (im.width, y)], fill=JOINT_COLOURS[name], width=3)
+        draw.text((8, y - 26), name.upper(), fill=JOINT_COLOURS[name], font=font)
+    im.save(out)
+    return out
+
+
 def outline_image(mask: np.ndarray) -> Image.Image:
     return Image.fromarray(np.where(mask, 0, 255).astype(np.uint8)).convert("RGB")
 
@@ -247,11 +285,13 @@ def marked(image: Image.Image, missing: np.ndarray, spilled: np.ndarray) -> Imag
 
 
 def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
-             kept: Image.Image | None = None, sent: tuple = ()) -> tuple[dict, list[str], Path, Path | None]:
+             kept: Image.Image | None = None, sent: tuple = (),
+             joints: dict | None = None) -> tuple[dict, list[str], Path, Path | None]:
     """Score one draw. Returns the scores, the lines for the sheet, the sheet and the overlay (None for a side).
     A masked draw (`kept` is its pasted result, shown beside it) is scored on the raw return against the mask that
     was sent, as the interiors score theirs: after the paste there is nothing left to measure. A reference draw is
-    lined up with its outline first. `sent`: the images the model was given, shown first on the sheet."""
+    lined up with its outline first. `sent`: the images the model was given, shown first on the sheet. `joints`:
+    {joint: (row in image 1, draw minus image 1 in % h)} from --display-joints, judged and drawn on the sheet."""
     shown = [Image.open(p).convert("RGB") for p in sent] or [outline_image(target)]
     if view == "side":
         s = score_side(target, score_mask(raw))
@@ -278,10 +318,20 @@ def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
                  f"IoU {s['iou']:.3f}  missing {s['missing'] * 100:.2f} %  spilled {s['spilled'] * 100:.2f} %"
                  + ("  (raw return against the mask)" if kept is not None else "  (lined up with the outline)")]
     lines.append("  ".join(f"{k} {v['diff']:+.2f}" for k, v in s["bands"].items()) + "  (% h, draw minus target)")
+    if joints is not None:
+        s["joints"] = {k: v[1] for k, v in joints.items()}
+        bad = [k for k in JOINT_JUDGED if k in joints and abs(joints[k][1]) > JOINT_MAX_OFF]
+        if bad:
+            s["passed"] = False
+            s["failing"] = s["failing"] + [f"{k} {joints[k][1]:+.1f} % h" for k in bad]
+        lines[0] = f"{view}: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}"
+        lines.append("joints, draw minus image 1 (% h): " + "  ".join(f"{k} {v[1]:+.1f}" for k, v in joints.items())
+                     + f"  (hip, knee within {JOINT_MAX_OFF}; red lines: image 1's joints)")
     shape_png = tag.with_name(tag.name + "_shape.png")
     overlay.save(shape_png)
     panels = shown + [overlay] + ([kept] if kept is not None else [])
-    return s, lines, sheet(panels, lines, tag.with_name(tag.name + "_sheet.png")), shape_png
+    rows = tuple(round(v[0]) for v in joints.values()) if joints else ()
+    return s, lines, sheet(panels, lines, tag.with_name(tag.name + "_sheet.png"), rows), shape_png
 
 
 def main() -> None:
@@ -298,6 +348,9 @@ def main() -> None:
                          "(body_silhouette.py)")
     ap.add_argument("--draw", choices=("reference", "mask"), default="reference",
                     help="front, back: the target outline as a reference image (default) or as the edit's mask")
+    ap.add_argument("--display-joints", action="store_true",
+                    help="draw labelled lines at his shoulder, hip, knee and ankle heights (found on image 1 by "
+                         "pose_heights.py) on every image sent, say so in the prompt, and check the draw's joints")
     ap.add_argument("--config", type=Path, help="the image model; default per view and --draw (DEFAULT_CONFIG)")
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
@@ -307,6 +360,8 @@ def main() -> None:
             ap.error(f"{a.view} needs --{name}")
     if a.view == "side" and a.draw == "mask":
         ap.error("a side has no outline to use as a mask")
+    if a.display_joints and a.draw == "mask":
+        ap.error("--display-joints is for --draw reference: a masked edit repaints image 1, lines included")
     a.config = a.config or DEFAULT_CONFIG[(a.view, a.draw)]
     a.out.mkdir(parents=True, exist_ok=True)
 
@@ -349,6 +404,17 @@ def main() -> None:
         canvas_path = a.out / f"{a.view}_canvas.png"
         canvas.save(canvas_path)
 
+    ref_joints = None
+    if a.display_joints:
+        ref_joints = joint_heights([refs[0]])[str(refs[0])]
+        if ref_joints is None:
+            sys.exit(f"--display-joints: no person found in {refs[0]}")
+        refs = [with_joint_lines(p, ref_joints, a.out / f"{a.view}_image{i + 1}_joints.png").resolve()
+                for i, p in enumerate(refs)]
+        prompt += "\n\n" + JOINT_NOTE
+        print("  joints on image 1 (% h above the feet): " + "  ".join(
+            f"{k} {v['height_pct']:.1f}" for k, v in ref_joints.items()))
+
     config = json.loads(a.config.read_text(encoding="utf-8"))
     client = make_image_client(config)
     # A rerun into the same folder carries on numbering: earlier attempts stay on disk.
@@ -381,7 +447,12 @@ def main() -> None:
             tag.with_name(tag.name + "_request.json").write_text(json.dumps(
                 {"images": [str(p) for p in extra], "strengths": strengths, "result": result}, indent=1,
                 default=str), encoding="utf-8")
-            s, lines, sheet_png, shape_png = evaluate(a.view, Image.open(draw_path), target, tag, sent=refs)
+            joints = None
+            if ref_joints is not None and a.view != "side":
+                got = joint_heights([draw_path])[str(draw_path)] or {}
+                joints = {k: (v["y"], got[k]["height_pct"] - v["height_pct"]) for k, v in ref_joints.items() if k in got}
+            s, lines, sheet_png, shape_png = evaluate(a.view, Image.open(draw_path), target, tag, sent=refs,
+                                                      joints=joints)
         attempts.append({"attempt": n, "draw": str(draw_path), "prompt": str(tag.with_name(tag.name + "_prompt.txt")),
                          "images_sent": [str(p) for p in extra], "scores": s,
                          "shape": str(shape_png) if shape_png else None})
