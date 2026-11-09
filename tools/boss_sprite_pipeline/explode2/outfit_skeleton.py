@@ -1,6 +1,9 @@
 """Step 0: give an outfit mesh (TRELLIS, no rig) the base character's skeleton.
 
-    .venv-bpy/Scripts/python.exe outfit_skeleton.py <base_rigged.glb> <outfit.glb> <out.glb>
+    .venv-bpy/Scripts/python.exe outfit_skeleton.py <base_rigged.glb> <outfit.glb> <out.glb> [--align-only] [--scaling 3]
+
+--align-only: step 1 only; writes the aligned mesh without weights (for explode2/shell_check.py).
+--scaling P: after the alignment, the outfit object is scaled by (1 + P / 100) about its own centre (bounding box).
 
 1. align  one similarity onto the base body (same as explode_pose.load_parts): scale from height,
           bounding-box foot anchor, then the outfit's head ICP-matched onto the base head (the head is
@@ -28,7 +31,14 @@ from scipy.spatial import cKDTree
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "explode"))
 from explode_common import world_verts
 
-BASE, OUTFIT, OUT = (os.path.abspath(a) for a in sys.argv[1:4])
+ARGS = sys.argv[1:]
+ALIGN_ONLY = "--align-only" in ARGS
+SCALING = 0.0                    # percent
+if "--scaling" in ARGS:
+    i = ARGS.index("--scaling")
+    SCALING = float(ARGS[i + 1])
+    del ARGS[i:i + 2]
+BASE, OUTFIT, OUT = (os.path.abspath(a) for a in [a for a in ARGS if a != "--align-only"][:3])
 HEAD_FRAC = 0.12
 VOXEL = 0.5          # % of height, as rig_reweight heat 0.5
 t0 = time.time()
@@ -81,8 +91,20 @@ DIAG = {"step": "0 skeleton", "base": BASE, "outfit": OUTFIT, "out": OUT,
         "settings": {"head_frac": HEAD_FRAC, "voxel_pct_h": VOXEL, "weights": "bone heat on outfit+body voxel proxy, nearest-face transfer, top 4"},
         "results": {"scale": round(s, 5), "head_residual_pct_h": round(float(np.median(dist) / hB * 100), 3)}}
 print(f"aligned: scale {s:.4f}, head residual median {np.median(dist) / hB * 100:.2f}% of height", flush=True)
+if SCALING:                      # the whole object, about its own centre
+    centre = (A.min(0) + A.max(0)) / 2
+    A = centre + (A - centre) * (1 + SCALING / 100)
+    print(f"scaled: x{1 + SCALING / 100:.4f} about its centre", flush=True)
+DIAG["settings"]["scaling_pct"] = SCALING
 outfit.data.vertices.foreach_set("co", A.astype(np.float32).ravel())
 outfit.data.update()
+if ALIGN_ONLY:                   # the aligned mesh alone, no weights (shell_check needs only the shape)
+    bpy.ops.object.select_all(action="DESELECT")
+    outfit.select_set(True)
+    bpy.context.view_layer.objects.active = outfit
+    bpy.ops.export_scene.gltf(filepath=OUT, use_selection=True)
+    print(f"ALIGN_ONLY wrote {OUT}", flush=True)
+    sys.exit(0)
 
 
 
