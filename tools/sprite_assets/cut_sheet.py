@@ -164,20 +164,21 @@ def distance_from(rgb: np.ndarray, background: tuple) -> np.ndarray:
     return np.abs(rgb - np.asarray(background, dtype=np.float32)).max(axis=2)
 
 
-def flat_background(rgb: np.ndarray, pockets: bool = True) -> np.ndarray:
+def flat_background(rgb: np.ndarray, pockets: bool = True, tolerance: float = 75) -> np.ndarray:
     """The flat sheet a figure is drawn on, as a boolean mask.
 
     The sheet is whatever colour touches the border: every region near that colour that reaches
     the border. With `pockets`, also patches of almost exactly that colour (45 px or more) inside
     the outline, taken as sheet showing through a gap -- right for flat sprite sheets, wrong for
     polished steel on white, whose highlights are that colour. Light paint of a similar colour
-    otherwise stays, because it sits inside the outline.
+    otherwise stays, because it sits inside the outline. `tolerance`: how far from the sheet's colour a
+    pixel may be and still be sheet (75 suits flat sprite sheets; figures use FIGURE_TOLERANCE).
     """
     from scipy import ndimage
 
     rgb = np.asarray(rgb, dtype=np.float32)
     dist = distance_from(rgb, sheet_background(rgb))
-    labels, _ = ndimage.label(dist < 75)
+    labels, _ = ndimage.label(dist < tolerance)
     edge = np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
     clear = np.isin(labels, edge[edge > 0])
     if not pockets:
@@ -189,12 +190,18 @@ def flat_background(rgb: np.ndarray, pockets: bool = True) -> np.ndarray:
     return clear
 
 
+# A character on white: the backdrop is within 4 of white (99.9th pct) in all 41 generated views and inputs
+# measured 2026-11-09, at most 27 in 3 lone JPEG pixels; bright steel sits at 34-39 (median) and was cut away at
+# 75 -- a crack between collar and pauldron in view_gate_v6's back outline.
+FIGURE_TOLERANCE = 15
+
+
 def _largest_figure(image: Image.Image) -> np.ndarray:
     from scipy import ndimage
 
     # No pockets: on a character view they are highlights on steel, not sheet. The gaps between
     # arm and torso in these poses open onto the border, so the border cut clears them anyway.
-    figure = ~flat_background(np.asarray(image.convert("RGB")), pockets=False)
+    figure = ~flat_background(np.asarray(image.convert("RGB")), pockets=False, tolerance=FIGURE_TOLERANCE)
     labels, count = ndimage.label(figure)
     if not count:
         return figure
