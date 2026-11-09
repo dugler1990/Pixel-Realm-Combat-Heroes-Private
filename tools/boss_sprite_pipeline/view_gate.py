@@ -322,7 +322,8 @@ def main() -> None:
             body = score_mask(Image.open(a.outline))
             bare = line_up(Image.fromarray(np.where(body, 0, 255).astype(np.uint8)), body, bare)[1]
         top, _, height, _ = frame(bare)
-        target = ndimage.binary_dilation(bare, iterations=max(1, round(a.margin * height)))
+        grow = round(a.margin * height)        # 0: his outline as it is (iterations=0 would grow until it stops)
+        target = ndimage.binary_dilation(bare, iterations=grow) if grow > 0 else bare.copy()
         if masked:
             target[: int(top + HEAD * height)] = False
             canvas, refs = Image.open(a.input).convert("RGB"), []
