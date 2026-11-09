@@ -286,12 +286,13 @@ def marked(image: Image.Image, missing: np.ndarray, spilled: np.ndarray) -> Imag
 
 def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
              kept: Image.Image | None = None, sent: tuple = (),
-             joints: dict | None = None) -> tuple[dict, list[str], Path, Path | None]:
+             joints: dict | None = None, exact: np.ndarray | None = None) -> tuple[dict, list[str], Path, Path | None]:
     """Score one draw. Returns the scores, the lines for the sheet, the sheet and the overlay (None for a side).
     A masked draw (`kept` is its pasted result, shown beside it) is scored on the raw return against the mask that
     was sent, as the interiors score theirs: after the paste there is nothing left to measure. A reference draw is
     lined up with its outline first. `sent`: the images the model was given, shown first on the sheet. `joints`:
-    {joint: (row in image 1, draw minus image 1 in % h)} from --display-joints, judged and drawn on the sheet."""
+    {joint: (row in image 1, draw minus image 1 in % h)} from --display-joints, judged and drawn on the sheet.
+    `exact`: front only, his outline with no margin -- the draw marked against it is added as the last panel."""
     shown = [Image.open(p).convert("RGB") for p in sent] or [outline_image(target)]
     if view == "side":
         s = score_side(target, score_mask(raw))
@@ -301,6 +302,7 @@ def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
         top, bottom, _, _ = frame(target)
         return s, lines, sheet(shown + [raw], lines, tag.with_name(tag.name + "_sheet.png"),
                                (top, bottom)), None
+    drawn = raw
     if kept is None:
         raw, has = line_up(raw, score_mask(raw), target)
     else:
@@ -330,6 +332,12 @@ def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
     shape_png = tag.with_name(tag.name + "_shape.png")
     overlay.save(shape_png)
     panels = shown + [overlay] + ([kept] if kept is not None else [])
+    if exact is not None and view == "front":
+        on_exact, has_exact = (raw, has) if kept is not None else line_up(drawn, score_mask(drawn), exact)
+        s_exact, should_exact = score_front(exact, has_exact, masked=kept is not None)
+        s["exact_missing"] = s_exact["missing"]
+        panels.append(marked(on_exact, should_exact & ~has_exact, np.zeros_like(has_exact)))
+        lines.append(f"last panel: his exact outline (no margin) uncovered {s_exact['missing'] * 100:.2f} %")
     rows = tuple(round(v[0]) for v in joints.values()) if joints else ()
     return s, lines, sheet(panels, lines, tag.with_name(tag.name + "_sheet.png"), rows), shape_png
 
@@ -366,6 +374,7 @@ def main() -> None:
     a.out.mkdir(parents=True, exist_ok=True)
 
     masked = a.draw == "mask"
+    exact = None                             # front: his outline with no margin, for the last panel
     mode = a.view + ("_masked" if masked else "")
     prompt = PROMPTS[mode]
     if a.view == "front":
@@ -377,6 +386,7 @@ def main() -> None:
             # and the concept is not that body (barb: the 3D body is 1.2-2.5 % h wider, legs further apart).
             body = score_mask(Image.open(a.outline))
             bare = line_up(Image.fromarray(np.where(body, 0, 255).astype(np.uint8)), body, bare)[1]
+        exact = bare.copy()
         top, _, height, _ = frame(bare)
         grow = round(a.margin * height)        # 0: his outline as it is (iterations=0 would grow until it stops)
         target = ndimage.binary_dilation(bare, iterations=grow) if grow > 0 else bare.copy()
@@ -436,7 +446,8 @@ def main() -> None:
             # mask and image 1 everywhere else.
             kept = paste_back(raw, canvas, target).convert("RGB")
             kept.save(draw_path)
-            s, lines, sheet_png, shape_png = evaluate(a.view, raw.convert("RGB"), target, tag, kept, [canvas_path] + refs)
+            s, lines, sheet_png, shape_png = evaluate(a.view, raw.convert("RGB"), target, tag, kept, [canvas_path] + refs,
+                                                      exact=exact)
         else:
             # Leonardo takes a reference strength per image; gpt-image has none.
             strengths = ([INPUT_STRENGTH] * len(refs) + [ATTACHED_STRENGTH] * len(attach)) \
@@ -452,7 +463,7 @@ def main() -> None:
                 got = joint_heights([draw_path])[str(draw_path)] or {}
                 joints = {k: (v["y"], got[k]["height_pct"] - v["height_pct"]) for k, v in ref_joints.items() if k in got}
             s, lines, sheet_png, shape_png = evaluate(a.view, Image.open(draw_path), target, tag, sent=refs,
-                                                      joints=joints)
+                                                      joints=joints, exact=exact)
         attempts.append({"attempt": n, "draw": str(draw_path), "prompt": str(tag.with_name(tag.name + "_prompt.txt")),
                          "images_sent": [str(p) for p in extra], "scores": s,
                          "shape": str(shape_png) if shape_png else None})
