@@ -55,6 +55,7 @@ levels/*/*/export/**/*.png
 
 # boss_sprite_pipeline: bpy venv, GPU-box tool checkouts, bulky rendered frames
 tools/boss_sprite_pipeline/.venv-bpy/
+tools/boss_sprite_pipeline/.venv-pose/
 tools/boss_sprite_pipeline/gpu_box/vendor/
 generated/bosses/**
 !generated/bosses/**/

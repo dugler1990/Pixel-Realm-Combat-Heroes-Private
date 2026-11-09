@@ -155,12 +155,19 @@ class Inventory:
         (0.35, 0.395, 0.30, 0.065),  # waist
     )
 
-    def _layout(self, kit):
+    def _layout(self, kit, placed=None):
         """Place every slot for this window: the slab, the doll and its slots, the pack and the
-        belt. The slots' rects are set here, so the held item follows the focused slot."""
-        width = min(kit.width - kit.px(56), round((kit.height - kit.px(40)) * 1.25))
-        slab = pygame.Rect(0, 0, width, round(width * 0.8))
-        slab.center = (kit.width // 2, kit.height // 2)
+        belt. The slots' rects are set here, so the held item follows the focused slot.
+
+        `placed` is a rect when another screen, such as trade, sits this window on one side.
+        """
+        if placed is None:
+            width = min(kit.width - kit.px(56), round((kit.height - kit.px(40)) * 1.25))
+            slab = pygame.Rect(0, 0, width, round(width * 0.8))
+            slab.center = (kit.width // 2, kit.height // 2)
+        else:
+            slab = pygame.Rect(placed)
+            width = slab.w
         inner = slab.inflate(-round(width * 0.12), -round(width * 0.10))
         top = inner.y + kit.font("display", 32).get_height() + kit.px(10)
         cell, gap = kit.px(46), kit.px(6)
@@ -191,13 +198,16 @@ class Inventory:
             return self.focus_region == FOCUS_BACKPACK and i - self.backpack_start_index == self.selected_backpack_index
         return self.focus_region == FOCUS_BELT and i - self.belt_start_index == self.belt_index
 
-    def display(self, backend):
+    def display(self, backend, placed=None, show_highlight=True):
         """The inventory in the Legion look: the stone slab at its own 5:4, the painted figure
-        with its body slots on it, the pack 3 wide and 4 tall, the belt of four under the figure."""
-        if not self.visible:
+        with its body slots on it, the pack 3 wide and 4 tall, the belt of four under the figure.
+
+        Trade draws it while `visible` is false, on `placed`, and can hide the cursor.
+        """
+        if not self.visible and placed is None:
             return
         kit = L.kit_for(backend)
-        slab, inner, doll, (pack_x, pack_y) = self._layout(kit)
+        slab, inner, doll, (pack_x, pack_y) = self._layout(kit, placed)
         L.draw(backend, kit.picture("slab.png", width=slab.w), slab.topleft)
         L.draw(backend, kit.label("Inventory", "display", 32, L.GOLD), inner.topleft)
         if self._gold is None:
@@ -207,7 +217,7 @@ class Inventory:
         L.draw(backend, kit.label("Pack", "body", 12, L.GOLD, spacing=0.14, upper=True), (pack_x, pack_y))
         for i, slot in enumerate(self.slots):
             r = slot.rect
-            if self._selected(i):
+            if show_highlight and self._selected(i):
                 edge, glow = kit.highlight(r.w, r.h)
                 L.draw(backend, edge, (r.x - glow, r.y - glow))
             body = i < self.backpack_start_index
@@ -240,6 +250,10 @@ class Inventory:
             L.draw(backend, kit.label(str(self.hand_qty), "medium", 13, L.GOLD), (cx + kit.px(24) + side, cy + kit.px(8)))
 
     def input(self):
+        level = getattr(self.player, "level", None)
+        trade = getattr(getattr(level, "dialogue", None), "trade", None)
+        if trade is not None and getattr(trade, "visible", False):
+            return
         current_time = pygame.time.get_ticks()
         if self.input_manager.is_key_just_pressed(pygame.K_i):
             if current_time - self.player.last_i_press_time > 500:

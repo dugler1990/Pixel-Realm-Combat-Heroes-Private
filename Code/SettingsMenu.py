@@ -43,6 +43,9 @@ class SettingsMenu:
             ("Debug", "On" if s.debug_mode else "Off"),
             ("Faction outlines", "On" if s.debug_faction_outlines else "Off"),
             ("Gold popup", "On" if s.gold_pickup_popup else "Off"),
+            ("Speech bubbles", "On" if s.speech_bubbles else "Off"),
+            ("Conversation text", "On" if s.conversation_text else "Off"),
+            ("Voice", "On" if s.voice_enabled else "Off"),
         ]
 
     def draw(self, backend):

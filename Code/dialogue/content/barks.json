@@ -1,0 +1,7 @@
+{
+  "cold": {
+    "speaker": "Eskimo",
+    "text": "Cold out.",
+    "cooldown_ms": 8000
+  }
+}
