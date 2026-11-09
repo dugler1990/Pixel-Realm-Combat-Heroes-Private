@@ -247,18 +247,19 @@ def marked(image: Image.Image, missing: np.ndarray, spilled: np.ndarray) -> Imag
 
 
 def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
-             kept: Image.Image | None = None) -> tuple[dict, list[str], Path, Path | None]:
+             kept: Image.Image | None = None, sent: tuple = ()) -> tuple[dict, list[str], Path, Path | None]:
     """Score one draw. Returns the scores, the lines for the sheet, the sheet and the overlay (None for a side).
     A masked draw (`kept` is its pasted result, shown beside it) is scored on the raw return against the mask that
     was sent, as the interiors score theirs: after the paste there is nothing left to measure. A reference draw is
-    lined up with its outline first."""
+    lined up with its outline first. `sent`: the images the model was given, shown first on the sheet."""
+    shown = [Image.open(p).convert("RGB") for p in sent] or [outline_image(target)]
     if view == "side":
         s = score_side(target, score_mask(raw))
         lines = [f"side: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
                  f"head top {s['top'] * 100:+.2f} %  feet {s['feet'] * 100:+.2f} %  height {s['height'] * 100:+.2f} %"
                  "  (of the front's height; red lines: the front's head top and feet)"]
         top, bottom, _, _ = frame(target)
-        return s, lines, sheet([outline_image(target), raw], lines, tag.with_name(tag.name + "_sheet.png"),
+        return s, lines, sheet(shown + [raw], lines, tag.with_name(tag.name + "_sheet.png"),
                                (top, bottom)), None
     if kept is None:
         raw, has = line_up(raw, score_mask(raw), target)
@@ -279,7 +280,7 @@ def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
     lines.append("  ".join(f"{k} {v['diff']:+.2f}" for k, v in s["bands"].items()) + "  (% h, draw minus target)")
     shape_png = tag.with_name(tag.name + "_shape.png")
     overlay.save(shape_png)
-    panels = [outline_image(target), overlay] + ([kept] if kept is not None else [])
+    panels = shown + [overlay] + ([kept] if kept is not None else [])
     return s, lines, sheet(panels, lines, tag.with_name(tag.name + "_sheet.png")), shape_png
 
 
@@ -369,7 +370,7 @@ def main() -> None:
             # mask and image 1 everywhere else.
             kept = paste_back(raw, canvas, target).convert("RGB")
             kept.save(draw_path)
-            s, lines, sheet_png, shape_png = evaluate(a.view, raw.convert("RGB"), target, tag, kept)
+            s, lines, sheet_png, shape_png = evaluate(a.view, raw.convert("RGB"), target, tag, kept, [canvas_path] + refs)
         else:
             # Leonardo takes a reference strength per image; gpt-image has none.
             strengths = ([INPUT_STRENGTH] * len(refs) + [ATTACHED_STRENGTH] * len(attach)) \
@@ -380,7 +381,7 @@ def main() -> None:
             tag.with_name(tag.name + "_request.json").write_text(json.dumps(
                 {"images": [str(p) for p in extra], "strengths": strengths, "result": result}, indent=1,
                 default=str), encoding="utf-8")
-            s, lines, sheet_png, shape_png = evaluate(a.view, Image.open(draw_path), target, tag)
+            s, lines, sheet_png, shape_png = evaluate(a.view, Image.open(draw_path), target, tag, sent=refs)
         attempts.append({"attempt": n, "draw": str(draw_path), "prompt": str(tag.with_name(tag.name + "_prompt.txt")),
                          "images_sent": [str(p) for p in extra], "scores": s,
                          "shape": str(shape_png) if shape_png else None})
