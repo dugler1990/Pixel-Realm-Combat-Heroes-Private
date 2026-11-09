@@ -349,6 +349,7 @@ def main() -> None:
     ap.add_argument("--front", type=Path, help="back, side: the approved armoured front")
     ap.add_argument("--back", type=Path, help="side: the approved back")
     ap.add_argument("--side", choices=("left", "right"), default="left")
+    ap.add_argument("--other-side", type=Path, help="side: the side already drawn, sent mirrored so this one matches")
     ap.add_argument("--margin", type=float, default=MARGIN,
                     help="front: the outline to cover is his bare outline grown by this share of his height")
     ap.add_argument("--outline", type=Path,
@@ -409,6 +410,12 @@ def main() -> None:
         target = score_mask(Image.open(a.front))
         prompt = prompt.format(side=a.side, edge=a.side)
         refs, name = [a.front.resolve(), a.back.resolve()], f"side_{a.side}"
+        if a.other_side:
+            mirrored = a.out / f"side_{a.side}_other_side_mirrored.png"
+            Image.open(a.other_side).transpose(Image.FLIP_LEFT_RIGHT).save(mirrored)
+            refs.append(mirrored.resolve())
+            prompt += ("\n\nImage 3 is his other side, mirrored: draw this side to match it, with the same armour, "
+                       "size and heights.")
     if masked:
         outline_image(target).save(a.out / f"{a.view}_target_mask.png")
         canvas_path = a.out / f"{a.view}_canvas.png"
@@ -434,7 +441,8 @@ def main() -> None:
         n += 1
         tag = a.out / f"{a.view}_attempt_{n:02d}"
         draw_path = tag.with_suffix(".png")
-        sent_prompt = with_criticism(prompt, criticism, attach, first_index=FIRST_INDEX[mode])
+        sent_prompt = with_criticism(prompt, criticism, attach,
+                                     first_index=FIRST_INDEX[mode] + (1 if a.view == "side" and a.other_side else 0))
         tag.with_name(tag.name + "_prompt.txt").write_text(sent_prompt, encoding="utf-8")
         extra = refs + [Path(p) for p in attach]
         if masked:
