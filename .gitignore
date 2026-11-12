@@ -48,6 +48,7 @@ generated/ui_kit/**
 # they are text.
 levels/*/*/generated_bootstrap/
 levels/*/*/background*.png
+levels/*/*/snap_overlay.png
 levels/*/*/export/**/*.png
 
 # Scratch renders that collect in the repo root while iterating.
