@@ -117,8 +117,8 @@ def parse_config(raw: dict[str, Any], config_path: Path) -> RunConfig:
 
     execution_raw = dict(raw.get("execution") or {})
     approval_mode = str(execution_raw.get("approval_mode") or "manual").strip().lower()
-    if approval_mode not in {"manual", "automatic"}:
-        raise ValueError("execution.approval_mode must be 'manual' or 'automatic'")
+    if approval_mode != "manual":
+        raise ValueError("execution.approval_mode must be 'manual'")
     retry_limit = int(execution_raw.get("retry_limit", 2))
     if retry_limit < 0:
         raise ValueError("execution.retry_limit must be non-negative")
@@ -131,14 +131,6 @@ def parse_config(raw: dict[str, Any], config_path: Path) -> RunConfig:
     if renderer not in {"warp", "frame"}:
         raise ValueError("generation.renderer must be 'warp' or 'frame'")
     generation_raw["renderer"] = renderer
-    if renderer == "frame" and approval_mode == "automatic":
-        # The frame renderer has no footprint gate -- there is no silhouette to score, so a
-        # catastrophic draw is cut, kept, and propagated into every neighbour as padding.
-        # A human looking at it is the only defence, so automatic approval is refused.
-        raise ValueError(
-            "generation.renderer 'frame' requires execution.approval_mode 'manual': "
-            "it has no automatic reject gate"
-        )
 
     return RunConfig(
         config_path=config_path.resolve(),

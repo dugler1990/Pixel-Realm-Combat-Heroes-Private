@@ -16,7 +16,7 @@ from tools.painted_map_pipeline.world_levels.masks import compute_overlap, share
 from tools.painted_map_pipeline.world_levels.package_builder import level_paths, prepare_run
 from tools.painted_map_pipeline.world_levels.package_refresher import refresh_level
 from tools.painted_map_pipeline.world_levels.plan_loader import load_level_plan
-from tools.painted_map_pipeline.world_levels.result_ingest import ingest_result
+from tools.painted_map_pipeline.world_levels.result_ingest import accept_result, ingest_result
 from tools.painted_map_pipeline.world_levels.state_store import read_json, sha256_file
 from tools.painted_map_pipeline.world_levels.validate_continuity import validate_run
 
@@ -242,20 +242,23 @@ def test_selector_and_real_plan_contract():
     assert plan["03"].connection_to("04") is not None
 
 
-def test_automatic_batch_refreshes_between_selected_levels(tmp_path: Path):
-    config_path = _write_fixture(tmp_path)
-    raw = json.loads(config_path.read_text(encoding="utf-8"))
-    raw["execution"]["approval_mode"] = "automatic"
-    config_path.write_text(json.dumps(raw), encoding="utf-8")
-    config = load_config(config_path)
+def test_batch_waits_and_refresh_uses_the_accepted_neighbour(tmp_path: Path):
+    config = load_config(_write_fixture(tmp_path))
     prepare_run(config)
+
     summary = run_batch(config.output_root, ["01", "02"])
-    assert summary["status"] == "finished"
-    assert [item["state"] for item in summary["results"]] == ["accepted", "accepted"]
-    run = read_json(config.output_root / "run.json")
-    assert run["levels"]["01"]["state"] == "accepted"
-    assert run["levels"]["02"]["state"] == "accepted"
-    assert validate_run(config.output_root)["valid"] is True
+
+    assert summary["status"] == "waiting_for_approval"
+    assert [item["level_id"] for item in summary["results"]] == ["01"]
+    assert summary["results"][0]["state"] == "generated"
+
+    accept_result(config.output_root, "01")
+    summary = run_batch(config.output_root, ["02"])
+    accept_result(config.output_root, "02")
+
+    assert summary["results"][0]["state"] == "generated"
+    validation = validate_run(config.output_root)
+    assert validation["valid"] is True
 
 
 def test_batch_records_provider_failure_after_configured_retries(tmp_path: Path, monkeypatch):

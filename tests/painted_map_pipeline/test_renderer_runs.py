@@ -122,7 +122,7 @@ def test_frame_renderer_refuses_automatic_approval(tmp_path: Path):
     config_path = _write_fixture(tmp_path, generation=FRAME)
     raw = config_path.read_text(encoding="utf-8").replace('"manual"', '"automatic"')
     config_path.write_text(raw, encoding="utf-8")
-    with pytest.raises(ValueError, match="requires execution.approval_mode 'manual'"):
+    with pytest.raises(ValueError, match="execution.approval_mode must be 'manual'"):
         load_config(config_path)
 
 
