@@ -38,9 +38,14 @@ if "--scaling" in ARGS:
     i = ARGS.index("--scaling")
     SCALING = float(ARGS[i + 1])
     del ARGS[i:i + 2]
+GROW_BODY = 0.0                  # percent: the body copy that fills the proxy, scaled up so bulky armour still joins it
+if "--grow-body" in ARGS:
+    i = ARGS.index("--grow-body")
+    GROW_BODY = float(ARGS[i + 1])
+    del ARGS[i:i + 2]
 BASE, OUTFIT, OUT = (os.path.abspath(a) for a in [a for a in ARGS if a != "--align-only"][:3])
 HEAD_FRAC = 0.12
-VOXEL = 0.5          # % of height, as rig_reweight heat 0.5
+VOXEL = 2.0          # % of height (0.5 fused only snug armour: bulky plates stayed a hollow shell)
 t0 = time.time()
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -125,6 +130,14 @@ def detached_copy(o, name):
 
 proxy = detached_copy(outfit, "proxy")
 fill = detached_copy(body, "fill")
+if GROW_BODY:                    # only the proxy's filler grows; the body itself is untouched
+    F = np.empty(len(fill.data.vertices) * 3, np.float32)
+    fill.data.vertices.foreach_get("co", F)
+    F = F.reshape(-1, 3)
+    c = (F.min(0) + F.max(0)) / 2
+    fill.data.vertices.foreach_set("co", (c + (F - c) * (1 + GROW_BODY / 100)).astype(np.float32).ravel())
+    fill.data.update()
+DIAG["settings"]["grow_body_pct"] = GROW_BODY
 bpy.ops.object.select_all(action="DESELECT")
 proxy.select_set(True)
 fill.select_set(True)
