@@ -98,3 +98,56 @@ def test_alignment_learns_from_raw_after_the_cut_erases_the_overlap():
     accepted_colours = {tuple(int(v) for v in colour) for colour in accepted[accepted.sum(2) > 20]}
     used = {tuple(int(v) for v in colour) for colour in result[painted_pending][:, :3]}
     assert used <= accepted_colours
+
+
+def _noise_scene(height=80, width=160, join=60, seed=5):
+    """Per-pixel noise of the same four colours: a shift of even one pixel breaks most pairs.
+
+    The 8 px checkerboard above keeps about half its pairs right under a small shift, which
+    is enough for the per-bin median to recover, so it cannot show the drift doing harm.
+    """
+    source, accepted, locked, pending, join, _ = _scene(height, width, join)
+    palette = np.unique(source[..., :3].reshape(-1, 3), axis=0)
+    targets = np.unique(accepted[:, :join].reshape(-1, 3), axis=0)
+    classes = np.random.default_rng(seed).integers(0, len(palette), (height, width))
+    raw = np.dstack((palette[classes], np.full((height, width), 255, dtype=np.uint8)))
+    accepted = np.zeros_like(accepted)
+    accepted[:, :join] = targets[classes[:, :join]]
+    return raw, accepted, locked, pending, targets[classes]
+
+
+def _pending_error(image, expected, pending):
+    painted = (pending > 0) & (image[..., :3].sum(axis=2) > 20)
+    return np.abs(image[painted, :3].astype(np.int16) - expected[painted].astype(np.int16)).mean()
+
+
+def test_drifted_pairs_fail_and_the_offset_puts_them_back():
+    """The model drew everything (dx, dy) off; dragging the padding by the same fixes the map."""
+    from tools.painted_map_pipeline.world_levels.result_ingest import _shift_black
+
+    raw, accepted, locked, pending, expected = _noise_scene()
+    dx, dy = 3, -2
+    drifted = np.asarray(_shift_black(Image.fromarray(raw), dx, dy))
+    before = _pending_error(raw, expected, pending)
+
+    def aligned_with(pair_source):
+        out, _ = align_to_paired_padding(
+            Image.fromarray(raw), Image.fromarray(accepted), Image.fromarray(locked),
+            Image.fromarray(pending), raw=pair_source,
+        )
+        return _pending_error(np.asarray(out), expected, pending)
+
+    misaligned = aligned_with(Image.fromarray(drifted))
+    corrected = aligned_with(_shift_black(Image.fromarray(drifted), -dx, -dy))
+    assert misaligned > before * 0.35
+    assert corrected < before * 0.35
+
+
+def test_the_band_a_shift_opens_is_black():
+    from tools.painted_map_pipeline.world_levels.result_ingest import _shift_black
+
+    raw = _noise_scene()[0]
+    shifted = np.asarray(_shift_black(Image.fromarray(raw), -3, 2))
+    assert np.all(shifted[:2, :, :3] == 0)          # down 2: the top rows are new
+    assert np.all(shifted[:, -3:, :3] == 0)         # left 3: the right columns are new
+    assert np.array_equal(shifted[2:, :-3], raw[:-2, 3:])

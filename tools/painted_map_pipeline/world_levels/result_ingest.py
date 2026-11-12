@@ -98,6 +98,20 @@ def _paste_padding_feathered(
     normalized.paste(Image.fromarray(blended.astype(np.uint8), "RGBA"), (0, 0))
 
 
+def _shift_black(image: Image.Image, dx: int, dy: int) -> Image.Image:
+    """Move the content right by ``dx`` and down by ``dy``; the band it leaves is black.
+
+    The copy colour alignment learns from. ``frame.shift_image`` fills that band by repeating
+    the edge, which suits a picture that is shown, but repeated pixels paired with real padding
+    would teach the colour map something the model never drew. Black pairs are dropped there.
+    """
+    if not dx and not dy:
+        return image.copy()
+    out = Image.new("RGBA", image.size, (0, 0, 0, 255))
+    out.paste(image.convert("RGBA"), (dx, dy))
+    return out
+
+
 def _next_placement(
     attempt_dir: Path, *, warped: bool, colour_aligned: bool = False
 ) -> Path:
@@ -132,7 +146,16 @@ def ingest_result(
     cut_to_mask: bool = False,
     align_colours: bool = False,
     padding: str = "all",
+    padding_offset: tuple[int, int] = (0, 0),
 ) -> dict[str, Any]:
+    """Normalize a generated image for its job.
+
+    ``padding_offset`` is (dx, dy) in whole canvas pixels: how far the padding had to move,
+    right and down, to sit on the generation. The generation is moved back by it, so the
+    colour pairs and the padding paste line up with what the model drew. With the warp on,
+    the warp does the placing and the offset only corrects the colour pairs. The frame
+    renderer measures and undoes its own drift, so an offset there is refused.
+    """
     root_path = Path(root).resolve()
     config = load_config(root_path / "config.resolved.json")
     run = read_json(root_path / "run.json")
@@ -165,7 +188,22 @@ def ingest_result(
 
     # The renderer recorded on the job, not the one in the live config: re-ingesting an old
     # attempt must normalize it under the rules it was generated for.
-    renderer = get_renderer(job.get("renderer", "warp"))
+    renderer_name = job.get("renderer", "warp")
+    renderer = get_renderer(renderer_name)
+
+    dx, dy = (int(value) for value in padding_offset)
+    if (dx or dy) and renderer_name != "warp":
+        raise ValueError(
+            f"a padding offset needs the warp renderer; this job used {renderer_name!r}, "
+            "which measures and undoes its own drift"
+        )
+    # Snapshot before place(). A cut blacks out everything outside the new cell, including
+    # the model's overlap, and that overlap is the only place the colour shift can be learned.
+    raw_generation = _shift_black(generated, -dx, -dy)
+    if not fit_to_mask:
+        from .renderers.frame import shift_image
+
+        generated = shift_image(generated, -dx, -dy)
     place_context = PlaceContext(
         level_id=level_id,
         canvas_size=tuple(int(value) for value in job["canvas_size"]),
@@ -179,9 +217,6 @@ def ingest_result(
         cut_to_mask=cut_to_mask,
         mask_holds_the_shape=bool(config.generation.get("mask_edits")),
     )
-    # Snapshot before place(). A cut blacks out everything outside the new cell, including
-    # the model's overlap, and that overlap is the only place the colour shift can be learned.
-    raw_generation = generated.copy()
     try:
         normalized, info = renderer.place(generated, place_context)
     except FootprintRejected as exc:
@@ -265,6 +300,7 @@ def ingest_result(
             "placement_cut_to_mask": cut_to_mask,
             "placement_align_colours": align_colours,
             "placement_colour_alignment": colour_alignment,
+            "placement_padding_offset": [dx, dy],
             "placement_hash": sha256_file(placement_path),
         }
     )
@@ -307,6 +343,7 @@ def ingest_result(
         # The numbered file, so a reviewer is handed a path nothing has cached.
         "placement_path": str(placement_path),
         "current_path": str(current_path),
+        "padding_offset": [dx, dy],
     }
 
 
