@@ -42,7 +42,7 @@ See `world_levels/config.example.json`. A run config specifies:
 - explicit or derived canvas dimensions;
 - crop placement and canvas margin;
 - outside color and source resampling;
-- manual or automatic approval;
+- approval, which is always manual;
 - retry and failure behavior;
 - image-generation backend and style prompt.
 
@@ -164,9 +164,8 @@ normalized[outside generation] = configured blank color
 normalized[locked mask] = exact locked neighbor pixels
 ```
 
-The raw and normalized attempts are retained. In manual mode the normalized
-candidate waits for `accept`; in automatic mode it is accepted immediately
-after deterministic validation.
+The raw and normalized attempts are retained. The normalized candidate waits
+for `accept`. A config cannot accept it.
 
 Acceptance copies the normalized image to `accepted/image.png`, records its
 hash and acceptance order, and automatically refreshes every unfinished
@@ -197,7 +196,7 @@ refresh accepted context
     -> create immutable job
     -> invoke generation backend
     -> ingest and normalize
-    -> accept or pause for approval
+    -> pause for approval
     -> refresh all connected unfinished packages
 ```
 
@@ -205,8 +204,8 @@ Refresh propagation is not restricted to the selected range. If accepted level
 05 touches unselected level 06, level 06 receives the new overlap immediately.
 
 A manifest-only backend prepares the next immutable job and pauses for an
-external image. Callable providers can continue automatically. Manual approval
-pauses the batch after ingestion; `resume` continues after acceptance.
+external image. A callable provider generates the image, then the batch pauses
+for approval. `resume` continues after acceptance.
 
 ## Commands
 

@@ -11,6 +11,7 @@ Per level, none of which costs a generation except a retry:
     Enter      accept
     t          run the checks and open the shape-error overlay
     f N        re-place with the padding join faded over N px
+    a          re-place with paired colour alignment to accepted padding toggled
     w          re-place with the warp onto the mask toggled
     c          re-place with the spill trimmed at the polygon (no warping)
     p          re-place with the neighbours' padding paste off / on
@@ -136,6 +137,15 @@ def parse_retry(line: str, root: Path, level_id: str) -> tuple[str, Path | None,
     return split_retry(line)
 
 
+def _open(command: str, path: str) -> None:
+    # CreateProcess does not search PATHEXT, so the `code` and `cursor` .cmd shims
+    # raise WinError 2. cmd does search them.
+    if sys.platform == "win32":
+        subprocess.run(["cmd", "/c", command, "-r", path], check=False)
+    else:
+        subprocess.run([command, "-r", path], check=False)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Generate, review and accept levels one by one.")
     parser.add_argument("root")
@@ -206,14 +216,15 @@ def main(argv=None) -> int:
             feather = args.feather
             fit = False
             cut = False
+            align_colours = False
             padding = True
             while True:
                 print(f"    check: {image}")
                 if args.open_with:
-                    subprocess.run([args.open_with, "-r", image], check=False)
+                    _open(args.open_with, image)
                 raw_choice = input(
                     "    [Enter]=accept  t=run tests  f N=feather  c=cut to the polygon  "
-                    "p=padding on/off  "
+                    "a=align colours  p=padding on/off  "
                     "w=warp onto the mask  "
                     "r [why] [@img] [@@ note]=retry  r1=retry with the shape overlay  s=skip  q=quit > "
                 ).strip()
@@ -224,9 +235,9 @@ def main(argv=None) -> int:
                     report = run_checks(root, level_id)
                     print(textwrap.indent(format_report(report), "    "))
                     if report.get("overlay_path") and args.open_with:
-                        subprocess.run([args.open_with, "-r", report["overlay_path"]], check=False)
+                        _open(args.open_with, report["overlay_path"])
                     continue
-                if choice not in {"w", "c", "p"} and not choice.startswith("f"):
+                if choice not in {"w", "c", "a", "p"} and not choice.startswith("f"):
                     break
                 # These all re-ingest the SAME generated image, so none costs an API call
                 # and each can be applied, undone and retried by eye before accepting.
@@ -247,6 +258,12 @@ def main(argv=None) -> int:
                     # showing them, so cut_iou is read first and the call is yours.
                     cut = not cut
                     print(f"    cut to the polygon {'on' if cut else 'off'}")
+                elif choice == "a":
+                    align_colours = not align_colours
+                    print(
+                        "    paired colour alignment "
+                        f"{'on' if align_colours else 'off'}"
+                    )
                 else:
                     parts = choice.split()
                     feather = (
@@ -277,6 +294,8 @@ def main(argv=None) -> int:
                     reingest.append("--fit-to-mask")
                 if cut:
                     reingest.append("--cut-to-mask")
+                if align_colours:
+                    reingest.append("--align-colours")
                 if not padding:
                     reingest += ["--padding", "none"]
                 try:
@@ -289,11 +308,15 @@ def main(argv=None) -> int:
                         cut = not cut
                     elif choice == "p":
                         padding = not padding
+                    elif choice == "a":
+                        align_colours = not align_colours
                     print(f"    REFUSED: {refused}")
                     continue
                 image = payload.get("placement_path") or image
                 print(f"    re-placed: feather {feather}, warp {'on' if fit else 'off'}, "
-                      f"cut {'on' if cut else 'off'}, padding {'on' if padding else 'OFF'}")
+                      f"cut {'on' if cut else 'off'}, colours "
+                      f"{'aligned' if align_colours else 'original'}, "
+                      f"padding {'on' if padding else 'OFF'}")
             if choice == "r1" or choice.startswith("r1 ") or choice == "r" or choice.startswith("r "):
                 # Anything typed after the r is criticism of the picture, which no check can
                 # produce, plus optionally the image that shows it.

@@ -8,7 +8,8 @@ from PIL import Image, ImageDraw
 from tools.painted_map_pipeline.world_levels.checks import (
     footprint,
     full_bleed,
-    padding_seam,
+    colour_gap,
+    join_line,
 )
 from tools.painted_map_pipeline.world_levels.job_builder import _with_retry_context
 from tools.painted_map_pipeline.world_levels.renderers.base import (
@@ -36,37 +37,60 @@ def _noise(seed: int = 3, offset: int = 0) -> np.ndarray:
     return np.clip(base + offset, 0, 255).astype(np.uint8)
 
 
-def test_padding_seam_passes_when_the_texture_runs_through():
+def test_join_line_passes_when_the_texture_runs_through():
     locked, pending = _masks()
     image = Image.fromarray(_noise(), mode="RGB").convert("RGBA")
-    result = padding_seam(image, locked, pending)
+    result = join_line(image, locked, pending)
     assert result["passed"], result
+    assert result["name"] == "join_line"
 
 
-def test_padding_seam_fails_on_a_colour_step_across_the_join():
+def test_join_line_fails_on_a_step_across_the_join():
     locked, pending = _masks()
     pixels = _noise()
     pixels[:, JOIN_X:] = np.clip(pixels[:, JOIN_X:].astype(np.int16) + 60, 0, 255).astype(np.uint8)
-    result = padding_seam(Image.fromarray(pixels, mode="RGB").convert("RGBA"), locked, pending)
+    result = join_line(Image.fromarray(pixels, mode="RGB").convert("RGBA"), locked, pending)
     assert not result["passed"]
-    assert result["colour_step"] > result["colour_step_limit"]
+    assert result["line_step"] > result["line_step_limit"]
 
 
-def test_padding_seam_fails_on_an_edge_ridge_along_the_join():
+def test_join_line_fails_on_an_edge_ridge_along_the_join():
     """Flat either side, one hard line down the middle: no colour step, pure edge energy."""
     locked, pending = _masks()
     pixels = np.full((SIZE[1], SIZE[0], 3), 120, dtype=np.uint8)
     pixels[:, JOIN_X - 1 : JOIN_X + 1] = 20
-    result = padding_seam(Image.fromarray(pixels, mode="RGB").convert("RGBA"), locked, pending)
+    result = join_line(Image.fromarray(pixels, mode="RGB").convert("RGBA"), locked, pending)
     assert not result["passed"]
     assert result["edge_ratio"] > result["edge_ratio_limit"]
 
 
-def test_padding_seam_is_skipped_without_padding():
+def test_join_line_is_skipped_without_padding():
     _, pending = _masks()
     image = Image.fromarray(_noise(), mode="RGB").convert("RGBA")
-    result = padding_seam(image, Image.new("L", SIZE, 0), pending)
+    result = join_line(image, Image.new("L", SIZE, 0), pending)
     assert result["passed"] and result["skipped"]
+
+
+def test_colour_gap_sees_a_shift_the_join_strip_does_not():
+    """The four pixels at the join match. The rest of the cell does not."""
+    locked, pending = _masks()
+    pixels = np.zeros((SIZE[1], SIZE[0], 3), dtype=np.uint8)
+    pixels[:, :JOIN_X] = (30, 80, 140)
+    pixels[:, JOIN_X : JOIN_X + 4] = (30, 80, 140)
+    pixels[:, JOIN_X + 4 :] = (70, 120, 180)
+    image = Image.fromarray(pixels, mode="RGB").convert("RGBA")
+    line = join_line(image, locked, pending)
+    gap = colour_gap(image, locked, pending)
+    assert line["line_step"] < line["line_step_limit"]
+    assert not gap["passed"]
+    assert gap["gap"] > gap["gap_limit"]
+
+
+def test_colour_gap_passes_when_center_and_padding_share_colours():
+    locked, pending = _masks()
+    image = Image.fromarray(_noise(), mode="RGB").convert("RGBA")
+    result = colour_gap(image, locked, pending)
+    assert result["passed"], result
 
 
 def test_footprint_and_full_bleed_catch_their_own_failures():

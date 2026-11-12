@@ -23,7 +23,7 @@
     "source_resampling": "lanczos"
   },
   "execution": {
-    "approval_mode": "automatic",
+    "approval_mode": "manual",
     "stop_on_failure": true,
     "retry_limit": 2,
     "rescale_below_iou": 0.9

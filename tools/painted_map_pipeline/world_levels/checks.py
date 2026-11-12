@@ -3,9 +3,9 @@
 Each check returns a number and a verdict, and nothing else: what goes back to the model on a
 retry is only ever what a person types, so a check never speaks for itself.
 
-The geometric checks restate what the renderers already enforce. ``padding_seam`` is the one
-that exists only here, because the failure it catches is the one nobody automated: a visible
-line where the finished padding meets the new art.
+The geometric checks restate what the renderers already enforce. ``join_line`` is the hard
+line where the finished padding meets the new art. ``colour_gap`` is separate: it compares
+the whole new cell's colours with the whole padding, which a four-pixel strip cannot see.
 """
 
 from __future__ import annotations
@@ -23,11 +23,18 @@ Image.MAX_IMAGE_PIXELS = None
 # a little way to either side -- texture either continues or it does not. Measured as a ratio
 # so it does not care how detailed the terrain happens to be.
 SEAM_EDGE_RATIO = 1.5
-# Mean per-channel step across the join, in 0-255 units. Calibrated against joins judged by
-# eye: ones that read as continuous measure 0.8-1.6, ones with a line measure 9.3-42.
-SEAM_COLOUR_STEP = 5.0
+# Mean per-channel step across the join, in 0-255 units. This is the hard line, not the
+# colour of the cell. Calibrated against joins judged by eye: ones that read as continuous
+# measure 0.8-1.6, ones with a line measure 9.3-42.
+SEAM_LINE_STEP = 5.0
 BAND_PX = 4
 CONTROL_OFFSET_PX = 10
+# Mean absolute gap between the Lab quantiles of the new paint and the padding. OpenCV Lab,
+# so the units are 0-255, not CIE Delta E. On Bitter Floe 06 attempt 007 the uncorrected
+# center scored 9.1 and the aligned one, which read as the same family of colours, scored 5.4.
+COLOUR_GAP_LIMIT = 6.0
+COLOUR_SAMPLE = 80_000
+CONTENT_MIN_RGB_SUM = 20
 
 
 def _grad(rgb: np.ndarray) -> np.ndarray:
@@ -53,26 +60,26 @@ def _bands(locked: np.ndarray, pending: np.ndarray) -> dict[str, np.ndarray]:
     }
 
 
-def padding_seam(image: Image.Image, locked_mask: Image.Image, pending_mask: Image.Image) -> dict:
+def join_line(image: Image.Image, locked_mask: Image.Image, pending_mask: Image.Image) -> dict:
     """How visible the line is where the padding meets the new art.
 
     Two independent ways for a join to show: a ridge of edge energy lying along it, and a flat
-    step in colour across it. Either alone is enough to read as a border, so both are reported
-    and the check fails on whichever trips.
+    step in colour across that same thin strip. Either alone is enough to read as a border.
+    This says nothing about whether the rest of the cell uses the padding's colours.
     """
     rgb = np.asarray(image.convert("RGB"))
     locked = np.asarray(locked_mask.convert("L")) > 0
     pending = np.asarray(pending_mask.convert("L")) > 0
     if not locked.any() or not pending.any():
         return {
-            "name": "padding_seam",
+            "name": "join_line",
             "skipped": "this level has no padding",
             "passed": True,
         }
 
     bands = _bands(locked, pending)
     if not all(band.any() for band in bands.values()):
-        return {"name": "padding_seam", "skipped": "join too thin to measure", "passed": True}
+        return {"name": "join_line", "skipped": "join too thin to measure", "passed": True}
 
     grad = _grad(rgb)
     join = grad[bands["new_edge"] | bands["old_edge"]].mean()
@@ -90,14 +97,54 @@ def padding_seam(image: Image.Image, locked_mask: Image.Image, pending_mask: Ima
     )
 
     edge_failed = ratio > SEAM_EDGE_RATIO
-    step_failed = step > SEAM_COLOUR_STEP
+    step_failed = step > SEAM_LINE_STEP
     return {
-        "name": "padding_seam",
+        "name": "join_line",
         "edge_ratio": round(ratio, 3),
         "edge_ratio_limit": SEAM_EDGE_RATIO,
-        "colour_step": round(step, 2),
-        "colour_step_limit": SEAM_COLOUR_STEP,
+        "line_step": round(step, 2),
+        "line_step_limit": SEAM_LINE_STEP,
         "passed": not (edge_failed or step_failed),
+    }
+
+
+def colour_gap(image: Image.Image, locked_mask: Image.Image, pending_mask: Image.Image) -> dict:
+    """How far the new paint's colours sit from the padding's, across the whole cell.
+
+    Compares the 10th-to-90th Lab quantiles of every painted center pixel with the same
+    quantiles of the painted padding. A four-pixel strip at the join can match while the
+    water in the middle is a different blue; this is the number that moves when that happens.
+    """
+    rgb = np.asarray(image.convert("RGB"))
+    locked = np.asarray(locked_mask.convert("L")) > 0
+    pending = np.asarray(pending_mask.convert("L")) > 0
+    if not locked.any() or not pending.any():
+        return {"name": "colour_gap", "skipped": "this level has no padding", "passed": True}
+
+    painted = rgb.sum(axis=2) > CONTENT_MIN_RGB_SUM
+    center = rgb[pending & painted]
+    padding = rgb[locked & painted]
+    if len(center) < 1000 or len(padding) < 1000:
+        return {"name": "colour_gap", "skipped": "not enough painted pixels", "passed": True}
+
+    def _sample(pixels: np.ndarray) -> np.ndarray:
+        if len(pixels) > COLOUR_SAMPLE:
+            pixels = pixels[np.linspace(0, len(pixels) - 1, COLOUR_SAMPLE, dtype=np.int64)]
+        lab = cv2.cvtColor(pixels.reshape(-1, 1, 3), cv2.COLOR_RGB2LAB)
+        return lab.reshape(-1, 3).astype(np.float32)
+
+    quantiles = np.linspace(0.1, 0.9, 9)
+    gap = float(
+        np.abs(
+            np.quantile(_sample(center), quantiles, axis=0)
+            - np.quantile(_sample(padding), quantiles, axis=0)
+        ).mean()
+    )
+    return {
+        "name": "colour_gap",
+        "gap": round(gap, 2),
+        "gap_limit": COLOUR_GAP_LIMIT,
+        "passed": gap <= COLOUR_GAP_LIMIT,
     }
 
 
@@ -270,7 +317,12 @@ def run_checks(root: str | Path, level_id: str, attempt: int | None = None) -> d
         full_bleed(current),
         footprint(current, mask, minimum=minimum),
         coverage(current, mask),
-        padding_seam(
+        join_line(
+            current,
+            Image.open(canvas_asset(job_dir, "locked_mask")),
+            Image.open(canvas_asset(job_dir, "pending_mask")),
+        ),
+        colour_gap(
             current,
             Image.open(canvas_asset(job_dir, "locked_mask")),
             Image.open(canvas_asset(job_dir, "pending_mask")),
@@ -307,6 +359,11 @@ def format_report(report: dict[str, Any]) -> str:
             lines.append(
                 f"      the generation is SMALLER than its polygon by {item['missing_px']:,} px. "
                 f"Nothing can fill that in - regenerate."
+            )
+        if item["name"] == "colour_gap" and not item["passed"]:
+            lines.append(
+                "      the new paint's colours do not match the padding across the whole cell. "
+                "join_line only measures the line at the edge."
             )
         if item["name"] == "footprint" and item.get("cut_iou", 0) - item["iou"] > 0.01:
             lines.append(

@@ -1,0 +1,42 @@
+{
+  "world_map": "C:\\Users\\Douglas\\Pixel-Realm-Combat-Heroes-Private\\levels\\Frostreach\\bitter_floe_07\\background_snapped.png",
+  "level_plan": "C:\\Users\\Douglas\\Pixel-Realm-Combat-Heroes-Private\\generated\\world_levels\\bitter_floe_7x6\\plan.csv",
+  "output_root": "C:\\Users\\Douglas\\Pixel-Realm-Combat-Heroes-Private\\generated\\world_levels\\bitter_floe_7x6",
+  "canvas": {
+    "mode": "explicit",
+    "width": 3536,
+    "height": 2064,
+    "placement": "center",
+    "margin": 0
+  },
+  "scale": {
+    "pixels_per_world_pixel": 1
+  },
+  "rendering": {
+    "outside_color": [
+      0,
+      0,
+      0,
+      255
+    ],
+    "source_resampling": "lanczos"
+  },
+  "execution": {
+    "approval_mode": "manual",
+    "stop_on_failure": true,
+    "retry_limit": 2,
+    "rescale_below_iou": 0.9
+  },
+  "generation": {
+    "provider": "openai",
+    "api_key_env": "OPENAI_API_KEY",
+    "model": "gpt-image-2",
+    "quality": "medium",
+    "timeout_seconds": 900,
+    "config_source": "bitter_floe_7x6.warp.json",
+    "renderer": "warp",
+    "mask_edits": true,
+    "single_image": true
+  },
+  "style_prompt": "Richly detailed top-down / slightly 2.5D painted pixel-art RPG ice ground, finished game-art quality. Sharp snow crust, cracked glacier, ice floes, weathered rock. Preserve the layout exactly; do not invent or remove structures. Even lighting, no cast shadows, no text or labels."
+}

@@ -69,11 +69,13 @@ def refresh_level(
         # the same way whichever renderer is in use: one masks it back to the silhouette, the
         # other crops it to a frame, and neither needs a branch here.
         accepted_path = target_paths["root"] / "accepted" / "image.png"
-        if not accepted_path.is_file():
+        currents = sorted((target_paths["root"] / "attempts").glob("attempt_*/current.png"))
+        source = accepted_path if accepted_path.is_file() else (currents[-1] if currents else None)
+        if source is None:
             raise FileNotFoundError(
-                f"level {level_id} has no accepted image to refine: {accepted_path}"
+                f"level {level_id} has no image to refine: {accepted_path}"
             )
-        with Image.open(accepted_path) as opened:
+        with Image.open(source) as opened:
             generation_input = Image.composite(
                 opened.convert("RGBA"), generation_input, generation_mask
             )
