@@ -52,7 +52,7 @@
     <span class="row" id="tabs">
       <button class="tab" data-view="align" title="Raw generation with the padding over it">Align</button>
       <button class="tab" data-view="result" title="The placed image">Result</button>
-      <button class="tab" data-view="checks" title="The shape-error overlay from the checks">Checks</button>
+      <button class="tab" data-view="checks" title="The shape-error overlay from the tests">Tests</button>
     </span>
     <span id="placement" style="color:#888"></span>
   </div>
@@ -82,7 +82,7 @@
       <button id="align" title="Align colours on, with this offset">Align colours</button>
     </div>
     <div class="row" style="margin-top:10px">
-      <button id="checks">Run checks</button>
+      <button id="checks" title="Same as t in review_run">Run tests</button>
       <button id="accept">Accept</button>
     </div>
     <div id="report"></div>
@@ -190,7 +190,7 @@ function drawLayers(fit) {
     else say('No placed image for this attempt yet.');
   } else if (S.view === 'checks') {
     if (i.images.overlay) S.layers.overlay = L.imageOverlay(imageUrl('overlay'), full).addTo(map);
-    else say('No shape overlay yet: Run checks.');
+    else say('No shape overlay yet: press Run tests.');
   }
   if (fit) map.fitBounds(full);
   $('map').classList.toggle('dragpad', S.view === 'align' && !!S.layers.padding && warpJob());
