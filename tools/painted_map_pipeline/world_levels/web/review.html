@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Level review</title>
+<link rel="stylesheet" href="/leaflet/leaflet.css">
+<style>
+  html, body { margin: 0; height: 100%; font: 14px system-ui, sans-serif; background: #1e1e1e; color: #ddd; }
+  #app { display: grid; grid-template-rows: auto 1fr; grid-template-columns: 1fr 330px; height: 100%; }
+  #top { grid-column: 1 / 3; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+         padding: 8px 12px; background: #2a2a2a; border-bottom: 1px solid #444; }
+  #mapwrap { position: relative; }
+  #map { position: absolute; inset: 0; background: #111; }
+  #map.dragpad { cursor: move; }
+  #map.panning { cursor: grabbing; }
+  .leaflet-image-layer { image-rendering: pixelated; }
+  #working { position: absolute; inset: 0; z-index: 1000; display: none; flex-direction: column; gap: 14px;
+             align-items: center; justify-content: center; background: rgba(0, 0, 0, .55); font-size: 18px; text-align: center; }
+  #side { padding: 12px; background: #252525; border-left: 1px solid #444; overflow: auto; }
+  button { background: #3a3a3a; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  button:hover { background: #4a4a4a; }
+  button:disabled, input:disabled, select:disabled { opacity: .5; cursor: default; }
+  .tab.on { border-color: #ddd; background: #555; }
+  #align { background: #2d4a6a; }
+  #accept { background: #2d5a2d; }
+  #generate, #retry { background: #5a3a2d; }
+  label { display: block; margin-top: 12px; color: #aaa; }
+  label.row { margin-top: 6px; color: #ddd; }
+  input[type=range] { width: 100%; }
+  input[type=number], input[type=text] { background: #1e1e1e; color: #eee; border: 1px solid #555; padding: 2px 4px; }
+  input[type=number] { width: 64px; }
+  input[type=text] { width: 100%; box-sizing: border-box; }
+  select { background: #1e1e1e; color: #eee; border: 1px solid #555; padding: 2px 4px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  h3 { margin: 18px 0 4px; font-size: 13px; color: #c9a227; font-weight: 600; }
+  .state { padding: 1px 6px; border-radius: 8px; background: #444; font-size: 12px; }
+  .state.accepted { background: #2d5a2d; } .state.generated { background: #5a4a2d; } .state.failed { background: #6a2d2d; }
+  #msg { margin-top: 14px; min-height: 1.4em; }
+  #report { white-space: pre-wrap; font: 12px ui-monospace, monospace; color: #ccc; background: #1b1b1b;
+            padding: 6px; margin-top: 8px; display: none; }
+  .err { color: #ff7b7b; }
+  .help { margin-top: 20px; color: #888; font-size: 12px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <button id="prev" title="Previous level">&#9664;</button>
+    <span id="levelname"></span>
+    <button id="next" title="Next level (skip)">&#9654;</button>
+    <span>attempt</span><select id="attempt"></select>
+    <span class="row" id="tabs">
+      <button class="tab" data-view="align" title="Raw generation with the padding over it">Align</button>
+      <button class="tab" data-view="result" title="The placed image">Result</button>
+      <button class="tab" data-view="checks" title="The shape-error overlay from the checks">Checks</button>
+    </span>
+    <span id="placement" style="color:#888"></span>
+  </div>
+  <div id="mapwrap">
+    <div id="map"></div>
+    <div id="working"><div id="worktext"></div></div>
+  </div>
+  <div id="side">
+    <h3>Padding offset</h3>
+    <div class="row">dx <input id="dx" type="number" step="1"> dy <input id="dy" type="number" step="1">
+      <button id="reset" title="Back to 0, 0">Reset</button></div>
+    <div class="row" style="margin-top:8px">
+      <button id="swap" title="T">On top: <b id="ontop"></b></button>
+    </div>
+    <label>Top layer opacity: <b id="opv"></b></label>
+    <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.6">
+    <div id="offnote" class="err" style="display:none; margin-top:6px"></div>
+
+    <h3>Placement (no API call)</h3>
+    <div class="row">feather <input id="feather" type="number" min="0" step="1"> px</div>
+    <label class="row"><input id="warp" type="checkbox"> warp onto the mask</label>
+    <label class="row"><input id="cut" type="checkbox"> cut to the polygon</label>
+    <label class="row"><input id="alignon" type="checkbox"> align colours</label>
+    <label class="row"><input id="padding" type="checkbox"> paste the padding</label>
+    <div class="row" style="margin-top:10px">
+      <button id="replace">Re-place</button>
+      <button id="align" title="Align colours on, with this offset">Align colours</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="checks">Run checks</button>
+      <button id="accept">Accept</button>
+    </div>
+    <div id="report"></div>
+
+    <h3>New generation (API call)</h3>
+    <label>Why it was wrong (sent with a retry)</label>
+    <input id="reason" type="text">
+    <label>Attach image (path)</label>
+    <input id="image" type="text" placeholder="C:\...\something.png">
+    <label>What the image shows</label>
+    <input id="note" type="text">
+    <label class="row"><input id="r1" type="checkbox"> attach this attempt's shape overlay (r1)</label>
+    <div class="row" style="margin-top:10px">
+      <button id="retry">Retry</button>
+      <button id="generate" title="A fresh generation, nothing sent back">Generate</button>
+    </div>
+
+    <div id="msg"></div>
+    <div class="help">
+      Align view: drag to move the padding onto the generation. Ctrl + drag pans, the wheel zooms.
+      Arrow keys nudge 1 px, Shift + arrows 10 px. T swaps which layer is on top; the slider sets
+      the top layer's opacity.<br>
+      Align colours re-places this attempt with colour alignment on and the offset above: the
+      generation is moved back by the offset, so the colours are paired with the padding where it
+      really matches (with the warp on, the offset only corrects the pairing).<br>
+      Re-place applies the ticked settings. A refused re-place leaves them as they were.<br>
+      Next skips a level. Use this page or review_run on a run, not both at once.
+    </div>
+  </div>
+</div>
+<script src="/leaflet/leaflet.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+// Picture pixels as coordinates, y down: a point is [y, x].
+const CRS = L.extend({}, L.CRS.Simple, { transformation: new L.Transformation(1, 0, 1, 0) });
+const map = L.map('map', { crs: CRS, minZoom: -6, maxZoom: 4, zoomSnap: 0.25, attributionControl: false,
+                          dragging: false, boxZoom: false, keyboard: false });
+const S = { levels: [], index: 0, info: null, view: 'align', top: 'padding', busy: false,
+            layers: {}, offset: [0, 0], drag: null };
+
+async function api(path, body) {
+  const options = body === undefined ? {} : {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+  const res = await fetch('/api/' + path, options);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function say(text, isError) { $('msg').textContent = text || ''; $('msg').className = isError ? 'err' : ''; }
+
+function cover(text) {
+  $('worktext').textContent = text;
+  $('working').style.display = text ? 'flex' : 'none';
+}
+
+function lock(on) {
+  document.querySelectorAll('#app button, #app input, #app select').forEach(el => { el.disabled = on; });
+  if (!on) applyEnabled();
+}
+
+async function run(label, fn) {
+  if (S.busy) return;
+  S.busy = true;
+  say('');
+  if (label) cover(label);
+  lock(true);
+  try { await fn(); } catch (err) { say(err.message, true); }
+  finally { S.busy = false; cover(''); lock(false); }
+}
+
+const level = () => S.levels[S.index];
+const info = () => S.info;
+const warpJob = () => info() && info().renderer === 'warp';
+
+// -- the map ---------------------------------------------------------------------------------
+
+function imageUrl(kind) {
+  const i = info();
+  return `/api/level/${i.id}/image/${kind}?attempt=${i.attempt}&v=${i.images[kind] || 0}`;
+}
+
+function paddingBounds() {
+  const i = info(), [dx, dy] = S.offset;
+  return [[dy, dx], [i.height + dy, i.width + dx]];
+}
+
+function clearLayers() {
+  for (const layer of Object.values(S.layers)) layer.remove();
+  S.layers = {};
+}
+
+function drawLayers(fit) {
+  clearLayers();
+  const i = info();
+  if (!i || i.attempt === null) return;
+  const full = [[0, 0], [i.height, i.width]];
+  if (S.view === 'align') {
+    const [rw, rh] = i.raw_size;
+    if (i.images.raw) S.layers.raw = L.imageOverlay(imageUrl('raw'), [[0, 0], [rh, rw]]).addTo(map);
+    if (i.has_padding) S.layers.padding = L.imageOverlay(imageUrl('padding'), paddingBounds()).addTo(map);
+    stackLayers();
+  } else if (S.view === 'result') {
+    if (i.images.result) S.layers.result = L.imageOverlay(imageUrl('result'), full).addTo(map);
+    else say('No placed image for this attempt yet.');
+  } else if (S.view === 'checks') {
+    if (i.images.overlay) S.layers.overlay = L.imageOverlay(imageUrl('overlay'), full).addTo(map);
+    else say('No shape overlay yet: Run checks.');
+  }
+  if (fit) map.fitBounds(full);
+  $('map').classList.toggle('dragpad', S.view === 'align' && !!S.layers.padding && warpJob());
+}
+
+function stackLayers() {
+  const { raw, padding } = S.layers;
+  const opacity = Number($('opacity').value);
+  $('opv').textContent = opacity.toFixed(2);
+  $('ontop').textContent = S.top;
+  if (!raw || !padding) { if (raw) raw.setOpacity(1); if (padding) padding.setOpacity(1); return; }
+  const [over, under] = S.top === 'padding' ? [padding, raw] : [raw, padding];
+  under.setOpacity(1); under.bringToBack();
+  over.setOpacity(opacity); over.bringToFront();
+}
+
+function setOffset(dx, dy) {
+  S.offset = [Math.round(dx), Math.round(dy)];
+  $('dx').value = S.offset[0]; $('dy').value = S.offset[1];
+  if (S.layers.padding) S.layers.padding.setBounds(paddingBounds());
+}
+
+// Dragging the padding, and Ctrl + drag to pan, by hand: Leaflet cannot drag an image overlay,
+// and its own map dragging would take every drag.
+map.on('mousedown', e => {
+  if (S.busy || !info() || info().attempt === null) return;
+  const ev = e.originalEvent;
+  if (ev.button !== 0) return;
+  if (ev.ctrlKey || S.view !== 'align' || !S.layers.padding || !warpJob()) {
+    S.drag = { pan: true, last: e.containerPoint };
+    $('map').classList.add('panning');
+  } else {
+    S.drag = { pan: false, start: e.latlng, offset: S.offset.slice() };
+  }
+  ev.preventDefault();
+});
+map.on('mousemove', e => {
+  if (!S.drag) return;
+  if (S.drag.pan) {
+    map.panBy(S.drag.last.subtract(e.containerPoint), { animate: false });
+    S.drag.last = e.containerPoint;
+    return;
+  }
+  setOffset(S.drag.offset[0] + (e.latlng.lng - S.drag.start.lng),
+            S.drag.offset[1] + (e.latlng.lat - S.drag.start.lat));
+});
+const endDrag = () => { S.drag = null; $('map').classList.remove('panning'); };
+map.on('mouseup', endDrag);
+document.addEventListener('mouseup', endDrag);
+
+document.addEventListener('keydown', e => {
+  if (S.busy || ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  const step = e.shiftKey ? 10 : 1;
+  const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+  if (moves[e.key] && S.view === 'align' && S.layers.padding && warpJob()) {
+    setOffset(S.offset[0] + moves[e.key][0], S.offset[1] + moves[e.key][1]);
+    e.preventDefault();
+  } else if (e.key === 't' || e.key === 'T') {
+    swapTop();
+  }
+});
+
+function swapTop() { S.top = S.top === 'padding' ? 'generation' : 'padding'; stackLayers(); }
+
+// -- level and controls ------------------------------------------------------------------------
+
+function renderLevelName() {
+  const lv = level(), i = info();
+  const state = (i && i.state) || lv.state;
+  $('levelname').innerHTML = `level <b>${lv.id}</b> <span class="state ${state}">${state}</span>` +
+    ` <span style="color:#888">(${S.index + 1} of ${S.levels.length})</span>`;
+  $('attempt').innerHTML = '';
+  for (const n of (i ? i.attempts : [])) {
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = n; opt.selected = i.attempt === n;
+    $('attempt').appendChild(opt);
+  }
+  $('placement').textContent = i && i.placement ? `showing ${i.placement}` : '';
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.view === S.view));
+}
+
+function fillControls() {
+  const s = info().settings;
+  $('feather').value = s.feather;
+  $('warp').checked = s.warp; $('cut').checked = s.cut; $('alignon').checked = s.align; $('padding').checked = s.padding;
+  setOffset(s.offset[0], s.offset[1]);
+  const report = info().report;
+  $('report').textContent = report || '';
+  $('report').style.display = report ? 'block' : 'none';
+}
+
+function applyEnabled() {
+  const i = info(), has = i && i.attempt !== null;
+  for (const id of ['attempt', 'feather', 'warp', 'cut', 'alignon', 'padding', 'replace', 'align', 'checks', 'accept',
+                    'dx', 'dy', 'reset', 'swap', 'opacity', 'retry', 'r1'])
+    $(id).disabled = !has;
+  const offsetOk = has && warpJob();
+  for (const id of ['dx', 'dy', 'reset']) $(id).disabled = !offsetOk;
+  $('offnote').style.display = has && !warpJob() ? 'block' : 'none';
+  $('offnote').textContent = has && !warpJob() ? `This attempt used the ${i.renderer} renderer: it undoes its own drift, so no offset.` : '';
+  if (has && !i.has_padding) say('No padding on this attempt (no accepted neighbour yet).');
+}
+
+async function openLevel(index, attempt, fit) {
+  S.index = (index + S.levels.length) % S.levels.length;
+  const lv = level();
+  const before = S.info && { id: S.info.id, attempt: S.info.attempt, offset: S.offset.slice() };
+  await run(`opening level ${lv.id}...`, async () => {
+    const q = attempt == null ? '' : `?attempt=${attempt}`;
+    S.info = await api(`level/${lv.id}${q}`);
+    lv.state = S.info.state;
+  });
+  if (!S.info || S.info.id !== lv.id) return;
+  renderLevelName();
+  if (S.info.attempt === null) { clearLayers(); say(`Level ${lv.id} has no generation yet: Generate.`); applyEnabled(); return; }
+  fillControls();
+  // Same attempt reloaded (after checks, or a refused re-place): keep the padding where it was
+  // dragged to. The toggles still show what is actually applied.
+  if (before && before.id === S.info.id && before.attempt === S.info.attempt) setOffset(...before.offset);
+  applyEnabled();
+  drawLayers(fit !== false);
+}
+
+function placeBody(overrides) {
+  return Object.assign({
+    attempt: info().attempt,
+    feather: Number($('feather').value) || 0,
+    warp: $('warp').checked, cut: $('cut').checked, align: $('alignon').checked, padding: $('padding').checked,
+    offset: warpJob() ? S.offset.slice() : [0, 0],
+  }, overrides || {});
+}
+
+// Start a background command, wait for it, then reload the level. A failure puts the toggles
+// back to what the server says is applied, the way the console does.
+async function command(path, body, then) {
+  if (S.busy) return;
+  S.busy = true;
+  lock(true);
+  say('');
+  let p;
+  try {
+    p = await api(path, body);
+    while (p.running) {
+      cover(p.label || 'working...');
+      await new Promise(r => setTimeout(r, 700));
+      p = await api('progress');
+    }
+  } catch (err) { p = { error: err.message }; }
+  S.busy = false; cover(''); lock(false);
+  await openLevel(S.index, then === undefined ? info() && info().attempt : then, false);
+  if (p.error) say(p.error, true); else say(p.message || 'done.');
+}
+
+async function watchExisting() {
+  let p = await api('progress');
+  if (!p.running) return false;
+  S.busy = true; lock(true);
+  while (p.running) { cover(p.label || 'working...'); await new Promise(r => setTimeout(r, 700)); p = await api('progress'); }
+  S.busy = false; cover(''); lock(false);
+  if (p.error) say(p.error, true); else say(p.message || 'done.');
+  return true;
+}
+
+$('prev').onclick = () => openLevel(S.index - 1);
+$('next').onclick = () => openLevel(S.index + 1);
+$('attempt').onchange = () => openLevel(S.index, Number($('attempt').value));
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  S.view = b.dataset.view; say(''); renderLevelName(); drawLayers(false);
+});
+$('dx').onchange = $('dy').onchange = () => setOffset(Number($('dx').value) || 0, Number($('dy').value) || 0);
+$('reset').onclick = () => setOffset(0, 0);
+$('swap').onclick = swapTop;
+$('opacity').oninput = stackLayers;
+$('replace').onclick = () => command(`level/${level().id}/place`, placeBody());
+$('align').onclick = () => {
+  $('alignon').checked = true;
+  command(`level/${level().id}/place`, placeBody({ align: true }));
+};
+$('checks').onclick = async () => {
+  await command(`level/${level().id}/checks`, { attempt: info().attempt });
+  if (info() && info().images.overlay) { S.view = 'checks'; renderLevelName(); drawLayers(false); }
+};
+$('accept').onclick = () => {
+  if (!confirm(`Accept level ${level().id} attempt ${info().attempt}? Its pixels become its neighbours' padding.`)) return;
+  command(`level/${level().id}/accept`, { attempt: info().attempt });
+};
+$('generate').onclick = () => {
+  if (!confirm(`Generate level ${level().id} again? This is an API call.`)) return;
+  command(`level/${level().id}/generate`, { retry: false }, null);
+};
+$('retry').onclick = () => {
+  if (!confirm(`Retry level ${level().id} with the criticism above? This is an API call.`)) return;
+  command(`level/${level().id}/generate`, {
+    retry: true, r1: $('r1').checked, reason: $('reason').value, image: $('image').value, note: $('note').value,
+  }, null);
+};
+
+(async () => {
+  try {
+    S.levels = (await api('levels')).levels;
+    await watchExisting();
+  } catch (err) { say(err.message, true); return; }
+  if (!S.levels.length) { say('No levels in this run.', true); return; }
+  const first = S.levels.findIndex(lv => lv.state !== 'accepted');
+  await openLevel(first < 0 ? 0 : first);
+})();
+</script>
+</body>
+</html>
