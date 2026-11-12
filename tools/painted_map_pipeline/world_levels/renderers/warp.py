@@ -117,7 +117,7 @@ class WarpRenderer:
         # showing the model the shape twice. The mask is what actually holds it -- 0.970 IoU
         # against 0.305 when the alpha polarity was wrong.
         roster: list[tuple[ContextImage, Image.Image]] = [(INPUT, masked)]
-        if ctx.single_image:
+        if ctx.single_image and not ctx.refine:
             # Everything the roster carried is either already in image 1 (the padding is
             # pasted into it) or is context the mask makes unnecessary.
             context = [INPUT]
