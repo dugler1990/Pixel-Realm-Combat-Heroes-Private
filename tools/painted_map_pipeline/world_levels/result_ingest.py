@@ -98,7 +98,9 @@ def _paste_padding_feathered(
     normalized.paste(Image.fromarray(blended.astype(np.uint8), "RGBA"), (0, 0))
 
 
-def _next_placement(attempt_dir: Path, *, warped: bool) -> Path:
+def _next_placement(
+    attempt_dir: Path, *, warped: bool, colour_aligned: bool = False
+) -> Path:
     """The next free output file for this attempt.
 
     The name says whether the warp ran, because that is the only thing that changes the
@@ -106,7 +108,14 @@ def _next_placement(attempt_dir: Path, *, warped: bool) -> Path:
     ``placement_NNN.png`` is the generation with its padding pasted and nothing else done to
     it. Numbered so re-placing never destroys the version you were just comparing against.
     """
-    stem = "warp_normalize" if warped else "placement"
+    if warped and colour_aligned:
+        stem = "warp_colour_align"
+    elif warped:
+        stem = "warp_normalize"
+    elif colour_aligned:
+        stem = "colour_align"
+    else:
+        stem = "placement"
     existing = sorted(attempt_dir.glob(f"{stem}_*.png"))
     return attempt_dir / f"{stem}_{len(existing) + 1:03d}.png"
 
@@ -121,6 +130,7 @@ def ingest_result(
     feather: int = 0,
     fit_to_mask: bool = False,
     cut_to_mask: bool = False,
+    align_colours: bool = False,
     padding: str = "all",
 ) -> dict[str, Any]:
     root_path = Path(root).resolve()
@@ -169,6 +179,9 @@ def ingest_result(
         cut_to_mask=cut_to_mask,
         mask_holds_the_shape=bool(config.generation.get("mask_edits")),
     )
+    # Snapshot before place(). A cut blacks out everything outside the new cell, including
+    # the model's overlap, and that overlap is the only place the colour shift can be learned.
+    raw_generation = generated.copy()
     try:
         normalized, info = renderer.place(generated, place_context)
     except FootprintRejected as exc:
@@ -192,6 +205,20 @@ def ingest_result(
         raise
     job.update(info)
 
+    colour_alignment = None
+    if align_colours:
+        if pending_mask_image is None:
+            raise ValueError("paired colour alignment requires a pending mask")
+        from .colour_align import align_to_paired_padding
+
+        normalized, colour_alignment = align_to_paired_padding(
+            normalized,
+            locked_pixels,
+            locked_mask,
+            pending_mask_image,
+            raw=raw_generation,
+        )
+
     # The one guarantee both renderers share, and the reason levels tile at all: the padding
     # comes back byte-identical from this job's own snapshot, whatever the model did to it.
     # Which neighbours' strips to paste. "all" (default) is the real behaviour; "none" leaves
@@ -213,7 +240,11 @@ def ingest_result(
     # One generation can be placed many times -- warp on or off, different feather widths --
     # and each is worth keeping: comparing them is the only way to tell whether a setting
     # helped, and a viewer handed the same path twice shows its cached copy.
-    placement_path = _next_placement(attempt_dir, warped=bool(info.get("fit_to_mask")))
+    placement_path = _next_placement(
+        attempt_dir,
+        warped=bool(info.get("fit_to_mask")),
+        colour_aligned=align_colours,
+    )
     normalized.save(placement_path)
     # One stable name for the newest version, whichever steps produced it. Everything that
     # just wants "the current image" reads this and never has to know how it was made.
@@ -232,6 +263,8 @@ def ingest_result(
             "placement_padding": padding,
             "placement_fit_to_mask": fit_to_mask,
             "placement_cut_to_mask": cut_to_mask,
+            "placement_align_colours": align_colours,
+            "placement_colour_alignment": colour_alignment,
             "placement_hash": sha256_file(placement_path),
         }
     )
@@ -262,7 +295,7 @@ def ingest_result(
         footprint_iou_raw=job["footprint_iou_raw"],
         rescale_applied=job["rescale_applied"],
     )
-    should_accept = config.execution.approval_mode == "automatic" if auto_accept is None else auto_accept
+    should_accept = bool(auto_accept)
     if should_accept:
         return accept_result(root_path, level_id, attempt=attempt_number)
     return {
