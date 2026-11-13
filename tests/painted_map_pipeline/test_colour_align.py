@@ -151,3 +151,68 @@ def test_the_band_a_shift_opens_is_black():
     assert np.all(shifted[:2, :, :3] == 0)          # down 2: the top rows are new
     assert np.all(shifted[:, -3:, :3] == 0)         # left 3: the right columns are new
     assert np.array_equal(shifted[2:, :-3], raw[:-2, 3:])
+
+
+def _flat_new_cell_scene(seed=3, height=120, width=240, join=80):
+    """Padding with full contrast. The model's picture is darker, and only half of it follows
+    the padding's detail -- the other half is detail of its own, as when the model drew things
+    in slightly different places. Each colour group's median then sits between the two, which
+    is what makes the swap grey."""
+    import cv2
+
+    rng = np.random.default_rng(seed)
+
+    def field():
+        f = cv2.GaussianBlur(rng.random((height, width)).astype(np.float32), (0, 0), 2)
+        return (f - f.min()) / (f.max() - f.min())
+
+    def blue(lightness):
+        return np.stack([20 + 200 * lightness, 60 + 170 * lightness, 110 + 130 * lightness],
+                        axis=-1).astype(np.uint8)
+
+    padding_detail, own_detail = field(), field()
+    raw_rgb = (blue(0.5 * padding_detail + 0.5 * own_detail).astype(np.float32) * 0.7 + 20)
+    raw = np.dstack((raw_rgb.astype(np.uint8), np.full((height, width), 255, np.uint8)))
+    locked = np.zeros((height, width), np.uint8)
+    locked[:, :join] = 255
+    accepted = np.zeros((height, width, 3), np.uint8)
+    accepted[:, :join] = blue(padding_detail)[:, :join]
+    return raw, accepted, locked, 255 - locked, join
+
+
+def _lightness(rgb):
+    import cv2
+
+    return cv2.cvtColor(np.ascontiguousarray(rgb), cv2.COLOR_RGB2LAB)[..., 0].astype(np.float32)
+
+
+def test_match_restores_the_padding_contrast_the_swap_loses():
+    raw, accepted, locked, pending, join = _flat_new_cell_scene()
+    images = [Image.fromarray(a) for a in (raw, accepted, locked, pending)]
+    padding_spread = _lightness(accepted[:, :join]).std()
+    spreads = {}
+    for method in ("swap", "match"):
+        out, info = align_to_paired_padding(*images, method=method)
+        assert info["method"] == method
+        spreads[method] = _lightness(np.asarray(out)[:, join:, :3]).std() / padding_spread
+    assert spreads["swap"] < 0.8
+    assert abs(spreads["match"] - 1.0) < abs(spreads["swap"] - 1.0)
+    assert abs(spreads["match"] - 1.0) < 0.1
+
+
+def test_match_leaves_the_padding_and_the_black_gaps_alone():
+    raw, accepted, locked, pending, join = _flat_new_cell_scene()
+    raw[10:20, join + 30 : join + 40, :3] = 0
+    out, _ = align_to_paired_padding(*(Image.fromarray(a) for a in (raw, accepted, locked, pending)))
+    out = np.asarray(out)
+    assert np.array_equal(out[:, :join], raw[:, :join])
+    assert not out[10:20, join + 30 : join + 40, :3].any()
+
+
+def test_an_unknown_colour_method_is_refused():
+    import pytest
+
+    raw, accepted, locked, pending, _ = _flat_new_cell_scene()
+    with pytest.raises(ValueError, match="colour method"):
+        align_to_paired_padding(*(Image.fromarray(a) for a in (raw, accepted, locked, pending)),
+                                method="grade")

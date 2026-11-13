@@ -193,6 +193,9 @@ class ReviewPage:
             "align": bool(job.get("placement_align_colours", False)),
             "padding": job.get("placement_padding", "all") != "none",
             "offset": [int(v) for v in job.get("placement_padding_offset", [0, 0])],
+            # A placement aligned before the methods existed was the swap.
+            "colour_method": (job.get("placement_colour_alignment") or {}).get(
+                "method", "swap" if job.get("placement_colour_alignment") else "match"),
         }
         self.settings[level_id] = settings
         return settings
@@ -283,12 +286,16 @@ class ReviewPage:
             "align": bool(body.get("align")),
             "padding": bool(body.get("padding", True)),
             "offset": offset,
+            "colour_method": body.get("colour_method", "match"),
         }
+        if settings["colour_method"] not in ("match", "swap"):
+            raise ValueError("the colour method is 'match' or 'swap'")
         args = reingest_args(
             self.root, level_id,
             image=self._image_path(level_id, attempt, "raw"), attempt=attempt,
             feather=settings["feather"], fit=settings["warp"], cut=settings["cut"],
             align=settings["align"], padding=settings["padding"], offset=tuple(offset),
+            colour_method=settings["colour_method"],
         )
 
         def work() -> str:

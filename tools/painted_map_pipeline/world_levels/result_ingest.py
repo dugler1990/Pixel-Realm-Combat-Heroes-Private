@@ -163,6 +163,7 @@ def ingest_result(
     fit_to_mask: bool = False,
     cut_to_mask: bool = False,
     align_colours: bool = False,
+    colour_method: str = "match",
     padding: str = "all",
     padding_offset: tuple[int, int] = (0, 0),
 ) -> dict[str, Any]:
@@ -272,6 +273,7 @@ def ingest_result(
             locked_mask,
             pending_mask_image,
             raw=raw_generation,
+            method=colour_method,
         )
 
     # The one guarantee both renderers share, and the reason levels tile at all: the padding

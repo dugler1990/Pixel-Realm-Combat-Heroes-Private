@@ -102,6 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--cut-to-mask", action="store_true", help="Trim whatever spilled past the polygon, without warping. Use when the check reports cut_iou near 1 and the raw IoU below it: the miss is then a fringe at the edge, not a misplaced render. Cannot fill a shortfall.")
     ingest.add_argument("--align-colours", action="store_true", help="Apply the accepted padding's paired colour map to the new art. Re-uses the generated image and costs no API call.")
     ingest.add_argument("--padding", choices=["all", "none"], default="all", help="Paste the neighbours' padding strips, or not. 'none' re-places the same generation with the model's own art left everywhere, so a bad join can be told apart from a bad generation. Costs no API call.")
+    ingest.add_argument("--colour-method", choices=("match", "swap"), default="match", help="With --align-colours: 'match' (default) = colour swap + brightness mix + join fix + palette snap; 'swap' = colour swap + palette snap only (the earlier method).")
     ingest.add_argument("--padding-offset", type=_offset, default=(0, 0), metavar="DX,DY", help="How far the padding had to move (px, right/down) to sit on the generation. The generation is moved back by it before the colour pairs and the paste; with --fit-to-mask only the colour pairs move. Warp renderer only. Write it as --padding-offset=-3,2 when DX is negative.")
 
     accept =commands.add_parser("accept", help="Accept a validated candidate and refresh its neighbors.")
@@ -346,6 +347,7 @@ def main(argv=None) -> None:
             fit_to_mask=args.fit_to_mask,
             cut_to_mask=args.cut_to_mask,
             align_colours=args.align_colours,
+            colour_method=args.colour_method,
             padding=args.padding,
             padding_offset=args.padding_offset,
         )

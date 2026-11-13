@@ -76,7 +76,9 @@
     <div class="row">feather <input id="feather" type="number" min="0" step="1"> px</div>
     <label class="row"><input id="warp" type="checkbox"> warp onto the mask</label>
     <label class="row"><input id="cut" type="checkbox"> cut to the polygon</label>
-    <label class="row"><input id="alignon" type="checkbox"> align colours</label>
+    <label class="row"><input id="alignon" type="checkbox"> align colours:
+      <select id="colourmethod" title="match = colour swap + brightness mix + join fix; swap = the earlier colour swap only">
+        <option value="match">match</option><option value="swap">swap (old)</option></select></label>
     <label class="row"><input id="padding" type="checkbox"> paste the padding</label>
     <div class="row" style="margin-top:10px">
       <button id="replace">Re-place</button>
@@ -277,6 +279,7 @@ function fillControls() {
   const s = info().settings;
   $('feather').value = s.feather;
   $('warp').checked = s.warp; $('cut').checked = s.cut; $('alignon').checked = s.align; $('padding').checked = s.padding;
+  $('colourmethod').value = s.colour_method || 'match';
   setOffset(s.offset[0], s.offset[1]);
   const report = info().report;
   $('report').textContent = report || '';
@@ -286,7 +289,7 @@ function fillControls() {
 
 function applyEnabled() {
   const i = info(), has = i && i.attempt !== null;
-  for (const id of ['attempt', 'feather', 'warp', 'cut', 'alignon', 'padding', 'replace', 'align', 'checks', 'accept',
+  for (const id of ['attempt', 'feather', 'warp', 'cut', 'alignon', 'colourmethod', 'padding', 'replace', 'align', 'checks', 'accept',
                     'dx', 'dy', 'reset', 'swap', 'opacity', 'retry', 'r1'])
     $(id).disabled = !has;
   const offsetOk = has && warpJob();
@@ -321,6 +324,7 @@ function placeBody(overrides) {
     attempt: info().attempt,
     feather: Number($('feather').value) || 0,
     warp: $('warp').checked, cut: $('cut').checked, align: $('alignon').checked, padding: $('padding').checked,
+    colour_method: $('colourmethod').value,
     offset: warpJob() ? S.offset.slice() : [0, 0],
   }, overrides || {});
 }
@@ -368,7 +372,7 @@ $('reset').onclick = () => setOffset(0, 0);
 $('swap').onclick = swapTop;
 $('opacity').oninput = stackLayers;
 // Feather and the toggles only take effect on a re-place, and only show in the Result view.
-for (const id of ['feather', 'warp', 'cut', 'alignon', 'padding'])
+for (const id of ['feather', 'warp', 'cut', 'alignon', 'colourmethod', 'padding'])
   $(id).addEventListener('input', () => { $('replace').classList.add('pending'); say('Press Re-place to apply.'); });
 async function place(overrides) {
   const p = await command(`level/${level().id}/place`, placeBody(overrides));

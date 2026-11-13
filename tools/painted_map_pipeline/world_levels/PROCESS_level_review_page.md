@@ -10,7 +10,7 @@
   - Drag moves the padding. Ctrl + drag pans, the wheel zooms.
   - Arrows nudge 1 px, Shift + arrows 10 px.
   - T swaps which layer is on top; the slider sets the top layer's opacity.
-- Align colours = re-place with `--align-colours --padding-offset=DX,DY`.
+- Align colours = re-place with `--align-colours --padding-offset=DX,DY`. The dropdown next to the tickbox picks the colour method: match (default) or swap (old). Methods: `PROCESS_world_levels.md`.
 - Offset (dx, dy) = how far the padding moved, right/down, to sit on the generation.
   - Warp off: ingest moves the generation by (-dx, -dy) (`frame.shift_image`, edges repeated) before cut, the colour pairs and the paste.
   - Warp on: only the colour-pairing copy moves; the warp places.
@@ -34,7 +34,4 @@
 - Not yet done: dragging in a browser by hand.
 
 ## Tried and dropped
-Colour-align methods, numbers from the previous agent's `one_off_colour_align.py` report (level 06 attempt 001). **Unverified**: not rerun since.
-- Single Lab offset (`lab_offset`): step 7.11 / 3.70 / 0.83 / 3.68 at strength 0.25 / 0.5 / 0.75 / 1.0 (limit 5). Kept as a comparison only.
-- Full-palette quantile match (`full_palette`): 1.99 / 6.45 / 12.61 at 0.5 / 0.75 / 1.0. Worse at full strength; dropped.
-- Paired colour map (`paired_colour_map`): 4.74 / 1.69 / 1.88 / 4.96 at 0.5 / 0.75 / 1.0 / 1.25. Adopted into `colour_align.py` with a palette snap.
+- Colour methods: see `PROCESS_world_levels.md`.

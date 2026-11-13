@@ -117,6 +117,7 @@ def reingest_args(
     align: bool = False,
     padding: bool = True,
     offset: tuple[int, int] = (0, 0),
+    colour_method: str = "match",
 ) -> list[str]:
     """The ingest command that re-places one attempt's generation. Costs no API call.
 
@@ -132,6 +133,8 @@ def reingest_args(
         args.append("--cut-to-mask")
     if align:
         args.append("--align-colours")
+        if colour_method != "match":
+            args += ["--colour-method", colour_method]
     if not padding:
         args += ["--padding", "none"]
     dx, dy = (int(value) for value in offset)
