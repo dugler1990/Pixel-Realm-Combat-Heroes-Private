@@ -221,6 +221,29 @@ def test_both_sides_of_a_feathered_join_are_corrected():
     assert abs(under - new) < abs(raw_under - new)
 
 
+def test_every_drawn_pixel_is_recoloured_not_just_the_masked_ones():
+    """Where colours are written does not depend on the masks: a drawn pixel outside both the
+    new cell and the padding is recoloured exactly like the same colour inside the new cell."""
+    raw, accepted, locked, pending, join = _flat_new_cell_scene()
+    pending = pending.copy()
+    pending[:, -12:] = 0  # a strip the model drew that is neither new cell nor padding
+    out, info = align_to_paired_padding(*(Image.fromarray(a) for a in (raw, accepted, locked, pending)),
+                                        method="swap")
+    out = np.asarray(out)[..., :3]
+    drawn = raw[..., :3].sum(axis=2) > 20
+    assert info["corrected_total"] == int(drawn.sum())
+    strip = np.zeros(drawn.shape, bool)
+    strip[:, -12:] = True
+    inside = (pending > 0) & drawn
+    checked = 0
+    for y, x in zip(*np.where(strip & drawn)):
+        same = inside & (raw[..., :3] == raw[y, x, :3]).all(axis=2)
+        if same.any():
+            assert (out[same][0] == out[y, x]).all()
+            checked += 1
+    assert checked > 0
+
+
 def test_an_unknown_colour_method_is_refused():
     import pytest
 

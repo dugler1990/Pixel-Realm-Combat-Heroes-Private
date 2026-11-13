@@ -1,8 +1,8 @@
 """Deterministic colour alignment against accepted padding.
 
-Steps, written to the new cell and to the model's own pixels under the padding (the caller
-pastes the padding over those afterwards, so a feathered paste fades between two corrected
-sides); black gaps stay black:
+Steps, written to every pixel the model drew (black gaps stay black). The caller pastes the
+padding over the result afterwards, so a feathered paste always fades between two corrected
+sides:
 
 1. Swap: one shift per colour group, learned from the model's raw picture and the accepted
    padding at the same spots.
@@ -219,8 +219,8 @@ def align_to_paired_padding(
     ``accepted_padding`` is the neighbours' pixels. ``raw`` is the model output before cut or
     warp. The pairs are read from ``raw`` when it is passed, because a cut deletes the model's
     overlap. ``method`` is "match" (swap, brightness mix, join fix, snap) or "swap" (swap and
-    snap only, the earlier behaviour). The new cell and the model's own pixels under the padding
-    are written (the caller pastes the padding over the latter); black gaps are not.
+    snap only, the earlier behaviour). Every drawn pixel of ``image`` is written, black gaps
+    are not; the caller pastes the padding over the result.
     """
     if strength < 0:
         raise ValueError("paired colour alignment strength must be non-negative")
@@ -240,13 +240,12 @@ def align_to_paired_padding(
 
     pair_rgb = np.asarray(pair_source.convert("RGB"))
     rgb = rgba[..., :3]
-    painted_pending = pending & (rgb.sum(axis=2) > CONTENT_MIN_RGB_SUM)
-    # The model's own pixels under the padding are corrected too. The padding is pasted over
-    # them, so they never show at full strength -- but a feathered paste fades the padding
-    # into them, and left uncorrected they pulled the padding side of the fade back toward
-    # the model's colours while the new side had been corrected: a step at the join.
-    painted_under = locked & (rgb.sum(axis=2) > CONTENT_MIN_RGB_SUM)
-    write = painted_pending | painted_under
+    # Every pixel the model drew is recoloured; only black gaps are left. The masks below
+    # choose what the colours are learned from, never where they are written, so a later
+    # step (padding paste, feather, padding strips left out) always sees a recoloured image.
+    write = rgb.sum(axis=2) > CONTENT_MIN_RGB_SUM
+    painted_pending = pending & write
+    painted_under = locked & write
     lookup, populated_bins = _paired_delta_lut(pair_rgb, accepted, locked)
     corrected = _apply_lookup(rgb, lookup, strength)
     if method == "match":
@@ -271,6 +270,7 @@ def align_to_paired_padding(
         "paired_pixels": int(locked.sum()),
         "corrected_pixels": int(painted_pending.sum()),
         "corrected_under_padding": int(painted_under.sum()),
+        "corrected_total": int(write.sum()),
         "populated_colour_bins": int(populated_bins),
         "palette_colours": int(len(palette)),
     }
