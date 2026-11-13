@@ -56,8 +56,9 @@ def test_yaw_turns_the_model_forward_onto_the_heading(heading):
     assert math.degrees(math.atan2(g[1], g[0])) % 360 == pytest.approx(heading % 360, abs=1e-6)
 
 
-def test_barb_pack_loads_with_its_clips():
-    mesh = PlayerMesh("barb", figure_px=56)
+@pytest.mark.parametrize("pack_name", ["barb", "barb_armour"])
+def test_barb_pack_loads_with_its_clips(pack_name):
+    mesh = PlayerMesh(pack_name, figure_px=56)
     ranges = mesh.skin.pack.ranges
     assert set(ranges) == {"idle", "move", "attack"}
     assert mesh.px_per_frame > 0
@@ -108,6 +109,7 @@ def test_selection_passes_mesh_pack():
     import PlayerSelection as PS
     i = PS.unlocked_player_names.index("barb_mesh")
     assert PS.unlocked_player_mesh_packs[i] == "barb"
+    assert PS.unlocked_player_mesh_packs[PS.unlocked_player_names.index("barb_armour_mesh")] == "barb_armour"
     assert PS.unlocked_player_mesh_packs[PS.unlocked_player_names.index("barb")] is None
     sel = PS.PlayerSelection.__new__(PS.PlayerSelection)
     sel.game = SimpleNamespace(in_player_selection=True)

@@ -71,6 +71,24 @@
                             "magic":7,
                             "agility":4,
                             "charisma":3}
+        },
+        {
+            "selection_position": {"x":4,"y":0},
+            "name":"barb_armour_mesh",
+            "display_name": "Barbarian (armour, mesh)", "painting": "barbarian.png", "roster_stats": ["strength", "vitality"],
+            "player_info_dir":"../Graphics/barb/",
+            "mesh_pack": "barb_armour",
+            "evasion_loadout": ["slide", "leap_slam"],
+            "base_stats":{"health": 2000,
+                            "energy": 20,
+                            "attack": 10,
+                            "magic": 1,
+                            "speed": 5,
+                            "strength": 20,
+                            "vitality":20,
+                            "magic":7,
+                            "agility":4,
+                            "charisma":3}
         }
     ]
 }
