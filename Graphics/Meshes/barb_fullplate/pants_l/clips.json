@@ -1,0 +1,29 @@
+{
+  "idle": {
+    "source_action": "settle_01"
+  },
+  "move": {
+    "source_action": "jokesillyrun",
+    "source_frames": [
+      36,
+      53
+    ],
+    "travel_per_frame": 0.04492,
+    "note": "one stride, root travel removed; the player phases it on distance walked"
+  },
+  "attack": {
+    "source_action": "overheadchop",
+    "source_frames": [
+      [
+        45,
+        60
+      ],
+      [
+        108,
+        138
+      ]
+    ],
+    "note": "arm up then the chop (hold dropped); played once over the attack's duration"
+  },
+  "made_by": "export_outfit.py barb/fullplate slot pants_l"
+}
