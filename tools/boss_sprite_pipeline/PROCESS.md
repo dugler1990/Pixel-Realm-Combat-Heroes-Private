@@ -638,6 +638,7 @@ parallel; `UV_REUSE` fired on each (682k–742k verts), so the 1 h 10 m xatlas n
 | ⚠️ `ssh host 'cmd'` does **not** load RunPod's env | Non-interactive/non-login shells have **no** `RUNPOD_POD_ID` / `RUNPOD_API_KEY`, so `runpodctl` fails with `API key not found` and `accepts 1 arg(s), received 0`. Use the **TTY session** (`pod.py`) for `runpodctl`, or pass the pod id explicitly after `runpodctl config --apiKey "$RUNPOD_API_KEY"`. |
 | CRLF | A Windows-edited `.sh` breaks bash (`$'\r'`). First byte of `trellis2_setup.sh` must be `#` (`0x23`), not `0x0d`; `sed -i 's/\r$//'` after upload. Do not "debug bash." |
 | `groups: cannot find name for group ID` / `nohup … Terminated` | RunPod noise / HUP on disconnect. Ignore the first; `pgrep` after reconnect for the second. |
+| HF token onto the pod | He copies a read token to the clipboard; from PowerShell: `Get-Clipboard \| ssh -i …\ppp -p <port> root@<ip> "mkdir -p /workspace/.cache/huggingface && tr -cd 'A-Za-z0-9_' > /workspace/.cache/huggingface/token"`. **`tr -cd`, not `tr -d '\r\n'`**: his PowerShell pipes a UTF-8 BOM first (40 bytes, no `hf_` prefix, 401, 2026-11-07). Check: 37 bytes, `hf_` prefix, `curl …/api/whoami-v2` 200, DINOv3 `config.json` 200. Never print it. |
 
 ---
 

@@ -36,6 +36,13 @@ if len(sys.argv) > 2:                      # extra prompts: overlays/scores get 
 out = os.path.join(WORK, "masks")
 os.makedirs(out, exist_ok=True)
 cams = json.load(open(os.path.join(WORK, "cams.json")))["cams"]
+# SAM3_SHARD=i/k: this process takes every k-th camera from i. The GPU idles (~14 %) while one CPU core
+# post-processes masks, so k processes side by side finish ~k times sooner (each loads its own model).
+SHARD = os.environ.get("SAM3_SHARD")
+if SHARD:
+    _i, _k = map(int, SHARD.split("/"))
+    cams = cams[_i::_k]
+    TAG += f"_shard{_i}"
 rng = np.random.default_rng(3)
 summary = {}
 for c in cams:

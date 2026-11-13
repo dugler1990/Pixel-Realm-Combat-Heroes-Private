@@ -63,7 +63,9 @@ imgs = [Path(att, x) for x in ("input.png", "clay.png", "ref.png")] + [Path(anch
 prompt = open(os.path.join(att, "prompt.txt")).read().strip()
 base = json.load(open(os.path.join(att, "check.json")))
 size0 = Image.open(os.path.join(att, "output.png")).size[0]
-results = [(f"gpt-image-2 high {size0} (the one used)", os.path.join(att, "output.png"), usd("gpt-image-2", base.get("usage")))]
+_used_model = base.get("model", "gpt-image-2")
+_used_cost = base["usd"] if base.get("usd") is not None else usd(_used_model, base.get("usage"))
+results = [(f"{_used_model} {size0} (the one used)", os.path.join(att, "output.png"), _used_cost)]
 
 for combo in sys.argv[3:]:
     provider, model, q, size = parse(combo)
