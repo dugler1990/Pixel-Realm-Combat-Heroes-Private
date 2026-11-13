@@ -19,7 +19,7 @@ from mathutils import Vector
 from PIL import Image, ImageDraw, ImageFont
 from scipy.spatial import cKDTree
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "explode"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "explode"))
 from explode_common import match_by_centre, world_verts  # noqa: E402
 
 CUT, RAW, PART, OUT = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2]), sys.argv[3], os.path.abspath(sys.argv[4])

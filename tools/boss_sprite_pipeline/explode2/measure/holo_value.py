@@ -21,7 +21,7 @@ import numpy as np
 from mathutils import Vector
 from PIL import Image, ImageDraw, ImageFont
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "explode"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "explode"))
 from explode_common import match_by_centre  # noqa: E402
 
 argv = sys.argv[1:]

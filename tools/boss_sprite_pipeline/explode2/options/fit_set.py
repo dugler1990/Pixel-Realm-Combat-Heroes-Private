@@ -34,7 +34,7 @@ import numpy as np
 from mathutils import Matrix
 from scipy.spatial import cKDTree
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "explode"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "explode"))
 from explode_common import PAULDRON_ARM, fit_poses, piece_weights, set_pose, skin_bones, world_verts  # noqa: E402
 
 argv = sys.argv[1:]

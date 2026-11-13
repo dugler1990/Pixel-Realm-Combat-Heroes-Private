@@ -18,7 +18,7 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 from scipy.spatial import cKDTree
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "explode"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "explode"))
 from explode_common import world_verts  # noqa: E402
 
 BASE, FIT, VIEW = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2]), sys.argv[3]

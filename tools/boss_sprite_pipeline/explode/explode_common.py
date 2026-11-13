@@ -32,7 +32,7 @@ def world_verts(o):
 
 
 def test_poses(roles):
-    """The pose test's poses (explode_pose.py) and the fit's (explode2/fit_piece.py): name -> [(bone, axis, deg)]."""
+    """The pose test's poses (explode_pose.py) and the fit's (explode2/options/fit_piece.py): name -> [(bone, axis, deg)]."""
     al, ar, ll, lr = roles["arm_l"], roles["arm_r"], roles["leg_l"], roles["leg_r"]
     return {
         "rest": [],
@@ -48,7 +48,7 @@ PAULDRON_ARM = 0.75     # the pauldron's share of the upper arm (rest: the colla
 
 
 def piece_weights(part, P, Wa, roles, gnames, h, pauldron_arm=PAULDRON_ARM):
-    """Plate armour weights for one piece (explode_pose --rigid, explode2/fit_set.py): each piece moves with
+    """Plate armour weights for one piece (explode_pose --rigid, explode2/options/fit_set.py): each piece moves with
     fixed bones, not with the skin under it. P: the piece's vertices (world, rest); Wa: the body weights
     copied to them (nearest body vertices), columns = gnames; h: figure height; pauldron_arm: as the fit used."""
     import numpy as np

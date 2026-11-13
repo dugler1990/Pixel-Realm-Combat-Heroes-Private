@@ -21,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WORK, OUT = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
 
 # the labeller's own rules, read from its source so the two cannot drift apart
-src = open(os.path.join(HERE, "..", "explode", "explode_label.py"), encoding="utf-8").read()
+src = open(os.path.join(HERE, "..", "..", "explode", "explode_label.py"), encoding="utf-8").read()
 tree = ast.parse(src)
 RULES = {}
 for node in tree.body:

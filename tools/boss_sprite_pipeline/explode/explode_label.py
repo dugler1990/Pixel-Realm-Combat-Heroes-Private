@@ -43,7 +43,7 @@ BELT_GATING = "--belt-gate" in sys.argv
 CREASE_SNAP = "--crease-snap" in sys.argv
 # band half-width (x h), crease cost, full-crease angle (deg). Band 0.02 let the arm flood a pauldron
 # (most of a small plate lay inside the band, so too little of it was left to regrow it); the
-# ragged fringe it is for is ~1 % h wide (explode2/border_zoom.py, 2026-11-02).
+# ragged fringe it is for is ~1 % h wide (explode2/measure/border_zoom.py, 2026-11-02).
 SNAP_BAND, SNAP_K, SNAP_ANGLE = 0.008, 50.0, 30.0
 WORK = os.path.abspath(sys.argv[1])
 OUT = os.path.abspath(opt["--out"]) if "--out" in opt else WORK   # results; inputs stay in WORK
@@ -68,7 +68,7 @@ MIN_INSTANCE = 0.5                                    # instances below this are
 MIN_BY_PROMPT = {"armored_skirt": 0.4}                # v2 painted full plate: the exact front skirt mask scored 0.44
 # v2: parts that may only lie above / below the belt line (world height; the belt line = median height
 # of SAM's belt masks). From the side and back "armored skirt" also covers the torso's sides, and the
-# breastplate mask takes the pointed plate below the belt (explode2/sam_check.py, 2026-11-02).
+# breastplate mask takes the pointed plate below the belt (explode2/measure/sam_check.py, 2026-11-02).
 BELT_GATE = {"skirt": "below", "torso": "above"}
 BELT_MARGIN = 0.01                                    # x height
 # overlapping masks: the smaller, more specific part wins (a forearm mask usually includes the hand)

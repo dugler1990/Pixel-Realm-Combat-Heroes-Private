@@ -25,12 +25,12 @@ Explode v2:
   --hide-under     delete the body faces a worn part covers or that poke out through it, as a game
                    hides the body under worn gear; the rest of the body stays (see hide_under).
   --hide-head      delete the body's head and neck faces before rendering, so any skin left in the image is
-                   skin the armour should cover (explode2/skin_metric.py counts it).
+                   skin the armour should cover (explode2/measure/skin_metric.py counts it).
   --mask           flat colours, no anti-aliasing: body pure green, every piece grey, black background, so a
-                   pixel is exactly body, piece or nothing (explode2/skin_metric.py). Each visible body pixel is
+                   pixel is exactly body, piece or nothing (explode2/measure/skin_metric.py). Each visible body pixel is
                    then split by its camera ray (split_mask): armour just behind it = poking through (green),
                    none = an opening or hole in the armour (cyan).
-  --tuck-from <npz> the tuck explode2/fit_set.py computed for a whole worn set (tuck_offsets.npz), applied to
+  --tuck-from <npz> the tuck explode2/options/fit_set.py computed for a whole worn set (tuck_offsets.npz), applied to
                    this copy of the body by position (works on an animated.blend too); use instead of --tuck.
   --tuck           instead of --hide-under: push the skin a worn piece covers inward, behind it, by what the
                    worst of the test poses needs (see tuck_under). Nothing is deleted, so there is no hole in
@@ -64,7 +64,7 @@ ALIGNED = "--aligned" in sys.argv
 HIDE_UNDER = "--hide-under" in sys.argv
 SWEEP = "--sweep" in sys.argv
 HIDE_HEAD = "--hide-head" in sys.argv
-MASK = "--mask" in sys.argv      # flat colours, no anti-aliasing: body pure green, pieces grey (explode2/skin_metric.py)
+MASK = "--mask" in sys.argv      # flat colours, no anti-aliasing: body pure green, pieces grey (explode2/measure/skin_metric.py)
 TUCK = "--tuck" in sys.argv
 TUCK_MARGIN, TUCK_THICK = 0.004, 0.004   # x height: skin stays this far inside the plate's inner side
 ONLY = None
@@ -72,7 +72,7 @@ if "--only" in sys.argv:
     _i = sys.argv.index("--only")
     ONLY = set(sys.argv[_i + 1].split(","))
     del sys.argv[_i:_i + 2]
-TUCK_FROM = None                 # explode2/fit_set.py's tuck_offsets.npz: rest position -> offset per skin vertex
+TUCK_FROM = None                 # explode2/options/fit_set.py's tuck_offsets.npz: rest position -> offset per skin vertex
 if "--tuck-from" in sys.argv:
     _i = sys.argv.index("--tuck-from")
     TUCK_FROM = os.path.abspath(sys.argv[_i + 1])
@@ -178,7 +178,7 @@ if TUCK_FROM:
 
 
 def rigid_weights(part, P, Wa):
-    """Plate armour weights (explode_common.piece_weights, shared with explode2/fit_set.py)."""
+    """Plate armour weights (explode_common.piece_weights, shared with explode2/options/fit_set.py)."""
     if PAULDRON_ARM is None:
         return piece_weights(part, P, Wa, roles, gnames, hB)
     return piece_weights(part, P, Wa, roles, gnames, hB, pauldron_arm=PAULDRON_ARM)

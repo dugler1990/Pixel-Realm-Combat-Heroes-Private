@@ -2,7 +2,7 @@
 
     .venv-bpy/Scripts/python.exe outfit_skeleton.py <base_rigged.glb> <outfit.glb> <out.glb> [--align-only] [--scaling 3]
 
---align-only: step 1 only; writes the aligned mesh without weights (for explode2/shell_check.py).
+--align-only: step 1 only; writes the aligned mesh without weights (for explode2/measure/shell_check.py).
 --scaling P: after the alignment, the outfit object is scaled by (1 + P / 100) about its own centre (bounding box).
 
 1. align  one similarity onto the base body (same as explode_pose.load_parts): scale from height,

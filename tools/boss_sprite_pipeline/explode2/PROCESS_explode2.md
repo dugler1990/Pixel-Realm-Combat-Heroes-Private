@@ -220,7 +220,7 @@ Direct coverage 65.5 % of welded verts (v1: 41 % at 8 views, 58 % at 96). 14 par
 back plate, skirt from the belt down, legs separate. The fauld's pointed front plate went to the belt.
 
 **How many views are worth it** (`--dirs N` = first N greedy directions on the same masks;
-`explode2/compare_cuts.py` → `CUTS_BY_VIEWS.png`, `diag_step5_cut_vs_views.json`):
+`explode2/measure/compare_cuts.py` → `CUTS_BY_VIEWS.png`, `diag_step5_cut_vs_views.json`):
 
 | step | faces that change part | biggest changes |
 |---|---|---|
@@ -252,7 +252,7 @@ ends where parts join (boot soles, torso bottom).
 `explode_pose.py` gained `--aligned` (parts already in the base's frame), `--only <parts>` and
 `--hide-under` (delete body faces a worn part covers or that poke out through it: ray along the face
 normal hits the part within 6 % h, or against it within 3 % h, for faces on the bones the part sits on).
-`explode2/swap_sheet.py` puts the same poses side by side.
+`explode2/measure/swap_sheet.py` puts the same poses side by side.
 
 ```
 %PY% tools\boss_sprite_pipeline\explode\explode_pose.py --texture generated\bosses\barb\rigfix\barb_final.glb generated\bosses\barb\gear_test\barb_roles.json generated\bosses\barb\explode2\fullplate\swap_test\bare
@@ -275,7 +275,7 @@ hidden under it. Problems:
 
 ## Is SAM the weak link? (2026-11-02)
 
-`explode2/sam_check.py <views> <out.png>`: per view, each pixel takes the part SAM's masks give it under the
+`explode2/measure/sam_check.py <views> <out.png>`: per view, each pixel takes the part SAM's masks give it under the
 labeller's own rules (read from explode_label.py), before any combining (`SAM_CHECK.png`: front, side,
 back, 3/4, upper and lower crops). SAM's masks are clean for head, hands, arms, pauldrons, belt, lower legs
 and boots from every side. What went wrong was mine:
@@ -299,7 +299,7 @@ HoloPart re-run on `cut_d32_gate` (same pod, ~5 min) → `holopart_d32_gate/outp
 
 ## What does HoloPart buy? (2026-11-02)
 
-`explode2/holo_value.py`: each piece alone from 6 directions, front faces white, back faces red; see-through %
+`explode2/measure/holo_value.py`: each piece alone from 6 directions, front faces white, back faces red; see-through %
 = red / piece pixels (the inside seen through a hole or open end: an inventory item, a piece worn without
 its neighbours). Previous cut (`cut_d128`): **7.9 % → 5.7 %** mean with HoloPart's infill; belt 24.9 → 12.4,
 pauldron_r 16.3 → 10.1, pauldron_l 7.4 → 4.4, arms −1.6/−1.8, torso only 9.4 → 8.9 (its open ends are the
@@ -335,7 +335,7 @@ layered TRELLIS shells inconsistently), so it cannot answer this. Not blocking t
 
 ## Step 12 — breastplate fit (2026-11-02, local, ~3 min + pose test ~5 min)
 
-`explode2/fit_piece.py <base_rigged.glb> <roles.json> <parts.glb> <part> <out_parts.glb> [--bone chest]
+`explode2/options/fit_piece.py <base_rigged.glb> <roles.json> <parts.glb> <part> <out_parts.glb> [--bone chest]
 [--gap 0.005] [--thick 0.004]`: the plate rides the chest bone rigidly, so the body is looked at from that
 bone — in each of the 6 test poses (now shared: `explode_common.test_poses` / `set_pose`) the torso skin
 (root, spine, spine2, chest, neck, shoulder bones; not the arms) is moved into the chest bone's rest frame.
@@ -345,7 +345,7 @@ pushed outward by the shortfall (smoothed over ±1.5 bins, at least 80 % of the 
 bin moves the same, so the plate keeps its thickness. Only outward.
 
 ```
-%PY% tools\boss_sprite_pipeline\explode2\fit_piece.py generated\bosses\barb\rigfix\barb_final.glb generated\bosses\barb\gear_test\barb_roles.json generated\bosses\barb\explode2\fullplate\cut_d32_gate\merged_parts.glb torso generated\bosses\barb\explode2\fullplate\fit\merged_parts_fit.glb --diag generated\bosses\barb\explode2\fullplate\diag_step12_fit_torso.json
+%PY% tools\boss_sprite_pipeline\explode2\options\fit_piece.py generated\bosses\barb\rigfix\barb_final.glb generated\bosses\barb\gear_test\barb_roles.json generated\bosses\barb\explode2\fullplate\cut_d32_gate\merged_parts.glb torso generated\bosses\barb\explode2\fullplate\fit\merged_parts_fit.glb --diag generated\bosses\barb\explode2\fullplate\diag_step12_fit_torso.json
 ```
 
 - The plate was too tight in 1,690 of its 1,832 bins: push median 2.5 % h (~4.4 cm), max 5.4 % h (~10 cm).
@@ -367,7 +367,7 @@ bin moves the same, so the plate keeps its thickness. Only outward.
   anunaki`; bind_match off, arm cap open). Walk, two-hand swing, overhead chop (Kimodo/SOMA clips from
   `anunaki/bvh_all`), 150 frames each, 22 bones, 4 min → `barb/anim_test/retarget/animated.blend`.
   `explode_pose.py --clips a,b` plays them (base = the animated.blend; camera follows his root; every 3rd
-  frame) and `explode2/anim_compare.py` stacks without / with.
+  frame) and `explode2/measure/anim_compare.py` stacks without / with.
 
 ```
 %PY% tools\boss_sprite_pipeline\retarget_bvh.py --source anunaki --target barb generated\bosses\barb\anim_test\bvh generated\bosses\barb\anim_test\retarget
@@ -377,7 +377,7 @@ bin moves the same, so the plate keeps its thickness. Only outward.
 
 ## Holes: find them, fill the small ones (2026-11-02)
 
-`explode2/hole_check.py <parts.glb> <out> [--parts ...] [--hole-max 0.06] [--fix <out.glb>]`: boundary edges
+`explode2/measure/hole_check.py <parts.glb> <out> [--parts ...] [--hole-max 0.06] [--fix <out.glb>]`: boundary edges
 after welding UV seams; each connected run is an opening; perimeter < 6 % h = a hole, longer = a real
 opening (neck, arm holes, waist). `--fix` fills the holes (bmesh holes_fill, new corners take the
 surrounding UV). `holes/HOLES_<part>.png`: before (holes red, openings blue) / after.
@@ -396,7 +396,7 @@ relabelled by a multi-source shortest-path flood (scipy `dijkstra`, `min_only`) 
 band, which keep their part. A step between two faces costs their centre distance × (1 + 50 × crease),
 crease = 1 − |n₁·n₂| scaled so a 30° fold or sharper is 1 (normals compared either way up). Each side fills
 up to the fold, so the border lands where the plates meet. Runs before the fragment cleanup.
-`explode2/border_zoom.py <out.png> <label>=<cut> ...`: close-ups where two parts meet (camera found from
+`explode2/measure/border_zoom.py <out.png> <label>=<cut> ...`: close-ups where two parts meet (camera found from
 the last cut's border), each cut in the same part colours → `BORDERS_gate_vs_snap.png`.
 
 | band | changed | result |
@@ -439,8 +439,8 @@ All movement checks now render front, 3/4, side and back (`explode_pose.py` MOVE
 `final_check/`: cleaned + fitted torso — stills, sweeps, the 3 clips bare and with, `COMPARE_<clip>.gif`.
 
 ```
-%PY% tools\boss_sprite_pipeline\explode2\hole_check.py generated\bosses\barb\explode2\fullplate\cut_d32_snap\shells_parts.glb generated\bosses\barb\explode2\fullplate\holes_shell_clean --parts torso --clean --fix generated\bosses\barb\explode2\fullplate\cut_d32_snap\shells_clean_torso.glb
-%PY% tools\boss_sprite_pipeline\explode2\fit_piece.py generated\bosses\barb\rigfix\barb_final.glb generated\bosses\barb\gear_test\barb_roles.json generated\bosses\barb\explode2\fullplate\cut_d32_snap\shells_clean_torso.glb torso generated\bosses\barb\explode2\fullplate\fit_clean\parts_fit.glb
+%PY% tools\boss_sprite_pipeline\explode2\measure\hole_check.py generated\bosses\barb\explode2\fullplate\cut_d32_snap\shells_parts.glb generated\bosses\barb\explode2\fullplate\holes_shell_clean --parts torso --clean --fix generated\bosses\barb\explode2\fullplate\cut_d32_snap\shells_clean_torso.glb
+%PY% tools\boss_sprite_pipeline\explode2\options\fit_piece.py generated\bosses\barb\rigfix\barb_final.glb generated\bosses\barb\gear_test\barb_roles.json generated\bosses\barb\explode2\fullplate\cut_d32_snap\shells_clean_torso.glb torso generated\bosses\barb\explode2\fullplate\fit_clean\parts_fit.glb
 ```
 
 ### Torn armpits (2026-11-02)
@@ -584,7 +584,7 @@ All 13 pieces of `cut_d32_posed` (head excluded: the barb keeps his own) cleaned
 `hole_check.py --clean --fix` → `cut_d32_posed/shells_clean_all.glb` (`holes_posed_all/`, `diag_step9_holes_all.json`).
 Holes left: boots 3 each, pauldrons 5/7, gauntlets 27/45, arms ~60–100, legs 67/63, belt 66, skirt ~150, torso 124.
 
-`explode2/fit_set.py` (steps 11–12 for any piece): world space per fit pose (6 test + 8 stretch); everything as a
+`explode2/options/fit_set.py` (steps 11–12 for any piece): world space per fit pose (6 test + 8 stretch); everything as a
 height above the posed skin (nearest body vertex and its normal). Fit inner first (legs, boots, arms, gauntlets,
 torso, belt, skirt, pauldrons): a piece vertex stands GAP 0.5 % h above the skin and above inner pieces under it
 (within 1.2 % h); the worst shortfall is spread over 1.2 % h (voxel max, so plate layers move together), smoothed,
@@ -671,7 +671,7 @@ Undergarment plan (black gambeson + hose as a body-texture variant first, a garm
 **Mistake: "under control" was judged by eye** on a few sheets, and the user found the same skin faults still
 there (shoulders, seat, feet, loincloth). From here the skin is measured, not eyeballed:
 `explode_pose.py --mask --hide-head` renders flat colours with no anti-aliasing (body pure green, every piece grey,
-black background) with his head and neck taken out (his bare head is meant to show), and `explode2/skin_metric.py`
+black background) with his head and neck taken out (his bare head is meant to show), and `explode2/measure/skin_metric.py`
 counts the green: body showing as a % of the figure per image, the mean, per view, the worst ten, and a sheet
 with the body in red (`SKIN.png`, `skin.json`). Measured over the 14 fit poses × 4 sides and the 5 clips' key
 frames × 4 sides (`scratchpad/skin_base.ps1 <fit_dir> <name>` → `fullplate/skin_metric/<name>/`).
@@ -750,7 +750,7 @@ face. v3 running (`fit_set_full3/`, `skin_metric/v3/`).
 
 **v3: 4.19 % = through 1.94 + openings 2.25** (base 4.93 = 2.51 + 2.42). The loincloth patch at the crotch is mostly
 gone; the hands got worse than base (red / blue at the gauntlet cuffs); the red spots on both shins did not change.
-Probed instead of guessed — `explode2/skin_probe.py <base> <fit_dir> <view> <label>:<x0,y0,x1,y1> ...` casts each
+Probed instead of guessed — `explode2/measure/skin_probe.py <base> <fit_dir> <view> <label>:<x0,y0,x1,y1> ...` casts each
 pixel's ray at rest and reports the body vertex hit (main bone, tuck offset, outer skin or not, normal facing) and
 the armour next behind it (piece, distance, its triangle's longest edge):
 - hands (v3): finger bones 18/19, tuck moved them a median 3.35 % h, **2.77 % h outward along the normal**; 99 px with
@@ -825,7 +825,7 @@ Extra high: what is left red — hands (gauntlets ≈ his hands, ~36 % of the re
 4th, "3D render" style added to the prompt (`flare_4_3drender.jpg`, `CHECK_SHEET_2.png`): **3.95 %** (shoulder / chest /
 hips 38.8 / 43.7 / 58.3); extra red at the crotch (his loincloth below where the armour's legs part), else as 3.
 
-**3D check before any cut** — `explode2/shell_check.py <base> <roles> <outfit_aligned.glb> --json` (local, 52 s): 1 in 4
+**3D check before any cut** — `explode2/measure/shell_check.py <base> <roles> <outfit_aligned.glb> --json` (local, 52 s): 1 in 4
 outer-skin verts (head / neck out), a ray out along the normal; inside = it leaves an outward outfit face within 3 % h.
 Old armour (`fullplate/fullplate_rigged.glb`, `shell_check_v1.json`): **57.0 % of his skin OUT** (torso 66.8, upper
 arm 61.5, forearm 48.5, hands 53.2, thigh 55.8, shin 54.5, feet 44.5); where inside, the plate stands off 0.45 % h median.
@@ -981,7 +981,7 @@ was never tucked under the gauntlets (the red fingertips). `fit_set.py` now adds
 or foot (the feet have none: the foot role is the toe bone, already covered).
 
 ```
-%PY% tools\boss_sprite_pipeline\explode2\fit_set.py generated\bosses\barb\rigfix\barb_final_nb.glb generated\bosses\barb\gear_test\barb_roles.json generated\bosses\barb\explode2\fullplate\cut_d32_posed\shells_clean_all.glb generated\bosses\barb\explode2\fullplate\fit_set_full --only arm_l,arm_r,belt,boot_l,boot_r,gauntlet_l,gauntlet_r,leg_l,leg_r,pauldron_l,pauldron_r,skirt,torso
+%PY% tools\boss_sprite_pipeline\explode2\options\fit_set.py generated\bosses\barb\rigfix\barb_final_nb.glb generated\bosses\barb\gear_test\barb_roles.json generated\bosses\barb\explode2\fullplate\cut_d32_posed\shells_clean_all.glb generated\bosses\barb\explode2\fullplate\fit_set_full --only arm_l,arm_r,belt,boot_l,boot_r,gauntlet_l,gauntlet_r,leg_l,leg_r,pauldron_l,pauldron_r,skirt,torso
 %PY% tools\boss_sprite_pipeline\explode\explode_pose.py --texture --aligned --rigid --tuck-from generated\bosses\barb\explode2\fullplate\fit_set_full\tuck_offsets.npz --only <13 pieces> generated\bosses\barb\rigfix\barb_final_nb.glb generated\bosses\barb\gear_test\barb_roles.json <out> full=generated\bosses\barb\explode2\fullplate\fit_set_full\parts_fit.glb
 ```
 
@@ -1060,3 +1060,9 @@ copy W\views\cams.json W\cut\ ; %PY% tools\boss_sprite_pipeline\explode\explode_
   fills a mask to ~3 px, not exactly (OpenAI: the mask is guidance). Kept as `--draw mask`, not the default.
 - **Front as a masked edit** (2026-11-08): mask = bare outline grown 0.5 % h, head left out. Covers him by
   construction but cuts the armour to the mask (pauldrons cut to his shoulders). Not wanted; kept as `--draw mask`.
+- **`buffer_set.py`: a uniform buffer around each piece instead of the fit** (2026-11-07, old armour's 13 pieces):
+  21.71 % of the figure body after (fit_set + tuck: 4.93); its own ~90 % covered estimate was far off the render.
+  Not a working method as written. Removed 2026-11-13; the code is in commit `7c3de314`.
+- **`outline_check.py` + this folder's `body_silhouette.py`: scoring a drawn front against his outline**
+  (2026-11-07): replaced by `view_gate.py` (shape gate, body bands, joint lines) and its own
+  `tools/boss_sprite_pipeline/body_silhouette.py`. Removed 2026-11-13; the code is in commit `7c3de314`.
