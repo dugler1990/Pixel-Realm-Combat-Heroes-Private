@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Outfits</title>
+<style>
+  :root { --bg:#16181d; --panel:#1f2229; --line:#2e333d; --text:#e4e6ea; --dim:#9aa1ad; --ok:#4caf7a; --gate:#e0a33a;
+          --bad:#e05a5a; --run:#4a90d9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; gap:18px; align-items:center; padding:8px 14px; background:var(--panel);
+           border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header b { color:var(--dim); font-weight:600; margin-right:4px; }
+  .key { padding:2px 8px; border-radius:10px; border:1px solid var(--line); }
+  .key.on { border-color:var(--ok); color:var(--ok); } .key.off { color:var(--dim); }
+  button { background:#2b303a; color:var(--text); border:1px solid #3a404c; border-radius:5px; padding:4px 10px;
+           cursor:pointer; font:inherit; }
+  button:hover { background:#353b47; } button.main { background:#2d5d93; border-color:#3a72b0; }
+  button:disabled { opacity:.45; cursor:default; }
+  input[type=text] { background:#12141a; color:var(--text); border:1px solid var(--line); border-radius:5px;
+                     padding:4px 8px; font:inherit; }
+  #stop { display:none; background:var(--bad); color:#fff; font-weight:700; padding:4px 12px; border-radius:5px; }
+  main { display:grid; grid-template-columns:270px 1fr; min-height:calc(100vh - 48px); }
+  nav { border-right:1px solid var(--line); padding:10px; overflow:auto; }
+  .outfit { padding:8px; border-radius:6px; cursor:pointer; margin-bottom:6px; border:1px solid transparent; }
+  .outfit:hover { background:var(--panel); } .outfit.sel { border-color:var(--run); background:var(--panel); }
+  .outfit .name { font-weight:600; } .outfit .kind { color:var(--dim); font-size:12px; }
+  .chips { display:flex; flex-wrap:wrap; gap:3px; margin-top:5px; }
+  .chip { font-size:11px; padding:1px 6px; border-radius:8px; background:#2a2e36; color:var(--dim); cursor:pointer; }
+  .chip.done { background:#1f3b2c; color:var(--ok); } .chip.gate { background:#3d3020; color:var(--gate); }
+  .chip.skipped { background:#24272d; color:#6c727c; text-decoration:line-through; }
+  .chip.missing, .chip.failed { background:#3d2224; color:var(--bad); }
+  .chip.running { background:#1e3248; color:var(--run); } .chip.sel { outline:1px solid var(--text); }
+  section { padding:12px 16px; overflow:auto; }
+  h2 { margin:0 0 4px; font-size:18px; } h3 { margin:14px 0 6px; font-size:15px; }
+  .dim { color:var(--dim); } .err { color:var(--bad); } .okc { color:var(--ok); } .gatec { color:var(--gate); }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+  .attempt { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px; margin:8px 0; }
+  .attempt.acc { border-color:var(--ok); }
+  .attempt img, .big { max-width:100%; border-radius:4px; background:#fff; display:block; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:8px; }
+  .grid img { width:100%; background:#fff; border-radius:4px; }
+  pre { background:#0f1115; border:1px solid var(--line); border-radius:6px; padding:8px; max-height:340px;
+        overflow:auto; font:12px/1.35 Consolas, monospace; white-space:pre-wrap; }
+  .lightbox { position:fixed; inset:0; background:rgba(0,0,0,.88); display:none; align-items:center;
+              justify-content:center; z-index:9; cursor:zoom-out; }
+  .lightbox img { max-width:96vw; max-height:96vh; background:#fff; }
+  img.zoom { cursor:zoom-in; }
+  #toast { position:fixed; right:16px; bottom:16px; background:var(--bad); color:#fff; padding:10px 14px;
+           border-radius:6px; display:none; max-width:520px; white-space:pre-wrap; z-index:10; }
+</style>
+</head>
+<body>
+<header>
+  <span><b>Keys</b><span id="keys"></span></span>
+  <span><b>Pod</b><input id="podline" type="text" size="44" placeholder="paste RunPod's ssh line (…@ssh.runpod.io)">
+    <button onclick="setPod()">Set</button> <span id="podinfo" class="dim">no pod</span></span>
+  <span id="stop">stop the pod</span>
+</header>
+<main>
+  <nav id="nav"></nav>
+  <section id="main"><p class="dim">Pick an outfit on the left.</p></section>
+</main>
+<div class="lightbox" id="lb" onclick="this.style.display='none'"><img id="lbimg"></div>
+<div id="toast" onclick="this.style.display='none'"></div>
+<script>
+const S = { state:null, sel:null, step:null, detail:null, detailAt:0, logStep:null };
+const POD_STEPS = new Set(["trellis", "sam3", "holopart"]);
+const LABEL = { front_only:"front only", front_back:"front + back", front_back_sides:"front + back + sides",
+                eight_views:"8 views (front, back, sides, 3/4s)" };
+
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function img(path, cls="") { return path ? `<img class="zoom ${cls}" src="/img?path=${encodeURIComponent(path)}&t=${S.detailAt}" onclick="zoom(this.src)">` : ""; }
+function zoom(src) { document.getElementById("lbimg").src = src; document.getElementById("lb").style.display = "flex"; }
+function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.style.display = "block";
+                      setTimeout(() => t.style.display = "none", 9000); }
+async function api(path, body) {
+  const r = await fetch(path, body ? { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) } : {});
+  const j = await r.json();
+  if (!r.ok || j.error) throw new Error(j.error || r.statusText);
+  return j;
+}
+function cur() { return S.state && S.sel ? S.state.outfits.find(o => o.character + "/" + o.outfit === S.sel) : null; }
+function running(key) { return S.state ? S.state.jobs.running.find(j => j.outfit === key) : null; }
+
+async function refresh() {
+  try { S.state = await api("/api/state"); } catch (e) { return; }
+  drawHeader(); drawNav();
+  const o = cur();
+  if (o) {
+    const r = running(S.sel);
+    const stale = Date.now() - (S.fetchedAt || 0) > (r ? 2500 : 6000);
+    if (!S.detail || stale || S.lastRun !== !!r) { S.fetchedAt = Date.now(); await loadDetail(); S.lastRun = !!r; }
+    else drawLog();
+  }
+}
+setInterval(refresh, 2000);
+
+function drawHeader() {
+  const k = S.state.keys;
+  document.getElementById("keys").innerHTML = Object.entries({openai:"OpenAI", leonardo:"Leonardo", hf:"HF"}).map(([n, l]) =>
+    `<span class="key ${k[n] ? "on" : "off"}">${l} ${k[n] ? "set" : "–"}</span> <button onclick="setKey('${n}')" title="copy the key first">from clipboard</button>`).join(" ");
+  const p = S.state.pod, st = p.status;
+  let info = p.host ? `${p.host}:${p.port}` : "no pod";
+  if (st && !st.error) info += ` · GPU ${st.gpu_pct}% · ${Math.round(st.mem_mb / 1024)}/${Math.round(st.mem_total_mb / 1024)} GB · running: ${st.running.join(", ") || "nothing"} · installed: ${st.installed.join(", ") || "nothing"}`;
+  else if (st && st.error) info += ` · <span class="err">${esc(st.error)}</span>`;
+  document.getElementById("podinfo").innerHTML = info;
+  const podBusy = S.state.jobs.running.some(j => j.lane === "pod");
+  document.getElementById("stop").style.display = p.host && !podBusy ? "inline-block" : "none";
+}
+setInterval(async () => { if (S.state && S.state.pod.host) { try { await api("/api/pod/status"); } catch (e) {} } }, 10000);
+
+function drawNav() {
+  document.getElementById("nav").innerHTML = S.state.outfits.map(o => {
+    const key = o.character + "/" + o.outfit, r = running(key);
+    return `<div class="outfit ${key === S.sel ? "sel" : ""}" onclick="select('${key}')">
+      <div class="name">${esc(key)}</div><div class="kind">${o.kind}${o.models.length ? " · " + o.models.join(", ") : ""}</div>
+      <div class="chips">${o.steps.map(s => `<span class="chip ${r && r.step === s.name ? "running" : s.status}">${s.name}</span>`).join("")}</div></div>`;
+  }).join("");
+}
+async function select(key) { S.sel = key; S.step = null; S.detail = null; S.sig = null; await loadDetail(); }
+async function loadDetail() {
+  const o = cur(); if (!o) return;
+  let d;
+  try { d = await api(`/api/run?character=${o.character}&outfit=${o.outfit}`); } catch (e) { toast(e.message); return; }
+  if (!S.step) S.step = o.next || o.steps[o.steps.length - 1].name;
+  // Redraw only when something changed: a redraw would wipe what is being typed in a retry box.
+  const r = running(S.sel), sig = JSON.stringify([d, o.steps, r ? r.step : null, S.step, S.state.jobs.running.map(j => j.lane)]);
+  S.detail = d;
+  if (sig === S.sig) return drawLog();
+  S.sig = sig; S.detailAt = Date.now();
+  drawMain();
+}
+function pickStep(s) { S.step = s; S.sig = null; history.replaceState(null, "", "#" + S.sel + "/" + s); drawMain(); }
+
+async function act(body) {
+  const o = cur();
+  try { const r = await api("/api/do", Object.assign({ character:o.character, outfit:o.outfit }, body)); S.logStep = null; }
+  catch (e) { toast(e.message); }
+  await refresh();
+}
+async function setKey(n) { try { await api("/api/key", { name:n }); } catch (e) { toast(e.message); } refresh(); }
+async function setPod() {
+  const line = document.getElementById("podline").value.trim(); if (!line) return;
+  const m = line.match(/^(\d+\.\d+\.\d+\.\d+)[: ](\d+)$/);
+  document.getElementById("podinfo").textContent = "asking the pod for its address…";
+  try { await api("/api/pod", m ? { host:m[1], port:m[2] } : { line }); await api("/api/pod/status"); }
+  catch (e) { toast(e.message); }
+  refresh();
+}
+
+function drawMain() {
+  const o = cur(), d = S.detail; if (!o || !d) return;
+  const key = o.character + "/" + o.outfit, r = running(key), s = o.steps.find(x => x.name === S.step);
+  let h = `<h2>${esc(key)} <span class="dim">(${o.kind})</span></h2><div class="dim">${esc(o.about)}</div>`;
+  if (o.kind !== "cut") {
+    h += `<h3>TRELLIS models</h3><div class="row">` + d.all_models.map(m =>
+      `<label><input type="checkbox" class="mdl" value="${m}" ${d.models.includes(m) ? "checked" : ""}> ${LABEL[m]}</label>`).join("") +
+      `<button onclick="saveModels()">Save</button></div><div class="dim">Drawings needed: ${d.views.join(", ")}</div>`;
+  }
+  h += `<div class="chips" style="margin:12px 0">${o.steps.map(x => `<span class="chip ${r && r.step === x.name ? "running" : x.status} ${x.name === S.step ? "sel" : ""}" onclick="pickStep('${x.name}')">${x.name}</span>`).join("")}</div>`;
+  const busy = !!r, laneBusy = S.state.jobs.running.some(j => j.lane === (POD_STEPS.has(S.step) ? "pod" : "local"));
+  h += `<div class="row"><b>${S.step}</b> <span class="${s.status === "done" ? "okc" : s.status === "gate" ? "gatec" : "dim"}">${s.status}</span>
+        ${s.cost_usd ? `<span class="dim">$${s.cost_usd}</span>` : ""} ${s.pod_minutes ? `<span class="dim">${s.pod_minutes} pod min</span>` : ""}
+        <button class="main" ${busy || laneBusy ? "disabled" : ""} onclick="act({action:'run', step:'${S.step}'})">Run ${S.step}${POD_STEPS.has(S.step) ? " (pod)" : ""}</button>
+        ${busy ? `<span class="dim">running: ${esc(r.label)}</span>` : ""}</div>`;
+  h += panel(S.step, d, busy);
+  h += `<h3>Log</h3><pre id="log"></pre>`;
+  document.getElementById("main").innerHTML = h;
+  drawLog();
+}
+async function saveModels() {
+  const models = [...document.querySelectorAll(".mdl:checked")].map(x => x.value);
+  await act({ action:"models", models });
+  setTimeout(loadDetail, 1500);
+}
+
+function retryForm(step, view, attempt) {
+  const id = `${step}_${view || ""}`;
+  return `<div class="row"><select id="rk_${id}"><option value="r">r (redraw)</option>${step === "sides" ? "" : `<option value="r1">r1 (show its error)</option>`}${step === "front" ? `<option value="rb">rb (bigger armour)</option>` : ""}</select>
+    <input type="text" id="rw_${id}" size="50" placeholder="why (optional): what to fix">
+    <input type="file" id="rf_${id}" accept="image/png,image/jpeg">
+    <button onclick="retry('${step}', '${view || ""}')">Redraw</button></div>`;
+}
+async function retry(step, view) {
+  const id = `${step}_${view}`, o = cur();
+  let r = document.getElementById("rk_" + id).value, why = document.getElementById("rw_" + id).value.trim();
+  const f = document.getElementById("rf_" + id).files[0];
+  if (why) r += " " + why;
+  if (f) {
+    if (!why && r === "r") r += " see the attached image";
+    const data = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(f); });
+    try { const up = await api("/api/upload", { character:o.character, outfit:o.outfit, name:f.name, data }); r += " @" + up.path; }
+    catch (e) { return toast(e.message); }
+  }
+  act({ action:"retry", step, view: view || undefined, retry:r });
+}
+function attempts(step, view, g, busy) {
+  if (!g || !g.attempts.length) return `<p class="dim">No drawing yet: Run draws one.</p>`;
+  return [...g.attempts].reverse().map(t => {
+    const sc = t.scores || {}, acc = g.accepted === t.attempt;
+    const bits = sc.iou !== undefined ? `IoU ${sc.iou.toFixed(3)} · missing ${(100 * sc.missing).toFixed(2)} % · spilled ${(100 * sc.spilled).toFixed(2)} %` : "";
+    return `<div class="attempt ${acc ? "acc" : ""}"><div class="row"><b>attempt ${t.attempt}</b> ${acc ? `<span class="okc">accepted</span>` : ""}
+      <span class="dim">${bits}${sc.passed !== undefined ? (sc.passed ? " · PASS" : " · FAIL") : ""}</span>
+      ${acc ? "" : `<button class="main" ${busy ? "disabled" : ""} onclick="act({action:'accept', step:'${step}', view:${view ? `'${view}'` : "undefined"}, n:${t.attempt}})">Accept ${t.attempt}</button>`}</div>
+      ${img(t.sheet || t.draw)}</div>`;
+  }).join("");
+}
+
+function panel(step, d, busy) {
+  const run = d.run.steps[step] || {};
+  if (step === "front" || step === "back") {
+    const g = d.gates[step];
+    return (g && g.status === "accepted" ? "" : retryForm(step, null)) + attempts(step, null, g, busy);
+  }
+  if (step === "sides") {
+    const need = d.views.filter(v => !["front", "back"].includes(v));
+    if (!need.length) return `<p class="dim">The chosen models need no side views.</p>`;
+    const strip = ["front", "back", ...need].filter(v => d.cutouts[v]).map(v =>
+      `<div style="text-align:center">${img(d.cutouts[v])}<div class="dim">${v}</div></div>`).join("");
+    return `<div class="grid" style="grid-template-columns:repeat(8, 1fr)">${strip}</div>` + need.map(v => {
+      const mir = d.mirror_right && d.mirror_of[v];
+      const g = d.gates["side_" + v];
+      let h = `<h3>${v} ${d.cutouts[v] ? `<span class="okc">done</span>` : `<span class="gatec">to do</span>`}</h3>`;
+      if (mir) return h + `<p class="dim">The ${d.mirror_of[v]} view mirrored (Run sides writes it).</p>`;
+      if (d.cutouts[v] && !(g && g.attempts.length)) return h + `<p class="dim">Accepted earlier (one gate file for every side then).</p>`;
+      return h + (d.cutouts[v] ? "" : retryForm("sides", v)) + attempts("sides", v, g, busy);
+    }).join("");
+  }
+  if (step === "trellis") {
+    const made = Object.keys(d.trellis), picked = run.picked;
+    let h = `<p>Built: ${made.map(m => LABEL[m]).join(", ") || "none"}${picked ? ` · <span class="okc">picked ${LABEL[picked]}</span>` : ""}</p>`;
+    h += `<div class="row">` + d.models.filter(m => made.includes(m)).map(m =>
+      `<button class="${picked === m ? "" : "main"}" ${busy ? "disabled" : ""} onclick="act({action:'pick', step:'trellis', model:'${m}'})">Pick ${LABEL[m]}</button>`).join("") + `</div>`;
+    return h + (d.images.trellis_sheet ? img(d.images.trellis_sheet, "big") : `<p class="dim">No sheet yet: Run trellis (pod) builds the ticked models and the sheet.</p>`);
+  }
+  if (step === "paint") {
+    let h = `<div class="row"><button class="main" ${busy ? "disabled" : ""} onclick="act({action:'accept', step:'paint', n:1})">Accept paint</button>
+      <input type="text" id="redo" size="40" placeholder="views to repaint, e.g. pelvis_front pelvis_back">
+      <button ${busy ? "disabled" : ""} onclick="act({action:'redo', step:'paint', views:document.getElementById('redo').value.split(/[\\s,]+/).filter(Boolean)})">Repaint</button></div>`;
+    return h + `<div class="grid">${d.paint.map(p => img(p)).join("")}</div>`;
+  }
+  const pics = { cut:["cut_front", "cut_back", "cut_sheet"], merge:["cut_front", "cut_back"], worn:["worn"],
+                 slots:["slots_sheet"], sheet:["slots_sheet"] }[step] || [];
+  let h = pics.filter(k => d.images[k]).map(k => img(d.images[k], "big")).join("");
+  if (step === "export" && run.result) h += `<pre>${esc(run.result)}</pre>`;
+  if (step === "skeleton" && run.outputs) h += `<pre>${esc(JSON.stringify(run.outputs, null, 1))}</pre>`;
+  return h || `<p class="dim">${run.status === "done" ? "Done." : "Run it."}</p>`;
+}
+
+async function drawLog() {
+  const el = document.getElementById("log"); if (!el) return;
+  const o = cur(), r = running(S.sel);
+  let lines;
+  if (r) lines = r.lines;
+  else {
+    const last = S.state.jobs.done.find(j => j.outfit === S.sel && (j.step === S.step || j.step === null));
+    if (last && Date.now() / 1000 - last.ended < 600) lines = last.lines;
+    else {
+      if (S.logStep === S.step + S.detailAt) return;
+      try { lines = (await api(`/api/log?character=${o.character}&outfit=${o.outfit}&step=${S.step}`)).lines; } catch (e) { lines = []; }
+      S.logStep = S.step + S.detailAt;
+    }
+  }
+  const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+  el.textContent = (lines || []).join("\n") || "(no log yet)";
+  if (atEnd) el.scrollTop = el.scrollHeight;
+}
+// #barb/naked/trellis opens that outfit at that step
+(async () => {
+  await refresh();
+  const h = decodeURIComponent(location.hash.slice(1)).split("/");
+  if (h.length >= 2) { await select(h[0] + "/" + h[1]); if (h[2]) pickStep(h[2]); }
+})();
+</script>
+</body>
+</html>
