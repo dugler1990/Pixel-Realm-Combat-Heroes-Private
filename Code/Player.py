@@ -337,6 +337,13 @@ class BasePlayer(Entity):
             return True
         return self.inventory.add_item(item)
 
+    def refresh_equipment(self):
+        """A mesh player wears the armour in its body slots (Inventory.worn_pieces); a sprite player: nothing
+        to draw. Called after every inventory change (Inventory.sync_belt_from_waist)."""
+        skin = getattr(self, "mesh_skin", None)
+        if skin is not None:
+            skin.set_pieces(self.inventory.worn_pieces())
+
     def can_pickup(self, item):
         """Non-mutating: would pickup_item() succeed? Gold always fits; other
         items need inventory room. Used by co-op to pre-check a shared pickup."""

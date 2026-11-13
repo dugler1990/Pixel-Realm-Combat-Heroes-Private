@@ -16,5 +16,22 @@
  "display_joints": true,
  "quarter": "Draw the man in Image 1 seen from {view}: a 45 degree three-quarter view, turned toward the {edge} edge of the image. Image 2 is the same man from behind. Exactly the same figure as Images 1 and 2, a toy-like game character with smooth, featureless hips. Same skin, muscles, beard, hair bun, height and pose, head and feet at the same height in the image as in Image 1, full body, orthographic, painting style and white background.",
  "side_config": "tools/painted_map_pipeline/openai.gpt-image-2.json",
- "side_note": "2026-11-13: Leonardo refused the naked side as NSFW twice; gpt-image-2 drew it. Right drawn with --other-side <left> (alone it came out 2.4-3.2 % short)."
+ "side_note": "2026-11-13: Leonardo refused the naked side as NSFW twice; gpt-image-2 drew it. Right drawn with --other-side <left> (alone it came out 2.4-3.2 % short).",
+ "start_equipment": {
+  "wear": [
+   "barb_loincloth_loincloth"
+  ],
+  "pack": [
+   "barb_fullplate_belt",
+   "barb_fullplate_boot_l",
+   "barb_fullplate_boot_r",
+   "barb_fullplate_chest",
+   "barb_fullplate_gauntlet_l",
+   "barb_fullplate_gauntlet_r",
+   "barb_fullplate_pants_l",
+   "barb_fullplate_pants_r",
+   "barb_fullplate_shoulder_l",
+   "barb_fullplate_shoulder_r"
+  ]
+ }
 }

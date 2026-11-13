@@ -102,3 +102,51 @@ class PlayerMesh:
 
     def yaw_deg(self):
         return yaw_for_heading(self.facing_deg, self.forward_deg)
+
+    # --- worn pieces -------------------------------------------------------------------------
+    # A piece (armour slot, loincloth: Graphics/Meshes/<outfit>/<slot>) is a skinned pack on the same skeleton
+    # and clips as the body, in the same model space; each pack has its own pivot (its bottom centre). So a
+    # piece is drawn about the BODY's pivot, at the body's scale, on the body's frame.
+    pieces: dict = {}
+    PIECE_CLEAR_PAD = 0.15        # the body clears depth this much wider: pauldrons stick out of his outline
+
+    def set_pieces(self, names):
+        """The worn pieces, by pack name; packs are loaded once and kept."""
+        from mesh_boss import MeshBoss
+        cache = self.__dict__.setdefault("_piece_cache", {})
+        pieces = {}
+        for name in names:
+            if name not in cache:
+                try:
+                    cache[name] = MeshBoss(name, self.skin.action)
+                except Exception as exc:                     # a missing pack: draw the rest
+                    import logging
+                    logging.getLogger(__name__).warning("piece %r not loaded: %s", name, exc)
+                    cache[name] = None
+            if cache[name] is not None:
+                pieces[name] = cache[name]
+        self.pieces = pieces
+
+    def draw(self, backend, feet, light_dir=(-0.4, -0.5, 0.75), ambient=0.35):
+        """The body, then each worn piece in its depth. False when the backend has no mesh pass."""
+        draw = getattr(backend, "draw_mesh_boss", None)
+        if draw is None:
+            return False
+        from Settings import VIEW_ELEVATION_DEG
+        body = self.skin.pack
+        yaw = self.yaw_deg()
+        scale = self.height_px / max(body.height_units, 1e-6)
+        frame = self.skin.frame_index
+        if not self.pieces:
+            return self.skin.draw(backend, feet, yaw, self.height_px)
+        if not draw(body, frame, feet, yaw, scale, VIEW_ELEVATION_DEG, light_dir, ambient,
+                    clear_pad=self.PIECE_CLEAR_PAD):
+            return False
+        action, step = self.skin.action, int(self.skin.frame)
+        for piece in self.pieces.values():
+            # the body's clip and frame in the clip, looked up in the piece's own ranges (export_outfit.py makes
+            # them from one clips blend, so today they are the same numbers)
+            lo, hi = piece.pack.ranges.get(action, (frame, frame))
+            draw(piece.pack, min(lo + step, hi), feet, yaw, scale, VIEW_ELEVATION_DEG, light_dir, ambient,
+                 pivot=body.pivot, clear_depth=False)
+        return True

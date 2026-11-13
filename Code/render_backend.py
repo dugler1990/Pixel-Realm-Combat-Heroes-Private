@@ -1138,10 +1138,6 @@ class GPUBackend(RenderBackend):
         self._u_skin = {n: u("u_" + n) for n in
                         ("screen_size", "origin", "pivot", "scale", "yaw", "elev",
                          "tex", "light_dir", "ambient", "tint", "bones", "frame")}
-        self._skin_vao = glGenVertexArrays(1)
-        self._skin_vbo = glGenBuffers(1)
-        self._skin_jbo = glGenBuffers(1)
-        self._skin_ebo = glGenBuffers(1)
         self._skin_state = {}
 
     def _skin_pack_state(self, pack):
@@ -1183,24 +1179,27 @@ class GPUBackend(RenderBackend):
         joints = np.ascontiguousarray(np.asarray(pack.joints, dtype=np.uint32))
         idx = np.ascontiguousarray(pack.indices, dtype=np.uint32)
 
-        glBindVertexArray(self._skin_vao)
-        glBindBuffer(GL_ARRAY_BUFFER, self._skin_vbo)
+        # Buffers per pack: a figure draws its body and every worn piece each frame, and co-op draws
+        # several players; one shared buffer would hold only the last pack uploaded.
+        vao, vbo, jbo, ebo = glGenVertexArrays(1), glGenBuffers(1), glGenBuffers(1), glGenBuffers(1)
+        glBindVertexArray(vao)
+        glBindBuffer(GL_ARRAY_BUFFER, vbo)
         glBufferData(GL_ARRAY_BUFFER, interleaved.nbytes, interleaved, GL_STATIC_DRAW)
         stride = 12 * 4
         for loc, size, off in ((0, 3, 0), (1, 3, 12), (2, 2, 24), (3, 4, 32)):
             glEnableVertexAttribArray(loc)
             glVertexAttribPointer(loc, size, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(off))
-        glBindBuffer(GL_ARRAY_BUFFER, self._skin_jbo)
+        glBindBuffer(GL_ARRAY_BUFFER, jbo)
         glBufferData(GL_ARRAY_BUFFER, joints.nbytes, joints, GL_STATIC_DRAW)
         glEnableVertexAttribArray(4)
         glVertexAttribIPointer(4, 4, GL_UNSIGNED_INT, 16, ctypes.c_void_p(0))
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self._skin_ebo)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo)
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx.nbytes, idx, GL_STATIC_DRAW)
         glBindVertexArray(0)
         glBindBuffer(GL_ARRAY_BUFFER, 0)
 
         st = self._skin_state[pack.name] = {
-            "tex": tex, "bones": bones_tex, "n_idx": int(idx.size),
+            "tex": tex, "bones": bones_tex, "n_idx": int(idx.size), "vao": vao, "ebo": ebo,
         }
         return st
 
@@ -1232,21 +1231,32 @@ class GPUBackend(RenderBackend):
         y1 = min(self._height, y1)
         return x0, y0, max(0, x1 - x0), max(0, y1 - y0)
 
-    def _scissor_depth_clear(self, pack, screen_pos, facing_deg, scale, elevation_deg):
+    def _scissor_depth_clear(self, pack, screen_pos, facing_deg, scale, elevation_deg, pad=0.0):
+        """Clear the depth under the mesh's screen box. `pad` grows the box by that share of its size on
+        every side: a figure that wears pieces clears once, wide enough for what sticks out of the body."""
         x, y_top, w, h = self._mesh_screen_rect(pack, screen_pos, facing_deg, scale, elevation_deg)
         if w <= 0 or h <= 0:
             return
+        if pad > 0:
+            px, py = round(w * pad), round(h * pad)
+            x0, y0 = max(0, x - px), max(0, y_top - py)
+            x1, y1 = min(self._width, x + w + px), min(self._height, y_top + h + py)
+            x, y_top, w, h = x0, y0, x1 - x0, y1 - y0
         glEnable(GL_SCISSOR_TEST)
         glScissor(x, self._height - (y_top + h), w, h)
         glClear(GL_DEPTH_BUFFER_BIT)
         glDisable(GL_SCISSOR_TEST)
 
     def draw_mesh_boss(self, pack, frame_index, screen_pos, facing_deg, scale,
-                       elevation_deg, light_dir, ambient, tint=(1.0, 1.0, 1.0, 1.0)):
+                       elevation_deg, light_dir, ambient, tint=(1.0, 1.0, 1.0, 1.0),
+                       pivot=None, clear_depth=True, clear_pad=0.0):
+        """`pivot`: draw about another pack's pivot (a worn piece about its wearer's: the packs share model
+        space, each has its own pivot). `clear_depth=False`: keep the depth already drawn (the wearer's), so
+        body and pieces hide each other; the wearer clears once with `clear_pad`."""
         if getattr(pack, "skinned", False):
             return self._draw_skinned_boss(
                 pack, frame_index, screen_pos, facing_deg, scale,
-                elevation_deg, light_dir, ambient, tint)
+                elevation_deg, light_dir, ambient, tint, pivot, clear_depth, clear_pad)
         if getattr(self, "_mesh_shader", None) is None:
             self._init_mesh_pipeline()
         st = self._mesh_pack_state(pack)
@@ -1297,16 +1307,16 @@ class GPUBackend(RenderBackend):
         return True
 
     def _draw_skinned_boss(self, pack, frame_index, screen_pos, facing_deg, scale,
-                           elevation_deg, light_dir, ambient, tint):
+                           elevation_deg, light_dir, ambient, tint, pivot=None, clear_depth=True, clear_pad=0.0):
         if self._mesh_skin_shader is None:
             self._init_skin_pipeline()
         st = self._skin_pack_state(pack)
         self._flush_batch()
         glUseProgram(self._mesh_skin_shader)
-        glBindVertexArray(self._skin_vao)
+        glBindVertexArray(st["vao"])
         glUniform2f(self._u_skin["screen_size"], float(self._width), float(self._height))
         glUniform2f(self._u_skin["origin"], float(screen_pos[0]), float(screen_pos[1]))
-        glUniform3f(self._u_skin["pivot"], *[float(v) for v in pack.pivot])
+        glUniform3f(self._u_skin["pivot"], *[float(v) for v in (pack.pivot if pivot is None else pivot)])
         glUniform1f(self._u_skin["scale"], float(scale))
         glUniform1f(self._u_skin["yaw"], math.radians(float(facing_deg)))
         glUniform1f(self._u_skin["elev"], math.radians(float(elevation_deg)))
@@ -1323,8 +1333,9 @@ class GPUBackend(RenderBackend):
         glActiveTexture(GL_TEXTURE0)
         glEnable(GL_DEPTH_TEST)
         glDepthFunc(GL_LEQUAL)
-        self._scissor_depth_clear(pack, screen_pos, facing_deg, scale, elevation_deg)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self._skin_ebo)
+        if clear_depth:
+            self._scissor_depth_clear(pack, screen_pos, facing_deg, scale, elevation_deg, clear_pad)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, st["ebo"])
         if os.environ.get("PRCH_MESH_SKIP_DRAW", "0") == "0":
             glDrawElements(GL_TRIANGLES, st["n_idx"], GL_UNSIGNED_INT, None)
         glDisable(GL_DEPTH_TEST)

@@ -8,7 +8,13 @@ _player_item_log = get_debug_logger("player_item")
 # Max stack size per slot for stackable items (consumables).
 MAX_STACK_PER_ITEM = 99
 
-BODY_SLOT_COUNT = 9
+# The figure's slots, in order (DOLL_SLOTS places them). Waist last: waist_slot_index is the last body slot.
+# Armour slots take only armour made for them (an item with effect_type "armour_equip" and effect.slot);
+# a mesh player wears what is in them (Player.refresh_equipment -> PlayerMesh.set_pieces).
+BODY_SLOTS = ("helmet", "armor", "shoulder", "shoulder", "arm", "arm", "weapon", "weapon",
+              "legs", "legs", "boots", "boots", "waist")
+ARMOUR_SLOTS = {"helmet", "armor", "shoulder", "arm", "legs", "boots"}
+BODY_SLOT_COUNT = len(BODY_SLOTS)
 BACKPACK_ROWS = 4
 BACKPACK_COLS = 3
 BACKPACK_COUNT = BACKPACK_ROWS * BACKPACK_COLS
@@ -27,6 +33,20 @@ def _can_place_on_belt(item):
         getattr(item, "belt_allowed", False)
         and getattr(item, "effect_type", None) == "consumable"
     )
+
+
+def armour_slot(item):
+    """The body slot an armour piece goes in ("armor", "shoulder", ... "waist"), else None."""
+    if item is None or getattr(item, "effect_type", None) != "armour_equip":
+        return None
+    return (getattr(item, "effect", None) or {}).get("slot")
+
+
+def mesh_piece(item):
+    """The mesh pack a worn piece draws (Graphics/Meshes/<outfit>/<slot>), else None."""
+    if item is None or getattr(item, "effect_type", None) != "armour_equip":
+        return None
+    return (getattr(item, "effect", None) or {}).get("mesh_piece")
 
 
 class InventorySlot:
@@ -83,22 +103,11 @@ class Inventory:
         self.input_manager = input_manager
         self.player = player
 
-        base_x, base_y = 50, 50
         slot_width, slot_height = 60, 60
 
-        self.slots.append(InventorySlot(pygame.Rect(base_x + 70, base_y, 50, 50), "helmet"))
-        self.slots.append(InventorySlot(pygame.Rect(base_x, base_y + 60, 180, 120), "armor"))
-
-        arm_width, arm_height = 20, 140
-        self.slots.append(InventorySlot(pygame.Rect(base_x - 25, base_y + 100, arm_width, arm_height), "arm", angle=30))
-        self.slots.append(InventorySlot(pygame.Rect(base_x + 185, base_y + 100, arm_width, arm_height), "arm", angle=-30))
-
-        self.slots.append(InventorySlot(pygame.Rect(base_x - 10, base_y + 210, 45, 135), "weapon"))
-        self.slots.append(InventorySlot(pygame.Rect(base_x + 145, base_y + 210, 45, 135), "weapon"))
-
-        self.slots.append(InventorySlot(pygame.Rect(base_x - 20, base_y + 355, 80, 40), "boots"))
-        self.slots.append(InventorySlot(pygame.Rect(base_x + 120, base_y + 355, 80, 40), "boots"))
-        self.slots.append(InventorySlot(pygame.Rect(base_x + 70, base_y + 300, 50, 48), "waist"))
+        # Body slots: their rects are set by _layout from DOLL_SLOTS each time the window draws.
+        for slot_type in BODY_SLOTS:
+            self.slots.append(InventorySlot(pygame.Rect(0, 0, 50, 50), slot_type))
 
         self.body_start_index = 0
         self.waist_slot_index = self.body_start_index + BODY_SLOT_COUNT - 1
@@ -143,13 +152,17 @@ class Inventory:
     def _belt_slot_locked(self, belt_idx):
         return belt_idx >= getattr(self.player, "belt_capacity", 0)
 
-    DOLL_SLOTS = (
+    DOLL_SLOTS = (                 # (x, y, w, h) as shares of the doll picture, in BODY_SLOTS order
         (0.37, 0.02, 0.26, 0.15),  # helmet
-        (0.35, 0.21, 0.30, 0.17),  # armour
-        (0.00, 0.47, 0.15, 0.09),  # arm, left
-        (0.85, 0.47, 0.15, 0.09),  # arm, right
+        (0.35, 0.21, 0.30, 0.17),  # armour (chest)
+        (0.12, 0.19, 0.19, 0.08),  # shoulder, left
+        (0.69, 0.19, 0.19, 0.08),  # shoulder, right
+        (0.00, 0.47, 0.15, 0.09),  # arm (gauntlet), left
+        (0.85, 0.47, 0.15, 0.09),  # arm (gauntlet), right
         (0.03, 0.58, 0.14, 0.19),  # weapon, left
         (0.83, 0.58, 0.14, 0.19),  # weapon, right
+        (0.27, 0.62, 0.19, 0.14),  # legs, left
+        (0.54, 0.62, 0.19, 0.14),  # legs, right
         (0.22, 0.90, 0.23, 0.09),  # boots, left
         (0.58, 0.90, 0.23, 0.09),  # boots, right
         (0.35, 0.395, 0.30, 0.065),  # waist
@@ -322,7 +335,7 @@ class Inventory:
         if (
             it is not None
             and slot.quantity > 0
-            and getattr(it, "effect_type", None) == "belt_equip"
+            and (getattr(it, "effect_type", None) == "belt_equip" or armour_slot(it) == "waist")
         ):
             eff = getattr(it, "effect", None) or {}
             n = int(eff.get("belt_slots", 1))
@@ -335,6 +348,30 @@ class Inventory:
                 self.dump_belt_slots_to_backpack()
         if not self.player.has_belt and self.focus_region == FOCUS_BELT:
             self.focus_region = FOCUS_BACKPACK
+        # Every change to the slots ends here: the mesh player puts on / takes off what is worn.
+        refresh = getattr(self.player, "refresh_equipment", None)
+        if callable(refresh):
+            refresh()
+
+    def worn_pieces(self):
+        """The mesh packs of the armour in the body slots (helmet ... waist), in slot order."""
+        names = []
+        for slot in self.slots[self.body_start_index:self.body_start_index + BODY_SLOT_COUNT]:
+            name = mesh_piece(slot.item) if slot.quantity > 0 else None
+            if name and name not in names:
+                names.append(name)
+        return names
+
+    def wear(self, item):
+        """Put an armour piece (or a belt, in the waist) in the first empty body slot made for it (start
+        equipment). False if none."""
+        want = "waist" if getattr(item, "effect_type", None) == "belt_equip" else armour_slot(item)
+        for slot in self.slots[self.body_start_index:self.body_start_index + BODY_SLOT_COUNT]:
+            if slot.item is None and want == slot.slot_type:
+                slot.item, slot.quantity = item, 1
+                self.sync_belt_from_waist()
+                return True
+        return False
 
     def dump_belt_slots_to_backpack(self):
         for i in range(BELT_SLOT_COUNT):
@@ -353,13 +390,18 @@ class Inventory:
                 slot.quantity = 0
 
     def _can_place_in_slot(self, slot, item):
+        piece = armour_slot(item)
         if slot.slot_type == "waist":
-            return getattr(item, "effect_type", None) == "belt_equip"
+            return getattr(item, "effect_type", None) == "belt_equip" or piece == "waist"
         if slot.slot_type == "belt":
             bidx = self.slots.index(slot) - self.belt_start_index
             if self._belt_slot_locked(bidx):
                 return False
             return _can_place_on_belt(item)
+        if slot.slot_type in ARMOUR_SLOTS:
+            return piece == slot.slot_type
+        if slot.slot_type == "weapon":
+            return piece is None
         return True
 
     def _place_or_swap(self, slot):

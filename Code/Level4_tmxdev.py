@@ -1686,6 +1686,8 @@ class Level4:
             return
         inv = self.player.inventory
         wslot = inv.slots[inv.waist_slot_index]
+        if wslot.item is None and self._seed_mesh_equipment():
+            return
         if wslot.item is not None:
             inv.sync_belt_from_waist()
             return
@@ -1694,6 +1696,30 @@ class Level4:
         wslot.item = belt_item
         wslot.quantity = 1
         inv.sync_belt_from_waist()
+
+    def _seed_mesh_equipment(self):
+        """A mesh hero's start equipment, from its pack's equipment.json: {"wear": [item ids put on (the
+        loincloth: the waist slot)], "pack": [item ids into the backpack]}. True if the pack has one."""
+        skin = getattr(self.player, "mesh_skin", None)
+        if skin is None:
+            return False
+        path = os.path.join(skin.skin.pack.root, "equipment.json")
+        if not os.path.isfile(path):
+            return False
+        with open(path, encoding="utf-8") as fh:
+            start = json.load(fh)
+        inv = self.player.inventory
+        for key in ("wear", "pack"):
+            for item_id in start.get(key, []):
+                cfg = self.item_spawner.item_mapping.get(item_id)
+                if cfg is None:
+                    _game_flow_log.warning("equipment.json: no item %r", item_id)
+                    continue
+                item = self.item_spawner.create_item(copy.deepcopy(cfg), [0, 0])
+                if not (key == "wear" and inv.wear(item)):
+                    inv.add_item(item)
+        inv.sync_belt_from_waist()
+        return True
 
     def toggle_inventory(self):
         self.game_paused = not self.game_paused
