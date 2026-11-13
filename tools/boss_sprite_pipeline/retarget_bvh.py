@@ -335,6 +335,16 @@ TARGETS = {
         roles="generated/bosses/anunaki/rig/anun3_roles.json",
         bind_match=False, arm_elev_cap=90.0, digitigrade=False,
     ),
+    # The barb (explode v2 armour tests, 2026-11-02): UniRig with literal roles from anun_roles.py,
+    # like the anunaki, so use --source anunaki. Painted, bone-heat rig; a human build with a real
+    # armpit, so the arm cap stays open.
+    "barb": dict(
+        # barb_final with its 752 neutral_bone (loincloth) vertices rehomed (explode2/fix_neutral_bone.py):
+        # they streaked behind him once the root travels (run, backstep)
+        rig="generated/bosses/barb/rigfix/barb_final_nb.glb",
+        roles="generated/bosses/barb/gear_test/barb_roles.json",
+        bind_match=False, arm_elev_cap=90.0, digitigrade=False,
+    ),
 }
 
 PAIRS = {

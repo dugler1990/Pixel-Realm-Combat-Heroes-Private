@@ -1,6 +1,9 @@
 {
  "_about": "The barb in full plate (gear_test/in/barb_fullplate.png). 8 body views + 12 close-ups, chosen from the bare barb's patch report (2026-11-02): one view per hand (the second added 0.13-0.19 % of the texture), no side-face views (both failed to align on the barb), no separate foot views (small at sprite scale; the body views paint them), pelvis_back dropped (legs_back frames the hips from behind too), no 1024 head views (face_front and head_back replace them).",
- "_res": "part_res 1024: the 4096 texture holds at most ~260 px across the face, 300-400 for hands/head, ~1000 for the legs (barb UV-id measure, 2026-11-02); 2880 was 3-11x more than the model keeps. quality: set after quality_test.py. regions.arm: the arm frame cut the pauldron tops.",
+ "_res": "part_res 1024: the 4096 texture holds at most ~260 px across the face, 300-400 for hands/head, ~1000 for the legs (barb UV-id measure, 2026-11-02); 2880 was 3-11x more than the model keeps. regions.arm: the arm frame cut the pauldron tops.",
+ "_model": "Leonardo nano-banana-2 (quality_test.py on the barb's face, 2026-11-02): $0.039 and silhouette match 1.00, vs gpt-image-2 medium 1024 $0.099 / 0.96, high 2880 $0.758 / 0.93, gpt-image-1-mini $0.023 / 0.72 (off-style). quality applies only when provider is openai.",
+ "provider": "leonardo",
+ "model": "nano-banana-2",
  "part_res": [
   1024,
   1024
