@@ -33,6 +33,24 @@ def _job_for_attempt(paths: dict[str, Path], attempt: int | None) -> tuple[Path,
     return job_path, read_json(job_path)
 
 
+_PLACEMENT_HASHES = ("generation_mask", "locked_mask", "locked_pixels")
+
+
+def _same_padding(job: dict[str, Any], level_manifest: dict[str, Any]) -> bool:
+    """Whether an older job still places against the level as it is now.
+
+    The revision also moves when only the soft base picture changes -- a refine sends a placed
+    image as the base, and the next normal run sends the plain one back -- and that leaves every
+    earlier attempt refused although its padding, padding mask and shape are byte-identical.
+    Those three are all that placing a generation uses, so they decide it.
+    """
+    current = level_manifest.get("hashes", {})
+    return all(
+        job.get(f"{name}_hash") and job.get(f"{name}_hash") == current.get(name)
+        for name in _PLACEMENT_HASHES
+    )
+
+
 def _select_padding(spec, locked_mask):
     """Whether to paste the neighbours' strips at all.
 
@@ -165,7 +183,9 @@ def ingest_result(
     job_path, job = _job_for_attempt(paths, attempt)
     if job["level_id"] != level_id:
         raise ValueError("job level ID does not match ingestion level")
-    if int(job["context_revision"]) != int(level_manifest["context_revision"]):
+    if int(job["context_revision"]) != int(level_manifest["context_revision"]) and not _same_padding(
+        job, level_manifest
+    ):
         raise ValueError("job context is stale; refresh and create a new job")
     if sha256_file(job_path.parent / "input.png") != job["input_hash"]:
         raise ValueError("job input hash no longer matches its manifest")

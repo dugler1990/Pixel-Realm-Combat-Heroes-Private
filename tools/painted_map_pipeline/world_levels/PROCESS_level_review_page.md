@@ -22,7 +22,8 @@
 
 ## Known errors
 - Page and `review_run` on the same run at once: both write run.json / job.json. Use one at a time.
-- A re-place after a neighbour was accepted is refused: "job context is stale". Generate a new attempt.
+- "job context is stale": the attempt's padding, padding mask or shape differs from the level's now (a neighbour accepted since). Generate a new attempt.
+  - Was also refused when only the soft base changed: a refine (r) sends a placed image as base, the next run the plain one, each bumping `context_revision`. Level 06 attempt 1 (rev 6, level rev 8) has byte-identical padding / mask / shape hashes. Fix: `_same_padding` in result_ingest lets it through when those three hashes match the manifest. Check: on a copy, attempt 1 placed; feather 24 vs 0 changed 242,067 px.
 - "Feather does nothing": it only applies on Re-place and only shows in the Result view (Align shows the raw). Fix: changing feather / a toggle turns Re-place amber; a re-place switches to Result. Check: feather 24 vs 0 on level 06 attempt 16 changed 240,696 px.
 - One offset only fixes a pure shift. If the model also scaled the picture, no single offset lines up both sides.
 

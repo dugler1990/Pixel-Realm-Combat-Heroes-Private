@@ -376,3 +376,27 @@ def test_with_the_warp_on_the_offset_does_not_move_the_placement(tmp_path):
     moved = ingest_result(root, "02", job.input_path, attempt=job.attempt, fit_to_mask=True,
                           padding_offset=(1, -1))
     assert sha256_file(Path(plain["placement_path"])) == sha256_file(Path(moved["placement_path"]))
+
+
+def _bump_revision(root, level_id, **hashes):
+    """A refresh as the refine does one: the revision moves; ``hashes`` overrides the rest."""
+    path = level_paths(root, level_id)["manifest"]
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["context_revision"] += 1
+    manifest["hashes"]["generation_input"] = "a different soft base"
+    manifest["hashes"].update(hashes)
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def test_an_older_attempt_with_the_same_padding_can_still_be_placed(tmp_path):
+    root, job = _padded_job(tmp_path)
+    _bump_revision(root, "02")
+    result = ingest_result(root, "02", job.input_path, attempt=job.attempt, feather=4)
+    assert Path(result["placement_path"]).is_file()
+
+
+def test_an_older_attempt_whose_padding_changed_is_refused(tmp_path):
+    root, job = _padded_job(tmp_path)
+    _bump_revision(root, "02", locked_pixels="a neighbour accepted since")
+    with pytest.raises(ValueError, match="stale"):
+        ingest_result(root, "02", job.input_path, attempt=job.attempt)
