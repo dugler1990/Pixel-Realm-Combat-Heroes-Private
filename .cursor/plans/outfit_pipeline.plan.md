@@ -25,7 +25,7 @@ Reviews (junior + senior, 2026-11-13) folded in below.
   + view-gate's shape_note). Painted-map tests: the same 7 fail as on main.
 - Check: every script the explode2 Method names exists on the branch (12 of 12).
 
-## 1. Outfit files
+## 1. Outfit files — done 2026-11-13 (`a6b7c758`)
 `tools/boss_sprite_pipeline/outfits/<character>/<outfit>.json`, read by every step:
 - `kind`: `body` | `armour` | `cut`.
 - `concept`: the image the front is drawn on (fullplate: `gear_test/body_sil/body_front_textured.png`).
@@ -40,14 +40,14 @@ Changes: `view_gate.py --outfit`, `explode_label.py --prompt-map`, the loincloth
 Check: `view_gate front --outfit fullplate --dry-run --retry rb` prints v9's `front_attempt_02_prompt.txt`
 exactly (diff), with no paid call.
 
-## 2. Gates without the terminal
+## 2. Gates without the terminal — done
 `view_gate ... --no-ask` draws once, scores, appends to `gate_<view>.json` (status `pending`), exits.
 `--retry r|r1|rb|"r <why> @img"`: the next draw with the same choices as the terminal.
 `--accept N`: writes the cut-outs as the terminal accept does (a back accept also writes `front.png`).
 Paint: no accept loop; the driver stops after paint, shows `paint/result/after_0_body_0.png`, and you
 continue or rerun with `--redo <view>`. TRELLIS: stops with both models; `--pick front_only|front_back`.
 
-## 3. Pod steps: push / run / pull
+## 3. Pod steps: push / run / pull — written, untested until a pod
 `gpu_box/pod.py <step> push|run|pull --host <ip> --port <port>` (or `POD_HOST` / `POD_PORT`), key `ppp`.
 - `trellis`: `gpu_box/trellis_outfit.sh` (from `pod_chains/v9_chain.sh`): install, then
   `trellis2_mv_run.py` twice → `front_only_from_front.glb`, `front_back_from_front.glb`; `TRELLIS_OK`.
@@ -57,20 +57,20 @@ continue or rerun with `--redo <view>`. TRELLIS: stops with both models; `--pick
 - `holopart`: `holopart_pod.sh`, `holopart_patch.py`, `input_parts.glb`; `HP_READY`, `HP_DONE`.
 `pull` ends with **stop the pod** on its own line. You start and stop pods; Claude never does.
 
-## 4. Run state
+## 4. Run state — done (backfill checked on v9)
 `generated/bosses/<character>/outfits/<outfit>/run.json`: per step status, inputs, outputs, picked /
 accepted attempt, time, cost. The driver records each step; the next step reads its inputs from it.
 Cost: the image calls' own usage where the response gives it, else per-call list price; pod: minutes ×
 the rate you pass (`--pod-rate`). `--backfill` writes run.json from the outfit's `existing` (v9).
 Glue folded in: `cams.json` copied into the cut folder by the merge step.
 
-## 5. Game export (last step)
+## 5. Game export (last step) — slot packs checked on v9; body export untested until naked is painted
 `export_outfit.py`: body → `swap_body.py` onto the clips blend → `export_mesh_runtime.py` →
 `bake_body_capsules.py` → `clips.json`, prints the `PlayerSelectionDict.json` entry (pasting it is
 part of the proof). Armour / cut → one pack per slot (`slot_packs.py`: rigid weights per slot on the
 clips rig). The game can't draw slot packs yet: check = each pack loads (`PlayerMesh`) + the sheet.
 
-## 6. Driver
+## 6. Driver — done
 `outfit.py <character> <outfit> [--from S] [--only S] [--status] [--backfill] [--host --port]`:
 - body: `front, back, trellis, skeleton, paint, export`
 - armour: `front, back, trellis, skeleton, paint, views, sam3, cut, holopart, merge, worn, slots, sheet, export`
