@@ -1,0 +1,73 @@
+{
+ "_about": "The v9 full plate (2026-11-09..12): the armour drawn on his body render, front + back, cut into slots. Paths are relative to the data root (OUTFIT_DATA_ROOT, the Boss folder). PROCESS_outfit.md.",
+ "character": "barb",
+ "kind": "armour",
+ "concept": "generated/bosses/barb/gear_test/body_sil/body_front_textured.png",
+ "rig_fit": "generated/bosses/barb/rigfix/barb_final.glb",
+ "rig_game": "generated/bosses/barb/rigfix/barb_final_nb.glb",
+ "roles": "generated/bosses/barb/gear_test/barb_roles.json",
+ "greedy_dirs": "generated/bosses/barb/explode2/fullplate/greedy_dirs_f75.json",
+ "views": 32,
+ "paint_look": "tools/boss_sprite_pipeline/repaint/looks/barb_fullplate.json",
+ "clips_blend": "generated/bosses/barb/anim_test/retarget_player/player.blend",
+ "pack": "barb_fullplate",
+ "front": "Dress the man in Image 1 in a full suit of steel plate armour worn over a thick padded gambeson. Keep his pose, proportions, head, beard, framing, camera and white background identical. The armour sits over his body: every plate stands clear of the skin by about a finger's width, so the armoured outline is larger than his bare outline everywhere, including shoulders, arms, chest, waist, hips, legs and feet. If unsure, make the armour slightly too big rather than too tight. No skin visible except the head. Image 2 is the outline his armour must cover: every part of the black shape is inside the armour; the armour may reach past it.",
+ "back": "Draw the man in Image 1 seen from behind. Image 2 is his exact outline from behind: fill it exactly, with the same pose, size and position, nothing outside it and no gaps. Show his back, hair bun, backplate, the backs of his arms, legs and heels. Same armour, white background.",
+ "front_check": "cover",
+ "margin": 0.03,
+ "display_joints": true,
+ "retry_bigger": "Make the armour realistically big enough to cover his large chest, shoulders and arms: thick plate standing well clear of his muscles everywhere, never tight to the body.",
+ "holopart": true,
+ "sam": {
+  "prompts": "tools/boss_sprite_pipeline/explode2/prompts_v2.json"
+ },
+ "existing": {
+  "front": {
+   "gate": "generated/bosses/barb/gear_test/view_gate_v9/gate_front.json",
+   "accepted": 2,
+   "draw": "generated/bosses/barb/gear_test/view_gate_v9/front_attempt_02.png",
+   "cutout": "generated/bosses/barb/gear_test/view_gate_v9/front.png"
+  },
+  "back": {
+   "gate": "generated/bosses/barb/gear_test/view_gate_v9/gate_back.json",
+   "accepted": 1,
+   "cutout": "generated/bosses/barb/gear_test/view_gate_v9/back.png"
+  },
+  "trellis": {
+   "front_only": "generated/bosses/barb/explode2/mv_test/v9/v9_front_from_front.glb",
+   "front_back": "generated/bosses/barb/explode2/mv_test/v9/v9_fb_from_front.glb",
+   "picked": "front_back"
+  },
+  "skeleton": {
+   "rigged": "generated/bosses/barb/explode2/v9_fb/fullplate_rigged.glb"
+  },
+  "paint": {
+   "painted": "generated/bosses/barb/explode2/v9_fb/paint/result/fullplate_rigged_painted.glb",
+   "check": "generated/bosses/barb/explode2/v9_fb/paint/result/after_0_body_0.png"
+  },
+  "views": {
+   "views": "generated/bosses/barb/explode2/v9_fb/views"
+  },
+  "sam3": {
+   "masks": "generated/bosses/barb/explode2/v9_fb/views/masks"
+  },
+  "cut": {
+   "cut": "generated/bosses/barb/explode2/v9_fb/cut"
+  },
+  "holopart": {
+   "output": "generated/bosses/barb/explode2/v9_fb/holopart/output.glb"
+  },
+  "merge": {
+   "shells": "generated/bosses/barb/explode2/v9_fb/cut/shells_parts.glb"
+  },
+  "worn": {
+   "worn": "generated/bosses/barb/explode2/v9_fb/worn_shells/POSE_COMPARE_tex.png"
+  },
+  "slots": {
+   "slots": "generated/bosses/barb/explode2/v9_fb/slots/slots_parts.glb"
+  },
+  "sheet": {
+   "sheet": "generated/bosses/barb/explode2/v9_fb/slots/SLOTS_SHEET.png"
+  }
+ }
+}

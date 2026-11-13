@@ -1,0 +1,16 @@
+{
+ "_about": "The barb without his loincloth: a new body drawn like the armour (full redraw of the front on his body render, then the back), TRELLIS, his skeleton, paint. The loincloth comes back as a piece (loincloth.json).",
+ "character": "barb",
+ "kind": "body",
+ "concept": "generated/bosses/barb/gear_test/body_sil/body_front_textured.png",
+ "rig_fit": "generated/bosses/barb/rigfix/barb_final.glb",
+ "rig_game": "generated/bosses/barb/rigfix/barb_final_nb.glb",
+ "roles": "generated/bosses/barb/gear_test/barb_roles.json",
+ "paint_look": "tools/boss_sprite_pipeline/repaint/looks/barb_naked.json",
+ "clips_blend": "generated/bosses/barb/anim_test/retarget_player/player.blend",
+ "pack": "barb_naked",
+ "front": "Draw the man in Image 1 exactly as he is, but without the loincloth and its belt: bare hips with a smooth, featureless, doll-like groin and no genitals, like a toy figure (a family-friendly game character). Keep his pose, proportions, muscles, skin, head, beard, hair, painting style, framing, camera and white background identical. Image 2 is his exact outline: fill it exactly, nothing outside it and no gaps.",
+ "back": "Draw the man in Image 1 seen from behind. Image 2 is his exact outline from behind: fill it exactly, with the same pose, size and position, nothing outside it and no gaps. Show his back, hair bun, the backs of his arms, legs and heels. The same man with no clothing: smooth, featureless, doll-like hips like a toy figure. Same skin, painting style and white background.",
+ "front_check": "match",
+ "display_joints": true
+}

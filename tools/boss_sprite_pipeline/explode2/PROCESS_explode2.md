@@ -1004,7 +1004,7 @@ z +0.25 % h, ×1.015). By region vs the old front: thigh 22.0 (38.1), foot 17.1 
 arm 52.7 (20.5), forearm 50.4 (5.5), hand 56.9 (43.7). Chunkier legs helped; the arms got much worse.
 
 **v9 set on TRELLIS (2026-11-09, pod 5 A40, install 15:17-15:28, 3 runs to 15:43):** views from `view_gate_v9`
-(front attempt 02 drawn on his body render with `--display-joints --margin 0.01`, back 01, left side 01, right = left
+(front attempt 02 drawn on his body render `gear_test/body_sil/body_front_textured.png` with `--display-joints --margin 0.03`; 0.03 checked 2026-11-13: the outline matches dilation 29 px of 973 exactly, the 0.01 written here before was wrong, back 01, left side 01, right = left
 flipped), cut out → `mv_test/v9/`. OUT % as aligned → rigid best fit: front only 32.5 → 24.4 (torso 44.9, front-
 facing 41.4); front + back 28.8 → 24.8; front + back + both sides 48.1 → 43.5 (forearms 68.7, hands 83.0).
 Old concept front for reference: 30.8 → 23.6. Sides made it much worse.

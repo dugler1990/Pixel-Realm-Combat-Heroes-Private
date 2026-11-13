@@ -61,7 +61,7 @@ def piece_weights(part, P, Wa, roles, gnames, h, pauldron_arm=PAULDRON_ARM):
     elif base == "pauldron":                                     # rides mostly with the upper arm, as strapped plate
         out[:, gi(arm_r["shoulder"])] = 1 - pauldron_arm         # does (halfway left the deltoid bare with the arms
         out[:, gi(arm_r["elbow"])] = pauldron_arm                # up / swung, 2026-11-04)
-    elif base == "skirt":                                        # hips at the waist, up to 50 % thigh at the hem
+    elif base in ("skirt", "loincloth"):                          # hips at the waist, up to 50 % thigh at the hem
         z = P[:, 2]
         t = 0.5 * np.clip((z.max() - z) / max(np.ptp(z), 1e-9), 0, 1)
         sl = 1 / (1 + np.exp(-P[:, 0] / (0.02 * h)))               # +x = his left
@@ -88,6 +88,7 @@ def skin_bones(part, roles):
                  + [roles["arm_l"]["shoulder"], roles["arm_r"]["shoulder"]],
         "belt": [roles["root"], roles["spine"]],
         "skirt": [roles["root"], roles["leg_l"]["hip"], roles["leg_r"]["hip"]],
+        "loincloth": [roles["root"], roles["leg_l"]["hip"], roles["leg_r"]["hip"]],
         "head": [roles["neck"], roles["head"]],
         "pauldron": [a["shoulder"], a["elbow"]] if a else [],
         "arm": [a["elbow"], a["wrist"]] if a else [],

@@ -29,10 +29,12 @@ TILE = 300
 if SLOTS:     # armour_slots.py
     RIDES = {"chest": "chest bone, 100 % (rigid)", "belt": "hips (root), 100 % (rigid)",
              "shoulder": "collarbone or upper arm (each vertex one)", "gauntlet": "forearm or hand (each vertex one)",
-             "pants": "thigh, 100 % (rigid)", "boot": "shin, foot or toes (each vertex one)"}
+             "pants": "thigh, 100 % (rigid)", "boot": "shin, foot or toes (each vertex one)",
+             "loincloth": "hips, up to 50 % thighs at the hem"}
     COVERS = {"chest": "chest, belly, back, collar", "belt": "belt + hip plates",
               "shoulder": "pauldron + upper arm, down to the elbow", "gauntlet": "elbow down: forearm + hand",
-              "pants": "thigh, down to the knee", "boot": "knee down: greave + sabaton"}
+              "pants": "thigh, down to the knee", "boot": "knee down: greave + sabaton",
+              "loincloth": "loincloth"}
 else:         # explode_label.py cut pieces
     RIDES = {"torso": "chest bone, 100 % (rigid)", "belt": "hips (root), 100 % (rigid)",
              "pauldron": "75 % upper arm, 25 % collarbone", "arm": "upper arm or forearm (each vertex one)",
@@ -118,7 +120,8 @@ def shot(o, yaw, path, elev=12):
     return Image.open(path).convert("RGB")
 
 
-order = (["chest", "belt", "shoulder_l", "shoulder_r", "gauntlet_l", "gauntlet_r", "pants_l", "pants_r", "boot_l", "boot_r"]
+order = (["chest", "belt", "loincloth", "shoulder_l", "shoulder_r", "gauntlet_l", "gauntlet_r", "pants_l", "pants_r",
+          "boot_l", "boot_r"]
          if SLOTS else ["torso", "belt", "pauldron_l", "pauldron_r", "arm_l", "arm_r", "gauntlet_l", "gauntlet_r",
                         "leg_l", "leg_r", "boot_l", "boot_r", "head"])
 order = [n for n in order if n in parts] + sorted(set(parts) - set(order))

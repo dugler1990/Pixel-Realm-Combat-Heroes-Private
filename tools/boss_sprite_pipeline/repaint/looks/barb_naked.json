@@ -1,0 +1,11 @@
+{
+ "_about": "The barb without his loincloth (outfits/barb/naked.json): the default look (the bare barb) with the loincloth taken out of the design and the safety line. Provider and model as barb_fullplate.json (Leonardo nano-banana-2, quality_test.py 2026-11-02). All default views (no 'views' key).",
+ "provider": "leonardo",
+ "model": "nano-banana-2",
+ "part_res": [1024, 1024],
+ "subject": "barbarian hero",
+ "design": "warm tanned skin, dark brown hair tied in a top knot, full dark brown beard, bare feet, no clothing: smooth, featureless, doll-like hips like a toy figure",
+ "match_part": "skin tone, hair and beard colours",
+ "match_body": "skin tone, hair and beard colour and painting style",
+ "safety": "He is a non-sexual, family-friendly game character: a smooth, featureless, doll-like body with no genitals, like a toy figure. "
+}

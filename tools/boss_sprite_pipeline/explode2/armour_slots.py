@@ -13,7 +13,9 @@ limb piece takes the side of the joint whose bones weigh most on the body skin n
     gauntlet_*  arm, gauntlet             forearm + hand side               forearm, hand
     pants_*     leg, boot                 thigh side of the knee            thigh
     boot_*      leg, boot                 shin + foot + toes side           shin, foot, toes
+    loincloth   loincloth                 -                                 hips, up to 50 % thighs at the hem
     (head)      head                      dropped: not armour; the helmet slot needs a helmet model
+    (body)      body                      dropped: what is left of a body a piece was cut from
 
 Then loose bits farther than STRAY_GAP from the rest of their slot piece are dropped (stray cut bits).
 Writes <out_dir>/slots_parts.glb (one mesh per slot piece, paint kept) and slots.json.
@@ -116,6 +118,10 @@ for name, o in parts.items():
         label[name] = np.full(n, "chest", object)
     elif base in ("belt", "skirt"):
         label[name] = np.full(n, "belt", object)
+    elif base == "loincloth":
+        label[name] = np.full(n, "loincloth", object)
+    elif base == "body":                                            # a cut outfit's leftover: not a slot
+        label[name] = np.full(n, None, object)
     elif base == "head":
         label[name] = np.full(n, None, object)
     elif base == "pauldron":

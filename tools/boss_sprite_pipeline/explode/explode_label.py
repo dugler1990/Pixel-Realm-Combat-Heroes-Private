@@ -1,6 +1,10 @@
 """Step 3: SAM3 masks -> one part label per mesh face -> part-coloured renders + split GLB.
 
-    .venv-bpy/Scripts/python.exe explode_label.py <work_dir> [--facing-power K] [--diag <file>]
+    .venv-bpy/Scripts/python.exe explode_label.py <work_dir> [--facing-power K] [--diag <file>] [--prompt-map <json>]
+
+--prompt-map (outfit pipeline): a JSON with "prompt_to_part" (SAM prompt, spaces as underscores -> part) and
+optionally "priority", "paired", "skip" ([[crop, prompt]]), "belt_gate", "min_by_prompt". It replaces the armour
+table below (an outfit file's "sam" block, e.g. outfits/barb/loincloth.json). Without it: the armour table.
 
 Posed cameras (explode_render.py --pose, "pose" in cams.json) look pixels up in that pose's vertex
 positions (posed_<pose>_verts.npy), so the plate under the arms - hidden behind the arm at rest - votes
@@ -31,7 +35,7 @@ from mathutils import Vector, kdtree
 from PIL import Image, ImageDraw
 from scipy.spatial import cKDTree
 
-FLAGS = ("--facing-power", "--diag", "--dirs", "--out")
+FLAGS = ("--facing-power", "--diag", "--dirs", "--out", "--prompt-map")
 opt = {f: sys.argv[sys.argv.index(f) + 1] for f in FLAGS if f in sys.argv}
 FACING_POWER = float(opt["--facing-power"]) if "--facing-power" in opt else None
 DIAG_OUT = os.path.abspath(opt["--diag"]) if "--diag" in opt else None
@@ -75,6 +79,16 @@ BELT_MARGIN = 0.01                                    # x height
 PRIORITY = {"gauntlet": 1.6, "boot": 1.6, "belt": 1.5, "head": 1.3, "pauldron": 1.2, "arm": 1.0, "leg": 1.0,
             "skirt": 1.0, "torso": 0.8}
 PAIRED = {"pauldron", "arm", "gauntlet", "leg", "boot"}
+if "--prompt-map" in opt:
+    with open(opt["--prompt-map"], encoding="utf-8") as _fh:
+        _m = json.load(_fh)
+    _m = _m.get("sam", _m)                            # an outfit file, or the block alone
+    PROMPT_PART = dict(_m["prompt_to_part"])
+    PRIORITY = {p: float(_m.get("priority", {}).get(p, PRIORITY.get(p, 1.0))) for p in set(PROMPT_PART.values())}
+    PAIRED = set(_m.get("paired", sorted(PAIRED & set(PROMPT_PART.values()))))
+    SKIP = {tuple(x) for x in _m.get("skip", [])}
+    BELT_GATE = dict(_m.get("belt_gate", {}))
+    MIN_BY_PROMPT = dict(_m.get("min_by_prompt", {}))
 
 
 def log(*a):

@@ -27,6 +27,12 @@
 - side: drawn by Leonardo from the approved front and back. Its depth has nothing to be checked against in the
   images; the check is only that it is the same size, in the same place, as the front.
 
+Outfit pipeline (outfits/<character>/<outfit>.json, PROCESS_outfit.md): --outfit takes the prompts and settings from
+the outfit file ("front", "back", "front_check" cover|match, "margin", "display_joints", "retry_bigger"). Without a
+terminal: --no-ask draws once and records it in gate_<view>.json as pending; --retry r|r1|rb|"r <why> @img" draws
+again with the same choices as the gate; --accept N accepts attempt N; --dry-run prints the prompt and sends nothing.
+"match" (a body, not armour): the draw must fill his outline, scored like a back (IoU and bands), no margin.
+
 At the gate: [enter] accept, [r] draw again, [r1] draw again showing the marked error, [r <why> @img] draw again
 with criticism -- as in the interiors, a retry is the same call with the overlay attached, never an edit of the
 last attempt. Accept writes the view cut out for TRELLIS (front.png / back.png / side_<left|right>.png) and
@@ -286,7 +292,8 @@ def marked(image: Image.Image, missing: np.ndarray, spilled: np.ndarray) -> Imag
 
 def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
              kept: Image.Image | None = None, sent: tuple = (),
-             joints: dict | None = None, exact: np.ndarray | None = None) -> tuple[dict, list[str], Path, Path | None]:
+             joints: dict | None = None, exact: np.ndarray | None = None,
+             check: str = "cover") -> tuple[dict, list[str], Path, Path | None]:
     """Score one draw. Returns the scores, the lines for the sheet, the sheet and the overlay (None for a side).
     A masked draw (`kept` is its pasted result, shown beside it) is scored on the raw return against the mask that
     was sent, as the interiors score theirs: after the paste there is nothing left to measure. A reference draw is
@@ -307,7 +314,14 @@ def evaluate(view: str, raw: Image.Image, target: np.ndarray, tag: Path,
         raw, has = line_up(raw, score_mask(raw), target)
     else:
         has = painted(raw)
-    if view == "front":
+    if view == "front" and check == "match":
+        s = score_back(target, has)
+        overlay = marked(raw, target & ~has, has & ~target)
+        lines = [f"front (match): {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
+                 f"IoU {s['iou']:.3f}  missing {s['missing'] * 100:.2f} %  spilled {s['spilled'] * 100:.2f} %"
+                 "  (against his outline, no margin)"]
+        exact = None
+    elif view == "front":
         s, should = score_front(target, has, masked=kept is not None)
         overlay = marked(raw, should & ~has, np.zeros_like(has))
         lines = [f"front: {'PASS' if s['passed'] else 'FAIL ' + ', '.join(s['failing'])}",
@@ -362,7 +376,26 @@ def main() -> None:
                          "pose_heights.py) on every image sent, say so in the prompt, and check the draw's joints")
     ap.add_argument("--config", type=Path, help="the image model; default per view and --draw (DEFAULT_CONFIG)")
     ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("--outfit", type=Path, help="outfit file: prompts and settings (PROCESS_outfit.md)")
+    ap.add_argument("--dry-run", action="store_true", help="print the prompt and the images it would send; no call")
+    ap.add_argument("--no-ask", action="store_true", help="draw once, record it as pending in gate_<view>.json, exit")
+    ap.add_argument("--retry", help="with --no-ask / --dry-run: r | r1 | rb | 'r <why> @img', as at the gate, on the "
+                                    "last recorded attempt")
+    ap.add_argument("--accept", type=int, help="accept attempt N recorded in gate_<view>.json; no draw")
     a = ap.parse_args()
+    check, bigger = "cover", BIGGER
+    if a.outfit:
+        outfit = json.loads(a.outfit.read_text(encoding="utf-8"))
+        for key in ("front", "back", "front_masked", "back_masked"):
+            if outfit.get(key):
+                PROMPTS[key] = outfit[key]
+        check = outfit.get("front_check", "cover")
+        bigger = outfit.get("retry_bigger") or None
+        if "margin" in outfit and a.margin == MARGIN:
+            a.margin = float(outfit["margin"])
+        a.display_joints = a.display_joints or bool(outfit.get("display_joints"))
+    if check == "match":
+        a.margin = 0.0
     need = {"front": ["input"], "back": ["front"], "side": ["front", "back"]}[a.view]
     for name in need:
         if getattr(a, name) is None:
@@ -373,6 +406,16 @@ def main() -> None:
         ap.error("--display-joints is for --draw reference: a masked edit repaints image 1, lines included")
     a.config = a.config or DEFAULT_CONFIG[(a.view, a.draw)]
     a.out.mkdir(parents=True, exist_ok=True)
+
+    gate_json = a.out / f"gate_{a.view}.json"
+    gate = json.loads(gate_json.read_text(encoding="utf-8")) if gate_json.exists() else {}
+    name_of = {"front": "front", "back": "back"}.get(a.view, f"side_{a.side}")
+    if a.accept is not None:
+        hit = [t for t in gate.get("attempts", []) if t["attempt"] == a.accept]
+        if not hit:
+            sys.exit(f"no attempt {a.accept} in {gate_json}")
+        accept(a, gate, gate_json, Path(hit[0]["draw"]), a.accept, name_of)
+        return
 
     masked = a.draw == "mask"
     exact = None                             # front: his outline with no margin, for the last panel
@@ -430,13 +473,21 @@ def main() -> None:
                 for i, p in enumerate(refs)]
         prompt += "\n\n" + JOINT_NOTE
         print("  joints on image 1 (% h above the feet): " + "  ".join(
-            f"{k} {v['height_pct']:.1f}" for k, v in ref_joints.items()))
+            f"{k} {v['height_pct']:.1f}" for k, v in ref_joints.items()), file=sys.stderr)
 
     config = json.loads(a.config.read_text(encoding="utf-8"))
-    client = make_image_client(config)
     # A rerun into the same folder carries on numbering: earlier attempts stay on disk.
     done = [int(p.stem.split("_")[2]) for p in a.out.glob(f"{a.view}_attempt_[0-9][0-9]*.png")]
-    criticism, attach, attempts, n = "", [], [], max(done, default=0)
+    criticism, attach, attempts, n = "", [], list(gate.get("attempts", [])), max(done, default=0)
+    if a.retry:
+        criticism, attach = retry_from(a.retry, attempts[-1] if attempts else None, mode, masked, bigger, a.view)
+    if a.dry_run:
+        extra = refs + [Path(p) for p in attach]
+        print(with_criticism(prompt, criticism, attach,
+                             first_index=FIRST_INDEX[mode] + (1 if a.view == "side" and a.other_side else 0)), end="")
+        print("\n--- images: " + ", ".join(str(p) for p in extra), file=sys.stderr)
+        return
+    client = make_image_client(config)
     while True:
         n += 1
         tag = a.out / f"{a.view}_attempt_{n:02d}"
@@ -471,11 +522,18 @@ def main() -> None:
                 got = joint_heights([draw_path])[str(draw_path)] or {}
                 joints = {k: (v["y"], got[k]["height_pct"] - v["height_pct"]) for k, v in ref_joints.items() if k in got}
             s, lines, sheet_png, shape_png = evaluate(a.view, Image.open(draw_path), target, tag, sent=refs,
-                                                      joints=joints, exact=exact)
+                                                      joints=joints, exact=exact, check=check)
         attempts.append({"attempt": n, "draw": str(draw_path), "prompt": str(tag.with_name(tag.name + "_prompt.txt")),
                          "images_sent": [str(p) for p in extra], "scores": s,
                          "shape": str(shape_png) if shape_png else None})
         print("\n  " + "\n  ".join(lines) + f"\n  {sheet_png}")
+        if a.no_ask:
+            gate.update({"view": a.view, "draw": a.draw, "refs": [str(p) for p in refs], "config": str(a.config),
+                         "attempts": attempts, "status": "pending", "sheet": str(sheet_png),
+                         "front_input": str(a.front) if a.front else None})
+            gate_json.write_text(json.dumps(gate, indent=1), encoding="utf-8")
+            print(f"  PENDING attempt {n}: --accept {n}, or draw again: --no-ask --retry r|r1|rb|'r <why> @img'")
+            return
         show(sheet_png)
         criticism, attach = "", []
         while True:
@@ -490,29 +548,46 @@ def main() -> None:
             return
         if raw_answer.lower() == "r":
             continue
-        if raw_answer.lower() == "rb":
-            if masked:
-                print("  the mask sets the size -- use --margin", file=sys.stderr)
-            else:
-                criticism = BIGGER
-            continue
         if raw_answer:
             try:
-                if raw_answer[:2].lower() == "r1" and a.view == "side":
-                    raise FileNotFoundError("a side has no shape error to show -- use [r <why>]")
-                note, directive = TEXTS[mode] if mode in TEXTS else ("", "")
-                criticism, attach = parse_gate_retry(raw_answer, shape_png, note, directive)
-            except FileNotFoundError as exc:
+                criticism, attach = retry_from(raw_answer, attempts[-1], mode, masked, bigger, a.view)
+            except (FileNotFoundError, ValueError) as exc:
                 print(f"  {exc}", file=sys.stderr)
             continue
-        if a.view == "back":
-            figure_cutout(Image.open(a.front)).save(a.out / "front.png")
-        figure_cutout(Image.open(draw_path)).save(a.out / f"{name}.png")
-        (a.out / f"gate_{a.view}.json").write_text(json.dumps(
-            {"view": a.view, "draw": a.draw, "refs": [str(p) for p in refs], "config": str(a.config),
-             "attempts": attempts, "accepted": n}, indent=1), encoding="utf-8")
-        print(f"  accepted attempt {n}: {a.out / (name + '.png')}")
+        gate.update({"view": a.view, "draw": a.draw, "refs": [str(p) for p in refs], "config": str(a.config),
+                     "attempts": attempts, "front_input": str(a.front) if a.front else None})
+        accept(a, gate, gate_json, draw_path, n, name)
         return
+
+
+def retry_from(answer: str, last: dict | None, mode: str, masked: bool, bigger: str | None, view: str):
+    """The gate's retry choices as (criticism, attachments) for the next draw; `last` is the attempt retried."""
+    if answer.strip().lower() == "rb":
+        if masked:
+            raise ValueError("the mask sets the size -- use --margin")
+        if not bigger:
+            raise ValueError("this outfit has no 'retry_bigger' line")
+        return bigger, []
+    if answer.strip().lower() == "r":
+        return "", []
+    if answer[:2].lower() == "r1" and view == "side":
+        raise FileNotFoundError("a side has no shape error to show -- use [r <why>]")
+    if last is None:
+        raise ValueError("no attempt recorded to retry")
+    note, directive = TEXTS[mode] if mode in TEXTS else ("", "")
+    shape = Path(last["shape"]) if last.get("shape") else None
+    return parse_gate_retry(answer, shape, note, directive)
+
+
+def accept(a, gate: dict, gate_json: Path, draw_path: Path, n: int, name: str) -> None:
+    """As the gate's [enter]: the view cut out for TRELLIS (a back also writes the front's), gate_<view>.json."""
+    front = a.front or (Path(gate["front_input"]) if gate.get("front_input") else None)
+    if a.view == "back" and front is not None:
+        figure_cutout(Image.open(front)).save(a.out / "front.png")
+    figure_cutout(Image.open(draw_path)).save(a.out / f"{name}.png")
+    gate.update({"accepted": n, "status": "accepted"})
+    gate_json.write_text(json.dumps(gate, indent=1), encoding="utf-8")
+    print(f"  accepted attempt {n}: {a.out / (name + '.png')}")
 
 
 if __name__ == "__main__":

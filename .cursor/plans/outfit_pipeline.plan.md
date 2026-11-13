@@ -1,95 +1,92 @@
 # Plan: the outfit pipeline, scripted end to end
 
 Goal: one command per character + outfit runs the whole chain (drawings → 3D → skeleton → paint → cut
-into slots → game packs), stopping only at the review gates and the pod steps, and you can run it
-yourself. Afterwards a web page sits on top (separate plan), like the SAM3 tool and the world-level
-review page.
+into slots → game packs). It stops only at review gates and pod steps, and you can run it yourself.
+A web page goes on top later (separate plan), like the SAM3 tool and the world-level review page.
 
-An outfit is the same process with different prompts: `barb_fullplate` (armour), `barb_naked` (the barb
-without the loincloth), later others. Every TRELLIS run makes both models, front-only and front + back,
-until we know which one works best.
+An outfit is the same process with different prompts: `fullplate` (armour), `naked` (the barb without
+the loincloth: a full redraw of the front like the armour, then back, TRELLIS...), `loincloth` (cut
+from the current barb, like the armour pieces). Every TRELLIS run makes both models, front-only and
+front + back; you pick one by eye at the gate (we don't know yet which works best; the choice is logged).
 
-## Where things are (checked 2026-11-13)
-- main: older copies of the explode / repaint tools, `pose_heights.py`, the mesh player.
-- `feat/view-shape-gate` (worktree `Pixel-Realm-view-gate`): `view_gate.py`, 25 commits not on main.
-- `dev_3d_boss` (Boss folder): 3 commits not on main, 70 behind. **Uncommitted there:** 14 modified tool
-  files (explode_*, repaint.py, retarget_bvh.py, ...), 22 untracked tools the method depends on
-  (`repaint/paint_outfit.py`, `explode2/fit_set.py`, `fix_neutral_bone.py`, `prompts_v2.json`,
-  `gpu_box/trellis2_multiview.py`, `trellis2_mv_run.py`, ...). Uncommitted = one lost folder away from gone.
-- `feat/armour-slots` (worktree `Pixel-Realm-mesh-player`): `armour_slots.py`, `pieces_sheet.py`.
-- Scratchpad only: `v9_chain.sh`, `mv2_chain.sh` (the TRELLIS pod chains).
+Decisions (2026-11-13): merge route below OK; TRELLIS choice by eye for now; keep a process doc
+(`tools/boss_sprite_pipeline/PROCESS_outfit.md`); the Boss folder's uncommitted tools committed in
+groups, `explode2/` sorted into method / `options/` / `measure/`, dropped tools removed and logged.
+Reviews (junior + senior, 2026-11-13) folded in below.
 
-## Steps
+## 0. One branch with every script — done 2026-11-13
+- `dev_3d_boss`: `7c3de314` armour pipeline, `a4980e2a` leonardo_api error text, `135b5ab7` kimodo
+  host_demo, `1e6a5d02` pod chains (from the scratchpad), `e0f48f9e` explode2 sorted + README +
+  removals logged in Tried and dropped.
+- `feat/outfit-pipeline` (worktree `Pixel-Realm-outfit-pipeline`) from main + `dev_3d_boss` +
+  `feat/view-shape-gate` (brings its level-pipeline code: shape_gate, image_client, retry, cut_sheet,
+  figures — accepted) + `feat/armour-slots`. Conflicts: `leonardo_api.py` (both sides kept: view-gate's
+  checks + Boss's `error` fallback and 400-char message), `world_levels/checks.py` (main's colour_gap
+  + view-gate's shape_note). Painted-map tests: the same 7 fail as on main.
+- Check: every script the explode2 Method names exists on the branch (12 of 12).
 
-### 0. One branch with every script  (needs your go-ahead: commits and merges in shared folders)
-1. Commit the Boss folder's tool changes and untracked tools on `dev_3d_boss`. Who owns them: you say
-   (they look like the explode2 sessions' work).
-2. New branch `feat/outfit-pipeline` from main, in its own worktree. Merge into it: `dev_3d_boss`,
-   `feat/view-shape-gate`, `feat/armour-slots`. Conflicts expected in `tools/boss_sprite_pipeline/` (main's
-   older copies): the newer file wins, checked file by file.
-3. Commit `v9_chain.sh` / `mv2_chain.sh` as `gpu_box/trellis_outfit.sh` (step 3 below finishes it).
-Check: the explode2 Method commands (PROCESS_explode2.md) all resolve to files on the branch.
-
-### 1. Outfit files
+## 1. Outfit files
 `tools/boss_sprite_pipeline/outfits/<character>/<outfit>.json`, read by every step:
-- `kind`: `body` (a new body: drawings → 3D → skeleton → paint → body pack) or `armour` (also cut into
-  slots) or `cut` (cut pieces out of an existing mesh: the loincloth from the current barb).
-- `base`: the concept / mesh it starts from; `skeleton`: the rig it goes onto (`barb_final_nb.glb`).
-- `front` / `back`: prompt text; `front_check`: `cover` (armour covers his outline) or `match` (outline
-  and hip / knee joints match his).
-- `paint_look`: the paint prompts (today `repaint/looks/barb_fullplate.json`).
-- `sam_prompts` + `prompt_to_piece`: today `prompts_v2.json` and the table built into `explode_label.py`.
-- `slots`: slot rules for `armour_slots.py` (today built in; add `loincloth`: hips, up to 50 % thighs).
-Changes: `view_gate.py --outfit`, `explode_label.py --map`, `armour_slots.py --outfit`, `paint_outfit.py`
-reads the look from it. Files: `barb_fullplate.json` (the v9 settings, moved), `barb_naked.json`,
-`barb_loincloth.json`.
-Check: re-running the fullplate front from its file sends the same prompt as v9 did.
+- `kind`: `body` | `armour` | `cut`.
+- `concept`: the image the front is drawn on (fullplate: `gear_test/body_sil/body_front_textured.png`).
+- `rig_fit`: the rig the outfit is fitted and worn-tested on (`rigfix/barb_final.glb`, as v9);
+  `rig_game`: the clips' rig (`rigfix/barb_final_nb.glb`; `swap_body.py` checks rest poses against it).
+- `roles`, `greedy_dirs`, `sam_prompts`, `prompt_to_piece`, `paint_look`.
+- `front` / `back`: prompt text; `front_check`: `cover` | `match`; `margin`; `display_joints`;
+  `retry_bigger` (the [rb] line).
+- `existing`: paths of outputs made before run.json (v9), for `--backfill`.
+Changes: `view_gate.py --outfit`, `explode_label.py --prompt-map`, the loincloth rule in
+`explode_common` (as the skirt: hips, up to 50 % thighs at the hem) and `armour_slots.py`.
+Check: `view_gate front --outfit fullplate --dry-run --retry rb` prints v9's `front_attempt_02_prompt.txt`
+exactly (diff), with no paid call.
 
-### 2. Gates without the terminal
-`view_gate.py ... --no-ask` draws, scores, writes the attempt and `gate_<view>.json` (status `pending`),
-exits. `view_gate accept <dir> <view> <n>`, `view_gate redraw <dir> <view> [--note "..."] [--marked]`.
-Same for the paint check. The terminal prompt stays as the default.
-Check: one front drawn with `--no-ask`, accepted by command, `front.png` written as before.
+## 2. Gates without the terminal
+`view_gate ... --no-ask` draws once, scores, appends to `gate_<view>.json` (status `pending`), exits.
+`--retry r|r1|rb|"r <why> @img"`: the next draw with the same choices as the terminal.
+`--accept N`: writes the cut-outs as the terminal accept does (a back accept also writes `front.png`).
+Paint: no accept loop; the driver stops after paint, shows `paint/result/after_0_body_0.png`, and you
+continue or rerun with `--redo <view>`. TRELLIS: stops with both models; `--pick front_only|front_back`.
 
-### 3. Pod steps: push / run / pull
-`tools/boss_sprite_pipeline/gpu_box/pod.py <step> push|run|pull --host <ip> --port <port>`, key `ppp`,
-steps:
-- `trellis`: front (+ back) → `front_only.glb` and `front_back.glb` in one run.
-- `sam3`: SAM3 snapshot, sam3local src, views, prompts → masks.
-- `holopart`: input parts → output.glb.
-Each step's file list lives in the script (today in comments at the top of each pod script). `pull` checks the
-end marker (`TRELLIS_OK`, `SAM_OK` per shard, `HP_DONE`), then prints **stop the pod** on its own line.
-You start and stop the pod; Claude never does.
-Check: one SAM3 run on the existing v9 views gives the same masks count (3,299).
+## 3. Pod steps: push / run / pull
+`gpu_box/pod.py <step> push|run|pull --host <ip> --port <port>` (or `POD_HOST` / `POD_PORT`), key `ppp`.
+- `trellis`: `gpu_box/trellis_outfit.sh` (from `pod_chains/v9_chain.sh`): install, then
+  `trellis2_mv_run.py` twice → `front_only_from_front.glb`, `front_back_from_front.glb`; `TRELLIS_OK`.
+- `sam3`: snapshot path and sam3local src resolved at push (HF cache, `C:/Users/Douglas/sam3local/src`),
+  views, prompts, `explode_sam.py`, `sam3_pod.sh`; pull checks `SAM_OK` ending every `sam_shard*.log`
+  and `SAM_DONE`.
+- `holopart`: `holopart_pod.sh`, `holopart_patch.py`, `input_parts.glb`; `HP_READY`, `HP_DONE`.
+`pull` ends with **stop the pod** on its own line. You start and stop pods; Claude never does.
 
-### 4. Run state
-`generated/bosses/<character>/outfits/<outfit>/run.json`: per step: status, inputs, outputs, accepted
-attempt, time, cost. Each script writes its entry; the next step reads its inputs from it (no paths
-typed). Glue folded in: `cams.json` copied into the cut folder by the cut step.
-Check: `outfit.py barb_fullplate --status` lists the v9 outputs that exist.
+## 4. Run state
+`generated/bosses/<character>/outfits/<outfit>/run.json`: per step status, inputs, outputs, picked /
+accepted attempt, time, cost. The driver records each step; the next step reads its inputs from it.
+Cost: the image calls' own usage where the response gives it, else per-call list price; pod: minutes ×
+the rate you pass (`--pod-rate`). `--backfill` writes run.json from the outfit's `existing` (v9).
+Glue folded in: `cams.json` copied into the cut folder by the merge step.
 
-### 5. Game export
-`export_outfit.py <character> <outfit>`: `swap_body.py` onto the clips blend → `export_mesh_runtime.py`
-→ `bake_body_capsules.py` → `clips.json`; for armour / cut outfits one pack per slot. Prints the
-character-select entry to add (not written by itself).
-Drawing the body + the worn slot packs in game is its own plan (needs per-slot draw, hide-under, the
-loincloth hidden under the belt).
+## 5. Game export (last step)
+`export_outfit.py`: body → `swap_body.py` onto the clips blend → `export_mesh_runtime.py` →
+`bake_body_capsules.py` → `clips.json`, prints the `PlayerSelectionDict.json` entry (pasting it is
+part of the proof). Armour / cut → one pack per slot (`slot_packs.py`: rigid weights per slot on the
+clips rig). The game can't draw slot packs yet: check = each pack loads (`PlayerMesh`) + the sheet.
 
-### 6. Driver
-`outfit.py <character> <outfit> [--from <step>] [--only <step>] [--status]`. Steps by kind:
+## 6. Driver
+`outfit.py <character> <outfit> [--from S] [--only S] [--status] [--backfill] [--host --port]`:
 - body: `front, back, trellis, skeleton, paint, export`
-- armour: body steps + `views, sam3, cut, holopart, merge, slots, sheet`
-- cut: `views, sam3, cut, holopart, merge, slots, sheet`
-Stops at a gate (prints the accept / redraw commands) and at a pod step (asks for host and port),
-resumes from `run.json`.
+- armour: `front, back, trellis, skeleton, paint, views, sam3, cut, holopart, merge, worn, slots, sheet, export`
+- cut: `views, sam3, cut, holopart, merge, slots, sheet, export`
+Stops at a gate (prints accept / retry commands) and before a pod step without host / port.
 
-### 7. Proof
-- `barb_naked` end to end with the driver: front, back, both TRELLIS models, skeleton, paint, body pack,
-  as "Barbarian (naked, mesh)" next to the others.
-- `barb_loincloth` (kind `cut`) on the current barb → loincloth slot on the sheet.
-- `barb_fullplate` `--status` from the v9 outputs, no paid calls.
-Paid: drawings (Leonardo / gpt-image) and one pod session for trellis + sam3 + holopart.
+## 7. Proof
+Free first: the `--dry-run` diff (step 1), `--backfill` + `--status` for fullplate, slot packs from the
+v9 slots (load test). Then one paid session: `naked` front + back (drawings), one pod for TRELLIS
+(both models) + SAM3 + HoloPart (the SAM3 check: the v9 views again, masks compared pixel by pixel),
+`naked` skeleton + paint + body pack ("Barbarian (naked, mesh)"), `loincloth` as a first prompt trial
+(the sheet is the bar only once a mask labels the cloth), worn on the naked body.
+
+## Process doc
+`tools/boss_sprite_pipeline/PROCESS_outfit.md`: Method (commands), Known errors, Log, Tried and dropped.
 
 ## Not in this plan
-The web page (next plan, on top of steps 2, 4 and 6); per-slot drawing in game; SAM prompt tests
-("gauntlet", "sabaton", "helmet"); the helmet model.
+The web page; drawing slot packs in game (hide-under, loincloth under the belt); SAM prompt tests
+beyond the loincloth ("gauntlet", "sabaton", "helmet"); the helmet model.
