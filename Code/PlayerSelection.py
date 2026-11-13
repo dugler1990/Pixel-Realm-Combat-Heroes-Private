@@ -12,6 +12,8 @@ _players = player_dir_dict["Players"]
 unlocked_player_directory = [x['player_info_dir'] for x in _players]
 unlocked_player_base_stats = [x['base_stats'] for x in _players]
 unlocked_player_names = [x['name'] for x in _players]
+# Graphics/Meshes/<pack> drawn over the sprite body (draw-only); None = sprite player.
+unlocked_player_mesh_packs = [x.get('mesh_pack') for x in _players]
 unlocked_player_display_names = [x.get('display_name', x['name'].replace("_", " ")) for x in _players]
 # The full-length painting each hero stands as (Graphics/UI/kit), and the two stats on its card.
 unlocked_player_paintings = [x.get('painting') for x in _players]
@@ -33,6 +35,7 @@ class PlayerSelection:
         self.input_manager = input_manager
         self.selected_option = 0
         self.selected_player_info_dir = None
+        self.selected_mesh_pack = None
         self._kit = None
 
     def _look(self):
@@ -131,5 +134,6 @@ class PlayerSelection:
     def select_player(self, index):
         _game_flow_log.debug("Selected player %s", unlocked_player_names[index])
         self.selected_player_info_dir = unlocked_player_directory[index]
+        self.selected_mesh_pack = unlocked_player_mesh_packs[index]
         self.base_stats = unlocked_player_base_stats[index]
         self.game.in_player_selection = False

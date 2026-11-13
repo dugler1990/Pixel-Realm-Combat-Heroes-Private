@@ -718,20 +718,36 @@ class YSortCameraGroup(pygame.sprite.Group):
             offset_pos = sprite.rect.topleft - self.offset
             self._draw_sorted_sprite(sprite, offset_pos)
 
+    def _mesh_feet_screen(self, sprite):
+        hitbox = getattr(sprite, "hitbox", None)
+        if getattr(sprite, "sprite_anchor_px", None) is not None and hitbox is not None:
+            feet = hitbox.midbottom
+        elif getattr(sprite, "mask", None) is not None:
+            feet = mask_midbottom_world(sprite.rect, sprite.mask)
+        elif hitbox is not None:
+            feet = hitbox.midbottom
+        else:
+            feet = sprite.rect.midbottom
+        return (feet[0] - self.offset.x, feet[1] - self.offset.y)
+
     def _draw_sorted_sprite(self, sprite, offset_pos):
-        """Mesh boss when present, otherwise the sprite blit. Mesh is drawn at the feet."""
+        """Mesh boss when present, otherwise the sprite blit. Mesh is drawn at the feet.
+
+        A mesh player (`mesh_skin`, player_mesh.py) is draw-only: the mesh replaces the sprite blit
+        when it draws, the sprite stays the gameplay body. Its weapon's slash picture is not drawn
+        while the mesh draws (the weapon sprite itself, and its hit mask, are untouched)."""
+        skin = getattr(sprite, "mesh_skin", None)
+        if skin is not None:
+            drew = skin.skin.draw(self.backend, self._mesh_feet_screen(sprite), skin.yaw_deg(), skin.height_px)
+            sprite._mesh_drew = bool(drew)
+            if drew:
+                return
+        elif getattr(sprite, "sprite_type", None) == "weapon" and getattr(
+                getattr(sprite, "owner", None), "_mesh_drew", False):
+            return
         boss = getattr(sprite, "mesh_boss", None)
         if boss is not None:
-            hitbox = getattr(sprite, "hitbox", None)
-            if getattr(sprite, "sprite_anchor_px", None) is not None and hitbox is not None:
-                feet = hitbox.midbottom
-            elif getattr(sprite, "mask", None) is not None:
-                feet = mask_midbottom_world(sprite.rect, sprite.mask)
-            elif hitbox is not None:
-                feet = hitbox.midbottom
-            else:
-                feet = sprite.rect.midbottom
-            screen_pos = (feet[0] - self.offset.x, feet[1] - self.offset.y)
+            screen_pos = self._mesh_feet_screen(sprite)
             facing = getattr(sprite, "get_facing_deg", None)
             facing_deg = facing() if callable(facing) else 0.0
             height_px = getattr(sprite, "mesh_height_px", 650)
