@@ -1,0 +1,29 @@
+{
+  "idle": {
+    "source_action": "settle_01"
+  },
+  "move": {
+    "source_action": "jokesillyrun",
+    "source_frames": [
+      36,
+      53
+    ],
+    "travel_per_frame": 0.04492,
+    "note": "one stride, root travel removed; the player phases it on distance walked"
+  },
+  "attack": {
+    "source_action": "overheadchop",
+    "source_frames": [
+      [
+        45,
+        60
+      ],
+      [
+        108,
+        138
+      ]
+    ],
+    "note": "arm up then the chop (hold dropped); played once over the attack's duration"
+  },
+  "made_by": "Boss generated/bosses/barb/anim_test/retarget_player/player.blend (the barb's clips, see barb/clips.json) with its body swapped by tools/boss_sprite_pipeline/swap_body.py for explode2/v9_fb/paint/result/fullplate_rigged_painted.glb (the v9 full plate on his skeleton)"
+}
