@@ -22,6 +22,7 @@
   button:disabled, input:disabled, select:disabled { opacity: .5; cursor: default; }
   .tab.on { border-color: #ddd; background: #555; }
   #align { background: #2d4a6a; }
+  #replace.pending { background: #8a6a1a; border-color: #ffd36b; }
   #accept { background: #2d5a2d; }
   #generate, #retry { background: #5a3a2d; }
   label { display: block; margin-top: 12px; color: #aaa; }
@@ -280,6 +281,7 @@ function fillControls() {
   const report = info().report;
   $('report').textContent = report || '';
   $('report').style.display = report ? 'block' : 'none';
+  $('replace').classList.remove('pending');
 }
 
 function applyEnabled() {
@@ -342,6 +344,7 @@ async function command(path, body, then) {
   S.busy = false; cover(''); lock(false);
   await openLevel(S.index, then === undefined ? info() && info().attempt : then, false);
   if (p.error) say(p.error, true); else say(p.message || 'done.');
+  return p;
 }
 
 async function watchExisting() {
@@ -364,10 +367,17 @@ $('dx').onchange = $('dy').onchange = () => setOffset(Number($('dx').value) || 0
 $('reset').onclick = () => setOffset(0, 0);
 $('swap').onclick = swapTop;
 $('opacity').oninput = stackLayers;
-$('replace').onclick = () => command(`level/${level().id}/place`, placeBody());
+// Feather and the toggles only take effect on a re-place, and only show in the Result view.
+for (const id of ['feather', 'warp', 'cut', 'alignon', 'padding'])
+  $(id).addEventListener('input', () => { $('replace').classList.add('pending'); say('Press Re-place to apply.'); });
+async function place(overrides) {
+  const p = await command(`level/${level().id}/place`, placeBody(overrides));
+  if (p && !p.error && info() && info().images.result) { S.view = 'result'; renderLevelName(); drawLayers(false); }
+}
+$('replace').onclick = () => place();
 $('align').onclick = () => {
   $('alignon').checked = true;
-  command(`level/${level().id}/place`, placeBody({ align: true }));
+  place({ align: true });
 };
 $('checks').onclick = async () => {
   await command(`level/${level().id}/checks`, { attempt: info().attempt });
