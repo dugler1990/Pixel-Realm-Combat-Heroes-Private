@@ -1,17 +1,22 @@
 """Pod steps of the outfit pipeline: copy the inputs up, run, copy the results back.
 
     python tools/boss_sprite_pipeline/gpu_box/pod.py <step> push|run|pull|token --host <ip> --port <port>
-        --work <outfit run folder> [--key <ppp>]
+        --work <outfit run folder> [--key <ppp>] [--models a,b]
+    python tools/boss_sprite_pipeline/gpu_box/pod.py address "<the ssh line from RunPod's Connect tab>"
+    python tools/boss_sprite_pipeline/gpu_box/pod.py status --host <ip> --port <port>
 
 <step>: trellis | sam3 | holopart. --host / --port default to POD_HOST / POD_PORT; --key to POD_KEY, else the
-key `ppp` in the main repo folder. You start and stop the pod; this never does. `pull` ends by saying
-"stop the pod" on its own line.
+key `ppp` in the main repo folder. You start and stop the pod; this never does. outfit.py says "stop the pod"
+after the outfit's last pod step.
+address  asks the ssh.runpod.io proxy (TTY, commands on stdin) for the pod's direct address; prints POD <ip> <port>.
+status   one line, POD_STATUS {json}: GPU %, memory, what runs (TRELLIS / SAM3 / HoloPart / pip), what is installed.
 
 token   the HF token from HF_TOKEN (set it from the clipboard, never typed or printed) into the pod's
-        /workspace/.cache/huggingface/token, through ssh's stdin. trellis and sam3 need it.
-trellis push: gpu_box's TRELLIS files + <work>/gate/front.png [back.png] -> /workspace/in/
-        run:  trellis_outfit.sh (install, both models) until TRELLIS_OK
-        pull: /workspace/out/{front_only,front_back}_from_front.glb -> <work>/trellis/
+        /workspace/.cache/huggingface/token, through ssh's stdin; without HF_TOKEN, a token already on the pod
+        does. TRELLIS needs it. Prints TOKEN_OK.
+trellis push: gpu_box's TRELLIS files + the accepted views (<work>/gate/front.png, back.png, side_*.png) -> /workspace/in/
+        run:  trellis_outfit.sh <models> (install once, then each model not built yet) until TRELLIS_OK
+        pull: /workspace/out/<model>_from_front.glb -> <work>/trellis/
 sam3    push: the SAM3 snapshot (HF cache), sam3local src, explode_sam.py, sam3_pod.sh, the prompts, <work>/views
         run:  sam3_pod.sh until SAM_DONE; every sam_shard*.log must end in SAM_OK
         pull: /workspace/views/masks -> <work>/views/masks
@@ -40,6 +45,9 @@ TRELLIS_FILES = ["trellis2_setup.sh", "trellis2_patch.py", "trellis2_run.py", "t
 SAM3_SNAPSHOTS = Path.home() / ".cache" / "huggingface" / "hub" / "models--facebook--sam3" / "snapshots"
 SAM3_SRC = Path(r"C:\Users\Douglas\sam3local\src")
 POLL = 30
+MODELS = ("front_only", "front_back", "front_back_sides", "eight_views")
+VIEWS = ("front", "back", "side_left", "side_right", "side_front_left", "side_front_right", "side_back_left",
+         "side_back_right")
 
 
 class Pod:
@@ -60,6 +68,8 @@ class Pod:
         args = ["scp", *self.opts, "-P", self.port] + (["-r"] if local.is_dir() else []) + [
             str(local), f"root@{self.host}:{remote}"]
         subprocess.run(args, check=True)
+        # Windows checkouts have CRLF; bash on the pod reads "\r" as part of each command.
+        self.ssh(f"find {shlex.quote(remote)} -name '*.sh' -exec sed -i 's/\\r$//' {{}} +")
 
     def get(self, remote: str, local: Path) -> None:
         print(f"  pull {remote} -> {local}", flush=True)
@@ -68,10 +78,13 @@ class Pod:
                        check=True)
 
     def run_detached(self, cmd: str, log: str) -> None:
+        cmd = f"{cmd}; echo RUN_EXIT $?"
         self.ssh(f"mkdir -p /workspace/logs; nohup bash -c {shlex.quote(cmd)} > {log} 2>&1 < /dev/null &")
 
     def wait_for(self, log: str, ok: str, bad: tuple[str, ...] = ()) -> str:
-        """Poll `log` until a line holds `ok` (returns the log) or one of `bad` (exits)."""
+        """Poll `log` until a line holds `ok` (returns the log), one of `bad`, or the run ended without `ok`
+        (RUN_EXIT, written by run_detached): those exit."""
+        bad = (*bad, "RUN_EXIT")
         seen = 0
         while True:
             text = self.ssh(f"cat {log} 2>/dev/null || true", check=False)
@@ -79,29 +92,30 @@ class Pod:
             for line in lines[seen:]:
                 print("  | " + line, flush=True)
             seen = len(lines)
-            if any(b in text for b in bad):
-                sys.exit(f"FAILED: {log} says {[b for b in bad if b in text]}")
             if ok in text:
                 return text
+            if any(b in text for b in bad):
+                sys.exit(f"FAILED: {log} says {[b for b in bad if b in text]}")
             time.sleep(POLL)
 
 
-def step_trellis(pod: Pod, action: str, work: Path) -> None:
+def step_trellis(pod: Pod, action: str, work: Path, models: list[str]) -> None:
     if action == "push":
         pod.ssh("mkdir -p /workspace/gpu_box /workspace/in /workspace/out /workspace/logs")
         for f in TRELLIS_FILES:
             pod.put(HERE / f, f"/workspace/gpu_box/{f}")
-        for v in ("front", "back"):
+        for v in VIEWS:
             src = work / "gate" / f"{v}.png"
             if src.is_file():
                 pod.put(src, f"/workspace/in/{v}.png")
             elif v == "front":
                 sys.exit(f"no accepted front: {src}")
     elif action == "run":
-        pod.run_detached("bash /workspace/gpu_box/trellis_outfit.sh", "/workspace/logs/trellis_outfit.log")
+        pod.run_detached("bash /workspace/gpu_box/trellis_outfit.sh " + " ".join(models),
+                         "/workspace/logs/trellis_outfit.log")
         pod.wait_for("/workspace/logs/trellis_outfit.log", "TRELLIS_OK", ("TRELLIS_FAILED",))
     elif action == "pull":
-        for n in ("front_only", "front_back"):
+        for n in models:
             have = pod.ssh(f"test -s /workspace/out/{n}_from_front.glb && echo yes || true", check=False).strip()
             if have == "yes":
                 pod.get(f"/workspace/out/{n}_from_front.glb", work / "trellis")
@@ -161,13 +175,77 @@ def step_holopart(pod: Pod, action: str, work: Path) -> None:
 def send_token(pod: Pod) -> None:
     token = os.environ.get("HF_TOKEN", "").strip()
     if not token:
-        sys.exit("HF_TOKEN is not set (PowerShell: $env:HF_TOKEN = (Get-Clipboard).Trim())")
+        if pod.ssh("test -s /workspace/.cache/huggingface/token && echo yes || true", check=False).strip() == "yes":
+            print("TOKEN_OK already on the pod", flush=True)
+            return
+        sys.exit("HF_TOKEN is not set and the pod has none (PowerShell: $env:HF_TOKEN = (Get-Clipboard).Trim())")
     pod.ssh("mkdir -p /workspace/.cache/huggingface && tr -cd 'A-Za-z0-9_' > /workspace/.cache/huggingface/token",
             stdin=token.encode())
-    print("  token written on the pod", flush=True)
+    print("TOKEN_OK written on the pod", flush=True)
+
+
+def address(line: str, key: Path) -> tuple[str, str]:
+    """The pod's direct address, asked through the proxy line RunPod shows (user@ssh.runpod.io). The proxy ignores
+    a command argument and needs a TTY, so the command goes in on stdin (explode/PROCESS_explode.md)."""
+    user = next((t for t in line.split() if t.endswith("@ssh.runpod.io")), None)
+    if not user:
+        sys.exit("no <user>@ssh.runpod.io in that line")
+    cmd = 'echo "POD_ADDR=$RUNPOD_PUBLIC_IP:$RUNPOD_TCP_PORT_22"; exit\n'
+    r = subprocess.run(["ssh", "-tt", "-i", str(key), "-o", "StrictHostKeyChecking=accept-new", "-o",
+                        "ConnectTimeout=25", user], input=cmd.encode(), capture_output=True, timeout=90)
+    out = r.stdout.decode("utf-8", "replace").replace("\r", "\n")
+    hits = [h for h in out.split() if h.startswith("POD_ADDR=") and "$" not in h and h != "POD_ADDR=:"]
+    if not hits:
+        sys.exit("the pod gave no public IP / TCP 22 port (deploy it with Public IP and TCP port 22 exposed)")
+    host, port = hits[-1].split("=", 1)[1].split(":")
+    return host, port
+
+
+# GPU line; RUN_<name> for each job that runs (the [x]yz pattern keeps pgrep from matching this shell itself);
+# HAVE_<name> for what is installed.
+STATUS_CMD = (
+    "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits | head -1; "
+    "pgrep -f '[t]rellis2_mv_run' >/dev/null && echo RUN_trellis; "
+    "pgrep -f '[t]rellis2_setup' >/dev/null && echo RUN_trellis_install; "
+    "pgrep -f '[e]xplode_sam' >/dev/null && echo RUN_sam3; "
+    "pgrep -f '[i]nference_holopart' >/dev/null && echo RUN_holopart; "
+    "pgrep -f '[p]ip install' >/dev/null && echo RUN_pip; "
+    "grep -q INSTALL_OK /workspace/setup.log 2>/dev/null && echo HAVE_trellis; "
+    "test -x /workspace/sv/bin/python && echo HAVE_sam3; test -d /workspace/hp && echo HAVE_holopart; "
+    "test -s /workspace/.cache/huggingface/token && echo HAVE_token; true")
+
+
+def status(pod: Pod) -> dict:
+    import json
+    lines = [l.strip() for l in pod.ssh(STATUS_CMD, check=False).splitlines()]
+    if not lines:
+        d = {"error": f"no answer from {pod.host}:{pod.port} (stopped, or a new address?)"}
+        print("POD_STATUS " + json.dumps(d), flush=True)
+        return d
+    gpu = [x.strip() for x in lines[0].split(",")] if lines[0].count(",") == 2 else []
+    d = {"gpu_pct": int(gpu[0]) if gpu else None, "mem_mb": int(gpu[1]) if gpu else None,
+         "mem_total_mb": int(gpu[2]) if gpu else None,
+         "running": [l[4:] for l in lines if l.startswith("RUN_")],
+         "installed": [l[5:] for l in lines if l.startswith("HAVE_")]}
+    print("POD_STATUS " + json.dumps(d), flush=True)
+    return d
 
 
 def main(argv=None) -> None:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    key = Path(os.environ.get("POD_KEY", MAIN_KEY))
+    if argv[:1] == ["address"]:
+        host, port = address(" ".join(argv[1:]), key)
+        print(f"POD {host} {port}")
+        return
+    if argv[:1] == ["status"]:
+        sp = argparse.ArgumentParser()
+        sp.add_argument("status")
+        sp.add_argument("--host", default=os.environ.get("POD_HOST"))
+        sp.add_argument("--port", default=os.environ.get("POD_PORT"))
+        b = sp.parse_args(argv)
+        status(Pod(b.host, b.port, key))
+        return
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("step", choices=("trellis", "sam3", "holopart"))
     ap.add_argument("action", choices=("push", "run", "pull", "token"))
@@ -176,6 +254,7 @@ def main(argv=None) -> None:
     ap.add_argument("--port", default=os.environ.get("POD_PORT"))
     ap.add_argument("--key", type=Path, default=Path(os.environ.get("POD_KEY", MAIN_KEY)))
     ap.add_argument("--prompts", type=Path, help="sam3: the prompts file (crop -> prompts)")
+    ap.add_argument("--models", default=",".join(MODELS), help="trellis: the models to build / pull, comma-separated")
     a = ap.parse_args(argv)
     if not a.host or not a.port:
         ap.error("give --host and --port (or POD_HOST / POD_PORT)")
@@ -185,14 +264,16 @@ def main(argv=None) -> None:
     if a.action == "token":
         send_token(pod)
     elif a.step == "trellis":
-        step_trellis(pod, a.action, a.work)
+        models = [m for m in a.models.split(",") if m]
+        if set(models) - set(MODELS):
+            ap.error(f"unknown models {sorted(set(models) - set(MODELS))}; choose from {MODELS}")
+        step_trellis(pod, a.action, a.work, models)
     elif a.step == "sam3":
         step_sam3(pod, a.action, a.work, a.prompts)
     else:
         step_holopart(pod, a.action, a.work)
     if a.action == "pull":
         print(f"PULL_OK {a.step}")
-        print("stop the pod")
 
 
 if __name__ == "__main__":

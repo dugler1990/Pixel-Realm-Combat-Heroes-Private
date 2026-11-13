@@ -58,6 +58,19 @@ def test_run_state_round_trip(tmp_path, monkeypatch):
         again.out("back", "draw")
 
 
+def test_models_decide_the_drawings(tmp_path, monkeypatch):
+    monkeypatch.setenv("OUTFIT_DATA_ROOT", str(tmp_path))
+    ctx = of.Ctx("barb", "naked")
+    assert ctx.models() == of.DEFAULT_MODELS == ["eight_views"]
+    assert ctx.views() == ["front", "back", "left", "front_left", "back_left", "right", "front_right", "back_right"]
+    ctx.run["models"] = ["front_only"]
+    assert ctx.views() == ["front"]
+    ctx.run["models"] = ["front_back", "front_back_sides"]
+    assert ctx.views() == ["front", "back", "left", "right"]
+    for v, src in of.MIRROR_OF.items():                                 # a mirrored view comes after its source
+        assert of.SIDE_ORDER.index(src) < of.SIDE_ORDER.index(v)
+
+
 def test_pod_step_stops_without_a_pod(monkeypatch):
     monkeypatch.delenv("POD_HOST", raising=False)
     monkeypatch.delenv("POD_PORT", raising=False)

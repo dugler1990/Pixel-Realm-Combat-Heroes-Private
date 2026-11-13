@@ -1,4 +1,4 @@
-"""Several views (front, back, optional right / left) into ONE TRELLIS.2 generation, on stock microsoft/TRELLIS.2.
+"""Several views (front, back, optional sides and 3/4 views) into ONE TRELLIS.2 generation, on stock microsoft/TRELLIS.2.
 
 At every sampling step of the sparse-structure and shape stages, each view predicts the update for the whole latent
 from its own image; the predictions are blended per voxel by where the voxel sits: the front half follows the front
@@ -20,7 +20,13 @@ from easydict import EasyDict as edict
 
 from trellis2.pipelines.samplers.flow_euler import FlowEulerGuidanceIntervalSampler, FlowEulerSampler
 
-DIRS = {"front": (1, -1.0), "back": (1, 1.0), "right": (0, -1.0), "left": (0, 1.0)}   # (axis x0 / y1, sign)
+# Where each view's camera stands, as a unit vector in (x, y): front = -y, back = +y, his right = -x, left = +x;
+# the 3/4 views halfway between. A voxel follows the view it faces most: score = direction . position / band.
+# (front / back / right / left give the same scores as the earlier (axis, sign) table.)
+_H = 0.5 ** 0.5
+DIRS = {"front": (0.0, -1.0), "back": (0.0, 1.0), "right": (-1.0, 0.0), "left": (1.0, 0.0),
+        "front_left": (_H, -_H), "front_right": (-_H, -_H), "back_left": (_H, _H), "back_right": (-_H, _H)}
+VIEWS = tuple(DIRS)
 
 
 def _positions(x_t):
@@ -45,8 +51,7 @@ class MultiViewSampler(FlowEulerGuidanceIntervalSampler):
 
     def _weights(self, x_t):
         x, y = _positions(x_t)
-        pos = {0: x, 1: y}
-        scores = torch.broadcast_tensors(*[DIRS[v][1] * pos[DIRS[v][0]] / self.band for v in self.views])
+        scores = torch.broadcast_tensors(*[(DIRS[v][0] * x + DIRS[v][1] * y) / self.band for v in self.views])
         return torch.softmax(torch.stack(scores, -1), -1).unbind(-1)
 
     @torch.no_grad()
@@ -68,7 +73,7 @@ class MultiViewSampler(FlowEulerGuidanceIntervalSampler):
 @torch.no_grad()
 def run_multiview(pipeline, images, seed=0, band=0.03, max_num_tokens=49152):
     """images: {'front': PIL, 'back': PIL, ...} (front required). 1024_cascade, as trellis2_run.py. Returns the mesh."""
-    views = [v for v in ("front", "back", "right", "left") if v in images]
+    views = [v for v in VIEWS if v in images]
     imgs = {v: pipeline.preprocess_image(images[v]) for v in views}
     torch.manual_seed(seed)
     c512 = {v: pipeline.get_cond([imgs[v]], 512) for v in views}

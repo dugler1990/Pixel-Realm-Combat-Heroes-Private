@@ -11,6 +11,10 @@
  "pack": "barb_naked",
  "front": "Draw the man in Image 1 exactly as he is, but without the loincloth and its belt: bare hips with a smooth, featureless, doll-like groin and no genitals, like a toy figure (a family-friendly game character). Keep his pose, proportions, muscles, skin, head, beard, hair, painting style, framing, camera and white background identical. Image 2 is his exact outline: fill it exactly, nothing outside it and no gaps.",
  "back": "Draw the man in Image 1 seen from behind. Image 2 is his exact outline from behind: fill it exactly, with the same pose, size and position, nothing outside it and no gaps. Show his back, hair bun, the backs of his arms, legs and heels. The same man with no clothing: smooth, featureless, doll-like hips like a toy figure. Same skin, painting style and white background.",
+ "side": "Draw the man in Image 1 seen from exactly his {side} side, a 90 degree side view facing the {edge} edge of the image. Image 2 is the same man from behind. Exactly the same figure as Images 1 and 2, a toy-like game character with smooth, featureless hips. Same skin, muscles, beard, hair bun, height and pose, head and feet at the same height in the image as in Image 1, full body, orthographic, painting style and white background.",
  "front_check": "match",
- "display_joints": true
+ "display_joints": true,
+ "quarter": "Draw the man in Image 1 seen from {view}: a 45 degree three-quarter view, turned toward the {edge} edge of the image. Image 2 is the same man from behind. Exactly the same figure as Images 1 and 2, a toy-like game character with smooth, featureless hips. Same skin, muscles, beard, hair bun, height and pose, head and feet at the same height in the image as in Image 1, full body, orthographic, painting style and white background.",
+ "side_config": "tools/painted_map_pipeline/openai.gpt-image-2.json",
+ "side_note": "2026-11-13: Leonardo refused the naked side as NSFW twice; gpt-image-2 drew it. Right drawn with --other-side <left> (alone it came out 2.4-3.2 % short)."
 }

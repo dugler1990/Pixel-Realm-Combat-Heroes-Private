@@ -7,5 +7,9 @@
  "design": "warm tanned skin, dark brown hair tied in a top knot, full dark brown beard, bare feet, no clothing: smooth, featureless, doll-like hips like a toy figure",
  "match_part": "skin tone, hair and beard colours",
  "match_body": "skin tone, hair and beard colour and painting style",
- "safety": "He is a non-sexual, family-friendly game character: a smooth, featureless, doll-like body with no genitals, like a toy figure. "
+ "safety": "He is a non-sexual, family-friendly game character: a smooth, featureless, doll-like body with no genitals, like a toy figure. ",
+ "shots": {
+  "pelvis_front": {"shows": "his hips and the tops of his thighs, from the front", "paint": "the same warm skin as his belly and thighs: smooth, featureless, doll-like hips like a toy figure, bold hip and thigh muscle shapes, no belt, no cloth"},
+  "pelvis_back": {"shows": "his lower back and the tops of his thighs, from behind", "paint": "the same warm skin as his back and thighs: bold lower-back and glute muscle shapes like a toy figure, no belt, no cloth"}
+ }
 }

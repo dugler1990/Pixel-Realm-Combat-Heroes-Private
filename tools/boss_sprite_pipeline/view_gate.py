@@ -120,9 +120,19 @@ PROMPTS = {
         "the image. Image 2 is the same man from behind. Same armour, same height and pose, head and feet at the "
         "same height in the image as in Image 1, full body, orthographic, white background. Every plate stands "
         "clear of his body."),
+    "quarter": (
+        "Draw the man in Image 1 seen from {view}: a 45 degree three-quarter view, turned toward the {edge} edge of "
+        "the image. Image 2 is the same man from behind. Same armour, same height and pose, head and feet at the "
+        "same height in the image as in Image 1, full body, orthographic, white background."),
 }
+# The 3/4 views (`side --side <corner>`): where the camera stands. Each is turned toward the image's left edge
+# when the camera is on his left (as his left side view), right edge on his right.
+CORNERS = {"front_left": "in front of him and to his left, halfway between his front and his left side",
+           "front_right": "in front of him and to his right, halfway between his front and his right side",
+           "back_left": "behind him and to his left, halfway between his back and his left side",
+           "back_right": "behind him and to his right, halfway between his back and his right side"}
 # Images sent before an attachment: an attachment is image FIRST_INDEX.
-FIRST_INDEX = {"front": 3, "front_masked": 2, "back": 3, "back_masked": 3, "side": 3}
+FIRST_INDEX = {"front": 3, "front_masked": 2, "back": 3, "back_masked": 3, "side": 3, "quarter": 3}
 TEXTS = {
     "front": (
         "your previous attempt with its shape error marked: magenta is where his bare outline (the black shape in "
@@ -362,7 +372,10 @@ def main() -> None:
     ap.add_argument("--input", type=Path, help="front: the bare concept")
     ap.add_argument("--front", type=Path, help="back, side: the approved armoured front")
     ap.add_argument("--back", type=Path, help="side: the approved back")
-    ap.add_argument("--side", choices=("left", "right"), default="left")
+    ap.add_argument("--side", choices=("left", "right", *CORNERS), default="left",
+                    help="side: left | right, or a 3/4 view: " + " | ".join(CORNERS))
+    ap.add_argument("--side-ref", type=Path, action="append", default=[],
+                    help="side: an accepted view of him sent too, so this one matches (repeat; e.g. side_left.png)")
     ap.add_argument("--other-side", type=Path, help="side: the side already drawn, sent mirrored so this one matches")
     ap.add_argument("--margin", type=float, default=MARGIN,
                     help="front: the outline to cover is his bare outline grown by this share of his height")
@@ -386,7 +399,7 @@ def main() -> None:
     check, bigger = "cover", BIGGER
     if a.outfit:
         outfit = json.loads(a.outfit.read_text(encoding="utf-8"))
-        for key in ("front", "back", "front_masked", "back_masked"):
+        for key in ("front", "back", "front_masked", "back_masked", "side", "quarter"):
             if outfit.get(key):
                 PROMPTS[key] = outfit[key]
         check = outfit.get("front_check", "cover")
@@ -407,7 +420,8 @@ def main() -> None:
     a.config = a.config or DEFAULT_CONFIG[(a.view, a.draw)]
     a.out.mkdir(parents=True, exist_ok=True)
 
-    gate_json = a.out / f"gate_{a.view}.json"
+    # one gate per side view (left, front_left, ...): an accept closes that view only
+    gate_json = a.out / (f"gate_side_{a.side}.json" if a.view == "side" else f"gate_{a.view}.json")
     gate = json.loads(gate_json.read_text(encoding="utf-8")) if gate_json.exists() else {}
     name_of = {"front": "front", "back": "back"}.get(a.view, f"side_{a.side}")
     if a.accept is not None:
@@ -451,14 +465,22 @@ def main() -> None:
         name = "back"
     else:
         target = score_mask(Image.open(a.front))
-        prompt = prompt.format(side=a.side, edge=a.side)
+        if a.side in CORNERS:
+            mode = "quarter"
+            prompt = PROMPTS[mode].format(view=CORNERS[a.side], edge=a.side.split("_")[1])
+        else:
+            prompt = prompt.format(side=a.side, edge=a.side)
         refs, name = [a.front.resolve(), a.back.resolve()], f"side_{a.side}"
+        for ref in a.side_ref:
+            refs.append(ref.resolve())
+            label = ref.stem.replace("side_", "").replace("_", " ")
+            prompt += f"\n\nImage {len(refs)} is the same man seen from {'his ' + label + ' side' if label in ('left', 'right') else label}: keep him consistent with it."
         if a.other_side:
             mirrored = a.out / f"side_{a.side}_other_side_mirrored.png"
             Image.open(a.other_side).transpose(Image.FLIP_LEFT_RIGHT).save(mirrored)
             refs.append(mirrored.resolve())
-            prompt += ("\n\nImage 3 is his other side, mirrored: draw this side to match it, with the same armour, "
-                       "size and heights.")
+            prompt += (f"\n\nImage {len(refs)} is his other side, mirrored: draw this side to match it, with the same "
+                       "armour, size and heights.")
     if masked:
         outline_image(target).save(a.out / f"{a.view}_target_mask.png")
         canvas_path = a.out / f"{a.view}_canvas.png"
@@ -484,7 +506,7 @@ def main() -> None:
     if a.dry_run:
         extra = refs + [Path(p) for p in attach]
         print(with_criticism(prompt, criticism, attach,
-                             first_index=FIRST_INDEX[mode] + (1 if a.view == "side" and a.other_side else 0)), end="")
+                             first_index=FIRST_INDEX[mode] + (len(refs) - 2 if a.view == "side" else 0)), end="")
         print("\n--- images: " + ", ".join(str(p) for p in extra), file=sys.stderr)
         return
     client = make_image_client(config)
@@ -493,7 +515,7 @@ def main() -> None:
         tag = a.out / f"{a.view}_attempt_{n:02d}"
         draw_path = tag.with_suffix(".png")
         sent_prompt = with_criticism(prompt, criticism, attach,
-                                     first_index=FIRST_INDEX[mode] + (1 if a.view == "side" and a.other_side else 0))
+                                     first_index=FIRST_INDEX[mode] + (len(refs) - 2 if a.view == "side" else 0))
         tag.with_name(tag.name + "_prompt.txt").write_text(sent_prompt, encoding="utf-8")
         extra = refs + [Path(p) for p in attach]
         if masked:

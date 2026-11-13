@@ -69,5 +69,9 @@
   "sheet": {
    "sheet": "generated/bosses/barb/explode2/v9_fb/slots/SLOTS_SHEET.png"
   }
- }
+ },
+ "trellis_models": [
+  "front_back"
+ ],
+ "trellis_models_note": "v9 (2026-11-09) was built before the models choice: front only, front + back, front + back + both sides; front + back picked."
 }

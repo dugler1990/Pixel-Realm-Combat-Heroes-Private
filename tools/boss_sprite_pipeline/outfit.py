@@ -1,17 +1,21 @@
 """The outfit pipeline's driver: one command per character + outfit (PROCESS_outfit.md).
 
     python -m tools.boss_sprite_pipeline.outfit <character> <outfit> [--status] [--backfill]
-        [--from STEP] [--only STEP] [--host IP --port PORT] [--retry R | --accept N | --pick M | --redo VIEW...]
+        [--from STEP] [--only STEP] [--host IP --port PORT] [--models a,b] [--view V]
+        [--retry R | --accept N | --pick M | --redo VIEW...]
 
 Runs the outfit's steps in order from the first one not done, recording each in
-<data>/generated/bosses/<character>/outfits/<outfit>/run.json, and stops:
-- at a gate: front / back (view_gate draws; --accept N or --retry r|r1|rb|"r <why> @img"), trellis (both models
-  made; --pick front_only|front_back, by eye for now), paint (look at the check image; --accept, or --redo views)
+<data>/generated/bosses/<character>/outfits/<outfit>/run.json (log per step: <run>/logs/<step>.log), and stops:
+- at a gate: front / back / sides (view_gate draws; --accept N or --retry r|r1|rb|"r <why> @img"; sides: --view
+  left|front_left|back_left), trellis (several models: --pick one, by eye), paint (look at the check image;
+  --accept, or --redo views)
+--models: which TRELLIS models to build (front_only, front_back, front_back_sides, eight_views; default
+  DEFAULT_MODELS, or the outfit's "trellis_models"); they decide which drawings are asked for.
 - before a pod step without --host / --port (or POD_HOST / POD_PORT); you start and stop the pod
 - at the first step that fails.
 Steps by the outfit's kind:
-    body    front back trellis skeleton paint export
-    armour  front back trellis skeleton paint views sam3 cut holopart merge worn slots sheet export
+    body    front back sides trellis skeleton paint export
+    armour  front back sides trellis skeleton paint views sam3 cut holopart merge worn slots sheet export
     cut     views sam3 cut holopart merge worn slots sheet export
 --status   what is done, with outputs. --backfill: run.json from the outfit's "existing" outputs (made before the
            driver: v9). --only STEP: that step alone (rerun). --from STEP: from there on, rerunning what is done.
@@ -24,6 +28,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -33,12 +38,28 @@ from pathlib import Path
 TOOLS = Path(__file__).resolve().parent
 REPO = TOOLS.parents[1]
 STEPS = {
-    "body": ["front", "back", "trellis", "skeleton", "paint", "export"],
-    "armour": ["front", "back", "trellis", "skeleton", "paint", "views", "sam3", "cut", "holopart", "merge", "worn",
-               "slots", "sheet", "export"],
+    "body": ["front", "back", "sides", "trellis", "skeleton", "paint", "export"],
+    "armour": ["front", "back", "sides", "trellis", "skeleton", "paint", "views", "sam3", "cut", "holopart", "merge",
+               "worn", "slots", "sheet", "export"],
     "cut": ["views", "sam3", "cut", "holopart", "merge", "worn", "slots", "sheet", "export"],
 }
 POD_STEPS = {"trellis", "sam3", "holopart"}
+# TRELLIS models and the drawings each needs. The default is a setting: an outfit's "trellis_models" or --models
+# overrides it (2026-11-13, naked barb: front + back + sides and 8 views both better than front + back by eye).
+MODEL_VIEWS = {
+    "front_only": ["front"],
+    "front_back": ["front", "back"],
+    "front_back_sides": ["front", "back", "left", "right"],
+    "eight_views": ["front", "back", "left", "right", "front_left", "front_right", "back_left", "back_right"],
+}
+DEFAULT_MODELS = ["eight_views"]
+# Side views in drawing order: the left side first (the 3/4 views are sent it); the right-hand views are the
+# left-hand ones mirrored unless the outfit says "mirror_right": false (drawn alone they came out short, as four
+# small figures, or from the front: 2026-11-13).
+SIDE_ORDER = ["left", "front_left", "back_left", "right", "front_right", "back_right"]
+MIRROR_OF = {"right": "left", "front_right": "front_left", "back_right": "back_left"}
+LOG = None                       # the running step's log file (<run>/logs/<step>.log)
+COST = [0.0]                     # $ printed by the running step's commands (paint prints one per view)
 
 
 class Stop(Exception):
@@ -95,6 +116,15 @@ class Ctx:
             return self.data(self.o["source_mesh"])
         return self.out("paint", "painted")
 
+    def models(self) -> list[str]:
+        """The TRELLIS models this run builds: --models (kept in run.json), else the outfit's, else the default."""
+        return list(self.run.get("models") or self.o.get("trellis_models") or DEFAULT_MODELS)
+
+    def views(self) -> list[str]:
+        """The drawings the chosen models need."""
+        need = {v for m in self.models() for v in MODEL_VIEWS[m]}
+        return [v for v in ["front", "back"] + SIDE_ORDER if v in need]
+
 
 def call(cmd: list, ok: str | None = None, cwd: Path = REPO, show: bool = True) -> str:
     """Run a step's command; stream its output; fail unless it exits 0 (and prints `ok`, if given)."""
@@ -102,18 +132,27 @@ def call(cmd: list, ok: str | None = None, cwd: Path = REPO, show: bool = True) 
     p = subprocess.Popen([str(c) for c in cmd], cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                          text=True, encoding="utf-8", errors="replace")
     lines = []
+    if LOG:
+        LOG.write("$ " + " ".join(str(c) for c in cmd) + "\n")
     for line in p.stdout:
         lines.append(line)
         if show:
             print("  | " + line.rstrip(), flush=True)
+        if LOG:
+            LOG.write(line)
+            LOG.flush()
     p.wait()
     out = "".join(lines)
+    COST[0] += sum(float(x) for x in re.findall(r"\$(\d+\.\d+)", out))
     if p.returncode or (ok and ok not in out):
         raise Stop(f"{Path(str(cmd[3] if str(cmd[1]) == '-m' else cmd[1])).name} failed (exit {p.returncode}{'' if not ok or ok in out else ', no ' + ok})")
     return out
 
 
 def view_gate(ctx: Ctx, view: str, a) -> None:
+    if view not in ctx.views():
+        ctx.record(view, status="skipped", note=f"not needed by {ctx.models()}")
+        return
     o, gate_dir = ctx.o, ctx.work / "gate"
     gate_json = gate_dir / f"gate_{view}.json"
     base = [sys.executable, "-m", "tools.boss_sprite_pipeline.view_gate", view, "--out", gate_dir,
@@ -140,6 +179,53 @@ def view_gate(ctx: Ctx, view: str, a) -> None:
                                                          "gate": str(gate_json)})
 
 
+def s_sides(ctx: Ctx, a) -> None:
+    """The side and 3/4 views the chosen models need, one gate each (gate_side_<view>.json). A view is done once
+    its cut-out gate/side_<view>.png exists (view_gate's accept writes it; a mirrored one is written here)."""
+    o, gate_dir = ctx.o, ctx.work / "gate"
+    need = [v for v in SIDE_ORDER if v in ctx.views()]
+    if not need:
+        ctx.record("sides", status="skipped", note=f"not needed by {ctx.models()}")
+        return
+    mirror = o.get("mirror_right", True)
+    if a.view and a.view not in need:
+        raise Stop(f"--view {a.view} is not needed by {ctx.models()}: {need}")
+    base = [sys.executable, "-m", "tools.boss_sprite_pipeline.view_gate", "side", "--out", gate_dir, "--outfit",
+            ctx.file, "--front", ctx.out("front", "draw"), "--back", ctx.out("back", "draw")]
+    if o.get("side_config"):
+        base += ["--config", ctx.tool(o["side_config"])]
+    for v in need:
+        cutout = gate_dir / f"side_{v}.png"
+        if cutout.is_file():
+            continue
+        if v in MIRROR_OF and mirror:
+            src = gate_dir / f"side_{MIRROR_OF[v]}.png"
+            from PIL import Image, ImageOps
+            ImageOps.mirror(Image.open(src)).save(cutout)
+            print(f"  {v}: {MIRROR_OF[v]} mirrored -> {cutout}", flush=True)
+            continue
+        cmd = base + ["--side", v]
+        if v != "left" and (gate_dir / "side_left.png").is_file():
+            cmd += ["--side-ref", gate_dir / "side_left.png"]
+        if v in MIRROR_OF:
+            cmd += ["--other-side", gate_dir / f"side_{MIRROR_OF[v]}.png"]
+        gate_json = gate_dir / f"gate_side_{v}.json"
+        gate = json.loads(gate_json.read_text(encoding="utf-8")) if gate_json.is_file() else {}
+        mine = a.view == v or (a.view is None and v == next(x for x in need if not (gate_dir / f"side_{x}.png").is_file()))
+        if mine and a.accept is not None:
+            call(cmd + ["--accept", a.accept], ok="accepted attempt")
+            continue
+        if not gate.get("attempts") or (mine and a.retry):
+            call(cmd + ["--no-ask"] + (["--retry", a.retry] if mine and a.retry else []), ok="PENDING")
+            gate = json.loads(gate_json.read_text(encoding="utf-8"))
+        last = gate["attempts"][-1]
+        ctx.record("sides", status="gate", view=v, attempts=len(gate["attempts"]), sheet=gate.get("sheet"))
+        raise Stop(f"{v} attempt {last['attempt']} drawn: look at {gate.get('sheet')}\n"
+                   f"  accept:  outfit.py {ctx.character} {ctx.outfit} --only sides --view {v} --accept {last['attempt']}\n"
+                   f"  redraw:  outfit.py {ctx.character} {ctx.outfit} --only sides --view {v} --retry r|\"r <why> @img\"")
+    ctx.record("sides", status="done", view=None, outputs={v: str(gate_dir / f"side_{v}.png") for v in need})
+
+
 def pod_args(ctx: Ctx, a) -> list:
     host, port = a.host or os.environ.get("POD_HOST"), a.port or os.environ.get("POD_PORT")
     if not host or not port:
@@ -152,29 +238,53 @@ def pod(ctx: Ctx, step: str, a, token: bool = False, extra: list = ()) -> float:
     base = [sys.executable, TOOLS / "gpu_box" / "pod.py", step]
     args = pod_args(ctx, a) + list(extra)
     if token:
-        call(base + ["token"] + args, ok="token written")
+        call(base + ["token"] + args, ok="TOKEN_OK")
     for action in ("push", "run", "pull"):
         call(base + [action] + args, ok="PULL_OK" if action == "pull" else None)
     return round((time.time() - t0) / 60, 1)
 
 
+def trellis_sheet(ctx: Ctx, models: list[str]) -> Path:
+    """Each model from the front, his left side and behind, one row per model: TRELLIS_SHEET.png."""
+    from PIL import Image, ImageDraw
+    out, tiles = ctx.work / "trellis", ctx.work / "trellis" / "sheet_tiles"
+    call([ctx.bpy, TOOLS / "gpu_box" / "trellis_sheet.py", out, tiles, *models], ok="TILES_OK", show=False)
+    w, h, top = 512, 768, 30
+    sheet = Image.new("RGB", (w * 3, (h + top) * len(models)), "white")
+    d = ImageDraw.Draw(sheet)
+    for r, m in enumerate(models):
+        d.text((8, r * (h + top) + 8), f"{m}   (front, his left side, back)", fill="black")
+        for c, yaw in enumerate((0, 90, 180)):
+            sheet.paste(Image.open(tiles / f"{m}_{yaw}.png").convert("RGB"), (c * w, r * (h + top) + top))
+    path = out / "TRELLIS_SHEET.png"
+    sheet.save(path)
+    return path
+
+
 def s_trellis(ctx: Ctx, a) -> None:
-    out = ctx.work / "trellis"
-    have = {m: out / f"{m}_from_front.glb" for m in ("front_only", "front_back")}
-    if not any(p.is_file() for p in have.values()):
-        if not (ctx.work / "gate" / "front.png").is_file():
-            shutil.copy(ctx.out("front", "cutout"), ctx.work / "gate" / "front.png")
-        minutes = pod(ctx, "trellis", a, token=True)
-        ctx.record("trellis", pod_minutes=minutes)
-    models = {m: str(p) for m, p in have.items() if p.is_file()}
-    if a.pick:
-        if a.pick not in models:
-            raise Stop(f"no {a.pick} model; have {sorted(models)}")
-        ctx.record("trellis", status="done", picked=a.pick, outputs={**models, "picked": models[a.pick]})
+    out, models = ctx.work / "trellis", ctx.models()
+    have = {m: out / f"{m}_from_front.glb" for m in MODEL_VIEWS}
+    missing = [m for m in models if not have[m].is_file()]
+    if missing:
+        gate = ctx.work / "gate"
+        if not (gate / "front.png").is_file():
+            shutil.copy(ctx.out("front", "cutout"), gate / "front.png")
+        minutes = pod(ctx, "trellis", a, token=True, extra=["--models", ",".join(missing)])
+        ctx.record("trellis", pod_minutes=round(ctx.step("trellis").get("pod_minutes", 0) + minutes, 1))
+        lost = [m for m in missing if not have[m].is_file()]
+        if lost:
+            raise Stop(f"TRELLIS gave no {lost}")
+    made = {m: str(have[m]) for m in models}
+    sheet = trellis_sheet(ctx, models)
+    pick = a.pick or (models[0] if len(models) == 1 else None)
+    if pick:
+        if pick not in made:
+            raise Stop(f"{pick} is not one of this run's models {models}")
+        ctx.record("trellis", status="done", picked=pick, outputs={**made, "picked": made[pick], "sheet": str(sheet)})
         return
-    ctx.record("trellis", status="gate", outputs=models)
-    raise Stop("TRELLIS made " + ", ".join(models) + ": open both, pick by eye:\n"
-               f"  outfit.py {ctx.character} {ctx.outfit} --only trellis --pick front_only|front_back")
+    ctx.record("trellis", status="gate", picked=None, outputs={**made, "sheet": str(sheet)})
+    raise Stop(f"TRELLIS made {', '.join(models)}: look at {sheet}, pick one:\n"
+               f"  outfit.py {ctx.character} {ctx.outfit} --only trellis --pick {'|'.join(models)}")
 
 
 def s_skeleton(ctx: Ctx, a) -> None:
@@ -257,18 +367,21 @@ def s_merge(ctx: Ctx, a) -> None:
 
 def s_worn(ctx: Ctx, a) -> None:
     o = ctx.o
-    body = ctx.data(o["rig_fit"])
+    body, note = ctx.data(o["rig_fit"]), None
     if o.get("worn_on"):
         other = Ctx(ctx.character, o["worn_on"])
         if other.step("paint").get("status") != "done":
-            ctx.record("worn", status="skipped", note=f"{o['worn_on']} not painted yet: worn on {o['rig_fit']}")
+            note = f"{o['worn_on']} not painted yet: worn on {o['rig_fit']}"   # recorded only once the test ran
         else:
             body = other.painted()
     worn = ctx.work / "worn"
-    call([ctx.bpy, TOOLS / "explode" / "explode_pose.py", "--texture", "--aligned", "--rigid", "--hide-under", body,
-          ctx.data(o["roles"]), worn, f"outfit={ctx.out('merge', 'shells')}"])
+    # A cut keeps the rest of the mesh as "body": only the pieces are worn (piece_weights has no rule for it).
+    pieces = sorted(set(o.get("sam", {}).get("prompt_to_part", {}).values()) - {"body"})
+    only = ["--only", ",".join(pieces)] if pieces else []
+    call([ctx.bpy, TOOLS / "explode" / "explode_pose.py", "--texture", "--aligned", "--rigid", "--hide-under", *only,
+          body, ctx.data(o["roles"]), worn, f"outfit={ctx.out('merge', 'shells')}"])
     sheet = next(iter(glob.glob(str(worn / "POSE_COMPARE*.png"))), None)
-    ctx.record("worn", status="done", body=str(body), outputs={"sheet": sheet})
+    ctx.record("worn", status="done", body=str(body), note=note, outputs={"sheet": sheet})
 
 
 def s_slots(ctx: Ctx, a) -> None:
@@ -292,7 +405,7 @@ def s_export(ctx: Ctx, a) -> None:
 
 
 RUN = {"front": lambda c, a: view_gate(c, "front", a), "back": lambda c, a: view_gate(c, "back", a),
-       "trellis": s_trellis, "skeleton": s_skeleton, "paint": s_paint, "views": s_views, "sam3": s_sam3,
+       "sides": s_sides, "trellis": s_trellis, "skeleton": s_skeleton, "paint": s_paint, "views": s_views, "sam3": s_sam3,
        "cut": s_cut, "holopart": s_holopart, "merge": s_merge, "worn": s_worn, "slots": s_slots, "sheet": s_sheet,
        "export": s_export}
 
@@ -343,10 +456,20 @@ def main(argv=None) -> None:
     ap.add_argument("--port")
     ap.add_argument("--retry")
     ap.add_argument("--accept", type=int)
-    ap.add_argument("--pick", choices=("front_only", "front_back"))
+    ap.add_argument("--pick", choices=tuple(MODEL_VIEWS))
+    ap.add_argument("--models", help=f"TRELLIS models, comma-separated, kept in run.json: {', '.join(MODEL_VIEWS)} "
+                                     f"(default: the outfit's trellis_models, else {DEFAULT_MODELS})")
+    ap.add_argument("--view", choices=SIDE_ORDER, help="sides: the view --accept / --retry answers")
     ap.add_argument("--redo", nargs="+")
     a = ap.parse_args(argv)
     ctx = Ctx(a.character, a.outfit)
+    if a.models:
+        models = [m for m in a.models.split(",") if m]
+        bad = sorted(set(models) - set(MODEL_VIEWS))
+        if bad or not models:
+            sys.exit(f"unknown models {bad}; choose from {list(MODEL_VIEWS)}")
+        ctx.run["models"] = models
+        ctx.save()
     if a.backfill:
         backfill(ctx)
     if a.status or a.backfill:
@@ -357,17 +480,35 @@ def main(argv=None) -> None:
         if s and s not in steps:
             sys.exit(f"{s} is not a step of a {ctx.o['kind']} outfit: {steps}")
     todo = [a.only] if a.only else steps[steps.index(a.start):] if a.start else [s for s in steps if not ctx.done(s)]
+    global LOG
     for name in todo:
         print(f"=== {name}", flush=True)
+        (ctx.work / "logs").mkdir(parents=True, exist_ok=True)
+        LOG = open(ctx.work / "logs" / f"{name}.log", "a", encoding="utf-8")
+        LOG.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} {name} {' '.join(sys.argv[1:])}\n")
+        COST[0] = 0.0
         try:
             RUN[name](ctx, a)
         except Stop as stop:
+            LOG.write(f"STOPPED: {stop}\n")
+            LOG.close()
+            note_cost(ctx, name)
             print(f"\nSTOPPED at {name}: {stop}")
             sys.exit(2)
+        LOG.close()
+        note_cost(ctx, name)
+        if name in POD_STEPS and not any(s in POD_STEPS and not ctx.done(s) for s in steps[steps.index(name) + 1:]):
+            print("\nstop the pod  (no pod step left for this outfit)", flush=True)
         if a.only:
             break
-        a.accept = a.retry = a.pick = a.redo = None        # those answered the first step only
+        a.accept = a.retry = a.pick = a.redo = a.view = None   # those answered the first step only
     print("\nOUTFIT_DONE" if not a.only else f"\nSTEP_DONE {a.only}")
+
+
+def note_cost(ctx: Ctx, name: str) -> None:
+    """Add the $ the step's commands printed (paint: one line per view) to its cost in run.json."""
+    if COST[0]:
+        ctx.record(name, cost_usd=round(ctx.step(name).get("cost_usd", 0) + COST[0], 3))
 
 
 if __name__ == "__main__":

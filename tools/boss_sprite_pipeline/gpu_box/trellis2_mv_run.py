@@ -3,6 +3,7 @@
 
     /workspace/vendor/trellis2-venv/bin/python -u /workspace/gpu_box/trellis2_mv_run.py \
       --front /workspace/in/<front>.png --back /workspace/in/<back>.png [--right ...] [--left ...] \
+      [--front_left ...] [--front_right ...] [--back_left ...] [--back_right ...] \
       --out-dir /workspace/out --name <stem> [--band 0.03]
 
 Images: real-alpha cutouts, same figure, same pose and framing; back = seen from behind (his left on the image's
@@ -15,19 +16,19 @@ import trellis2_run as base                       # applies the patches, chdir +
 import torch
 from PIL import Image
 from trellis2.pipelines import Trellis2ImageTo3DPipeline
-from trellis2_multiview import run_multiview
+from trellis2_multiview import VIEWS, run_multiview
 
 
 def main():
     ap = argparse.ArgumentParser()
-    for v in ("front", "back", "right", "left"):
+    for v in VIEWS:                    # front back right left front_left front_right back_left back_right
         ap.add_argument(f"--{v}", required=v == "front")
     ap.add_argument("--out-dir", default="/workspace/out")
     ap.add_argument("--name", required=True)
     ap.add_argument("--band", type=float, default=0.03)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
-    images = {v: Image.open(getattr(a, v)).convert("RGBA") for v in ("front", "back", "right", "left") if getattr(a, v)}
+    images = {v: Image.open(getattr(a, v)).convert("RGBA") for v in VIEWS if getattr(a, v)}
     for v, im in images.items():
         print("IMAGE", v, getattr(a, v), im.size, flush=True)
     out = Path(a.out_dir)

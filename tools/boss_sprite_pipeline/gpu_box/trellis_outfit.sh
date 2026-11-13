@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# TRELLIS.2 for the outfit pipeline: both models in one pod session. Run ON THE POD (pod.py trellis run does):
-#     bash /workspace/gpu_box/trellis_outfit.sh
+# TRELLIS.2 for the outfit pipeline: the chosen models in one pod session. Run ON THE POD (pod.py trellis run does):
+#     bash /workspace/gpu_box/trellis_outfit.sh [model ...]     (front_only front_back front_back_sides eight_views)
 # In: /workspace/in/front.png [and back.png] (view_gate's accepted cut-outs, real alpha); the HF token at
 # /workspace/.cache/huggingface/token (pod.py token). Out: /workspace/out/front_only_from_front.glb and, with a
-# back, front_back_from_front.glb. Ends with TRELLIS_OK, or TRELLIS_FAILED.
+# back, front_back_from_front.glb; with side_left.png + side_right.png too, front_back_sides_from_front.glb; with
+# the four 3/4 views too (side_front_left.png ...), eight_views_from_front.glb (a model
+# already in out/ is kept, not remade). Ends with TRELLIS_OK, or TRELLIS_FAILED.
 # From pod_chains/v9_chain.sh (2026-11-09, pod 5 A40): install for this GPU's architecture with the models
 # downloading alongside, flash-attn check, then trellis2_mv_run.py per job (front only; front + back).
 set -uo pipefail
@@ -14,7 +16,9 @@ export CUDA_HOME=/usr/local/cuda PATH=/usr/local/cuda/bin:$PATH CPATH=/usr/inclu
   ATTN_BACKEND=sdpa SPARSE_ATTN_BACKEND=flash_attn PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 echo "=== $(date +%T) GPU $(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader) arch $CC"
 V=/workspace/vendor/trellis2-venv/bin/python
-if ! $V -c "import trellis2" 2>/dev/null; then
+# Installed = the last setup ended in INSTALL_OK ("import trellis2" fails outside the TRELLIS.2 folder, so it
+# reinstalled every run: 2026-11-13, ~12 min lost).
+if ! grep -q INSTALL_OK /workspace/setup.log 2>/dev/null; then
   bash /workspace/gpu_box/trellis2_setup.sh > /workspace/setup.log 2>&1 &
   SETUP=$!
   until $V -c "import huggingface_hub" 2>/dev/null; do sleep 15; done
@@ -41,9 +45,23 @@ cd /workspace
 I=/workspace/in; O=/workspace/out
 jobs=("front_only|--front $I/front.png")
 [ -s $I/back.png ] && jobs+=("front_back|--front $I/front.png --back $I/back.png")
+[ -s $I/back.png ] && [ -s $I/side_left.png ] && [ -s $I/side_right.png ] && \
+  jobs+=("front_back_sides|--front $I/front.png --back $I/back.png --left $I/side_left.png --right $I/side_right.png")
+EIGHT="--front $I/front.png --back $I/back.png"
+for v in left right front_left front_right back_left back_right; do
+  [ -s $I/side_$v.png ] && EIGHT="$EIGHT --$v $I/side_$v.png" || EIGHT=""
+  [ -z "$EIGHT" ] && break
+done
+[ -n "$EIGHT" ] && [ -s $I/back.png ] && jobs+=("eight_views|$EIGHT")
+WANT=" $* "                      # the models asked for (pod.py --models); none = every model the views allow
+for m in "$@"; do
+  printf '%s\n' "${jobs[@]}" | grep -q "^$m|" || { echo "MODEL_MISSING_VIEWS $m"; echo "TRELLIS_FAILED"; exit 1; }
+done
 ok=1
 for job in "${jobs[@]}"; do
   n=${job%%|*}; args=${job#*|}
+  [ $# -gt 0 ] && [[ "$WANT" != *" $n "* ]] && continue
+  if [ -s $O/${n}_from_front.glb ]; then echo "GLB_OK $n (already made)"; continue; fi
   echo "=== $(date +%T) $n"
   $V -u /workspace/gpu_box/trellis2_mv_run.py $args --out-dir $O --name $n > /workspace/logs/$n.log 2>&1
   if [ -s $O/${n}_from_front.glb ]; then echo "GLB_OK $n"; else echo "GLB_MISSING $n"; tail -20 /workspace/logs/$n.log; ok=0; fi
