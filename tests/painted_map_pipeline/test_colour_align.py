@@ -60,7 +60,9 @@ def test_paired_colour_alignment_maps_new_art_and_preserves_geometry():
     ).mean()
 
     assert after_error < before_error * 0.35
-    assert np.array_equal(result[:, :join], source[:, :join])
+    # Under the padding the model's own pixels are recoloured too (the padding is pasted
+    # over them later; a feather fades into them), so there they become padding colours.
+    assert np.array_equal(result[:, :join, :3], accepted[:, :join])
     assert np.all(result[20:30, join + 20 : join + 30, :3] == 0)
     assert info["corrected_pixels"] == int(painted_pending.sum())
     assert info["strength"] == 1.0
@@ -200,13 +202,23 @@ def test_match_restores_the_padding_contrast_the_swap_loses():
     assert abs(spreads["match"] - 1.0) < 0.1
 
 
-def test_match_leaves_the_padding_and_the_black_gaps_alone():
+def test_match_leaves_the_black_gaps_alone():
     raw, accepted, locked, pending, join = _flat_new_cell_scene()
     raw[10:20, join + 30 : join + 40, :3] = 0
     out, _ = align_to_paired_padding(*(Image.fromarray(a) for a in (raw, accepted, locked, pending)))
+    assert not np.asarray(out)[10:20, join + 30 : join + 40, :3].any()
+
+
+def test_both_sides_of_a_feathered_join_are_corrected():
+    """The feather fades the padding into the model's pixels under it, so those are corrected
+    the same way as the new cell; left raw they made a step at the join."""
+    raw, accepted, locked, pending, join = _flat_new_cell_scene()
+    out, info = align_to_paired_padding(*(Image.fromarray(a) for a in (raw, accepted, locked, pending)))
     out = np.asarray(out)
-    assert np.array_equal(out[:, :join], raw[:, :join])
-    assert not out[10:20, join + 30 : join + 40, :3].any()
+    under, new = _lightness(out[:, join - 6 : join, :3]).mean(), _lightness(out[:, join : join + 6, :3]).mean()
+    raw_under = _lightness(raw[:, join - 6 : join, :3]).mean()
+    assert info["corrected_under_padding"] == int((locked > 0).sum())
+    assert abs(under - new) < abs(raw_under - new)
 
 
 def test_an_unknown_colour_method_is_refused():

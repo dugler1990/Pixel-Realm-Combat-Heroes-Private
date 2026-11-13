@@ -1,7 +1,8 @@
 """Deterministic colour alignment against accepted padding.
 
-Steps, all written to the new cell only (the caller pastes the padding afterwards; black gaps
-stay black):
+Steps, written to the new cell and to the model's own pixels under the padding (the caller
+pastes the padding over those afterwards, so a feathered paste fades between two corrected
+sides); black gaps stay black:
 
 1. Swap: one shift per colour group, learned from the model's raw picture and the accepted
    padding at the same spots.
@@ -151,19 +152,28 @@ def _apply_lookup(rgb: np.ndarray, lookup: np.ndarray, strength: float) -> np.nd
     return lab + lookup[indices] * float(strength)
 
 
-def _match_lightness(lab: np.ndarray, region: np.ndarray, target: np.ndarray) -> np.ndarray:
-    """Remap lightness inside ``region`` so its distribution equals ``target`` (rank for rank).
+def _match_lightness(
+    lab: np.ndarray, region: np.ndarray, target: np.ndarray, apply_to: np.ndarray
+) -> np.ndarray:
+    """Remap lightness so that inside ``region`` its distribution equals ``target``.
 
+    The mapping is learned from ``region`` (rank for rank) and applied to every pixel of
+    ``apply_to``, so pixels outside the region with the same lightness get the same answer.
     Only L moves; the hue the swap chose is kept.
     """
     if not region.any() or not len(target):
         return lab
-    source = lab[..., 0][region]
-    order = np.argsort(source, kind="stable")
-    ranks = np.empty(len(source), dtype=np.float64)
-    ranks[order] = np.linspace(0.0, 1.0, len(source))
+    source = np.sort(lab[..., 0][region])
+    values = lab[..., 0][apply_to]
+    # Middle rank of equal values: with few distinct colours, the lowest rank would send a
+    # whole colour to the bottom of its share of the target.
+    first = np.searchsorted(source, values, side="left")
+    last = np.searchsorted(source, values, side="right") - 1
+    rank = (first + np.maximum(last, first)) / 2.0 / max(len(source) - 1, 1)
     out = lab.copy()
-    out[..., 0][region] = np.interp(ranks, np.linspace(0.0, 1.0, len(target)), np.sort(target))
+    out[..., 0][apply_to] = np.interp(
+        np.clip(rank, 0.0, 1.0), np.linspace(0.0, 1.0, len(target)), np.sort(target)
+    )
     return out
 
 
@@ -209,8 +219,8 @@ def align_to_paired_padding(
     ``accepted_padding`` is the neighbours' pixels. ``raw`` is the model output before cut or
     warp. The pairs are read from ``raw`` when it is passed, because a cut deletes the model's
     overlap. ``method`` is "match" (swap, brightness mix, join fix, snap) or "swap" (swap and
-    snap only, the earlier behaviour). Only the new cell is written. Accepted padding and black
-    gaps are not.
+    snap only, the earlier behaviour). The new cell and the model's own pixels under the padding
+    are written (the caller pastes the padding over the latter); black gaps are not.
     """
     if strength < 0:
         raise ValueError("paired colour alignment strength must be non-negative")
@@ -231,6 +241,12 @@ def align_to_paired_padding(
     pair_rgb = np.asarray(pair_source.convert("RGB"))
     rgb = rgba[..., :3]
     painted_pending = pending & (rgb.sum(axis=2) > CONTENT_MIN_RGB_SUM)
+    # The model's own pixels under the padding are corrected too. The padding is pasted over
+    # them, so they never show at full strength -- but a feathered paste fades the padding
+    # into them, and left uncorrected they pulled the padding side of the fade back toward
+    # the model's colours while the new side had been corrected: a step at the join.
+    painted_under = locked & (rgb.sum(axis=2) > CONTENT_MIN_RGB_SUM)
+    write = painted_pending | painted_under
     lookup, populated_bins = _paired_delta_lut(pair_rgb, accepted, locked)
     corrected = _apply_lookup(rgb, lookup, strength)
     if method == "match":
@@ -240,18 +256,21 @@ def align_to_paired_padding(
             & (pair_rgb.sum(axis=2) > CONTENT_MIN_RGB_SUM)
         )
         accepted_lab = _lab(accepted)
-        corrected = _match_lightness(corrected, painted_pending, accepted_lab[..., 0][painted_locked])
+        corrected = _match_lightness(
+            corrected, painted_pending, accepted_lab[..., 0][painted_locked], write
+        )
         model_copy = _apply_lookup(pair_rgb, lookup, strength)
         corrected = corrected + _join_correction(accepted_lab - model_copy, painted_locked, locked) * float(strength)
     corrected_rgb = cv2.cvtColor(np.clip(corrected, 0, 255).astype(np.uint8), cv2.COLOR_LAB2RGB)
-    rgb[painted_pending] = corrected_rgb[painted_pending]
+    rgb[write] = corrected_rgb[write]
     palette = _padding_palette(accepted, locked)
-    _snap_to_palette(rgb, painted_pending, palette)
+    _snap_to_palette(rgb, write, palette)
     return Image.fromarray(rgba), {
         "method": method,
         "strength": float(strength),
         "paired_pixels": int(locked.sum()),
         "corrected_pixels": int(painted_pending.sum()),
+        "corrected_under_padding": int(painted_under.sum()),
         "populated_colour_bins": int(populated_bins),
         "palette_colours": int(len(palette)),
     }
