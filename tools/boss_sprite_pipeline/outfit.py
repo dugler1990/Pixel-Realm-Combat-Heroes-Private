@@ -280,7 +280,13 @@ def s_trellis(ctx: Ctx, a) -> None:
     if pick:
         if pick not in made:
             raise Stop(f"{pick} is not one of this run's models {models}")
-        ctx.record("trellis", status="done", picked=pick, outputs={**made, "picked": made[pick], "sheet": str(sheet)})
+        if ctx.step("trellis").get("last_picked") not in (None, pick):
+            steps = STEPS[ctx.o["kind"]]
+            for later in steps[steps.index("trellis") + 1:]:          # built on the other model: build again
+                if ctx.step(later).get("status") in ("done", "gate"):
+                    ctx.record(later, status="redo", note=f"TRELLIS pick changed to {pick}")
+        ctx.record("trellis", status="done", picked=pick, last_picked=pick,
+                   outputs={**made, "picked": made[pick], "sheet": str(sheet)})
         return
     ctx.record("trellis", status="gate", picked=None, outputs={**made, "sheet": str(sheet)})
     raise Stop(f"TRELLIS made {', '.join(models)}: look at {sheet}, pick one:\n"
