@@ -20,6 +20,8 @@ class BasePlayer(Entity):
     # Bare direction names are the walk cycles; every other status ("_idle", "_attack",
     # "sit_*", "jump_*", "land_*", "leap_*") is not locomotion and stays time-based.
     WALK_STATUSES = frozenset({"up", "down", "left", "right"})
+    # Draw-only 3D mesh (player_mesh.PlayerMesh) when the selected hero has a mesh_pack; None = sprite.
+    mesh_skin = None
 
     def __init__(self,
                  pos,
@@ -611,6 +613,8 @@ class BasePlayer(Entity):
         self.action_controller.tick(self, dt, QuadTree, entity_quad_tree)
         if not self.action_controller.suppresses_locomotion(self):
             self.move(self.stats["speed"], QuadTree, entity_quad_tree)
+        if self.mesh_skin is not None:
+            self.mesh_skin.update(self, dt)
         self.energy_recovery()
         self.health_recovery()
         self.player_death()
@@ -705,7 +709,8 @@ class SpecificPlayer(BasePlayer):
                  input_manager,
                  QuadTree,
                  entity_quad_tree,
-                 layout_callback_update_quad_tree = None):
+                 layout_callback_update_quad_tree = None,
+                 mesh_pack = None):
         
         character_assets = selected_player_info_dir
         super().__init__(pos,
@@ -731,4 +736,16 @@ class SpecificPlayer(BasePlayer):
          # Initialize hitbox for SpecificPlayer
         self.hitbox = self.rect.inflate(-6, HITBOX_OFFSET["player"])
         self.capture_feet_anchor()
+        if mesh_pack:
+            self._attach_mesh(mesh_pack)
+
+    def _attach_mesh(self, mesh_pack):
+        """Draw-only mesh over the sprite body, sized to the sprite figure. Missing pack: stays a sprite."""
+        try:
+            from player_mesh import PlayerMesh
+            figure_px = self.image.get_bounding_rect().height
+            self.mesh_skin = PlayerMesh(mesh_pack, figure_px)
+        except (OSError, ValueError, KeyError) as exc:
+            _combat_log.warning("mesh_pack %r not loaded, sprite player: %s", mesh_pack, exc)
+            self.mesh_skin = None
 # You can add more specific player classes here in a similar fashion.

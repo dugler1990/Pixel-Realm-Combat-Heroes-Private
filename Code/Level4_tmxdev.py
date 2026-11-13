@@ -254,8 +254,10 @@ from level_layouts import LAYOUT_TO_LEVEL
 
 
 class Level4:
-    def __init__(self, input_manager, selected_player_info_dir, layouts_dir, player_stats, level_number=None, game_settings=None, backend=None, is_server=False):
+    def __init__(self, input_manager, selected_player_info_dir, layouts_dir, player_stats, level_number=None, game_settings=None, backend=None, is_server=False, mesh_pack=None):
         self.level_number = level_number
+        # Graphics/Meshes/<pack> the player draws as (draw-only, over the sprite body); None = sprite.
+        self.mesh_pack = mesh_pack
         self.game_settings = game_settings
         # Server-authoritative pivot: True only when the headless server runs this
         # Level4 (it simulates but never renders). Inert for now -- later slices
@@ -429,7 +431,8 @@ class Level4:
                 self.input_manager,
                 self.layout_manager.obstacle_quad_tree,
                 self.layout_manager.entity_quad_tree,
-                layout_callback_update_quad_tree = self.layout_manager.add_obstacle_sprite_to_quad_tree  ## TODO : rename this, its for entities, obstacles are done in the init only.
+                layout_callback_update_quad_tree = self.layout_manager.add_obstacle_sprite_to_quad_tree,  ## TODO : rename this, its for entities, obstacles are done in the init only.
+                mesh_pack=getattr(self, "mesh_pack", None),
             )
            
             # Pass the player to the LayoutManager for interaction handling
@@ -1491,6 +1494,7 @@ class Level4:
             'player_position': list(self.player.rect.topleft),
             'player_info_dir': self.selected_player_info_dir,
             'player_stats': self.player_base_stats,
+            'mesh_pack': getattr(self, 'mesh_pack', None),
         }
         with open(DEV_STATE_PATH, 'w') as f:
             json.dump(dev_state, f, indent=2)

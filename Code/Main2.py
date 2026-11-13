@@ -457,9 +457,11 @@ class Game:
             player_stats = dev_restore['player_stats']
             layouts_dir = dev_restore['layouts_dir']
             player_position = dev_restore['player_position']
+            mesh_pack = dev_restore.get('mesh_pack')
         else:
             player_info_dir = self.player_selection.selected_player_info_dir
             player_stats = self.player_configuration.final_stats
+            mesh_pack = getattr(self.player_selection, "selected_mesh_pack", None)
             if RTS_VALIDATION_RUNTIME.enabled:
                 layouts_dir = RTS_VALIDATION_RUNTIME.layout_dir
             elif BENCHMARK_RUNTIME.enabled:
@@ -477,6 +479,7 @@ class Game:
                 level_number=level_number,
                 game_settings=self.settings,
                 backend=self.backend,
+                mesh_pack=mesh_pack,
             )
             if dev_restore and player_position is not None:
                 self.level.player.rect.topleft = tuple(player_position)
