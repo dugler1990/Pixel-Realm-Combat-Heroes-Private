@@ -11,8 +11,8 @@ limb piece takes the side of the joint whose bones weigh most on the body skin n
     belt        belt (+ skirt)            -                                 hips (root)
     shoulder_*  pauldron, arm             collarbone + upper arm side       upper arm (+ collarbone)
     gauntlet_*  arm, gauntlet             forearm + hand side               forearm, hand
-    pants_*     leg, boot                 thigh + shin side                 thigh, shin
-    boot_*      leg, boot                 foot + toes side                  foot, toes
+    pants_*     leg, boot                 thigh side of the knee            thigh
+    boot_*      leg, boot                 shin + foot + toes side           shin, foot, toes
     (head)      head                      dropped: not armour; the helmet slot needs a helmet model
 
 Then loose bits farther than STRAY_GAP from the rest of their slot piece are dropped (stray cut bits).
@@ -129,8 +129,8 @@ for name, o in parts.items():
     elif base in ("leg", "boot"):
         g = roles[f"leg_{s}"]
         Wf = face_weights(o)
-        up = Wf[:, col(g["hip"])] + Wf[:, col(g["knee"])]
-        lo = Wf[:, col(g["ankle"])] + Wf[:, col(g["foot"])]
+        up = Wf[:, col(g["hip"])]                                   # the boot is the knee down
+        lo = Wf[:, col(g["knee"])] + Wf[:, col(g["ankle"])] + Wf[:, col(g["foot"])]
         label[name] = np.where(up > lo, f"pants_{s}", f"boot_{s}").astype(object)
     else:
         raise SystemExit(f"no slot rule for piece {name!r}")
