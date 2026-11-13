@@ -193,9 +193,10 @@ class ReviewPage:
             "align": bool(job.get("placement_align_colours", False)),
             "padding": job.get("placement_padding", "all") != "none",
             "offset": [int(v) for v in job.get("placement_padding_offset", [0, 0])],
-            # A placement aligned before the methods existed was the swap.
-            "colour_method": (job.get("placement_colour_alignment") or {}).get(
-                "method", "swap" if job.get("placement_colour_alignment") else "match"),
+            # Only an explicitly recorded method carries over. A placement aligned before the
+            # methods existed was the swap, but carrying that over made the next Align colours
+            # silently repeat the old method.
+            "colour_method": (job.get("placement_colour_alignment") or {}).get("method", "match"),
         }
         self.settings[level_id] = settings
         return settings

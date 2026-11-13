@@ -213,3 +213,21 @@ def test_every_route_is_refused_while_a_command_runs(server):
         assert status == 200 and json.loads(body)["running"]
     finally:
         page.run.update(running=False)
+
+
+def test_an_old_unlabelled_alignment_does_not_carry_the_old_method_over(tmp_path):
+    page = _page(tmp_path)
+    job_path = page.root / "levels" / "02" / "jobs" / "attempt_001" / "job.json"
+    job = read_json(job_path)
+    job.update({"placement_path": "x.png", "placement_align_colours": True,
+                "placement_colour_alignment": {"strength": 1.0}})
+    job_path.write_text(json.dumps(job), encoding="utf-8")
+    assert page.level_info("02", 1)["settings"]["colour_method"] == "match"
+
+
+def test_place_passes_the_swap_method_when_asked(tmp_path):
+    call = FakeCall({"placement_path": "x/colour_align_001.png"})
+    page = _page(tmp_path, call)
+    page.place("02", {"attempt": 1, "align": True, "colour_method": "swap"})
+    assert _wait(page)["error"] is None
+    assert call.calls[0][0][-2:] == ["--colour-method", "swap"]

@@ -82,7 +82,7 @@
     <label class="row"><input id="padding" type="checkbox"> paste the padding</label>
     <div class="row" style="margin-top:10px">
       <button id="replace">Re-place</button>
-      <button id="align" title="Align colours on, with this offset">Align colours</button>
+      <button id="align" title="Align colours on (match method), with this offset">Align colours</button>
     </div>
     <div class="row" style="margin-top:10px">
       <button id="checks" title="Same as t in review_run">Run tests</button>
@@ -379,9 +379,11 @@ async function place(overrides) {
   if (p && !p.error && info() && info().images.result) { S.view = 'result'; renderLevelName(); drawLayers(false); }
 }
 $('replace').onclick = () => place();
+// The button is always the current method; the old swap is picked in the dropdown + Re-place.
 $('align').onclick = () => {
   $('alignon').checked = true;
-  place({ align: true });
+  $('colourmethod').value = 'match';
+  place({ align: true, colour_method: 'match' });
 };
 $('checks').onclick = async () => {
   await command(`level/${level().id}/checks`, { attempt: info().attempt });
