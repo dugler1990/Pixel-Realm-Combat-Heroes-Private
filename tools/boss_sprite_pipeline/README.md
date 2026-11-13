@@ -79,6 +79,25 @@ drawn by the real engine code path.
 - **B** `review.composite_on_level(...)` — one frame on the painted level at game scale.
 - **C** `logs/boss_sprite_8dir_strip.png` — engine-drawn, every direction.
 
+### Generated views: `view_gate.py`
+
+Draws a view and checks it from the images alone before it goes to TRELLIS. `--draw` is how the target outline
+reaches the model: `reference` (default) sends it as an image and lines the draw up with it afterwards; `mask`
+sends it as a gpt-image edit's mask, as the interiors do, and pastes the return back inside it (the silhouette is
+the mask's; gpt-image fills a mask to within about 3 px). `--config` picks the image model; defaults: front gpt-image
+(`openai.gpt-image-2.json`, `OPENAI_API_KEY`), back reference and side Leonardo (`view_gate.json`,
+`LEONARDO_API_KEY`), back mask gpt-image.
+`front`: the bare concept dressed in armour; it must cover his bare outline grown by `--margin`; `[rb]` draws
+again asking for bigger armour. With `--draw mask` the armour cannot leave skin out but is cut to the mask.
+`back`: the approved front seen from behind, against the front's mirrored outline; IoU and body bands.
+`side`: drawn from the front and back; only its size and place are checked (depth has nothing to compare with in
+the images). `[r1]` draws again with the miss marked (`tools/painted_map_pipeline/shape_gate.py`, the same overlay
+and retry as the level and interiors gates). Accept writes the view cut out for TRELLIS and `gate_<view>.json`.
+
+    python -m tools.boss_sprite_pipeline.view_gate front --input <bare.jpg> --out <dir> [--draw mask [--margin 0.005]]
+    python -m tools.boss_sprite_pipeline.view_gate back  --front <front.jpg> --out <dir> [--draw mask]
+    python -m tools.boss_sprite_pipeline.view_gate side  --front <front.png> --back <back.png> --out <dir>
+
 ## Status
 
 - [x] Phase 0 — bpy render + pack + engine 8-dir loader/anchor/facing, verified on Fox.glb

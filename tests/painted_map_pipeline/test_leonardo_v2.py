@@ -34,3 +34,20 @@ def test_prepare_reference_upload_fits_under_10mb():
     )
     assert extension == "jpg"
     assert len(payload) <= 10 * 1024 * 1024
+
+
+def test_reference_strength_per_image_or_from_config(monkeypatch):
+    """One strength per image when given (the view gate sends its marked attempt LOW); otherwise the
+    config's reference_strength on every image, as before."""
+    from tools.painted_map_pipeline import leonardo_api
+
+    sent = []
+    monkeypatch.setattr(leonardo_api, "_api_key", lambda config: "key")
+    monkeypatch.setattr(leonardo_api, "_request_json",
+                        lambda method, url, key, payload: sent.append(payload) or {"generate": {"generationId": "g"}})
+    config = {"model": "google/nano-banana-2.1", "reference_strength": "HIGH"}
+    for strengths in (None, ["HIGH", "HIGH", "low"]):
+        leonardo_api.create_v2_generation(prompt="p", width=1024, height=1024, init_image_ids=["a", "b", "c"],
+                                          config=config, strengths=strengths)
+    assert [r["strength"] for r in sent[0]["parameters"]["guidances"]["image_reference"]] == ["HIGH"] * 3
+    assert [r["strength"] for r in sent[1]["parameters"]["guidances"]["image_reference"]] == ["HIGH", "HIGH", "LOW"]
