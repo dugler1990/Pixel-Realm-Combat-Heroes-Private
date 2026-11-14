@@ -28,6 +28,7 @@ from tools.painted_map_pipeline.world_levels.review_run import (
 from tools.painted_map_pipeline.world_levels.review_web import (
     REPO,
     ReviewPage,
+    _call_here,
     _OwnPortServer,
     make_handler,
 )
@@ -231,3 +232,39 @@ def test_place_passes_the_swap_method_when_asked(tmp_path):
     page.place("02", {"attempt": 1, "align": True, "colour_method": "swap"})
     assert _wait(page)["error"] is None
     assert call.calls[0][0][-2:] == ["--colour-method", "swap"]
+
+
+def test_the_in_process_call_returns_the_printed_json():
+    def main(argv):
+        print("working...")
+        print(json.dumps({"placement_path": "/x/placement_003.png", "argv": argv}))
+        print("open: /x/placement_003.png")
+
+    payload = _call_here("ingest", "root", "--level", "06", main=main)
+    assert payload == {"placement_path": "/x/placement_003.png",
+                       "argv": ["ingest", "root", "--level", "06"]}
+
+
+def test_the_in_process_call_turns_errors_and_exits_into_refusals():
+    def stale(argv):
+        raise ValueError("job context is stale; refresh and create a new job")
+
+    def bad_flag(argv):
+        raise SystemExit(2)
+
+    def done(argv):
+        raise SystemExit(0)
+
+    with pytest.raises(CommandFailed, match="ValueError: job context is stale"):
+        _call_here("ingest", main=stale)
+    with pytest.raises(CommandFailed, match="ingest failed"):
+        _call_here("ingest", main=bad_flag)
+    assert _call_here("ingest", main=done) == {}
+
+
+def test_generate_keeps_its_own_call_when_one_is_given(tmp_path):
+    place_call, generate_call = FakeCall(), FakeCall(payload={"results": []})
+    page = _page(tmp_path, call=place_call, generate_call=generate_call)
+    page.generate("02", {})
+    _wait(page)
+    assert generate_call.calls and not place_call.calls

@@ -251,3 +251,20 @@ def test_an_unknown_colour_method_is_refused():
     with pytest.raises(ValueError, match="colour method"):
         align_to_paired_padding(*(Image.fromarray(a) for a in (raw, accepted, locked, pending)),
                                 method="grade")
+
+
+def test_the_padding_palette_is_built_once_per_padding():
+    from tools.painted_map_pipeline.world_levels import colour_align
+
+    _, accepted, locked, _, _ = _flat_new_cell_scene()
+    rgb, mask = np.ascontiguousarray(accepted[..., :3]), locked > 0
+    colour_align._PALETTE_CACHE.clear()
+    first = colour_align._padding_palette(rgb, mask)
+    second = colour_align._padding_palette(rgb, mask)
+    assert len(colour_align._PALETTE_CACHE) == 1
+    assert np.array_equal(first, second)
+    assert np.array_equal(first, colour_align._build_padding_palette(rgb, mask))
+    other = rgb.copy()
+    other[mask] = 255 - other[mask]
+    colour_align._padding_palette(other, mask)
+    assert len(colour_align._PALETTE_CACHE) == 2

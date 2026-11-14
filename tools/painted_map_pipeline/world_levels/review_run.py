@@ -68,7 +68,11 @@ def _call(*args: str, fatal: bool = True, cwd: str | Path | None = None) -> dict
             raise CommandFailed(last[-1] if last else f"{' '.join(args)} failed")
         sys.stderr.write(proc.stderr[-2000:])
         raise SystemExit(f"{' '.join(args)} failed")
-    text = proc.stdout
+    return _payload(proc.stdout)
+
+
+def _payload(text: str) -> dict:
+    """The JSON an orchestrate command printed (it prints JSON, then links)."""
     start = text.find("{")
     end = text.rfind("}")
     try:

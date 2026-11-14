@@ -20,6 +20,8 @@ error / brightness spread vs padding): swap 14.4 / 0.92, match 12.2 / 1.05.
 
 from __future__ import annotations
 
+import hashlib
+
 import cv2
 import numpy as np
 from PIL import Image
@@ -33,6 +35,8 @@ PALETTE_COLOURS = 256
 PALETTE_SAMPLE = 120_000
 JOIN_SIGMA = 24
 JOIN_FADE = 200
+JOIN_SCALE = 4  # the join fix is smoothed over 24 px, so it is worked out at 1/4 size
+LIGHTNESS_BINS = 4096  # brightness mix ranks lightness in 1/16-unit steps (L is 0-255 here)
 COLOUR_METHODS = ("match", "swap")
 
 
@@ -99,8 +103,27 @@ def _paired_delta_lut(
     return lookup, len(representatives)
 
 
+_PALETTE_CACHE: dict[str, np.ndarray] = {}
+
+
 def _padding_palette(accepted_rgb: np.ndarray, locked: np.ndarray) -> np.ndarray:
-    """Up to 256 colours that actually occur in the accepted padding."""
+    """Up to 256 colours that actually occur in the accepted padding.
+
+    The k-means is seeded, so the same padding always gives the same palette: it is kept per
+    padding (hash of its pixels and mask) for the life of the process. Every attempt of a level
+    shares one padding, so in the review page only the first align of a level pays for it.
+    """
+    key = hashlib.sha1(
+        np.ascontiguousarray(accepted_rgb[locked]).tobytes()
+        + np.packbits(locked).tobytes()
+        + repr((locked.shape, PALETTE_COLOURS, PALETTE_SAMPLE, CONTENT_MIN_RGB_SUM)).encode()
+    ).hexdigest()
+    if key not in _PALETTE_CACHE:
+        _PALETTE_CACHE[key] = _build_padding_palette(accepted_rgb, locked)
+    return _PALETTE_CACHE[key].copy()
+
+
+def _build_padding_palette(accepted_rgb: np.ndarray, locked: np.ndarray) -> np.ndarray:
     pixels = accepted_rgb[locked]
     pixels = pixels[pixels.sum(axis=1) > CONTENT_MIN_RGB_SUM]
     if len(pixels) > PALETTE_SAMPLE:
@@ -159,21 +182,27 @@ def _match_lightness(
 
     The mapping is learned from ``region`` (rank for rank) and applied to every pixel of
     ``apply_to``, so pixels outside the region with the same lightness get the same answer.
-    Only L moves; the hue the swap chose is kept.
+    Only L moves; the hue the swap chose is kept. Ranks are counted per lightness step of
+    1/16 (``LIGHTNESS_BINS``) instead of per pixel: same answer to well under one L unit,
+    without sorting millions of pixels.
     """
     if not region.any() or not len(target):
         return lab
-    source = np.sort(lab[..., 0][region])
-    values = lab[..., 0][apply_to]
+
+    def step(values: np.ndarray) -> np.ndarray:
+        return np.clip((values * (LIGHTNESS_BINS / 256.0)).astype(np.int32), 0, LIGHTNESS_BINS - 1)
+
+    counts = np.bincount(step(lab[..., 0][region]), minlength=LIGHTNESS_BINS)
+    below = np.cumsum(counts) - counts
     # Middle rank of equal values: with few distinct colours, the lowest rank would send a
     # whole colour to the bottom of its share of the target.
-    first = np.searchsorted(source, values, side="left")
-    last = np.searchsorted(source, values, side="right") - 1
-    rank = (first + np.maximum(last, first)) / 2.0 / max(len(source) - 1, 1)
-    out = lab.copy()
-    out[..., 0][apply_to] = np.interp(
+    last = below + counts - 1
+    rank = (below + np.maximum(last, below)) / 2.0 / max(int(counts.sum()) - 1, 1)
+    remap = np.interp(
         np.clip(rank, 0.0, 1.0), np.linspace(0.0, 1.0, len(target)), np.sort(target)
     )
+    out = lab.copy()
+    out[..., 0][apply_to] = remap[step(lab[..., 0][apply_to])]
     return out
 
 
@@ -182,24 +211,33 @@ def _join_correction(difference: np.ndarray, known: np.ndarray, locked: np.ndarr
 
     Smoothed by normalised convolution so the gaps in ``known`` do not pull it toward zero.
     Beyond the smoothing's reach each pixel takes the nearest smoothed value, then the whole
-    correction fades with distance from the padding.
+    correction fades with distance from the padding. The smoothing and the fill are worked out
+    at 1/``JOIN_SCALE`` size and scaled back up: the result is a 24 px blur, so the small grid
+    loses nothing visible. The fade is full size.
     """
+    height, width = known.shape
+    small = (max(1, -(-width // JOIN_SCALE)), max(1, -(-height // JOIN_SCALE)))
     weight_mask = known.astype(np.float32)
-    blur = lambda x: cv2.GaussianBlur(x, (0, 0), JOIN_SIGMA)  # noqa: E731
-    weight = blur(weight_mask)
+    weighted = (difference * weight_mask[..., None]).astype(np.float32)
+    blur = lambda x: cv2.GaussianBlur(x, (0, 0), JOIN_SIGMA / JOIN_SCALE)  # noqa: E731
+    weight = blur(cv2.resize(weight_mask, small, interpolation=cv2.INTER_AREA))
     reached = weight > 0.02
     if not reached.any():
         return np.zeros_like(difference)
-    local = np.stack(
-        [blur(difference[..., c] * weight_mask) for c in range(3)], axis=-1
-    ) / np.maximum(weight, 1e-6)[..., None]
+    local = blur(cv2.resize(weighted, small, interpolation=cv2.INTER_AREA)) / np.maximum(
+        weight, 1e-6
+    )[..., None]
     _, labels = cv2.distanceTransformWithLabels(
         (~reached).astype(np.uint8), cv2.DIST_L2, 5, labelType=cv2.DIST_LABEL_PIXEL
     )
     ys, xs = np.where(reached)
     by_label = np.zeros(int(labels.max()) + 1, dtype=np.int64)
     by_label[labels[reached]] = np.arange(len(ys))
-    filled = local[ys[by_label[labels]], xs[by_label[labels]]]
+    filled = cv2.resize(
+        np.ascontiguousarray(local[ys[by_label[labels]], xs[by_label[labels]]], dtype=np.float32),
+        (width, height),
+        interpolation=cv2.INTER_LINEAR,
+    )
     to_padding = cv2.distanceTransform((~locked).astype(np.uint8), cv2.DIST_L2, 5)
     return filled * np.exp(-to_padding / JOIN_FADE)[..., None]
 

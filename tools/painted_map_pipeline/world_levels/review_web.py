@@ -3,7 +3,9 @@
 Every action runs the same orchestrate commands as the console loop (review_run), with the
 same arguments, so the two agree. Use one of them at a time on a run: both write run.json and
 job.json. Commands run in a background thread of this process, one at a time; while one runs
-the page only asks for progress. Listens on 127.0.0.1 only.
+the page only asks for progress. Listens on 127.0.0.1 only. Re-place and accept run inside
+this process (``_call_here``), so a pipeline code change needs the page restarted; generate
+runs as its own process.
 
 Each level is pinned to one attempt. Re-place, the images and accept all use that attempt's
 own files, never merely the newest job on disk.
@@ -11,6 +13,7 @@ own files, never merely the newest job on disk.
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import threading
@@ -31,6 +34,7 @@ from .review_run import (
     _call,
     _candidate,
     _entry,
+    _payload,
     attempt_of,
     parse_retry,
     reingest_args,
@@ -76,6 +80,38 @@ class RunProgress:
             return bool(self._data.get("running"))
 
 
+def _call_here(*args: str, fatal: bool = False, cwd: str | Path | None = None,
+               main: Callable[[list[str]], None] | None = None) -> dict:
+    """Run an orchestrate subcommand inside this process; same answer as ``_call``.
+
+    A fresh Python per press has to load numpy / scipy / cv2 again, which took up to 80 s when
+    Windows had them off disk (2026-11-14, level 06). Here they are loaded once. The price:
+    a code change to the pipeline needs the page restarted. A refusal (any exception, or a
+    non-zero exit) becomes CommandFailed with its message, as ``_call`` does with fatal=False.
+    """
+    if main is None:
+        from .orchestrate import main
+    printed = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(printed):
+            main(list(args))
+    except SystemExit as stop:
+        if stop.code not in (None, 0):
+            raise CommandFailed(stop.code if isinstance(stop.code, str) else f"{args[0]} failed")
+    except Exception as exc:
+        traceback.print_exc()
+        raise CommandFailed(f"{type(exc).__name__}: {exc}") from exc
+    return _payload(printed.getvalue())
+
+
+def _warm_up() -> None:
+    """Load the pipeline in the background at start, so the first press does not wait for it."""
+    try:
+        from . import orchestrate  # noqa: F401
+    except Exception:
+        traceback.print_exc()
+
+
 def _version(path: Path | None) -> int | None:
     return path.stat().st_mtime_ns if path is not None and path.is_file() else None
 
@@ -90,14 +126,19 @@ class ReviewPage:
         *,
         feather: int = 0,
         prompt_file: str | None = None,
-        call: Callable[..., dict] = _call,
+        call: Callable[..., dict] | None = None,
+        generate_call: Callable[..., dict] | None = None,
         checks: Callable[..., dict] = run_checks,
     ) -> None:
         self.root = Path(root).resolve()
         self.levels = list(levels)
         self.default_feather = int(feather)
         self.prompt_file = prompt_file
-        self.call = call
+        # Re-place and accept run in this process (fast). Generate keeps its own process: it
+        # runs for minutes against the API and must not hold this one's stdout. A ``call``
+        # passed in (tests) is used for everything unless ``generate_call`` is given too.
+        self.call = call or _call_here
+        self.generate_call = generate_call or call or _call
         self.checks_fn = checks
         self.lock = threading.Lock()
         self.run = RunProgress()
@@ -343,7 +384,7 @@ class ReviewPage:
                 args += ["--retry-image", str(attached), "--retry-note", note]
 
         def work() -> str:
-            payload = self.call(*args, fatal=False, cwd=REPO)
+            payload = self.generate_call(*args, fatal=False, cwd=REPO)
             entry = _entry(payload, level_id)
             if entry.get("skipped"):
                 raise ValueError(f"level {level_id} is already {entry['skipped']}, nothing generated")
@@ -477,6 +518,7 @@ def serve(page: ReviewPage, port: int, open_browser: bool = True) -> None:
     except OSError:
         raise SystemExit(f"Port {port} is already in use by another program: start with --port and another number.")
     url = f"http://127.0.0.1:{port}/"
+    threading.Thread(target=_warm_up, daemon=True).start()
     print(f"Level review page: {url}   (Ctrl+C here to stop)")
     if open_browser:
         webbrowser.open(url)

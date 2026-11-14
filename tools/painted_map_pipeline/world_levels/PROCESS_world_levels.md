@@ -15,7 +15,8 @@ Review page: `PROCESS_level_review_page.md`.
   - Swap: Lab colour groups (8-unit bins); each group's median shift; groups with < 20 pairs skipped; other colours get a weighted mix of the 8 nearest groups.
   - Brightness mix: new-cell lightness remapped rank for rank onto the padding's lightness values. Hue kept.
   - Join fix: Lab difference (padding minus swapped model copy) at each padding spot, smoothed (Gaussian 24 px, normalised), carried out to the nearest value, faded by exp(-distance / 200 px) from the padding.
-  - Snap: every new pixel -> nearest of 256 padding colours (k-means in Lab).
+  - Snap: every new pixel -> nearest of 256 padding colours (k-means in Lab, seeded; kept per padding for the life of the process).
+  - Speed settings: join fix smoothed / filled at 1/4 size (`JOIN_SCALE`), fade full size; brightness mix ranks in 1/16 L steps (`LIGHTNESS_BINS`).
 - Scoring a colour method: learn on half the padding (64 px checkerboard blocks), score on the other half. Error per pixel, error per 16 px chunk (Lab), brightness spread vs padding (1 = same), brightness mix gap. Script pattern: scratch `colour_test.py` (not kept).
 
 ## Known errors
@@ -41,6 +42,8 @@ Review page: `PROCESS_level_review_page.md`.
 - 2026-11-13: through ingest, attempt 1, whole new cell: padding mean 45.7 / spread 26.6; swap 42.8 / 23.4 (19 s); match 46.1 / 26.6 (26 s). Swap + feather 40 + cut reproduces the run's `colour_align_006.png` exactly (0 px differ).
 - 2026-11-13: feather is applied where it should be (ramp 40 px each side of the join, masks binary, no gap or overlap). Cut does not touch the join (generation mask covers all the padding).
 - 2026-11-13: align writes every drawn pixel instead of new cell + under padding. Level 06 attempt 1, old vs new placement, pixel by pixel: cut + feather 40 (match and swap), cut + feather 0 -> 0 px differ; no cut + feather 40, no cut + padding none -> 58,407 px differ, all outside both new cell and padding (scrap the model drew past the level), 0 in the new cell or padding. Script: scratch `scope_compare.py` (not kept).
+- 2026-11-14: align time, level 06 attempt 1 (cProfile, ingest with cut + align + feather 40): 32 s in align = palette 10.6 (k-means 7.0), brightness mix 7.8 (searchsorted 4.3, interp 2.7), join fix 7.7, rest ~5.
+- 2026-11-14: after palette kept + join fix at 1/4 + brightness in 1/16 steps, old vs new placement pixel by pixel (5 settings): match cases 32,873-39,167 px differ (of 4.2 M new), Lab difference mean 0.06, 99th percentile 0, max 17-27 (single pixels flipping to the next palette colour); swap 0 px differ. Align ingest 36 s -> 8 s (palette known) / 15-22 s (first per level). Script: scratch `speed_compare.py` (not kept).
 - 2026-11-13: by eye (labelled crops, top and left joins): match brighter and with more contrast, closer to the padding; join line still visible without feather.
 
 ## Tried and dropped
