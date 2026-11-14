@@ -49,6 +49,7 @@ class IceClone(Trap):
                 amount=getattr(self, "amount", 50) or 50,
                 attack_type=getattr(self, "attack_type", "explosion"),
                 tags=set(getattr(self, "tags", {"special"})),
+                attack_def=getattr(self, "attack_def", None),
             )
             resolver = None
             if hasattr(self, "owner") and self.owner is not None:

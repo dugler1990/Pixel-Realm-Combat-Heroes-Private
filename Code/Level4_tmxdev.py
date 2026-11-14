@@ -61,6 +61,7 @@ from tmx_layout_manager import LayoutManager
 from benchmark_runtime import BENCHMARK_RUNTIME
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
 from Interaction import InteractionContext, InteractionResolver
+from damage_data import attack_of
 from dialogue.session import DialogueSession
 from rts import RtsSession, RtsWorldSim
 from rts.world_adapter import RtsWorldAdapter
@@ -1519,10 +1520,12 @@ class Level4:
             self.magic_player.heal(self.player, strength, cost, [self.layout_manager.visible_sprites])
         elif style == "flame":
             self.magic_player.flame(self.player, cost, [self.layout_manager.visible_sprites, self.attack_sprites],
-                                    rehit_ms=magic_data["flame"].get("rehit_ms"))
+                                    rehit_ms=magic_data["flame"].get("rehit_ms"),
+                                    attack_def=attack_of(magic_data["flame"]))
         if style == 'ice_ball':
             particle = self.magic_player.ice_ball2(self.player, cost, [self.layout_manager.visible_sprites, self.attack_sprites], self.layout_manager.entity_quad_tree,
-                                                   rehit_ms=magic_data["ice_ball"].get("rehit_ms"))
+                                                   rehit_ms=magic_data["ice_ball"].get("rehit_ms"),
+                                                   attack_def=attack_of(magic_data["ice_ball"]))
             # Register particle in the dictionary
             self.particle_dict[id(particle)] = particle
        
@@ -1579,6 +1582,7 @@ class Level4:
                 amount=attack_sprite.amount,
                 attack_type=attack_sprite.attack_type,
                 tags=set(attack_sprite.tags),
+                attack_def=attack_sprite.attack_def,
             )
             hits, rehit_ms = attack_sprite.hits, attack_sprite.rehit_ms
             if attack_sprite.stops:
@@ -1756,7 +1760,7 @@ class Level4:
         # Return the direction vector
         return pygame.math.Vector2(direction_x, direction_y)
     #@profile
-    def fire_projectile(self, enemy_pos, target_pos, projectile_type, groups, owner=None, source_team=None, amount=None, rehit_ms=None): ### groups not actually used, we pass level references to the groups explicitely below , regardles,, this could be confusing ISSUE
+    def fire_projectile(self, enemy_pos, target_pos, projectile_type, groups, owner=None, source_team=None, amount=None, rehit_ms=None, attack_def=None): ### groups not actually used, we pass level references to the groups explicitely below , regardles,, this could be confusing ISSUE
     
         # Calculate the angle to the target
         angle_to_target = self.calculate_angle(enemy_pos, target_pos)
@@ -1800,8 +1804,11 @@ class Level4:
                                                source_kind="enemy_projectile",
                                                attack_type="magic",
                                                amount=resolved_amount,
-                                               stops=projectile_type != "demon_dog_projectile",
+                                               # The def says whether it stops at the first body
+                                               # (arrows, stones); a shot without one flies through.
+                                               stops=attack_def is not None and attack_def.stops,
                                                rehit_ms=rehit_ms,
+                                               attack_def=attack_def,
                                                )
 
     def spawn_meteor(
@@ -1819,6 +1826,8 @@ class Level4:
         knockback=252.0,
         knockback_follow_through=0.55,
         shake_scale_threshold=None,
+        attack_def=None,
+        residual_attack_def=None,
     ):
         """Ground-targeted meteor strike used by MeteorShower special attacks."""
         frames = self.animation_player.frames
@@ -1849,6 +1858,8 @@ class Level4:
             knockback=knockback,
             knockback_follow_through=knockback_follow_through,
             shake_scale_threshold=shake_scale_threshold,
+            attack_def=attack_def,
+            residual_attack_def=residual_attack_def,
         )
 
     def _draw_smoke_fx(self):

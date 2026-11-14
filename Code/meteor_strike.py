@@ -279,10 +279,15 @@ class MeteorStrike(pygame.sprite.Sprite):
         knockback_follow_through: float = 0.55,
         shake_scale_threshold: float | None = None,
         base_frame_duration_ms: int | None = None,
+        attack_def=None,
+        residual_attack_def=None,
     ):
         super().__init__(groups)
         self.level = level
         self.owner = owner
+        # AttackDefs (damage_data.py): the impact, and the embers left burning (phase "residual").
+        self.attack_def = attack_def
+        self.residual_attack_def = residual_attack_def
         self.source_team = source_team or getattr(owner, "team_id", "enemy")
         self.ground_pos = (float(pos[0]), float(pos[1]))
         self.scale = float(scale)
@@ -616,6 +621,7 @@ class MeteorStrike(pygame.sprite.Sprite):
                 attack_type="magic",
                 phase=phase,
                 tags={"meteor", phase},
+                attack_def=self.residual_attack_def if phase == "residual" else self.attack_def,
             )
             resolver.apply(ctx)
 
@@ -656,6 +662,7 @@ class MeteorStrike(pygame.sprite.Sprite):
                     impulse_y=ny * mag,
                     phase="impact",
                     tags={"meteor", "impact", "explosion"},
+                    attack_def=self.attack_def,
                 )
             )
 

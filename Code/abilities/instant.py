@@ -42,6 +42,7 @@ class InstantEvasionAbility(PlayerAbility):
             "source_team": getattr(entity, "team_id", "player"),
             "source_kind": "special",
             "attack_type": self.config.get("effect_type", "freeze"),
+            "attack": self.config.get("attack"),
             "amount": None,
             "tags": {"summon", "special"},
         }

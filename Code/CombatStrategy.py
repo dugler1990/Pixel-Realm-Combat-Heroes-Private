@@ -3,6 +3,7 @@ import pygame
 from pygame.math import Vector2
 from  hashRect import HashableRect
 import hit_core
+from damage_data import attack_of
 
 
 
@@ -149,6 +150,7 @@ class CombatStrategy:
             amount=attack.get("damage"),
             attack_type=attack.get("type", "melee"),
             tags={"enemy_melee"},
+            attack_def=attack_of(attack),
         )
 
 
@@ -290,7 +292,8 @@ class RangedCombatStrategy(CombatStrategy):
                                                      owner=enemy,
                                                      source_team=getattr(enemy, "team_id", None),
                                                      amount=attack.get("damage"),
-                                                     rehit_ms=attack.get("rehit_ms"))
+                                                     rehit_ms=attack.get("rehit_ms"),
+                                                     attack_def=attack_of(attack))
                 enemy.attack_sound.play()
                 enemy.attack_cooldown = attack['cooldown']
                 enemy.direction = Vector2(0, 0)
@@ -426,7 +429,8 @@ class MixedCombatStrategy(CombatStrategy):
                                      owner=enemy,
                                      source_team=getattr(enemy, "team_id", None),
                                      amount=attack.get("damage"),
-                                     rehit_ms=attack.get("rehit_ms"))
+                                     rehit_ms=attack.get("rehit_ms"),
+                                     attack_def=attack_of(attack))
                 enemy.attack_sound.play()
                 enemy.attack_cooldown = attack['cooldown']
             enemy.direction = Vector2(0, 0)  

@@ -7,6 +7,7 @@ import pygame
 from abilities.base import PlayerAbility
 from abilities.protocol import CombatAbilityContext, PlayerAbilityContext
 import hit_core
+from damage_data import attack_of
 
 STUB_COLLISION_MODES = frozenset()
 IMPLEMENTED_COLLISION_MODES = frozenset({"pass_through", "resolve", "damage_on_hit"})
@@ -69,6 +70,7 @@ class DashAbility(PlayerAbility):
             "hit_once_per_target": bool(self.config.get("hit_once_per_target", True)),
             "hits": {},
             "rehit_ms": self.config.get("rehit_ms"),
+            "attack_def": attack_of(self.config),
             "end_status_template": end_status_template,
             "_ability": self,
         }
@@ -159,6 +161,7 @@ class DashAbility(PlayerAbility):
             source_team=getattr(entity, "team_id", None),
             amount=runtime["damage"],
             attack_type=runtime["attack_type"],
+            attack_def=runtime["attack_def"],
         )
 
     def _end(self, entity, runtime) -> None:

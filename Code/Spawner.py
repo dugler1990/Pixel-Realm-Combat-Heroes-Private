@@ -26,6 +26,7 @@ from Trap import Trap
 from PolarBear import PolarBear
 from Settings import monster_data
 import SpecialAttacks
+from damage_data import attack_of
 from enemy_drop_defaults import get_default_item_drop_for_monster
 
 CHARACTER_CLASSES = {
@@ -100,6 +101,7 @@ class Spawner:
             trap.attack_type = trap_config.get('attack_type', trap_config.get('effect_type', 'special'))
             trap.amount = trap_config.get('amount')
             trap.tags = set(trap_config.get('tags', {'special'}))
+            trap.attack_def = attack_of(trap_config)
             #print(trap_config)
         else:
             # Default to the general Trap class if no specific class is required
@@ -127,6 +129,7 @@ class Spawner:
             trap.attack_type = trap_config.get('attack_type', trap_config.get('effect_type', 'trap'))
             trap.amount = trap_config.get('amount')
             trap.tags = set(trap_config.get('tags', {'trap'}))
+            trap.attack_def = attack_of(trap_config)
     
         # Adding the trap to sprite groups is handled in the Trap's __init__, so we just return the trap
         return trap

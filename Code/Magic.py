@@ -27,7 +27,7 @@ class MagicPlayer:
             self.animation_player.create_particles("aura", player.rect.center, groups)
             self.animation_player.create_particles("heal", player.rect.center + pygame.math.Vector2(0, -60), groups)
 
-    def flame(self, player, cost, groups, rehit_ms=None):
+    def flame(self, player, cost, groups, rehit_ms=None, attack_def=None):
         if player.energy >= cost:
             player.energy -= cost
             self.sounds["flame"].play()
@@ -47,7 +47,8 @@ class MagicPlayer:
                                                           source_team=getattr(player, "team_id", "player"),
                                                           source_kind="player_attack",
                                                           attack_type="magic",
-                                                          rehit_ms=rehit_ms)
+                                                          rehit_ms=rehit_ms,
+                                                          attack_def=attack_def)
                 else: # Vertical
                     offset_y = (direction.y * i) * TILESIZE
                     x = player.rect.centerx + randint(-TILESIZE // 3, TILESIZE // 3)
@@ -57,7 +58,8 @@ class MagicPlayer:
                                                           source_team=getattr(player, "team_id", "player"),
                                                           source_kind="player_attack",
                                                           attack_type="magic",
-                                                          rehit_ms=rehit_ms)
+                                                          rehit_ms=rehit_ms,
+                                                          attack_def=attack_def)
     
     
     def ice_ball(self, player, cost, groups):
@@ -74,7 +76,7 @@ class MagicPlayer:
                                                         groups=groups,
                                                         animation_speed = 250)
                             
-    def ice_ball2(self, player, cost, groups, quad_tree, rehit_ms=None):
+    def ice_ball2(self, player, cost, groups, quad_tree, rehit_ms=None, attack_def=None):
         if player.energy >= cost:
             player.energy -= cost
             self.sounds["ice"].play()
@@ -98,7 +100,8 @@ class MagicPlayer:
                                                     source_team=getattr(player, "team_id", "player"),
                                                     source_kind="player_attack",
                                                     attack_type="magic",
-                                                    rehit_ms=rehit_ms)
+                                                    rehit_ms=rehit_ms,
+                                                    attack_def=attack_def)
             return particle
 
               

@@ -24,6 +24,8 @@ class InteractionContext:
     impulse_x: Optional[float] = None
     impulse_y: Optional[float] = None
     tags: Set[str] = field(default_factory=set)
+    # The AttackDef (damage_data.py) this hit is; None for an old path. Not read yet (chunk 5).
+    attack_def: Any = None
 
 
 class FactionPolicy:

@@ -10,6 +10,7 @@ from abilities.base import PlayerAbility
 from abilities.dash import entity_speed
 from abilities.protocol import PlayerAbilityContext
 import hit_core
+from damage_data import attack_of
 from Interaction import InteractionContext
 from Settings import VIEW_ELEVATION_DEG
 
@@ -309,6 +310,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
         base_damage = float(self.config.get("base_damage", 0))
         base_knockback = float(self.config.get("base_knockback", 0))
         attack_type = self.config.get("damage_attack_type", "weapon")
+        attack_def = attack_of(self.config)
         follow_through = float(self.config.get("velocity_follow_through", 0.5))
         entity.impulse_follow_through = follow_through
 
@@ -363,6 +365,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
                     target=target,
                     amount=damage_amount,
                     attack_type=attack_type,
+                    attack_def=attack_def,
                 )
                 if resolver is not None:
                     if resolver.can_potentially_affect(
@@ -384,6 +387,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
                     target=target,
                     impulse_x=nx * knockback_mag,
                     impulse_y=ny * knockback_mag,
+                    attack_def=attack_def,
                 )
                 if resolver is not None:
                     resolver.apply(imp_ctx)
