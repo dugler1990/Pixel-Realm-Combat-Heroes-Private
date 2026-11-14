@@ -21,7 +21,21 @@ Proof throughout: the barb's outputs do not change.
 Already per character: data folder `<Boss>/generated/bosses/<character>/`, outfit prompts, paint looks,
 `Graphics/Meshes/<pack>/`, `player_mesh.py` (draws any pack on any sprite body).
 
-## 1. Character file
+## Status 2026-11-14: checked against the latest processes, not to implement as written
+- Steps 1 and 3's roster entry are covered, more fully, by `feat/outfit-config` (`.cursor/plans/outfit_config.plan.md`,
+  from main b581b6e6): `outfits/<character>/character.json` + field table, also `greedy_dirs` / `views`
+  (missed here), `DEFAULT_LOOK` → `looks/barb_bare.json`, "use this image" = supplied views (= this plan's
+  `concept_front`), export writes the hero entry. Follow that plan; drop step 1 here.
+- Step 2 matches the current best methods (PROCESS_rigfix "current best": heat 0.5, linear skinning not DQS;
+  PROCESS_explode2: `_nb` fix, `--source anunaki`; PROCESS_outfit: views, eight_views, gpt-image-2 sides, paint).
+  Not proven in today's flow: UniRig has no `pod.py` step (pod steps: trellis, sam3, holopart); it last ran via the
+  September `gpu_box/setup.sh` + `GpuExec` route. The barb's UniRig input was a single-image TRELLIS mesh, not
+  eight_views. Shoulder stretch with arms raised: still open.
+- `outfit_config.plan.md` "Not in this plan" sends base assets to `pipeline.py` / `PLAN.md`: that is the
+  September boss route (Hunyuan default, procedural clips), not how the barb was made. Step 2 here is the gap.
+- Step 3's body check is not in PROCESS_equipment or outfit_config; still needed once a second mesh hero exists.
+
+## 1. Character file (superseded by outfit_config.plan.md)
 `tools/boss_sprite_pipeline/characters/<character>.json`; `characters/barb.json` filled from today's values:
 - `rig_fit`, `rig_game`, `roles`, `clips_blend` (an outfit may still override)
 - `clips`: `idle`, `move`, `attack` source names + attack frames
