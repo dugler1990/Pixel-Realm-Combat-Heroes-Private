@@ -271,9 +271,62 @@ REPO_JSON = ("tools/boss_sprite_pipeline/repaint/looks", "tools/boss_sprite_pipe
 FILES_MAX = 400
 
 
+# What the page calls things. The files and the driver keep their names (kind "armour", step "sam3"); the page shows
+# these, with the file name small beside them.
+KIND_UI = {
+    "body": ("Body variant", "Redraw an existing character's body (e.g. the barb without his loincloth) and build "
+                             "it in 3D on his rig."),
+    "armour": ("Armour set", "Draw armour over a character, build it in 3D, cut it into wearable pieces."),
+    "cut": ("Pieces from a mesh", "Cut wearable pieces out of a painted mesh you already have; nothing is drawn."),
+}
+PHASES = [("views", "Views"), ("model", "3D model"), ("pieces", "Pieces"), ("game", "Game")]
+STEP_UI = {  # step: (label, phase, what it does)
+    "front": ("Front", "views", "The front view: drawn from the concept, or your image."),
+    "back": ("Back", "views", "The back view: drawn from the front, or your image."),
+    "sides": ("Sides & 3/4", "views", "Side and 3/4 views the TRELLIS models need: drawn, mirrored, or yours."),
+    "trellis": ("3D model", "model", "TRELLIS builds the mesh from the views (pod); pick one by eye."),
+    "skeleton": ("Fit to rig", "model", "The mesh fitted onto the character's rig."),
+    "paint": ("Paint", "model", "Colours painted onto the mesh from the drawings."),
+    "views": ("Render angles", "pieces", "The painted mesh rendered from many angles."),
+    "sam3": ("Find parts", "pieces", "SAM3 marks every part in each render (pod)."),
+    "cut": ("Cut parts", "pieces", "The mesh split into parts by those marks."),
+    "holopart": ("Complete parts", "pieces", "HoloPart fills in the hidden sides of each part (pod)."),
+    "merge": ("Merge parts", "pieces", "The completed parts put back together."),
+    "worn": ("Wear test", "pieces", "The parts posed on the body: nothing should poke through."),
+    "slots": ("Sort into slots", "pieces", "Parts grouped into the game's slots (helmet, chest, ...), skinned to "
+                                           "the game rig."),
+    "sheet": ("Pieces sheet", "pieces", "One picture of every piece."),
+    "export": ("Export", "game", "The game's mesh pack."),
+    "install": ("Install", "game", "Into the game: piece stats and items, or the hero entry."),
+}
+CHARACTER_PHASE = {"rig_fit": "model", "rig_game": "model", "roles": "model", "clips_blend": "game",
+                   "greedy_dirs": "pieces", "views": "pieces", "clips_from": "game", "roster": "game",
+                   "clips": "animation", "retarget": "animation"}
+
+
 def fields() -> dict:
     return {"fields": [dict(f.__dict__) for f in outfit_fields.FIELDS], "kinds": list(outfit_fields.KINDS),
-            "model_views": of.MODEL_VIEWS, "given_by_image": outfit_fields.GIVEN_BY_IMAGE}
+            "model_views": of.MODEL_VIEWS, "given_by_image": outfit_fields.GIVEN_BY_IMAGE,
+            "kind_steps": of.STEPS, "kind_ui": KIND_UI, "phases": PHASES, "step_ui": STEP_UI,
+            "character_phase": CHARACTER_PHASE}
+
+
+def character_info(character: str) -> dict:
+    """A character's page: each character field set or not, and whether its file is there."""
+    name_ok(character)
+    p = characters.path(character)
+    data = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    rows = []
+    for f in outfit_fields.FIELDS:
+        if f.level != "character":
+            continue
+        v = data.get(f.name)
+        there = None
+        if v is not None and f.type in outfit_fields.FILE_TYPES:
+            there = (Path(v) if Path(v).is_absolute() else data_root() / v).exists()
+        rows.append({"field": f.name, "set": v is not None, "exists": there, "kinds": list(f.kinds),
+                     "steps": list(f.steps), "help": f.help})
+    return {"character": character, "file": str(p), "about": data.get("_about", ""), "fields": rows}
 
 
 def config(character: str | None, outfit: str | None) -> dict:
@@ -388,6 +441,8 @@ def make_handler(jobs: Jobs, pod: Pod):
                                       "data_root": str(data_root()),
                                       "characters": sorted(p.parent.name for p in
                                                            characters.OUTFITS.glob(f"*/{characters.FILE}"))})
+                if u.path == "/api/character":
+                    return self.json(character_info(q["character"]))
                 if u.path == "/api/run":
                     return self.json(run_detail(q["character"], q["outfit"]))
                 if u.path == "/api/pod/status":

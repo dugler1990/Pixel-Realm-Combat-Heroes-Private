@@ -21,7 +21,13 @@ that step; `#new` the new-character form, `#new/<character>` the new-outfit form
   (r / r1 / rb, a reason, an image: uploaded to `<run>/gate/uploads/`, sent as `@path`), Pick (TRELLIS), Accept
   paint / Repaint views.
 - Two lanes: a pod step and a local step can run at once, for different outfits.
-- Left list: one block per character (settings, + outfit), its outfits by name.
+- Names on the page (outfit_web.py KIND_UI / STEP_UI / PHASES; files and driver keep theirs): kinds Body variant
+  (body), Armour set (armour), Pieces from a mesh (cut); steps by phase Views / 3D model / Pieces / Game with plain
+  labels (sam3 = Find parts, holopart = Complete parts, skeleton = Fit to rig ...), the step name small beside.
+- Left list: one block per character (name: its page; + outfit), its outfits by name with kind, next step, and
+  one pill per phase (done / total). Character page (`#character/<c>`): each character field set / not set / file
+  missing, which steps read it, its outfits. Forms: the kind as cards; only the fields that kind's steps read (or
+  already set), under phase headings.
 - New character / + outfit: name, character, start from (blank or a copy) in the form. Forms per file from
   `outfit_fields.py`; files picked from the character's data folder or uploaded to
   `<data>/generated/bosses/<character>/inputs/`. Save refuses wrong values only; a missing field is named by the
@@ -64,6 +70,8 @@ Files: `outfit_web.py` (server), `web/outfit.html` (page), `tests/test_outfit_we
   identical to the previous one: commands, looks, export, retarget, clips. Headless Chrome on port 8768, no
   console errors: list, new outfit (8 view slots), new character, naked run view (views strip), looked at. Not
   yet: a new outfit from real images run through TRELLIS (pod).
+- 2026-11-14: page names: kinds, phases, step labels, character page, forms by kind and phase. 29 tests. Headless
+  Chrome on 8768, no console errors: list, fullplate view, new outfit, loincloth settings, barb page, looked at.
 
 ## Tried and dropped
 
