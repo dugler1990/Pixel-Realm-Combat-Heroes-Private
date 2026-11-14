@@ -1,0 +1,26 @@
+{
+ "_about": "View prompts for a new character (kind character): its concept from a description, then back, sides and 3/4s drawn from the accepted front. a_pose.png: the barb's A-pose as a stick figure (pose_heights.py --skeleton on his body_front_textured.png; arms 28 degrees from straight down), so every character stands as the rig, the retarget and the armour route were proven on, without his body.",
+ "concept": {
+  "pose_ref": "tools/boss_sprite_pipeline/view_prompts/a_pose.png",
+  "prompt": "{description}\n\nA full-body character concept for a game: one character, standing in exactly the pose of the stick figure in Image 1: an A-pose, arms straight and held away from the body at about 30 degrees, hands open, legs straight and slightly apart, facing the camera. Copy only the pose from Image 1, not its shape or proportions. The whole body in the picture from the top of the head to the feet, nothing cut off, centred, an orthographic front view, plain white background, no shadow, no text.",
+  "refs": "\n\nImages {first} to {last} show how the character looks: follow their face, build, clothes, colours and painting style. Image 1 is only the pose.",
+  "refs_one": "\n\nImage {first} shows how the character looks: follow its face, build, clothes, colours and painting style. Image 1 is only the pose.",
+  "retry": "\n\nThe last attempt was rejected: {why}. Fix that, keeping everything else."
+ },
+ "prompts": {
+  "back": "Draw the character in Image 1 seen from behind. Image 2 is the exact outline from behind: fill it exactly, with the same pose, size and position, nothing outside it and no gaps. Show the back, the back of the head and hair, the backs of the arms, legs and heels. The same character: same clothes, colours, painting style and white background.",
+  "back_masked": "Image 1 is a placeholder: the black shape is exactly where the character must be. Repaint the masked area: draw the character in Image 2 seen from directly behind, filling the black shape completely and exactly, with no black left. Show the back, the back of the head and hair, the backs of the arms, legs and heels. The same character as Image 2: the same clothes, colours, lighting and painting style. Plain white background.",
+  "side": "Draw the character in Image 1 seen from exactly the character's {side} side, a 90 degree side view facing the {edge} edge of the image. Image 2 is the same character from behind. Exactly the same character as Images 1 and 2: same clothes, colours, height and pose, head and feet at the same height in the image as in Image 1, full body, orthographic, the same painting style and a white background.",
+  "quarter": "Draw the character in Image 1 seen from {view}: a 45 degree three-quarter view, turned toward the {edge} edge of the image. Image 2 is the same character from behind. Exactly the same character as Images 1 and 2: same clothes, colours, height and pose, head and feet at the same height in the image as in Image 1, full body, orthographic, the same painting style and a white background."
+ },
+ "retry_texts": {
+  "back": [
+   "shape_note:white",
+   "This image represents how you have differed from the outline in image 2, which your drawing must fill exactly, this shape needs to be pixel perfect relative to that outline, if not the image is not valid and cannot be used, this is the most important directive it takes precedence over any other contradictory statements earlier in the prompt, thanks."
+  ],
+  "back_masked": [
+   "shape_note:white",
+   "This image represents how you have differed from the black shape in image 1, which your drawing must fill exactly, this shape needs to be pixel perfect relative to that shape, if not the image is not valid and cannot be used, this is the most important directive it takes precedence over any other contradictory statements earlier in the prompt, thanks."
+  ]
+ }
+}

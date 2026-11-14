@@ -213,7 +213,8 @@ function drawMain() {
       // done: the gate's cut-out, else the step's recorded drawing (outfits backfilled from before the driver)
       const mine = o.images[v], cut = d.cutouts[v] || ((d.run.steps[v] || {}).outputs || {}).draw
         || ((d.run.steps.sides || {}).outputs || {})[v];
-      const how = mine ? "your image" : (v in d.mirror_of && d.mirror_right ? "mirrored from " + d.mirror_of[v] : "drawn from the prompt");
+      const how = mine ? "your image" : v === "front" && o.kind === "character" ? "the concept"
+        : (v in d.mirror_of && d.mirror_right ? "mirrored from " + d.mirror_of[v] : "drawn from the prompt");
       return `<div style="text-align:center"><b>${v}</b><br>${cut ? img(cut, "thumb") : mine ? thumbImg(mine) : `<div class="dim" style="height:120px;width:80px"></div>`}<br>
         <span class="dim">${how}${cut ? " · done" : ""}</span></div>`;
     }).join("") + `</div><div class="dim">Give your own images in Outfit settings → images; views without one are drawn.</div>`;
@@ -283,8 +284,28 @@ function attempts(step, view, g, busy) {
   }).join("");
 }
 
+// A new character's concept: the candidates of the last calls, each with its check; accept one or generate again.
+function conceptPanel(d, run, busy) {
+  if (run.status === "skipped") return `<p class="dim">Your own front image is the concept (Outfit settings → images → front).</p>`;
+  const g = d.gates.concept;
+  let h = `<div class="row"><input type="text" id="cwhy" size="60" placeholder="what to change (optional), e.g. longer cloak, older face">
+    <button ${busy ? "disabled" : ""} onclick="act({action:'retry', step:'concept', retry:('r ' + document.getElementById('cwhy').value).trim()})">Generate again</button>
+    <span class="dim">candidates per call: concept_count (Outfit settings)</span></div>`;
+  if (!g || !g.attempts.length) return h + `<p class="dim">No candidates yet: Run Concept generates them from the description.</p>`;
+  h += `<div class="grid">` + [...g.attempts].reverse().map(t => {
+    const sc = t.scores || {}, acc = g.accepted === t.attempt;
+    return `<div class="attempt ${acc ? "acc" : ""}"><div class="row"><b>${t.attempt}</b>
+      <span class="${sc.passed ? "okc" : "err"}">${sc.passed ? "PASS" : "FAIL"}</span>
+      ${acc ? `<span class="okc">accepted</span>` : `<button class="main" ${busy ? "disabled" : ""} onclick="act({action:'accept', step:'concept', n:${t.attempt}})">Accept</button>`}</div>
+      <div class="dim" style="font-size:12px">${esc((sc.failing || []).join("; "))}${sc.arms ? ` arms ${sc.arms.left.toFixed(0)}/${sc.arms.right.toFixed(0)}°` : ""}${t.why ? " · asked: " + esc(t.why) : ""}</div>
+      ${img(t.draw)}</div>`;
+  }).join("") + `</div>`;
+  return h;
+}
+
 function panel(step, d, busy) {
   const run = d.run.steps[step] || {};
+  if (step === "concept") return conceptPanel(d, run, busy);
   if (step === "front" || step === "back") {
     const g = d.gates[step];
     if (!g && run.status === "done" && (run.outputs || {}).draw)   // made before the driver (backfilled): no gate file here
@@ -403,7 +424,7 @@ async function drawLog() {
   if (atEnd) el.scrollTop = el.scrollHeight;
 }
 // --- settings: character and outfit files, forms from the field table (outfit_fields.py) -------------------------
-const LONG = new Set(["front", "back", "side", "quarter", "retry_bigger"]);
+const LONG = new Set(["front", "back", "side", "quarter", "retry_bigger", "concept_prompt"]);
 const FILE_TYPES = ["image", "glb", "blend", "json"];
 async function fieldsTable() { if (!S.fields) S.fields = await api("/api/fields"); return S.fields; }
 function isNote(k) { return k.startsWith("_") || k.endsWith("_note"); }
@@ -414,11 +435,14 @@ async function newCharacter() {
   const cfg = await api("/api/config");
   openForm({ level:"character", character:"", data:{}, isNew:true, copies:Object.keys(cfg.characters) });
 }
+// A new character's first outfit is its base (kind character), with the generic prompts and a concept model set.
+const CHARACTER_START = { view_prompts:"tools/boss_sprite_pipeline/view_prompts/character.json",
+                          concept_config:"tools/painted_map_pipeline/openai.gpt-image-2.json", concept_count:4 };
 async function newOutfit(c, kind) {
   const cfg = await api("/api/config");
   const copies = Object.entries(cfg.characters).flatMap(([ch, os]) => os.map(o => ch + "/" + o));
-  openForm({ level:"outfit", character:c, outfit:"", data:{ kind: kind || "armour", trellis_models:["front_back_sides"] },
-             isNew:true, copies });
+  const data = { kind: kind || "armour", trellis_models:["front_back_sides"], ...(kind === "character" ? CHARACTER_START : {}) };
+  openForm({ level:"outfit", character:c, outfit: kind === "character" ? "base" : "", data, isNew:true, copies });
 }
 async function charPage(c) {
   S.form = null; S.sel = null; S.charPage = c; drawNav();
@@ -478,7 +502,7 @@ async function openForm(F) { S.form = F; S.charPage = null; await fieldsTable();
 function closeForm() { const c = S.form.character, back = !S.sel && S.form.level === "character" && !S.form.isNew;
                        S.form = null; S.sig = null; if (back) return charPage(c); refresh(); }
 
-const FIRST = ["kind", "trellis_models", "images"];        // an outfit form starts with what it is and its images
+const FIRST = ["kind", "concept_prompt", "concept_refs", "trellis_models", "images"];        // an outfit form starts with what it is and its images
 // The fields this form shows: a character's, or the outfit fields its kind's steps read (and any already set).
 function formRows() {
   const F = S.form, kind = F.data.kind || "armour", steps = S.fields.kind_steps[kind] || [];
@@ -653,7 +677,7 @@ async function saveForm() {
   const key = F.outfit ? F.character + "/" + F.outfit : null, newChar = F.isNew && F.level === "character";
   S.form = null;
   await refresh();
-  if (newChar) return newOutfit(F.character, "body");      // a new character: its first outfit, its body
+  if (newChar) return newOutfit(F.character, "character"); // a new character: its base, concept to install
   if (key && S.state.outfits.some(o => o.character + "/" + o.outfit === key && !o.error)) await select(key);
   else drawNav();
 }
@@ -668,7 +692,7 @@ async function saveForm() {
     return openForm({ level: h[2] ? "outfit" : "character", character:h[1], outfit:h[2],
                       data: (h[2] ? cfg.outfit : cfg.character) || {} });
   }
-  if (h[0] === "new") return h[1] ? newOutfit(h[1]) : newCharacter();   // #new: a character; #new/<character>: an outfit
+  if (h[0] === "new") return h[1] ? newOutfit(h[1], h[2]) : newCharacter();   // #new; #new/<character>[/<kind>]: an outfit
   if (h[0] === "character" && h[1]) return charPage(h[1]);              // #character/<c>: its page
   if (h.length >= 2) { await select(h[0] + "/" + h[1]); if (h[2]) pickStep(h[2]); }
 })();

@@ -45,5 +45,14 @@
  "joint_judged": [
   "hip",
   "knee"
- ]
+ ],
+ "concept": {
+  "_note": "a new character's concept candidates: the barb's arms are 28 degrees from straight down",
+  "arm_deg": [
+   18.0,
+   40.0
+  ],
+  "frame_margin": 0.01,
+  "background_min": 235
+ }
 }

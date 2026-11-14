@@ -128,6 +128,11 @@ Settings that matter:
   `view_checks/default.json` (`feat/new-character`). `_checks/view_prompts_unchanged.py`, 16 barb dry-run cases
   (fullplate, naked: front, front rb, front r, back, 2 sides, 2 3/4s): identical before / after, the 3 expected
   errors included. `_checks/barb_unchanged.py`: same but the 2 drawn outfits gain `view_prompts`. 30 tests.
+- 2026-11-14: kind `character` (new character), concept to TRELLIS: `concept_gate.py` (description + the A-pose
+  stick figure `view_prompts/a_pose.png` + look images → candidates; pose_heights `--arms`: one person, arms 18-40
+  degrees, clear of the edges, white background), the accepted concept is the front, back / sides from
+  `view_prompts/character.json`. Barb front checked: PASS, arms 28.7 / 28.0. 36 tests (`test_new_character.py`
+  + the outfit ones). No paid concept call yet.
 
 ## Tried and dropped
 

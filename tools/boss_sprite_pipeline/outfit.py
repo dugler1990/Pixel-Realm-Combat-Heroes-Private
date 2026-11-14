@@ -44,7 +44,12 @@ STEPS = {
     "armour": ["front", "back", "sides", "trellis", "skeleton", "paint", "views", "sam3", "cut", "holopart", "merge",
                "worn", "slots", "sheet", "export", "install"],
     "cut": ["views", "sam3", "cut", "holopart", "merge", "worn", "slots", "sheet", "export", "install"],
+    # A new character (new_character.plan.md): what it makes is written into its character file.
+    "character": ["concept", "front", "back", "sides", "trellis", "rig", "reweight", "roles", "paint", "game_rig",
+                  "clips", "sprites", "export", "install"],
 }
+# Steps of the character kind not built yet (new_character.plan.md, in order): they stop saying so.
+NOT_BUILT = {"rig", "reweight", "roles", "paint", "game_rig", "clips", "sprites", "export", "install"}
 POD_STEPS = {"trellis", "sam3", "holopart"}
 # TRELLIS models and the drawings each needs. The default is a setting: an outfit's "trellis_models" or --models
 # overrides it (2026-11-13, naked barb: front + back + sides and 8 views both better than front + back by eye).
@@ -129,6 +134,8 @@ class Ctx:
     def given(self, view: str) -> Path | None:
         """Your own image for a view (the outfit's "images"), else None: used instead of drawing it."""
         rel = (self.o.get("images") or {}).get(view)
+        if not rel and view == "front" and self.o["kind"] == "character" and self.done("concept"):
+            rel = self.step("concept").get("outputs", {}).get("concept")   # a new character: its accepted concept
         if not rel:
             return None
         p = self.data(rel)
@@ -199,6 +206,34 @@ def view_gate(ctx: Ctx, view: str, a) -> None:
     draw = next(t["draw"] for t in gate["attempts"] if t["attempt"] == n)
     ctx.record(view, status="done", accepted=n, outputs={"draw": draw, "cutout": str(gate_dir / f"{view}.png"),
                                                          "gate": str(gate_json)})
+
+
+def s_concept(ctx: Ctx, a) -> None:
+    """A new character's concept (concept_gate.py): candidates from its description, checked; you accept one. Your
+    own front image (images.front) is the concept instead."""
+    if (ctx.o.get("images") or {}).get("front"):
+        ctx.record("concept", status="skipped", note="images.front is the concept")
+        return
+    out = ctx.work / "concept"
+    base = [sys.executable, "-m", "tools.boss_sprite_pipeline.concept_gate", "--out", out, "--outfit", ctx.file]
+    gate_json = out / "gate_concept.json"
+    gate = json.loads(gate_json.read_text(encoding="utf-8")) if gate_json.is_file() else {}
+    if a.accept is not None:
+        call(base + ["--accept", a.accept], ok="accepted attempt")
+    elif gate.get("status") != "accepted" and (a.retry or not gate.get("attempts")):
+        call(base + (["--retry", a.retry] if a.retry else []), ok="PENDING")
+    gate = json.loads(gate_json.read_text(encoding="utf-8"))
+    if gate.get("status") != "accepted":
+        ctx.record("concept", status="gate", attempts=len(gate["attempts"]), sheet=gate.get("sheet"))
+        raise Stop(f"concept candidates: look at {gate.get('sheet')}\n"
+                   f"  accept:  outfit.py {ctx.character} {ctx.outfit} --only concept --accept N\n"
+                   f"  again:   outfit.py {ctx.character} {ctx.outfit} --only concept --retry \"r <why>\"")
+    ctx.record("concept", status="done", accepted=gate["accepted"],
+               outputs={"concept": gate["concept"], "sheet": gate.get("sheet"), "gate": str(gate_json)})
+
+
+def not_built(ctx: Ctx, a) -> None:
+    raise Stop("not built yet (.cursor/plans/new_character.plan.md)")
 
 
 def use_given(cmd: list, gate_json: Path, gate: dict, given: Path, always: bool = False) -> None:
@@ -478,7 +513,9 @@ def s_install(ctx: Ctx, a) -> None:
     ctx.record("install", status="done", missing_bases=[], items=items)
 
 
-RUN = {"front": lambda c, a: view_gate(c, "front", a), "back": lambda c, a: view_gate(c, "back", a),
+RUN = {"concept": s_concept, "rig": not_built, "reweight": not_built, "roles": not_built, "game_rig": not_built,
+       "clips": not_built, "sprites": not_built,
+       "front": lambda c, a: view_gate(c, "front", a), "back": lambda c, a: view_gate(c, "back", a),
        "sides": s_sides, "trellis": s_trellis, "skeleton": s_skeleton, "paint": s_paint, "views": s_views, "sam3": s_sam3,
        "cut": s_cut, "holopart": s_holopart, "merge": s_merge, "worn": s_worn, "slots": s_slots, "sheet": s_sheet,
        "export": s_export, "install": s_install}
@@ -571,6 +608,8 @@ def main(argv=None) -> None:
             if miss:
                 raise Stop("this step needs settings the files do not have (Outfit / character settings):\n  "
                            + "\n  ".join(miss))
+            if ctx.o["kind"] == "character" and name in NOT_BUILT:
+                not_built(ctx, a)
             RUN[name](ctx, a)
         except Stop as stop:
             LOG.write(f"STOPPED: {stop}\n")

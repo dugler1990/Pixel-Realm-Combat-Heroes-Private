@@ -13,10 +13,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-ALL = ("body", "armour", "cut")
+ALL = ("body", "armour", "cut")              # the kinds made on a character that has its rig
 TRELLIS_MODELS = ("front_only", "front_back", "front_back_sides", "eight_views")   # = outfit.MODEL_VIEWS keys
 VIEWS = ("front", "back", "left", "front_left", "back_left", "right", "front_right", "back_right")
-KINDS = ALL
+KINDS = ALL + ("character",)                # character: a new character, concept to install (its rig too)
 
 
 @dataclass(frozen=True)
@@ -57,11 +57,21 @@ FIELDS = (
           "player_clips.py's picks: idle, move, attack (retargeted clip names), attack_frames ([[from, to], ...])."),
     Field("retarget", "character", (), "dict", "retarget_bvh.py's quirks: bind_match, arm_elev_cap, digitigrade."),
     # --- outfit ----------------------------------------------------------------------------------------------
-    Field("character", "outfit", ALL, "text", "The character folder this outfit belongs to."),
-    Field("kind", "outfit", ALL, "choice", "What the outfit is: body (a body variant), armour (an armour set), cut (pieces from a mesh).",
+    Field("character", "outfit", KINDS, "text", "The character folder this outfit belongs to."),
+    Field("kind", "outfit", KINDS, "choice", "What the outfit is: body (a body variant), armour (an armour set), cut "
+          "(pieces from a mesh), character (a new character).",
           KINDS),
-    Field("pack", "outfit", ALL, "text", "Mesh pack name in Graphics/Meshes/ (<character>_<outfit>).",
+    Field("pack", "outfit", KINDS, "text", "Mesh pack name in Graphics/Meshes/ (<character>_<outfit>).",
           steps=('export', 'install')),
+    Field("concept_prompt", "outfit", ("character",), "text",
+          "A new character's description: what it is and how it looks. Sent with the A-pose stick figure and any "
+          "concept_refs (view_prompts' concept block). Not needed when images has a front.", steps=("concept",)),
+    Field("concept_config", "outfit", ("character",), "json",
+          "The image model for the concept (an image_client config: tools/painted_map_pipeline/openai.gpt-image-2.json, "
+          "a Leonardo config ...).", steps=("concept",)),
+    Field("concept_refs", "outfit", (), "list", "Images of how the character should look (style, face, clothes), "
+          "paths relative to the data root.", steps=("concept",)),
+    Field("concept_count", "outfit", (), "number", "Concept candidates per call (4).", steps=("concept",)),
     Field("images", "outfit", (), "views",
           "Your own images, one per view (front, back, left, front_left, ...): used instead of drawing that view, "
           "checked the same way, accepted when the check passes. Views not given are drawn from their prompt.",
@@ -71,13 +81,13 @@ FIELDS = (
           "has a front.", steps=('front',)),
     Field("source_mesh", "outfit", ("cut",), "glb", "The painted mesh a cut outfit is cut from.",
           steps=('views',)),
-    Field("paint_look", "outfit", ("body", "armour"), "json", "Paint look (repaint/looks/*.json).",
+    Field("paint_look", "outfit", ("body", "armour", "character"), "json", "Paint look (repaint/looks/*.json).",
           steps=('paint',)),
     Field("front", "outfit", ("body", "armour"), "text", "Front drawing prompt (not needed for a front in images).",
           steps=('front',)),
     Field("back", "outfit", ("body", "armour"), "text", "Back drawing prompt (not needed for a back in images).",
           steps=('back',)),
-    Field("view_prompts", "outfit", (), "json",
+    Field("view_prompts", "outfit", ("character",), "json",
           "Prompt file for the drawn views (view_prompts/*.json): front, back, side, 3/4 and the redraw texts. The "
           "outfit's own front / back / side / quarter / retry_bigger win over it.", steps=("front", "back", "sides")),
     Field("view_checks", "outfit", (), "json",
@@ -105,7 +115,9 @@ FIELDS = (
 BY_NAME = {f.name: f for f in FIELDS}
 FILE_TYPES = ("image", "glb", "blend", "json")
 # A view in "images" stands in for what drawing that view needs.
-GIVEN_BY_IMAGE = {"concept": "front", "front": "front", "back": "back"}
+GIVEN_BY_IMAGE = {"concept": "front", "front": "front", "back": "back", "concept_prompt": "front",
+                  "concept_config": "front"}
+BY_PROMPT_FILE = ("front", "back")          # a view_prompts file gives these prompts
 _PY = {"text": str, "number": (int, float), "bool": bool, "list": list, "dict": dict}
 
 
@@ -151,7 +163,8 @@ def needed(o: dict, step: str | None = None) -> list[Field]:
     kind, images = o.get("kind"), o.get("images") or {}
     return [f for f in FIELDS if kind in f.kinds and f.name not in o
             and (step is None or not f.steps or step in f.steps)
-            and GIVEN_BY_IMAGE.get(f.name) not in images]
+            and GIVEN_BY_IMAGE.get(f.name) not in images
+            and not (f.name in BY_PROMPT_FILE and o.get("view_prompts"))]
 
 
 def missing(o: dict, step: str | None = None, where: str = "") -> list[str]:

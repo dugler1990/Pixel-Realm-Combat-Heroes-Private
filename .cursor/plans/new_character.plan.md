@@ -9,7 +9,13 @@ fits only its body) stays there.
 Proof throughout: the barb's outputs do not change (`_checks/barb_unchanged.py`, main vs branch).
 
 ## Status 2026-11-14
-Written, nothing built. Branch `feat/new-character` from `feat/outfit-config` (not merged yet), own worktree.
+Branch `feat/new-character` (worktree `Pixel-Realm-new-character`), from `feat/outfit-config`.
+- 0 built: `view_prompts/barb_plate_armour.json`, `view_checks/default.json`; 16 barb dry-run cases identical.
+- 1 concept / front / back / sides built (kind `character`, `concept_gate.py`, `view_prompts/character.json` +
+  `a_pose.png`, page panel). The A-pose: the barb's arms measure 28 degrees from straight down
+  (`pose_heights.py --arms`); candidates pass at 18-40. Not run with a paid call yet. trellis: the existing step.
+- Next: rig (pod), then reweight roles game_rig, paint, clips, sprites, export install. Those steps stop with
+  "not built yet".
 
 ## What exists and is reused
 | Step | Tool | State |
