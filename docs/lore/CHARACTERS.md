@@ -17,7 +17,7 @@ born in a cave and surviving the ice, ayahuasca-style trips for the big changes)
 ### Barb (Frostreach). Exists
 - Wakes naked in the snow. No memory. Kept mysterious.
 
-### The ice wizard (the Ice Wall). Next to build
+### The ice wizard (the Ice Wall). Idea only, not being built (2026-11-14)
 Low level: early twenties, lean and underfed, shaved head, faint frost-blue ritual lines (crown, nape, arms,
 collarbones), clean-shaven, pale wind-burned skin, barefoot, a short wool wrap at the hips.
 
@@ -108,4 +108,5 @@ Paths:
 ## Open
 - Ice wizard: which cult take (A / B / C), his name.
 - Apprentice vs ice wizard: both have a good/necro split.
-- Evolution models: a new body per stage, or one body that changes. See `.cursor/plans/character_pipeline.plan.md`.
+- Evolution models: a new body per stage, or one body that changes.
+- Pipeline for any new mesh hero: `.cursor/plans/character_pipeline.plan.md`.
