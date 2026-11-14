@@ -76,11 +76,33 @@ All but heat reach a target through `InteractionResolver.apply` / `strike` with 
 First rows (the master doc's roster plus what the warriors use):
 `unarmed, sword, rapier, sai, axe, lance, flame, ice_ball, leap_slam, dash_hit, ice_clone_burst,
 demon_claw, meteor_impact, meteor_embers, squid_slap, snake_bite, raccoon_claw, spirit_touch,
-bamboo_whip, ghost_chill, spear_thrust, fire_spit, thorn, staff_strike, ice_shard, arrow, stone,
-tribal_club`, plus the card's reference rows `crossbow_bolt, ballista, storm_bolt, holy_smite,
-blowgun_dart` (no hookup yet).
-`stops` as today: `arrow`, `stone` true; `fire_spit`, `thorn`, `ice_shard` (all fired as
-`demon_dog_projectile` art) false.
+bamboo_whip, ghost_chill, spear_thrust, fire_spit, thorn, staff_strike, ice_shard`, the warriors'
+`arrow, stone, tribal_club, scimitar, curse_bolt, sun_bolt, catapult_shot, scorpion_sting`, plus the
+card's reference rows `crossbow_bolt, ballista, storm_bolt, holy_smite, blowgun_dart` (no hookup yet).
+`stops` as today: `arrow`, `stone`, `catapult_shot` true; `fire_spit`, `thorn`, `ice_shard`,
+`curse_bolt`, `sun_bolt` (all fired as `demon_dog_projectile` art) false.
+
+### The warriors (`warrior_00`..`19`, sheet `generated/entity_pipeline/pyramid3/sheet.png`)
+
+Numbered across the rows of the sheet (`layout.json`). Weapon from the sheet's label and picture,
+checked against what each one fires today in `monster_data`; 07 and 13 also checked in their attack
+frames (`Graphics/Monsters/warrior_NN/_contact.png`).
+
+| warrior | sheet | attack |
+|---|---|---|
+| 00, 06, 12 | archers (06 on a camel) | `arrow` |
+| 01, 02, 05, 08, 14 | spearmen (05 on a camel) | `spear_thrust` |
+| 09 | camel standard bearer (spear-tipped pole) | `spear_thrust` |
+| 03, 04, 10, 11 | curved blades (jaguar priest, pharaoh's guard, scimitars) | `scimitar` |
+| 07 | desert chieftain, curved blade from a camel | `scimitar` |
+| 13 | warrior with club/mace (confirmed by Douglas) | `tribal_club` |
+| 15 | catapult crewmember, throws a stone | `stone` |
+| 16 | magic-user | `curse_bolt` (unholy) |
+| 17 | high priest | `sun_bolt` (holy) |
+| 18 | catapult machine | `catapult_shot` (blast) |
+| 19 | scorpion | `scorpion_sting` (pierce, venom) |
+
+Workers and chiefs (eskimo, jungle): `unarmed` (no weapon in their art known to me; flagged).
 
 ## Hookups in `Settings.py`
 
@@ -93,7 +115,9 @@ blowgun_dart` (no hookup yet).
 | `monster_data` specials `MeteorShower` | `"attack": "meteor_impact"`, `"residual_attack": "meteor_embers"` |
 | specials `Dash` | `"attack": "dash_hit"`; `MultiShotIceball`: `"attack": "ice_shard"` |
 
-`tools/entity_pipeline/wire.py` copies a template monster entry, so new warriors get the keys.
+`tools/entity_pipeline/wire.py` writes each new warrior's attacks itself (`adjust_entry`), so it
+gets `attack_for(label, reach)`: the same words it already uses for the projectile (caster, priest,
+catapult) plus spear, club/mace, scimitar/sword/blade, staff, scorpion; arrow / `unarmed` otherwise.
 
 ## Code
 
@@ -107,6 +131,9 @@ blowgun_dart` (no hookup yet).
 | `Level4_tmxdev.py` `fire_projectile` | `attack_def` argument; `stops=attack_def.stops` (the name rule goes) |
 | `CombatStrategy.py:140, 285, 421`, `SpecialAttacks.py:173` | pass the attack's def |
 | `abilities/dash.py`, `abilities/leap_slam.py`, `IceClone.py`, `meteor_strike.py` | pass the def into their contexts |
+| `abilities/instant.py`, `Spawner.spawn_trap` | the ice clone's trap config carries `attack`; the trap gets `attack_def` |
+| `SpecialAttacks.py` `DashAttack`, `MeteorShower`; `Level4.spawn_meteor` | carry the defs from the special's config |
+| `tools/entity_pipeline/wire.py` | `attack_for(label, reach)`; `adjust_entry` writes `"attack"` |
 | `Interaction.py` `InteractionContext` | `attack_def: Any = None` |
 | `Level4_tmxdev.py:1555` `_strike_with_attack_sprites` | `attack_def=attack_sprite.attack_def` in the fields |
 
@@ -142,6 +169,10 @@ Hot path: one more attribute copied per hit; no perf run.
 
 ## Open
 
-- `tribal_club` is a guess at what the tribe warriors swing (crush). Their art may say spear or axe.
+- Warriors 16, 17: `curse_bolt` (unholy) and `sun_bolt` (holy) are guesses from a purple wizard and
+  a sun priest. 05 could be `lance` (mounted). Workers and chiefs: `unarmed` is a guess.
+- Raccoon `Dash` and the player's slide never deal damage today (no `damage`, collision mode not
+  `damage_on_hit`); `dash_hit` rides along, unused.
+- Ice clone `explode` is never chosen (the ability is `freeze`); `ice_clone_burst` rides along, unused.
 - Player damage still comes from `stats + weapon_data damage`; the def's `damage` for player weapons
   copies `weapon_data` until chunk 5 makes the def the source.
