@@ -86,13 +86,16 @@ The existing hit test stays (`hit_core.py`): rect, then mask against mask.
    arrow entered. From that pixel, step back along the flight over the body mask with `get_at` until
    outside: at most this frame's travel + the shot's length in reads, capped at 64
    (`hit_core.entry_point`). ~20 µs a walk, so it runs only for hits that land (`EntryPoints`).
-3. **Which layer is there** (only bodies with worn layers):
-   - Sprite bodies: one mask per worn slot per animation frame, built when frames load.
-     `slot_mask.get_at(point)`, outer first: 1–3 reads. Holes are transparent pixels.
-   - Mesh bodies: the hit mask is the posed capsules (`mesh_boss.build_body_mask`, cached per frame
-     and facing). Rasterize each capsule with its index as colour into the same cached image: the
-     pixel gives the bone; the capsule's projection gives position along it (u) and around it
-     (angle). Each slot bakes, at export, a coverage bitmap per bone in (u, angle). One read.
+3. **Which layer is there** (only bodies with worn layers; chunk 4, `defence_layers.plan.md`):
+   - The region (head, chest, `upper_arm l`, ...) under the contact, then the profile's layers for
+     that region, outer first. A region is covered or not (the item's `coverage`).
+   - Mesh hero: hits still land on his sprite mask (the mesh is draw-only); the region is his
+     nearest projected body capsule at the contact → bone → `regions.json`. Torso is chest or back
+     by the attack's direction against his facing. ~53-167 µs, landed hits on armoured bodies only.
+   - Sprite hero wearing items: height bands on the hitbox. Sprite enemies wear nothing: one layer
+     (their hide) everywhere, no lookup.
+   - Was in this doc before chunk 4: per-slot sprite masks per frame (no sprite body wears pieces)
+     and per-bone (u, angle) coverage bitmaps baked at export (deferred until a piece needs a gap).
 4. No contact point (rect fallback, ground blasts): blasts need none; rect fallback uses the centre
    of the overlap.
 
@@ -168,10 +171,11 @@ New modules, flat in `Code/` like the rest (one job each):
 |---|---|---|
 | `damage_data.py` | load + validate + compile the data files; registries (property, category, delivery, kind, condition ids); `AttackDef`, `LayerDef`, `BodyDef` (`__slots__`); `attack(name)`, `body(name)` lookups | no |
 | `damage_rules.py` | the pure rules: `physical(attack, layers) -> (amount, bruise, reached_flesh, wear)`, `magic(attack, profile, states) -> amount`, `impulse(force, profile)`, `KIND_MULT`, constants | no |
-| `defence_profile.py` | `DefenceProfile`: body def + worn pieces → per-region layer lists, total weight, resistances, `reacts_mask`; built on equip; shared per body def; copy-on-write | no |
+| `defence_profile.py` | `DefenceProfile`: body def + worn pieces → per-region-slot layer tuples (outer first, hide last), worn weight; built on equip; one shared per body def for the unarmoured; resistances, `reacts_mask` and copy-on-write come with chunks 7-10 | no |
 | `hit_resolve.py` | `resolve(ctx, target) -> HitResult(amount, impulse, conditions, wear)`: amount from attacker, contact → layers, rules; called by `InteractionResolver.apply` | no |
 | `conditions.py` | condition defs, `ConditionClock` (the level heap), venom / burning / hot shell / wet / buff behaviours | no |
-| `hit_core.py` (existing) | `touch_point(a, b)` beside `touching`; `entry_point(projectile, body)` | yes (masks) |
+| `hit_core.py` (existing) | `touch_point(a, b)` beside `touching`; `find_contacts`; `entry_point(point, step, body)` (done: chunk 3) | yes (masks) |
+| `body_regions.py` | contact pixel → region: mesh hero by nearest posed capsule + `Graphics/Meshes/<pack>/regions.json`; sprite hero by height bands (chunk 4) | no (numpy) |
 
 Pure modules stay importable on the headless server and in tests without a display.
 
@@ -378,8 +382,11 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
    `hit_core.touch_point` / `find_contacts` / `entry_point` / `EntryPoints`, `Shape.solid`,
    `InteractionContext.contact`, `strike(contacts=)`; sprites, enemy swings, dashes carry it; blasts
    None. `DEBUG_DRAW_CONTACTS` dots (`contact_debug.py`). → 4, 11
-4. **Bodies and layers.** `defence_profile.py`; profile on Player / CombatUnit; slot masks for sprite
-   bodies; bone map + per-bone coverage for mesh bodies (needs the outfit per-slot draw). → 5
+4. **Bodies and layers.** Plan: `.cursor/plans/defence_layers.plan.md`, branch
+   `refactor/defence-layers`. `bodies.json` + `kinds.json` (natural layer, kind; mass stays in
+   `monster_data`), `defence_profile.py` (layers per region slot, worn weight), hero rebuilt on equip,
+   enemies share one per body; `body_regions.py` + `regions.json` (contact → region on the mesh hero).
+   Needs `main`'s item card merged. → 5
 5. **Physical resolve.** `damage_rules.physical`, `hit_resolve.py`, resolver calls it, receivers
    simplified. First real behaviour: plate stops the dart. → 10, 12
 6. **Conditions and buffs.** `conditions.py`, the level clock, server-owned. → 7, 8, 9
