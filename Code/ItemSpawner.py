@@ -163,6 +163,9 @@ class ItemSpawner:
             float_direction=float_direction,
             float_amplitude=float_amplitude,
             belt_allowed=item_config.get('belt_allowed', False),
+            base=item_config.get('base'),
+            name=item_config.get('name'),
+            description=item_config.get('description', ''),
         )
 
     def update(self):

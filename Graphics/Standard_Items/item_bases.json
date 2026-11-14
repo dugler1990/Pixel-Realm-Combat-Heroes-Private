@@ -1,0 +1,43 @@
+{
+ "_about": "Base stats of wearable items, hand-written (Code/item_properties.py: what each field means). An item names its base in its 'base' field (outfit_items.json, written by equip_install.py). Left and right pieces share one base. First numbers, to be tuned: docs/damage/NOTES_damage_and_armour.md.",
+ "plate_helmet": {
+  "name": "Plate helmet", "set": "fullplate",
+  "stopping_power": 40, "absorb": 0.15, "weight": 3, "coverage": ["head", "neck"],
+  "conductivity": 0.9, "insulation": 0.2, "flammability": 0, "sealed": false, "durability": 200
+ },
+ "plate_chest": {
+  "name": "Plate chest", "set": "fullplate",
+  "stopping_power": 40, "absorb": 0.15, "weight": 12, "coverage": ["chest", "back"],
+  "conductivity": 0.9, "insulation": 0.2, "flammability": 0, "sealed": false, "durability": 300
+ },
+ "plate_shoulder": {
+  "name": "Plate pauldron", "set": "fullplate",
+  "stopping_power": 40, "absorb": 0.15, "weight": 2, "coverage": ["upper_arm"],
+  "conductivity": 0.9, "insulation": 0.2, "flammability": 0, "sealed": false, "durability": 120
+ },
+ "plate_gauntlet": {
+  "name": "Plate gauntlet", "set": "fullplate",
+  "stopping_power": 40, "absorb": 0.15, "weight": 1.5, "coverage": ["forearm", "hand"],
+  "conductivity": 0.9, "insulation": 0.2, "flammability": 0, "sealed": false, "durability": 120
+ },
+ "plate_pants": {
+  "name": "Plate leg", "set": "fullplate",
+  "stopping_power": 40, "absorb": 0.15, "weight": 3, "coverage": ["thigh"],
+  "conductivity": 0.9, "insulation": 0.2, "flammability": 0, "sealed": false, "durability": 120
+ },
+ "plate_boot": {
+  "name": "Plate boot", "set": "fullplate",
+  "stopping_power": 40, "absorb": 0.15, "weight": 2.5, "coverage": ["shin", "foot"],
+  "conductivity": 0.9, "insulation": 0.2, "flammability": 0, "sealed": false, "durability": 120
+ },
+ "plate_belt": {
+  "name": "Plate belt", "set": "fullplate",
+  "stopping_power": 40, "absorb": 0.15, "weight": 1, "coverage": ["waist"],
+  "conductivity": 0.9, "insulation": 0.2, "flammability": 0, "sealed": false, "durability": 120
+ },
+ "loincloth": {
+  "name": "Loincloth", "set": null,
+  "stopping_power": 0, "absorb": 0.05, "weight": 0.3, "coverage": ["waist"],
+  "conductivity": 0, "insulation": 0.1, "flammability": 0.8, "sealed": false, "durability": 40
+ }
+}

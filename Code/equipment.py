@@ -58,6 +58,14 @@ PIECES = {
 BELT_POCKETS = {"belt": 2, "loincloth": 1}     # a waist piece opens this many belt pockets (simple belt: 1)
 
 
+def piece_base(piece, material=None):
+    """The base stats id (Graphics/Standard_Items/item_bases.json) of a mesh piece. Left and right share one
+    ("boot_l" -> "boot"); the outfit's material, if it has one, comes first ("plate_boot")."""
+    side = PIECES[piece][2]
+    name = piece[:-2] if side and piece.endswith("_" + side) else piece
+    return f"{material}_{name}" if material else name
+
+
 def _effect(item):
     return (getattr(item, "effect", None) or {}) if item is not None else {}
 

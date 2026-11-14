@@ -7,7 +7,8 @@ For an armour or cut outfit whose export made <run>/packs/<slot>/:
 - an icon per slot (explode2/piece_icons.py) -> Graphics/Standard_Items/outfits/<pack>_<slot>.png;
 - one item per slot in Graphics/Standard_Items/outfit_items.json (this outfit's entries replaced, others kept),
   item_id <pack>_<slot>, from Code/equipment.py PIECES: armour "armour_equip" {"slot", "side", "mesh_piece"},
-  waist pieces "waist_equip" {"belt_slots", "mesh_piece"}.
+  waist pieces "waist_equip" {"belt_slots", "mesh_piece"}; "base": the stats in item_bases.json
+  (equipment.piece_base: the outfit's "material" + the piece, left and right sharing one, e.g. plate_boot).
 --items-only: only the items, from the packs already in Graphics/Meshes/<pack>/ (no run folder, no Blender).
 A hero gets them from its PlayerSelectionDict.json entry's "start_equipment" (equipment.start_equipment).
 """
@@ -27,7 +28,7 @@ sys.path.insert(0, str(REPO / "Code"))
 import equipment  # noqa: E402  (the game's table: piece -> item type, body slot, side, belt pockets)
 
 
-def item(character: str, outfit: str, pack: str, piece: str) -> dict:
+def item(character: str, outfit: str, pack: str, piece: str, material: str | None = None) -> dict:
     kind_type, kind, side = equipment.PIECES[piece]
     effect = {"mesh_piece": f"{pack}/{piece}"}
     if kind_type == equipment.WAIST:
@@ -36,7 +37,8 @@ def item(character: str, outfit: str, pack: str, piece: str) -> dict:
         effect.update({"slot": kind, **({"side": side} if side else {})})
     return {"item_id": f"{pack}_{piece}", "item_type": "armour", "spawn_type": "droppable", "positions": [],
             "image_path": f"../Graphics/Standard_Items/outfits/{pack}_{piece}.png", "effect": effect,
-            "effect_type": kind_type, "outfit": f"{character}/{outfit}"}
+            "effect_type": kind_type, "outfit": f"{character}/{outfit}",
+            "base": equipment.piece_base(piece, material)}
 
 
 def install(character: str, outfit: str, items_only: bool = False) -> dict:
@@ -63,7 +65,7 @@ def install(character: str, outfit: str, items_only: bool = False) -> dict:
         for s in slots:
             shutil.move(str(ICONS / "_tmp" / f"{s}.png"), ICONS / f"{pack}_{s}.png")
         shutil.rmtree(ICONS / "_tmp", ignore_errors=True)
-    entries = [item(character, outfit, pack, s) for s in slots]
+    entries = [item(character, outfit, pack, s, ctx.o.get("material")) for s in slots]
     old = json.loads(ITEMS.read_text(encoding="utf-8")) if ITEMS.is_file() else []
     keep = [e for e in old if e.get("outfit") != f"{character}/{outfit}"]
     ITEMS.write_text(json.dumps(keep + entries, indent=1), encoding="utf-8")

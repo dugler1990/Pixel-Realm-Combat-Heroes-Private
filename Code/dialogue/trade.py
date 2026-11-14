@@ -75,6 +75,9 @@ def make_item(item_id):
         effect_type=row.get("effect_type") or "",
         item_type=row.get("item_type") or "",
         belt_allowed=bool(row.get("belt_allowed", False)),
+        base=row.get("base"),
+        name=row.get("name"),
+        description=row.get("description", ""),
     )
 
 

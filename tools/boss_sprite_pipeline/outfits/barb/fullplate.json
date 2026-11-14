@@ -11,6 +11,7 @@
  "paint_look": "tools/boss_sprite_pipeline/repaint/looks/barb_fullplate.json",
  "clips_blend": "generated/bosses/barb/anim_test/retarget_player/player.blend",
  "pack": "barb_fullplate",
+ "material": "plate",
  "front": "Dress the man in Image 1 in a full suit of steel plate armour worn over a thick padded gambeson. Keep his pose, proportions, head, beard, framing, camera and white background identical. The armour sits over his body: every plate stands clear of the skin by about a finger's width, so the armoured outline is larger than his bare outline everywhere, including shoulders, arms, chest, waist, hips, legs and feet. If unsure, make the armour slightly too big rather than too tight. No skin visible except the head. Image 2 is the outline his armour must cover: every part of the black shape is inside the armour; the armour may reach past it.",
  "back": "Draw the man in Image 1 seen from behind. Image 2 is his exact outline from behind: fill it exactly, with the same pose, size and position, nothing outside it and no gaps. Show his back, hair bun, backplate, the backs of his arms, legs and heels. Same armour, white background.",
  "front_check": "cover",

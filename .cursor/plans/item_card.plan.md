@@ -1,5 +1,9 @@
 # Plan: the item card, tied to the combat rules
 
+Status 2026-11-14: chunk 1 built and chunk 3 without verdicts, plate armour and loincloth only (branch
+`feat/item-card`): `item_bases.json`, `item_properties.py`, `item_card.py`, the card panel in
+`inventory_view.py`, detail view on Shift, `tests/test_item_card.py`. Not played by hand yet.
+
 Written 2026-11-14. Part of `docs/damage/NOTES_damage_and_armour.md` (chunk 12, pulled forward: the
 card can ship before combat uses the numbers). Broad plan: shape and order, not every answer.
 
