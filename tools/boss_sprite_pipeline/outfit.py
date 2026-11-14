@@ -170,6 +170,8 @@ def view_gate(ctx: Ctx, view: str, a) -> None:
     gate = json.loads(gate_json.read_text(encoding="utf-8")) if gate_json.is_file() else {}
     if a.accept is not None:
         call(base + ["--accept", a.accept], ok="accepted attempt")
+    elif a.use:                                      # an image you have as the next attempt (same checks)
+        call(base + ["--use", ctx.data(a.use)], ok="PENDING")
     elif gate.get("status") != "accepted":
         call(base + ["--no-ask"] + (["--retry", a.retry] if a.retry else []), ok="PENDING")
     gate = json.loads(gate_json.read_text(encoding="utf-8"))
@@ -221,6 +223,9 @@ def s_sides(ctx: Ctx, a) -> None:
         if mine and a.accept is not None:
             call(cmd + ["--accept", a.accept], ok="accepted attempt")
             continue
+        if mine and a.use:
+            call(cmd + ["--use", ctx.data(a.use)], ok="PENDING")
+            gate = json.loads(gate_json.read_text(encoding="utf-8"))
         if not gate.get("attempts") or (mine and a.retry):
             call(cmd + ["--no-ask"] + (["--retry", a.retry] if mine and a.retry else []), ok="PENDING")
             gate = json.loads(gate_json.read_text(encoding="utf-8"))
@@ -473,6 +478,8 @@ def main(argv=None) -> None:
                                      f"(default: the outfit's trellis_models, else {DEFAULT_MODELS})")
     ap.add_argument("--view", choices=SIDE_ORDER, help="sides: the view --accept / --retry answers")
     ap.add_argument("--redo", nargs="+")
+    ap.add_argument("--use", help="front / back / sides (--view): an image you have as the next attempt, checked and "
+                                  "shown like a drawing (path: absolute or relative to the data root)")
     a = ap.parse_args(argv)
     ctx = Ctx(a.character, a.outfit)
     if a.models:
@@ -513,7 +520,7 @@ def main(argv=None) -> None:
             print("\nstop the pod  (no pod step left for this outfit)", flush=True)
         if a.only:
             break
-        a.accept = a.retry = a.pick = a.redo = a.view = None   # those answered the first step only
+        a.accept = a.retry = a.pick = a.redo = a.view = a.use = None   # those answered the first step only
     print("\nOUTFIT_DONE" if not a.only else f"\nSTEP_DONE {a.only}")
 
 

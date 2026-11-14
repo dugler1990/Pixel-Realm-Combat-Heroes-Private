@@ -395,6 +395,8 @@ def main() -> None:
     ap.add_argument("--retry", help="with --no-ask / --dry-run: r | r1 | rb | 'r <why> @img', as at the gate, on the "
                                     "last recorded attempt")
     ap.add_argument("--accept", type=int, help="accept attempt N recorded in gate_<view>.json; no draw")
+    ap.add_argument("--use", type=Path, help="an image you have, as the next attempt: no call; the same checks, sheet "
+                                              "and gate as a drawing (recorded as supplied); then --accept N")
     a = ap.parse_args()
     check, bigger = "cover", BIGGER
     if a.outfit:
@@ -417,6 +419,8 @@ def main() -> None:
         ap.error("a side has no outline to use as a mask")
     if a.display_joints and a.draw == "mask":
         ap.error("--display-joints is for --draw reference: a masked edit repaints image 1, lines included")
+    if a.use and (a.draw == "mask" or not a.use.is_file()):
+        ap.error("--use needs an image file, and --draw reference")
     a.config = a.config or DEFAULT_CONFIG[(a.view, a.draw)]
     a.out.mkdir(parents=True, exist_ok=True)
 
@@ -509,6 +513,26 @@ def main() -> None:
                              first_index=FIRST_INDEX[mode] + (len(refs) - 2 if a.view == "side" else 0)), end="")
         print("\n--- images: " + ", ".join(str(p) for p in extra), file=sys.stderr)
         return
+    if a.use:                                # a supplied image: the next attempt, checked as a drawing would be
+        n += 1
+        tag = a.out / f"{a.view}_attempt_{n:02d}"
+        draw_path = tag.with_suffix(".png")
+        on_white(Image.open(a.use)).save(draw_path)
+        joints = None
+        if ref_joints is not None and a.view != "side":
+            got = joint_heights([draw_path])[str(draw_path)] or {}
+            joints = {k: (v["y"], got[k]["height_pct"] - v["height_pct"]) for k, v in ref_joints.items() if k in got}
+        s, lines, sheet_png, shape_png = evaluate(a.view, Image.open(draw_path), target, tag, sent=refs,
+                                                  joints=joints, exact=exact, check=check)
+        attempts.append({"attempt": n, "draw": str(draw_path), "supplied": str(a.use.resolve()), "prompt": None,
+                         "images_sent": [], "scores": s, "shape": str(shape_png) if shape_png else None})
+        gate.update({"view": a.view, "draw": a.draw, "refs": [str(p) for p in refs], "config": str(a.config),
+                     "attempts": attempts, "status": "pending", "sheet": str(sheet_png),
+                     "front_input": str(a.front) if a.front else None})
+        gate_json.write_text(json.dumps(gate, indent=1), encoding="utf-8")
+        print("\n  " + "\n  ".join(lines) + f"\n  {sheet_png}")
+        print(f"  PENDING attempt {n} (supplied {a.use}): --accept {n}, or draw again: --no-ask --retry r")
+        return
     client = make_image_client(config)
     while True:
         n += 1
@@ -599,6 +623,16 @@ def retry_from(answer: str, last: dict | None, mode: str, masked: bool, bigger: 
     note, directive = TEXTS[mode] if mode in TEXTS else ("", "")
     shape = Path(last["shape"]) if last.get("shape") else None
     return parse_gate_retry(answer, shape, note, directive)
+
+
+def on_white(im: Image.Image) -> Image.Image:
+    """A supplied image as RGB: a cut-out's transparent background becomes white, as a drawing's is."""
+    if im.mode in ("RGBA", "LA", "P"):
+        im = im.convert("RGBA")
+        bg = Image.new("RGB", im.size, (255, 255, 255))
+        bg.paste(im, mask=im.getchannel("A"))
+        return bg
+    return im.convert("RGB")
 
 
 def accept(a, gate: dict, gate_json: Path, draw_path: Path, n: int, name: str) -> None:

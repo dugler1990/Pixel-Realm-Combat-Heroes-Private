@@ -222,6 +222,13 @@ def build_args(ctx: of.Ctx, body: dict, pod: Pod) -> tuple[str | None, list[str]
             if not inside(Path(img), allowed_roots()):
                 raise ValueError(f"attached image outside the run folders: {img}")
         args += ["--retry", retry]
+    elif action == "use":
+        if step not in ("front", "back", "sides"):
+            raise ValueError("an image can stand in for front, back or a side view only")
+        image = Path(str(body.get("image") or ""))
+        if not image.is_file() or not inside(image, allowed_roots()) or image.suffix.lower() not in EXT["image"]:
+            raise ValueError("the image must be an uploaded or picked file in the data folder")
+        args += ["--use", str(image)]
     elif action == "pick":
         if body.get("model") not in of.MODEL_VIEWS:
             raise ValueError("unknown model")

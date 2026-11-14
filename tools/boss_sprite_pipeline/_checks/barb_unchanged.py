@@ -41,7 +41,7 @@ def norm(obj, tree: str):
 
 def args():
     return SimpleNamespace(accept=None, retry=None, pick=None, redo=None, view=None, host="HOST", port="PORT",
-                           models=None)
+                           models=None, use=None)
 
 
 def commands(of, outfit: str) -> dict:

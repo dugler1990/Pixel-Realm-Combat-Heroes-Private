@@ -181,3 +181,16 @@ def test_names_and_broken_files(server, tmp_path, monkeypatch):
     (tmp_path / "outfits" / "w" / "hat.json").write_text('{"kind": "armour"}', encoding="utf-8")
     row = json.loads(get(base + "/api/state")[1])["outfits"][0]
     assert row["outfit"] == "hat" and "no rig_fit" in row["error"]         # listed with what is missing
+
+
+def test_use_an_image_for_a_view(server, tmp_path):
+    base, run, jobs, _ = server
+    o = {"character": "barb", "outfit": "naked"}
+    code, r = post(base + "/api/do", {**o, "action": "use", "step": "front", "image": str(run / "pic.png")})
+    assert code == 200, r
+    wait_idle(jobs)
+    assert jobs.done[-1]["args"] == ["--only", "front", "--use", str(run / "pic.png")]
+    outside = tmp_path / "x.png"
+    outside.write_bytes(b"x")
+    for b in ({"step": "front", "image": str(outside)}, {"step": "trellis", "image": str(run / "pic.png")}):
+        assert post(base + "/api/do", {**o, "action": "use", **b})[0] == 400, b

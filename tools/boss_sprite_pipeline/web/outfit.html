@@ -187,7 +187,19 @@ function retryForm(step, view, attempt) {
   return `<div class="row"><select id="rk_${id}"><option value="r">r (redraw)</option>${step === "sides" ? "" : `<option value="r1">r1 (show its error)</option>`}${step === "front" ? `<option value="rb">rb (bigger armour)</option>` : ""}</select>
     <input type="text" id="rw_${id}" size="50" placeholder="why (optional): what to fix">
     <input type="file" id="rf_${id}" accept="image/png,image/jpeg">
-    <button onclick="retry('${step}', '${view || ""}')">Redraw</button></div>`;
+    <button onclick="retry('${step}', '${view || ""}')">Redraw</button></div>
+    <div class="row"><span class="dim">or use an image you have (checked like a drawing, then Accept):</span>
+    <input type="file" id="uf_${id}" accept="image/png,image/jpeg,image/webp">
+    <button onclick="useImage('${step}', '${view || ""}')">Use this image</button></div>`;
+}
+async function useImage(step, view) {
+  const o = cur(), f = document.getElementById(`uf_${step}_${view}`).files[0];
+  if (!f) return toast("choose an image first");
+  const data = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(f); });
+  try {
+    const up = await api("/api/upload", { character:o.character, input:true, name:f.name, data });
+    act({ action:"use", step, view: view || undefined, image:up.path });
+  } catch (e) { toast(e.message); }
 }
 async function retry(step, view) {
   const id = `${step}_${view}`, o = cur();
