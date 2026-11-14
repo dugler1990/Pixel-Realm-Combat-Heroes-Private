@@ -12,6 +12,8 @@ so the mask test only runs for pairs that are already close.
   the blast's falloff distance on the same circle.
 - Candidates are a sprite group, or the entity tree through bodies_near, which turns
   the tree's snapshots back into their entities.
+- A contact is the world pixel where a hit landed (touch_point, find_contacts); a moving
+  shot's contact is walked back to where it entered the body (entry_point).
 
 Rect, Mask and plain Surfaces only: no display and no game imports, so it is safe on the
 headless server.
@@ -33,18 +35,23 @@ _RECT_FALLBACK_LOGGED = set()
 
 
 class Shape:
-    """A mask placed in the world, its top-left pixel at rect.topleft."""
+    """A mask placed in the world, its top-left pixel at rect.topleft.
 
-    __slots__ = ("mask", "rect")
+    `solid` marks a plain rect (rect_shape): every pixel set, so its first shared pixel
+    with another solid shape is just a corner of the overlap.
+    """
 
-    def __init__(self, mask, x, y):
+    __slots__ = ("mask", "rect", "solid")
+
+    def __init__(self, mask, x, y, solid=False):
         self.mask = mask
         self.rect = pygame.Rect((int(x), int(y)), mask.get_size())
+        self.solid = solid
 
 
 def rect_shape(rect):
     """A solid rect: the shape of anything without a mask."""
-    return Shape(collision_core.solid_mask(rect.width, rect.height), rect.x, rect.y)
+    return Shape(collision_core.solid_mask(rect.width, rect.height), rect.x, rect.y, solid=True)
 
 
 def frame_masks(frames):
@@ -123,11 +130,58 @@ def ground_reach(center, foot, elevation_deg):
     return max(0.0, math.hypot(dx, dy) - foot.rect.width / 2.0)
 
 
+def touch_point(a, b):
+    """The world (x, y) of a pixel two shapes share, or None if they share none.
+
+    The pixel is the first one pygame's overlap scan finds (left-most bit-column band
+    first), not where an attack arrived. Two solid shapes give the centre of their rect
+    overlap instead: their first shared pixel is only its top-left corner.
+    """
+    if a is None or b is None or not a.rect.colliderect(b.rect):
+        return None
+    ax, ay = a.rect.topleft
+    hit = a.mask.overlap(b.mask, (b.rect.x - ax, b.rect.y - ay))
+    if hit is None:
+        return None
+    if a.solid and b.solid:
+        return a.rect.clip(b.rect).center
+    return (ax + hit[0], ay + hit[1])
+
+
 def touching(a, b):
     """True if two shapes share at least one pixel."""
     if a is None or b is None or not a.rect.colliderect(b.rect):
         return False
     return a.mask.overlap(b.mask, (b.rect.x - a.rect.x, b.rect.y - a.rect.y)) is not None
+
+
+def entry_point(point, step, body, max_steps=64):
+    """Where a shot moving by `step` entered `body`, walking back from `point` inside it.
+
+    `point` is a body pixel the shot touches (touch_point); the shot came along `step`, so
+    the line back through `point` leaves the body where the shot crossed its outline. The
+    walk reads at most `max_steps` pixels (capped at 64) and returns the last body pixel on
+    it. A zero step, or a `point` not on the body, is returned as is.
+    """
+    sx, sy = float(step[0]), float(step[1])
+    length = math.hypot(sx, sy)
+    if length == 0.0 or body is None:
+        return point
+    sx, sy = sx / length, sy / length
+    rx, ry = body.rect.topleft
+    w, h = body.rect.size
+    get_at = body.mask.get_at
+    px, py = point[0] - rx, point[1] - ry
+    if not (0 <= px < w and 0 <= py < h) or not get_at((px, py)):
+        return point
+    last = (px, py)
+    for i in range(1, min(int(max_steps), 64) + 1):
+        x = int(round(px - sx * i))
+        y = int(round(py - sy * i))
+        if not (0 <= x < w and 0 <= y < h) or not get_at((x, y)):
+            break
+        last = (x, y)
+    return (rx + last[0], ry + last[1])
 
 
 def bodies_near(tree, rect, query_id, margin=32):
@@ -149,6 +203,17 @@ def bodies_near(tree, rect, query_id, margin=32):
     return owners
 
 
+def _close(shape, candidates, body):
+    """With shape_of bodies, only the candidates whose rect overlaps `shape`."""
+    if body is not shape_of:
+        return candidates
+    overlaps = shape.rect.colliderect
+    return [
+        sprite for sprite in candidates
+        if (rect := getattr(sprite, "rect", None)) is not None and overlaps(rect)
+    ]
+
+
 def find_hits(shape, candidates, exclude=(), body=shape_of):
     """Every candidate whose body touches `shape`, each once, in candidate order.
 
@@ -159,18 +224,33 @@ def find_hits(shape, candidates, exclude=(), body=shape_of):
     """
     if shape is None:
         return []
-    if body is shape_of:
-        overlaps = shape.rect.colliderect
-        candidates = [
-            sprite for sprite in candidates
-            if (rect := getattr(sprite, "rect", None)) is not None and overlaps(rect)
-        ]
     hits = []
     seen = set()
-    for sprite in candidates:
+    for sprite in _close(shape, candidates, body):
         if sprite in exclude or id(sprite) in seen:
             continue
         seen.add(id(sprite))
         if touching(shape, body(sprite)):
             hits.append(sprite)
     return hits
+
+
+def find_contacts(shape, candidates, exclude=(), body=shape_of):
+    """find_hits, with where each hit landed: [(sprite, point, body_shape), ...].
+
+    Same bodies in the same order as find_hits. `point` is touch_point's world pixel;
+    `body_shape` is the target's shape, for entry_point without asking for it again.
+    """
+    if shape is None:
+        return []
+    contacts = []
+    seen = set()
+    for sprite in _close(shape, candidates, body):
+        if sprite in exclude or id(sprite) in seen:
+            continue
+        seen.add(id(sprite))
+        target_shape = body(sprite)
+        point = touch_point(shape, target_shape)
+        if point is not None:
+            contacts.append((sprite, point, target_shape))
+    return contacts

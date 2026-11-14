@@ -39,8 +39,9 @@ chunk 4 (layers) and 11 (stuck arrows) read the point.
 - **Rect bodies** (`rect_shape`, no mask): the first shared pixel of two solid shapes is the top-left
   corner of their overlap, which says nothing. `Shape` gets a `solid` slot (True from `rect_shape`);
   when **both** shapes are solid, the point is the centre of the rect overlap (the master doc's rule).
-- `find_contacts(shape, candidates, exclude=(), body=shape_of)` → `[(sprite, point), ...]`, same
-  filter and order as `find_hits`. `find_hits` stays (blasts, freeze) and is unchanged.
+- `find_contacts(shape, candidates, exclude=(), body=shape_of)` → `[(sprite, point, body_shape), ...]`,
+  same filter and order as `find_hits` (body_shape so `entry_point` doesn't build the target's shape
+  twice; mesh bosses pose a mask for it). `find_hits` stays (blasts, freeze) and is unchanged.
 - `entry_point(point, step, body_shape, max_steps)` → the last body pixel walking back from `point`
   along `-step` (the projectile's travel this frame). `step` is a unit vector; at most `max_steps`
   `get_at` reads (`max_steps` = this frame's travel + the shot's own length, capped at 64). Point
