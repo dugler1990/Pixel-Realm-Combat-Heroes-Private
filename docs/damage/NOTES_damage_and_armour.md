@@ -262,7 +262,7 @@ Each becomes its own plan. Order follows the arrows; 1 is independent.
    change them, holy/unholy by `kind`.
 10. **Armour wear.** Durability, dented/broken, repair.
 11. **Stuck arrows.** Attach, draw, cap, pool.
-12. **Item card and character sheet.**
+12. **Item card and character sheet.** Plan: `.cursor/plans/item_card.plan.md` (pulled forward: the card can ship before combat uses the numbers).
 13. **Boss with layers.** One key boss using 4, 5, 10 to prove NPC opt-in.
 
 ## Open
@@ -283,6 +283,7 @@ Each becomes its own plan. Order follows the arrows; 1 is independent.
 ## Log
 
 - 2026-11-14: design talk; this doc written. No code changed.
+- 2026-11-14: item card plan written (`.cursor/plans/item_card.plan.md`).
 
 ## Tried and dropped
 
