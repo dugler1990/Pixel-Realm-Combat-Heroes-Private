@@ -105,16 +105,28 @@ says so (Decisions).
 
 1. **Merge `main` into this branch** (item card files). Doc conflicts are small (Method that works,
    Log); I resolve them.
-2. **Agreed (Douglas): the hero's hit body stays the sprite mask**; the region is read from the mesh capsules at the
-   contact. The sprite pose is not the mesh pose, so a hit can land a region off. Switching the mesh
-   hero to capsule hits (like the demon) is exact, but plays differently and the server's player is a
-   sprite: a later chunk.
+2. **Reversed (2026-11-14).** Was: the hero's hit body stays the sprite mask; the region is read from
+   the mesh capsules at the contact. I recommended it as harmless; it is not: the sprite pose is not
+   the drawn mesh, so an arrow can visibly hit his arm and miss. Fails Douglas's requirement "what you
+   see is what you hit" (master doc Goal). Replaced by `visual_hits.plan.md` (a): hit on his capsules.
 3. **Agreed (Douglas): worn weight counts now**: `gear_weight = defence.weight`. The full-plate set
    that exists (10 pieces, no helmet item yet) is 31 → the barb moves 90 / 121 = 74% as far.
-4. **Holes and partial cover**: a region is covered or not (the item's `coverage`). The master doc's
-   per-bone (u, angle) coverage bitmaps baked at export wait until a piece needs a gap (visor slit,
-   armpit).
+4. **Reversed (2026-11-14).** Was: a region is covered or not (the item's `coverage`); per-bone
+   (u, angle) coverage baked at export deferred. A visible gap in a piece then counts as plate: fails
+   the same requirement. Replaced by `visual_hits.plan.md` (b): coverage baked per piece.
 5. **Agreed (Douglas)**: the bodies and masses above.
+
+## After the review (2026-11-14): what stays, what changes
+
+- **Stays**: bodies and kinds, masses, `wire.body_for`; `DefenceProfile` and worn weight → knockback;
+  the front-most capsule lookup (`body_regions.mesh_slot`: the right rule once hits land on the
+  capsules); `regions.json` (bone → region, still the item card's and the profile's regions);
+  `Support.mesh_feet_world`; `mesh_boss.projected_capsules`.
+- **Changes in `visual_hits.plan.md`**: what the hero is hit on (capsules); which layers a hit meets
+  on a covered region (the piece's baked coverage at the contact's bone + (u, angle), not the whole
+  region).
+- **Open**: `body_regions.sprite_slot` (height bands) serves sprite heroes only; kept while they
+  exist. Anything 4b leaves unused is deleted when 4b lands.
 
 ## Tests
 

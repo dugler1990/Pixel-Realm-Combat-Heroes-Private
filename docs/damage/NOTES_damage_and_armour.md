@@ -14,6 +14,10 @@ Armour that is a fact, not a percentage: full plate walks through a dart tribe, 
 through it, lightning loves it. Magic, venom, heat and cold work on the same hit. Hundreds of
 fighters on screen: near-zero cost per frame, a few µs per hit.
 
+**What you see is what you hit** (Douglas, from the start): an arrow that visibly hits armour pings
+off; one that visibly hits skin can stick in him, where it hit. So a hit is tested against the body as
+drawn, and armour is where each piece is drawn, not a whole body region.
+
 ## Rules the system keeps
 
 - Behaviour comes from **properties** (constants), never from names. "Plate" is a set of numbers;
@@ -86,17 +90,19 @@ The existing hit test stays (`hit_core.py`): rect, then mask against mask.
    arrow entered. From that pixel, step back along the flight over the body mask with `get_at` until
    outside: at most this frame's travel + the shot's length in reads, capped at 64
    (`hit_core.entry_point`). ~20 µs a walk, so it runs only for hits that land (`EntryPoints`).
-3. **Which layer is there** (only bodies with worn layers; chunk 4, `defence_layers.plan.md`):
-   - The region (head, chest, `upper_arm l`, ...) under the contact, then the profile's layers for
-     that region, outer first. A region is covered or not (the item's `coverage`).
-   - Mesh hero: hits still land on his sprite mask (the mesh is draw-only); the region is the
-     front-most of his projected body capsules at the contact → bone → `regions.json`. Torso is chest or back
-     by the attack's direction against his facing. 61 µs (cached per frame) / 329 µs, landed hits on
-     armoured bodies only.
-   - Sprite hero wearing items: height bands on the hitbox. Sprite enemies wear nothing: one layer
-     (their hide) everywhere, no lookup.
-   - Was in this doc before chunk 4: per-slot sprite masks per frame (no sprite body wears pieces)
-     and per-bone (u, angle) coverage bitmaps baked at export (deferred until a piece needs a gap).
+3. **Which layer is there** (only bodies with worn layers):
+   - **Built in chunk 4** (`defence_layers.plan.md`), **short of the Goal's "what you see is what
+     you hit"**: the mesh hero is hit on his sprite mask (the mesh is draw-only); the region is the
+     front-most of his projected body capsules at the contact → bone → `regions.json`; a region is
+     covered or not (the item's `coverage`). Torso is chest or back by the attack's direction against
+     his facing. 61 µs (cached per frame) / 329 µs, landed hits on armoured bodies only.
+   - **Next** (`visual_hits.plan.md`): (a) the mesh hero is hit on his posed capsules, like the demon,
+     so a hit lands where he is drawn; (b) each armour piece bakes, at export, where it covers each
+     bone in (u along the bone, angle around it): the contact's bone + (u, angle) says plate or skin.
+     That (u, angle) is also where a stuck arrow sits (chunk 11).
+   - Sprite hero wearing items: height bands on the hitbox (kept while sprite heroes exist). Sprite
+     enemies wear nothing: one layer (their hide) everywhere, no lookup.
+   - Dropped before chunk 4: per-slot sprite masks per frame (no sprite body wears pieces).
 4. No contact point (rect fallback, ground blasts): blasts need none; rect fallback uses the centre
    of the overlap.
 
@@ -387,7 +393,11 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
    `refactor/defence-layers`. `bodies.json` + `kinds.json` (natural layer, kind; mass stays in
    `monster_data`), `defence_profile.py` (layers per region slot, worn weight), hero rebuilt on equip,
    enemies share one per body; `body_regions.py` + `regions.json` (contact → region on the mesh hero).
-   Needs `main`'s item card merged. → 5
+   Needs `main`'s item card merged. Falls short of "what you see is what you hit": hero hit on his
+   sprite, armour per whole region. → 4b
+4b. **Visual hits.** Plan: `.cursor/plans/visual_hits.plan.md`. Mesh hero hit on his posed capsules;
+   armour coverage baked per piece per bone (u, angle); arrows from many directions on the plated barb
+   land on plate or skin as drawn. → 5, 11
 5. **Physical resolve.** `damage_rules.physical`, `hit_resolve.py`, resolver calls it, receivers
    simplified. First real behaviour: plate stops the dart. → 10, 12
 6. **Conditions and buffs.** `conditions.py`, the level clock, server-owned. → 7, 8, 9
@@ -483,6 +493,12 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 
 ## Tried and dropped
 
+- **Mesh hero hit on his 2D sprite mask** (chunk 4, decision 2 of `defence_layers.plan.md`, my
+  recommendation): the sprite pose is not the drawn mesh's, so an arrow can visibly hit his arm and
+  miss, or hit beside him. Fails the Goal's "what you see is what you hit"; replaced in 4b by his
+  posed capsules.
+- **Armour per whole region** (chunk 4, decision 4: per-bone coverage deferred): a visible gap in a
+  piece still counts as plate. Fails the same Goal; replaced in 4b by coverage baked per piece.
 - **Hit region by the nearest capsule edge** (chunk 4, as first planned): from the side, a hit landed
   on the arm hidden behind the body, and big capsules swallowed the neck. Replaced by the front-most
   capsule under the contact (depth toward the camera); region map at 4 facings compared both.
