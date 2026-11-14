@@ -11,10 +11,11 @@ Pack clips: `idle`, `move` (one stride, in place), `attack` (tools/boss_sprite_p
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 
-from Settings import FPS
+from Settings import FPS, VIEW_ELEVATION_DEG
 
 # Screen degrees (y down) the 4-way attack statuses point at; the weapon is placed from the same status.
 CARDINAL_DEG = {"right": 0.0, "down": 90.0, "left": 180.0, "up": 270.0}
@@ -74,6 +75,8 @@ class PlayerMesh:
         self.px_per_frame = travel * scale                       # ground px walked per move frame
         self.facing_deg = 90.0
         self._attack_time = None
+        self.pieces = {}                 # worn pieces drawn now: pack name -> MeshBoss
+        self._piece_cache = {}           # every piece loaded so far (None: failed to load)
 
     def update(self, player, dt=None):
         if dt is None or dt <= 0:
@@ -107,32 +110,26 @@ class PlayerMesh:
     # A piece (armour slot, loincloth: Graphics/Meshes/<outfit>/<slot>) is a skinned pack on the same skeleton
     # and clips as the body, in the same model space; each pack has its own pivot (its bottom centre). So a
     # piece is drawn about the BODY's pivot, at the body's scale, on the body's frame.
-    pieces: dict = {}
     PIECE_CLEAR_PAD = 0.15        # the body clears depth this much wider: pauldrons stick out of his outline
 
     def set_pieces(self, names):
         """The worn pieces, by pack name; packs are loaded once and kept."""
         from mesh_boss import MeshBoss
-        cache = self.__dict__.setdefault("_piece_cache", {})
-        pieces = {}
+        cache = self._piece_cache
         for name in names:
             if name not in cache:
                 try:
                     cache[name] = MeshBoss(name, self.skin.action)
                 except Exception as exc:                     # a missing pack: draw the rest
-                    import logging
                     logging.getLogger(__name__).warning("piece %r not loaded: %s", name, exc)
                     cache[name] = None
-            if cache[name] is not None:
-                pieces[name] = cache[name]
-        self.pieces = pieces
+        self.pieces = {name: cache[name] for name in names if cache[name] is not None}
 
     def draw(self, backend, feet, light_dir=(-0.4, -0.5, 0.75), ambient=0.35):
         """The body, then each worn piece in its depth. False when the backend has no mesh pass."""
         draw = getattr(backend, "draw_mesh_boss", None)
         if draw is None:
             return False
-        from Settings import VIEW_ELEVATION_DEG
         body = self.skin.pack
         yaw = self.yaw_deg()
         scale = self.height_px / max(body.height_units, 1e-6)

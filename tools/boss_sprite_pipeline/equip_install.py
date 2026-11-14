@@ -1,14 +1,15 @@
 """Put an outfit's slot packs in the game as wearable items (after export_outfit.py).
 
-    python -m tools.boss_sprite_pipeline.equip_install <character> <outfit>
+    python -m tools.boss_sprite_pipeline.equip_install <character> <outfit> [--items-only]
 
 For an armour or cut outfit whose export made <run>/packs/<slot>/:
 - each pack copied to Graphics/Meshes/<pack>/<slot>/ (the game loads it as "<pack>/<slot>");
 - an icon per slot (explode2/piece_icons.py) -> Graphics/Standard_Items/outfits/<pack>_<slot>.png;
-- one item per slot in Graphics/Standard_Items/outfit_items.json (this outfit's entries replaced, others kept):
-  item_id <pack>_<slot>, effect_type "armour_equip", effect {"slot": <inventory body slot>, "mesh_piece":
-  "<pack>/<slot>"} (+ "belt_slots" for the waist).
-A hero gets them from its body pack's equipment.json ({"wear": [...], "pack": [...]}, Level4 seeds it).
+- one item per slot in Graphics/Standard_Items/outfit_items.json (this outfit's entries replaced, others kept),
+  item_id <pack>_<slot>, from Code/equipment.py PIECES: armour "armour_equip" {"slot", "side", "mesh_piece"},
+  waist pieces "waist_equip" {"belt_slots", "mesh_piece"}.
+--items-only: only the items, from the packs already in Graphics/Meshes/<pack>/ (no run folder, no Blender).
+A hero gets them from its PlayerSelectionDict.json entry's "start_equipment" (equipment.start_equipment).
 """
 from __future__ import annotations
 
@@ -22,41 +23,47 @@ from tools.boss_sprite_pipeline import outfit as of
 REPO = of.REPO
 ITEMS = REPO / "Graphics" / "Standard_Items" / "outfit_items.json"
 ICONS = REPO / "Graphics" / "Standard_Items" / "outfits"
-# Slot pack -> the inventory's body slot (Code/Inventory.py BODY_SLOTS).
-BODY_SLOT = {"chest": "armor", "belt": "waist", "loincloth": "waist", "helmet": "helmet",
-             "shoulder_l": "shoulder", "shoulder_r": "shoulder", "gauntlet_l": "arm", "gauntlet_r": "arm",
-             "pants_l": "legs", "pants_r": "legs", "boot_l": "boots", "boot_r": "boots"}
-BELT_SLOTS = {"belt": 2, "loincloth": 1}       # a waist piece opens this many belt pockets (simple_belt: 1)
+sys.path.insert(0, str(REPO / "Code"))
+import equipment  # noqa: E402  (the game's table: piece -> item type, body slot, side, belt pockets)
 
 
-def install(character: str, outfit: str) -> dict:
+def item(character: str, outfit: str, pack: str, piece: str) -> dict:
+    kind_type, kind, side = equipment.PIECES[piece]
+    effect = {"mesh_piece": f"{pack}/{piece}"}
+    if kind_type == equipment.WAIST:
+        effect["belt_slots"] = equipment.BELT_POCKETS.get(piece, 1)
+    else:
+        effect.update({"slot": kind, **({"side": side} if side else {})})
+    return {"item_id": f"{pack}_{piece}", "item_type": "armour", "spawn_type": "droppable", "positions": [],
+            "image_path": f"../Graphics/Standard_Items/outfits/{pack}_{piece}.png", "effect": effect,
+            "effect_type": kind_type, "outfit": f"{character}/{outfit}"}
+
+
+def install(character: str, outfit: str, items_only: bool = False) -> dict:
     ctx = of.Ctx(character, outfit)
     pack = ctx.o["pack"]
-    packs = ctx.work / "packs"
-    info = json.loads((packs / "slot_packs.json").read_text(encoding="utf-8"))
-    slots = [s for s in sorted(info) if (packs / s / "skin.npz").is_file()]
-    missing = sorted(set(slots) - set(BODY_SLOT))
-    if missing:
-        sys.exit(f"no inventory slot for {missing}: add them to BODY_SLOT")
     dst_root = REPO / "Graphics" / "Meshes" / pack
-    for s in slots:
-        dst = dst_root / s
-        if dst.exists():
-            shutil.rmtree(dst)
-        shutil.copytree(packs / s, dst)
-    of.call([ctx.bpy, of.TOOLS / "explode2" / "piece_icons.py", packs, ICONS / "_tmp", *slots], ok="ICONS_OK",
-            show=False)
-    entries = []
-    for s in slots:
-        icon = ICONS / f"{pack}_{s}.png"
-        shutil.move(str(ICONS / "_tmp" / f"{s}.png"), icon)
-        effect = {"slot": BODY_SLOT[s], "mesh_piece": f"{pack}/{s}"}
-        if s in BELT_SLOTS:
-            effect["belt_slots"] = BELT_SLOTS[s]
-        entries.append({"item_id": f"{pack}_{s}", "item_type": "armour", "spawn_type": "droppable", "positions": [],
-                        "image_path": f"../Graphics/Standard_Items/outfits/{pack}_{s}.png", "effect": effect,
-                        "effect_type": "armour_equip", "outfit": f"{character}/{outfit}"})
-    shutil.rmtree(ICONS / "_tmp", ignore_errors=True)
+    if items_only:
+        slots = sorted(p.name for p in dst_root.iterdir() if (p / "skin.npz").is_file())
+    else:
+        packs = ctx.work / "packs"
+        info = json.loads((packs / "slot_packs.json").read_text(encoding="utf-8"))
+        slots = [s for s in sorted(info) if (packs / s / "skin.npz").is_file()]
+    missing = sorted(set(slots) - set(equipment.PIECES))
+    if missing:
+        sys.exit(f"no body slot for {missing}: add them to Code/equipment.py PIECES")
+    if not items_only:
+        for s in slots:
+            dst = dst_root / s
+            if dst.exists():
+                shutil.rmtree(dst)
+            shutil.copytree(packs / s, dst)
+        of.call([ctx.bpy, of.TOOLS / "explode2" / "piece_icons.py", packs, ICONS / "_tmp", *slots], ok="ICONS_OK",
+                show=False)
+        for s in slots:
+            shutil.move(str(ICONS / "_tmp" / f"{s}.png"), ICONS / f"{pack}_{s}.png")
+        shutil.rmtree(ICONS / "_tmp", ignore_errors=True)
+    entries = [item(character, outfit, pack, s) for s in slots]
     old = json.loads(ITEMS.read_text(encoding="utf-8")) if ITEMS.is_file() else []
     keep = [e for e in old if e.get("outfit") != f"{character}/{outfit}"]
     ITEMS.write_text(json.dumps(keep + entries, indent=1), encoding="utf-8")
@@ -65,8 +72,10 @@ def install(character: str, outfit: str) -> dict:
 
 
 def main(argv=None) -> None:
-    character, outfit = (argv or sys.argv[1:])[:2]
-    print("EQUIP_INSTALL_OK", json.dumps(install(character, outfit)))
+    args = list(argv or sys.argv[1:])
+    items_only = "--items-only" in args
+    character, outfit = [a for a in args if not a.startswith("--")][:2]
+    print("EQUIP_INSTALL_OK", json.dumps(install(character, outfit, items_only)))
 
 
 if __name__ == "__main__":

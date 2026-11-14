@@ -51,14 +51,14 @@ def export_body(o: dict, ctx: of.Ctx) -> dict:
     out = run([ctx.bpy, of.TOOLS / "export_mesh_runtime.py", blend, pack, TRIS, TEX, "--skin", "--only", CLIPS])
     run([sys.executable, "-m", "tools.boss_sprite_pipeline.bake_body_capsules", o["pack"]], ok="baked")
     clips_json(pack, f"export_outfit.py {ctx.character}/{ctx.outfit}: {painted} in {o['clips_blend']}")
-    if o.get("start_equipment"):          # what the hero starts wearing / carrying (Level4._seed_mesh_equipment)
-        (pack / "equipment.json").write_text(json.dumps(o["start_equipment"], indent=1), encoding="utf-8")
     entry = {"selection_position": {"x": 0, "y": 1}, "name": f"{o['pack']}_mesh",
              "display_name": o.get("display_name", f"Barbarian ({ctx.outfit}, mesh)"), "painting": "barbarian.png",
              "roster_stats": ["strength", "vitality"], "player_info_dir": "../Graphics/barb/", "mesh_pack": o["pack"],
              "evasion_loadout": ["slide", "leap_slam"],
              "base_stats": {"health": 2000, "energy": 20, "attack": 10, "magic": 7, "speed": 5, "strength": 20,
                             "vitality": 20, "agility": 4, "charisma": 3}}
+    if o.get("start_equipment"):          # what the hero starts wearing / carrying (equipment.start_equipment)
+        entry["start_equipment"] = o["start_equipment"]
     print("\nAdd to Graphics/PlayerSelectionDict.json (players list; pick a free selection_position):")
     print(json.dumps(entry, indent=1))
     check = load_check(str(pack))

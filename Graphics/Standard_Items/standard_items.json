@@ -75,6 +75,6 @@
         "positions": [],
         "image_path": "../Graphics/Standard_Items/simple_belt.png",
         "effect": {"belt_slots": 1},
-        "effect_type": "belt_equip"
+        "effect_type": "waist_equip"
     }
 ]

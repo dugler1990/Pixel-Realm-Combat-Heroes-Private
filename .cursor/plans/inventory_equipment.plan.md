@@ -1,6 +1,6 @@
 # Plan: the inventory, restructured for wearable pieces
 
-Status 2026-11-14: plan only. Branch `feat/mesh-equipment` (worktree `Pixel-Realm-mesh-equipment`), on top of
+Status 2026-11-14: steps 0-3, 5-8 built (not 4, gamepad; not played by hand yet). Branch `feat/mesh-equipment` (worktree `Pixel-Realm-mesh-equipment`), on top of
 `4f8fe279` / `4dffdbfd` (pieces wearable and drawn; PROCESS_equipment.md).
 
 Goal: armour from the inventory onto the mesh hero, easy to use with arrows / d-pad, and code that is easy to

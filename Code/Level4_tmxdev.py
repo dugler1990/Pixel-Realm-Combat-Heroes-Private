@@ -6,6 +6,7 @@ from Spawner import Spawner
 from ItemSpawner import ItemSpawner
 from Item import Item
 from Inventory import draw_belt_hud
+import equipment
 from abilities.charge_hud import draw_charge_bar
 from ItemVisual import ItemVisual
 import pygame
@@ -441,7 +442,7 @@ class Level4:
         
         self.layout_manager.set_player(self.player)
         self.attackable_sprites.add(self.player)
-        self._seed_default_belt_if_needed()
+        self._seed_start_equipment()
         # Level-authored climate when the layout specifies one (tmx 'climate_name'
         # property surfaces as layout_manager.climate_name), else the Settings default.
         self.weather = Weather(climate_by_name(getattr(self.layout_manager, 'climate_name', None)))
@@ -1680,46 +1681,22 @@ class Level4:
         self.game_paused = not self.game_paused
         self.upgrade_menu_open = not self.upgrade_menu_open
 
-    def _seed_default_belt_if_needed(self):
-        cfg = self.item_spawner.item_mapping.get("simple_belt")
-        if not cfg or not getattr(self, "player", None):
+    def _seed_start_equipment(self):
+        """The hero's start gear (equipment.start_equipment: its PlayerSelectionDict.json entry's
+        "start_equipment", else the simple belt), only into an empty body: an inventory already worn keeps its own."""
+        if not getattr(self, "player", None):
             return
         inv = self.player.inventory
-        wslot = inv.slots[inv.waist_slot_index]
-        if wslot.item is None and self._seed_mesh_equipment():
-            return
-        if wslot.item is not None:
-            inv.sync_belt_from_waist()
-            return
-        cfg = copy.deepcopy(cfg)
-        belt_item = self.item_spawner.create_item(cfg, [0, 0])
-        wslot.item = belt_item
-        wslot.quantity = 1
-        inv.sync_belt_from_waist()
+        if all(s.empty for s in inv.body_slots()):
+            start = equipment.start_equipment(getattr(self, "mesh_pack", None), self.selected_player_info_dir)
 
-    def _seed_mesh_equipment(self):
-        """A mesh hero's start equipment, from its pack's equipment.json: {"wear": [item ids put on (the
-        loincloth: the waist slot)], "pack": [item ids into the backpack]}. True if the pack has one."""
-        skin = getattr(self.player, "mesh_skin", None)
-        if skin is None:
-            return False
-        path = os.path.join(skin.skin.pack.root, "equipment.json")
-        if not os.path.isfile(path):
-            return False
-        with open(path, encoding="utf-8") as fh:
-            start = json.load(fh)
-        inv = self.player.inventory
-        for key in ("wear", "pack"):
-            for item_id in start.get(key, []):
+            def make(item_id):
                 cfg = self.item_spawner.item_mapping.get(item_id)
-                if cfg is None:
-                    _game_flow_log.warning("equipment.json: no item %r", item_id)
-                    continue
-                item = self.item_spawner.create_item(copy.deepcopy(cfg), [0, 0])
-                if not (key == "wear" and inv.wear(item)):
-                    inv.add_item(item)
+                return None if cfg is None else self.item_spawner.create_item(copy.deepcopy(cfg), [0, 0])
+
+            for item_id in equipment.give_start_equipment(inv, start, make):
+                _game_flow_log.warning("start_equipment: no item %r", item_id)
         inv.sync_belt_from_waist()
-        return True
 
     def toggle_inventory(self):
         self.game_paused = not self.game_paused
