@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "attacks": {
+    "unarmed":         {"delivery": "crush",  "damage": 5,  "force": 8,   "scales_with": "attack"},
+    "sword":           {"delivery": "pierce", "damage": 15, "penetration": 20, "force": 15, "scales_with": "attack"},
+    "rapier":          {"delivery": "pierce", "damage": 8,  "penetration": 30, "force": 6,  "scales_with": "attack"},
+    "sai":             {"delivery": "pierce", "damage": 10, "penetration": 25, "force": 8,  "scales_with": "attack"},
+    "axe":             {"delivery": "pierce", "damage": 20, "penetration": 30, "force": 35, "scales_with": "attack"},
+    "lance":           {"delivery": "pierce", "damage": 30, "penetration": 50, "force": 60, "scales_with": "attack"},
+    "flame":           {"magic": {"fire": 5},  "scales_with": "magic"},
+    "ice_ball":        {"magic": {"ice": 10},  "force": 10, "scales_with": "magic"},
+    "leap_slam":       {"delivery": "blast",  "damage": 25, "force": 140, "scales_with": "attack"},
+    "dash_hit":        {"delivery": "crush",  "force": 80},
+    "ice_clone_burst": {"delivery": "blast",  "damage": 50, "force": 60, "magic": {"ice": 15}},
+
+    "demon_claw":      {"delivery": "crush",  "damage": 40, "force": 120, "magic": {"unholy": 10}},
+    "meteor_impact":   {"delivery": "blast",  "damage": 75, "force": 250, "magic": {"fire": 30}},
+    "meteor_embers":   {"damage": 8, "magic": {"fire": 8}},
+    "squid_slap":      {"delivery": "crush",  "damage": 8,  "force": 15},
+    "snake_bite":      {"delivery": "pierce", "damage": 8,  "penetration": 15, "force": 3, "venom": {"id": "snake_venom", "dose": 1}},
+    "raccoon_claw":    {"delivery": "pierce", "damage": 80, "penetration": 15, "force": 20},
+    "spirit_touch":    {"magic": {"fire": 9}},
+    "bamboo_whip":     {"delivery": "crush",  "damage": 6,  "force": 8},
+    "ghost_chill":     {"magic": {"ice": 20}},
+    "spear_thrust":    {"delivery": "pierce", "damage": 6,  "penetration": 25, "force": 10},
+    "fire_spit":       {"force": 10, "magic": {"fire": 15}},
+    "thorn":           {"delivery": "pierce", "damage": 5,  "penetration": 12, "force": 2, "venom": {"id": "plant_venom", "dose": 1}},
+    "staff_strike":    {"delivery": "crush",  "damage": 15, "force": 20},
+    "ice_shard":       {"delivery": "pierce", "damage": 8,  "penetration": 20, "force": 5, "magic": {"ice": 15}},
+
+    "arrow":           {"delivery": "pierce", "damage": 6,  "penetration": 30, "force": 4,  "stops": true},
+    "stone":           {"delivery": "crush",  "damage": 4,  "force": 15, "stops": true},
+    "tribal_club":     {"delivery": "crush",  "damage": 9,  "force": 30},
+    "scimitar":        {"delivery": "pierce", "damage": 8,  "penetration": 20, "force": 10},
+    "curse_bolt":      {"magic": {"unholy": 9}},
+    "sun_bolt":        {"magic": {"holy": 8}},
+    "catapult_shot":   {"delivery": "blast",  "damage": 12, "force": 200, "stops": true},
+    "scorpion_sting":  {"delivery": "pierce", "damage": 10, "penetration": 15, "force": 3, "venom": {"id": "scorpion_venom", "dose": 1}},
+
+    "crossbow_bolt":   {"delivery": "pierce", "damage": 30, "penetration": 55,  "force": 25,  "stops": true},
+    "ballista":        {"delivery": "pierce", "damage": 80, "penetration": 120, "force": 400, "stops": true},
+    "storm_bolt":      {"magic": {"lightning": 50}},
+    "holy_smite":      {"delivery": "crush",  "damage": 25, "force": 50, "magic": {"holy": 20}},
+    "blowgun_dart":    {"delivery": "pierce", "damage": 4,  "penetration": 12, "force": 2, "stops": true, "venom": {"id": "frog_venom", "dose": 1}}
+  }
+}

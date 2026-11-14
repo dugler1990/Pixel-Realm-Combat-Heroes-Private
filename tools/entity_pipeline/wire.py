@@ -381,6 +381,35 @@ def projectile_for(label: str) -> str:
     return ARROW
 
 
+# The attack def (Code/config/damage/attacks.json) a new unit's one attack names, by words in its
+# label: first match wins. Ranged follows projectile_for; anything unmatched gets the fallback.
+RANGED_ATTACKS = (
+    (("priest",), "sun_bolt"),
+    (("magic", "wizard", "mage"), "curse_bolt"),
+    (("catapult machine",), "catapult_shot"),
+    (("catapult",), "stone"),
+)
+MELEE_ATTACKS = (
+    (("scorpion",), "scorpion_sting"),
+    (("spear", "lance", "pike", "standard"), "spear_thrust"),
+    (("club", "mace"), "tribal_club"),
+    (("scimitar", "sword", "blade", "khopesh", "axe"), "scimitar"),
+    (("staff",), "staff_strike"),
+)
+RANGED_FALLBACK = "arrow"
+MELEE_FALLBACK = "unarmed"
+
+
+def attack_for(label: str, reach: str) -> str:
+    """The attack def for a new unit, from its label and reach (see RANGED_ATTACKS, MELEE_ATTACKS)."""
+    text = (label or "").lower()
+    table, fallback = (RANGED_ATTACKS, RANGED_FALLBACK) if reach == "ranged" else (MELEE_ATTACKS, MELEE_FALLBACK)
+    for words, name in table:
+        if any(word in text for word in words):
+            return name
+    return fallback
+
+
 def _band(score: int, lo: int, hi: int) -> int:
     """1 -> lo, 10 -> hi, straight line between, rounded."""
     return round(lo + (score - 1) * (hi - lo) / 9)
@@ -393,16 +422,18 @@ def adjust_entry(entry: dict, score: dict) -> dict:
     out["speed"] = _band(score["speed"], 2, 6)
     out["health"] = _band(score["bulk"], 40, 140)
     damage = _band(score["damage"], 3, 12)
+    label = score.get("label", "")
+    attack = attack_for(label, score["reach"])
     if score["reach"] == "ranged":
         out["attack_type"] = "ranged"
         config["melee_attacks"] = []
-        config["ranged_attacks"] = [{"type": projectile_for(score.get("label", "")), "damage": damage, "cooldown": RANGED_COOLDOWN}]
+        config["ranged_attacks"] = [{"attack": attack, "type": projectile_for(label), "damage": damage, "cooldown": RANGED_COOLDOWN}]
         config["melee_attack_radius"] = 0
         config["ranged_attack_radius"] = RANGED_RADIUS
         context["fire_projectile"] = True
     else:
         out["attack_type"] = "melee"
-        config["melee_attacks"] = [{"damage": damage, "cooldown": MELEE_COOLDOWN}]
+        config["melee_attacks"] = [{"attack": attack, "damage": damage, "cooldown": MELEE_COOLDOWN}]
         config["ranged_attacks"] = []
         config["melee_attack_radius"] = MELEE_RADIUS
         config.pop("ranged_attack_radius", None)
