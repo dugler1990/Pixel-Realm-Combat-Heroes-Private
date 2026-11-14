@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "_about": "Body defs (damage chunk 4): a creature's kind and its natural layer (hide, fur, shell), named with the item property ids (Code/item_properties.py). Missing numbers are 0. Mass stays in Settings monster_data. First numbers, to be tuned: docs/damage/NOTES_damage_and_armour.md (Roster: bodies).",
+  "bodies": {
+    "barb":        {"kind": "living",    "natural": {"stopping_power": 0,  "absorb": 0.05, "flammability": 0.2, "conductivity": 0}},
+    "demon":       {"kind": "demon",     "natural": {"stopping_power": 30, "absorb": 0.3,  "flammability": 0,   "conductivity": 0.2}},
+    "squid":       {"kind": "living",    "natural": {"stopping_power": 0,  "absorb": 0.5,  "flammability": 0,   "conductivity": 0}},
+    "snake":       {"kind": "living",    "natural": {"stopping_power": 5,  "absorb": 0.1,  "flammability": 0.3, "conductivity": 0}},
+    "raccoon":     {"kind": "living",    "natural": {"stopping_power": 5,  "absorb": 0.2,  "flammability": 0.5, "conductivity": 0}},
+    "spirit":      {"kind": "undead",    "natural": {"stopping_power": 0,  "absorb": 0,    "flammability": 0,   "conductivity": 0}},
+    "bamboo":      {"kind": "living",    "natural": {"stopping_power": 15, "absorb": 0.2,  "flammability": 0.9, "conductivity": 0}},
+    "ice_ghost":   {"kind": "undead",    "natural": {"stopping_power": 0,  "absorb": 0,    "flammability": 0,   "conductivity": 0}},
+    "tribesman":   {"kind": "living",    "natural": {"stopping_power": 10, "absorb": 0.1,  "flammability": 0.5, "conductivity": 0}},
+    "demon_dog":   {"kind": "demon",     "natural": {"stopping_power": 5,  "absorb": 0.1,  "flammability": 0,   "conductivity": 0}},
+    "venom_plant": {"kind": "living",    "natural": {"stopping_power": 10, "absorb": 0.3,  "flammability": 0.9, "conductivity": 0}},
+    "ice_mage":    {"kind": "living",    "natural": {"stopping_power": 0,  "absorb": 0.1,  "flammability": 0.6, "conductivity": 0}},
+    "eskimo":      {"kind": "living",    "natural": {"stopping_power": 5,  "absorb": 0.2,  "flammability": 0.6, "conductivity": 0}},
+    "warrior":     {"kind": "living",    "natural": {"stopping_power": 10, "absorb": 0.1,  "flammability": 0.5, "conductivity": 0}},
+    "robed":       {"kind": "living",    "natural": {"stopping_power": 0,  "absorb": 0.1,  "flammability": 0.6, "conductivity": 0}},
+    "beastman":    {"kind": "living",    "natural": {"stopping_power": 10, "absorb": 0.2,  "flammability": 0.4, "conductivity": 0}},
+    "camel_rider": {"kind": "living",    "natural": {"stopping_power": 10, "absorb": 0.2,  "flammability": 0.5, "conductivity": 0}},
+    "siege":       {"kind": "construct", "natural": {"stopping_power": 30, "absorb": 0.4,  "flammability": 0.8, "conductivity": 0}},
+    "scorpion":    {"kind": "living",    "natural": {"stopping_power": 25, "absorb": 0.1,  "flammability": 0,   "conductivity": 0}}
+  }
+}

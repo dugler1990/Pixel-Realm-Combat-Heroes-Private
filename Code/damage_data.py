@@ -4,6 +4,10 @@ Read once at import from config/damage/categories.json and config/damage/attacks
 Settings.py names its def with an "attack" key; attack(name) returns the one shared AttackDef, so a
 sprite or a strike carries a reference, never a copy. Nothing reads the defs for damage yet: chunk 5
 does. No pygame here.
+
+Body defs (chunk 4): config/damage/kinds.json and bodies.json. Every monster_data entry names its
+body with a "body" key; body(name) returns the shared BodyDef (kind + natural LayerDef). Worn pieces
+become LayerDefs from their item base (defence_profile.py).
 """
 import json
 import os
@@ -183,3 +187,117 @@ def attack_of(entry, key="attack"):
     """The def an attack entry from Settings names under `key`; None when it names none."""
     name = entry.get(key) if isinstance(entry, dict) else None
     return None if name is None else attack(name)
+
+
+# --- bodies and layers (damage chunk 4) ------------------------------------------------------
+
+KINDS_PATH = os.path.join(CONFIG_DIR, "kinds.json")
+BODIES_PATH = os.path.join(CONFIG_DIR, "bodies.json")
+
+# The item property ids (item_properties.PROPERTIES) a layer has; coverage is where, not what.
+LAYER_NUMBERS = ("stopping_power", "absorb", "flammability", "conductivity", "insulation",
+                 "weight", "durability")
+LAYER_SHARES = ("absorb", "flammability", "conductivity", "insulation")   # 0..1
+_LAYER_FIELDS = frozenset(LAYER_NUMBERS + ("sealed",))
+_BODY_FIELDS = frozenset(("kind", "natural"))
+
+
+class LayerDef:
+    """One layer between a hit and the flesh: a worn piece's base or a body's natural hide.
+    Shared: never change one after load (wear, chunk 10, keeps its own state)."""
+
+    __slots__ = LAYER_NUMBERS + ("sealed", "name")
+
+    def __init__(self, name, **fields):
+        self.name = name
+        for field in LAYER_NUMBERS:
+            setattr(self, field, fields.get(field, 0))
+        self.sealed = fields.get("sealed", False)
+
+    def __repr__(self):
+        return f"LayerDef({self.name!r})"
+
+
+class BodyDef:
+    """A creature's constants: its kind and its natural layer. Mass is in monster_data."""
+
+    __slots__ = ("id", "name", "kind", "natural")
+
+    def __init__(self, id, name, kind, natural):
+        self.id = id
+        self.name = name
+        self.kind = kind
+        self.natural = natural
+
+    def __repr__(self):
+        return f"BodyDef({self.name!r})"
+
+
+def layer_def(name, fields, where, extra=()):
+    """A LayerDef from property fields (a natural layer or an item base). Fields in `extra` are
+    allowed and skipped (an item base's name, set, coverage); any other unknown field fails."""
+    unknown = set(fields) - _LAYER_FIELDS - set(extra)
+    if unknown:
+        raise DamageDataError(f"{where}: unknown layer field(s) {sorted(unknown)}")
+    clean = {}
+    for field in LAYER_NUMBERS:
+        if field in fields:
+            value = fields[field]
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+                raise DamageDataError(f"{where}: {field} must be a number >= 0, got {value!r}")
+            if field in LAYER_SHARES and value > 1:
+                raise DamageDataError(f"{where}: {field} must be 0..1, got {value!r}")
+            clean[field] = value
+    sealed = fields.get("sealed", False)
+    if not isinstance(sealed, bool):
+        raise DamageDataError(f"{where}: sealed must be true or false")
+    return LayerDef(name, sealed=sealed, **clean)
+
+
+def load_kinds(path=KINDS_PATH):
+    kinds = _read(path).get("kinds")
+    if not isinstance(kinds, list) or not kinds or not all(isinstance(k, str) for k in kinds):
+        raise DamageDataError(f"{path}: kinds must be a list of names")
+    return tuple(kinds)
+
+
+def load_bodies(path=BODIES_PATH, kinds=None):
+    """The body defs in file order; ids are 0..n-1."""
+    kinds = kinds if kinds is not None else load_kinds()
+    rows = _read(path).get("bodies")
+    if not isinstance(rows, dict):
+        raise DamageDataError(f"{path}: bodies must be a name -> row map")
+    bodies = []
+    for body_id, (name, row) in enumerate(rows.items()):
+        where = f"{path}: body {name!r}"
+        if not isinstance(row, dict):
+            raise DamageDataError(f"{where}: must be an object")
+        unknown = set(row) - _BODY_FIELDS
+        if unknown:
+            raise DamageDataError(f"{where}: unknown field(s) {sorted(unknown)}")
+        if row.get("kind") not in kinds:
+            raise DamageDataError(f"{where}: unknown kind {row.get('kind')!r}")
+        natural = row.get("natural", {})
+        if not isinstance(natural, dict):
+            raise DamageDataError(f"{where}: natural must be a property -> value map")
+        bodies.append(BodyDef(body_id, name, row["kind"], layer_def(name, natural, where)))
+    return bodies
+
+
+KINDS = load_kinds()
+BODIES = load_bodies(kinds=KINDS)
+_BODY_BY_NAME = {b.name: b for b in BODIES}
+
+
+def body(name):
+    """The shared BodyDef called `name`. KeyError naming it when there is none."""
+    try:
+        return _BODY_BY_NAME[name]
+    except KeyError:
+        raise KeyError(f"no body def {name!r} in {BODIES_PATH}") from None
+
+
+def body_of(entry, key="body"):
+    """The body def a monster_data entry names under `key`; None when it names none."""
+    name = entry.get(key) if isinstance(entry, dict) else None
+    return None if name is None else body(name)
