@@ -135,7 +135,6 @@ class RtsTribeMember(CombatUnit):
         driver.steer(self, dt, ctx)
         if self._should_walk():
             self.move(self.speed, QuadTree, entity_quad_tree)
-            self.hit_reaction()
         self.animate()
         self.cooldowns()
         self.check_death()

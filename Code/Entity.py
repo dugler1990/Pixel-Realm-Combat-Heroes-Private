@@ -16,6 +16,13 @@ from Effect import EFFECT_REGISTRY, SlipperyEffect
 from benchmark_runtime import BENCHMARK_RUNTIME
 from Interaction import InteractionContext
 from terrain_height import GRADE_SMOOTH, PHYSICS_GRADIENT_STEP, grade_acceleration
+from Settings import (
+    KNOCKBACK_SCALE_MAX,
+    KNOCKBACK_SCALE_MIN,
+    REFERENCE_MASS,
+    STRENGTH_KNOCKBACK_CUT,
+    STRENGTH_KNOCKBACK_FLOOR,
+)
 # This is for file (images specifically) importing (This line changes the directory to where the project is saved)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 MAX_DISPLACEMENT = 5.5
@@ -59,6 +66,31 @@ def _pixel_step(rect, dx, dy):
     probe.y += dy
     return probe.x - rect.x, probe.y - rect.y
 
+def _strength(body):
+    """The body's strength: stats["strength"], else .strength, else None."""
+    stats = getattr(body, "stats", None)
+    raw = stats.get("strength") if isinstance(stats, dict) else None
+    if raw is None:
+        raw = getattr(body, "strength", None)
+    try:
+        return None if raw is None else float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def knockback_scale(body):
+    """How far a shove moves `body`, as a share of the force: REFERENCE_MASS / (mass + gear),
+    inside [KNOCKBACK_SCALE_MIN, KNOCKBACK_SCALE_MAX], times the strength cut. A body with no mass
+    counts as REFERENCE_MASS; no strength, no cut."""
+    total = float(getattr(body, "mass", REFERENCE_MASS)) + float(getattr(body, "gear_weight", 0.0))
+    scale = REFERENCE_MASS / total if total > 0 else KNOCKBACK_SCALE_MAX
+    scale = min(KNOCKBACK_SCALE_MAX, max(KNOCKBACK_SCALE_MIN, scale))
+    strength = _strength(body)
+    if strength is not None:
+        scale *= max(STRENGTH_KNOCKBACK_FLOOR, 1.0 - STRENGTH_KNOCKBACK_CUT * strength)
+    return scale
+
+
 class Entity(pygame.sprite.Sprite):
     casts_shadow = True  # entities (player/enemies/friendlies) drop directional shadows
     # Statuses whose animation is a walk cycle, and so phased on distance rather than time.
@@ -82,6 +114,10 @@ class Entity(pygame.sprite.Sprite):
         self.direction = pygame.math.Vector2()
         self.velocity = pygame.math.Vector2(0, 0)  # Current velocity for movement
         self.weight = 1.0  # Weight affects acceleration (higher weight = slower acceleration)
+        # How hard the body is to shove (knockback_scale). Monsters set mass from monster_data;
+        # gear_weight is what is worn (0 until armour has weights).
+        self.mass = REFERENCE_MASS
+        self.gear_weight = 0.0
         self.max_collision_distance_squared = 10000
         self.max_collision_distance = 10
         self.mask = None
@@ -1135,13 +1171,15 @@ class Entity(pygame.sprite.Sprite):
                 setattr(self, attr, None)
 
     def apply_impulse(self, force, follow_through=0.5) -> None:
+        """Shove the body by `force`, scaled by knockback_scale (mass and strength)."""
         self.cancel_displacement_abilities()
         if force is None:
             return
         if not hasattr(self, "velocity"):
             self.velocity = pygame.math.Vector2(0, 0)
-        dx = float(force[0]) if hasattr(force, "__getitem__") else float(force.x)
-        dy = float(force[1]) if hasattr(force, "__getitem__") else float(force.y)
+        scale = knockback_scale(self)
+        dx = (float(force[0]) if hasattr(force, "__getitem__") else float(force.x)) * scale
+        dy = (float(force[1]) if hasattr(force, "__getitem__") else float(force.y)) * scale
         if hasattr(self, "hitbox"):
             tree = getattr(self, "_wall_tree", None)
             if tree is not None:

@@ -83,7 +83,7 @@ class Friendly(Entity):
         self.health = monster_info["health"]
         self.exp = monster_info["exp"]
         self.speed = monster_info["speed"]
-        self.resistance = monster_info["resistance"]
+        self.mass = monster_info["mass"]  # knockback_scale (Entity.py)
         
         #### All in combat config now
         self.combat_config = monster_info["combat_config"]
@@ -566,9 +566,6 @@ class Friendly(Entity):
             #self.combat_context["add_exp"](self.exp)
             self.death_sound.play()
             
-    def hit_reaction(self):
-        if not self.vulnerable:
-            self.direction *= -self.resistance
     #@profile
     
     
@@ -583,7 +580,6 @@ class Friendly(Entity):
             self.move(speed = self.speed,
                       QuadTree = QuadTree ,
                       entity_quad_tree = entity_quad_tree)
-            self.hit_reaction()
         self.animate()
         self.cooldowns()
         self.check_death()

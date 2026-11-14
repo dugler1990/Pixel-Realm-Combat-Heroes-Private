@@ -218,6 +218,15 @@ ability_data = {
 
 evasion_data = ability_data
 
+# Knockback by mass (Entity.knockback_scale). A shove moves a body REFERENCE_MASS / its mass as far
+# as the force says (the barb, 90, moves exactly the force), kept inside the scale limits, then cut by
+# strength: max(FLOOR, 1 - CUT * strength). No strength, no cut. Each monster's mass is in monster_data.
+REFERENCE_MASS = 90.0
+KNOCKBACK_SCALE_MIN = 0.1
+KNOCKBACK_SCALE_MAX = 3.0
+STRENGTH_KNOCKBACK_CUT = 0.015
+STRENGTH_KNOCKBACK_FLOOR = 0.55
+
 # Enemies
 monster_data = {
 	"demon": {
@@ -227,7 +236,7 @@ monster_data = {
 		"attack_type": "melee",
 		"attack_sound": "../Audio/Attack/Slash.wav",
 		"speed": 3,
-		"resistance": 8,
+		"mass": 400,
 		"combat_config": {
 			"melee_attack_radius": 260,
 			"notice_radius": 1600,
@@ -275,7 +284,7 @@ monster_data = {
                "attack_type": "melee", 
                "attack_sound": "../Audio/Attack/Slash.wav", 
                "speed": 6, 
-               "resistance": 3,
+               "mass": 60,
                "combat_config":{
                 "melee_attacks": [{"damage": 8, "cooldown": 1500}],
                "melee_attack_radius": 80, 
@@ -294,7 +303,7 @@ monster_data = {
                "attack_type": "melee", 
                "attack_sound": "../Audio/Attack/Slash.wav", 
                "speed": 6, 
-               "resistance": 3,
+               "mass": 20,
                "combat_config":{
                 "melee_attacks": [{"damage": 8, "cooldown": 1500}],
                "melee_attack_radius": 80, 
@@ -314,7 +323,7 @@ monster_data = {
              "attack_type": "melee", 
              "attack_sound": "../Audio/Attack/Claw.wav", 
              "speed": 4, 
-             "resistance": 3, 
+             "mass": 80, 
              "combat_config":{
              "melee_attacks": [{"damage": 80, "cooldown": 1500}],
              "melee_attack_radius": 120, 
@@ -344,7 +353,7 @@ monster_data = {
                "attack_type": "melee", 
                "attack_sound": "../Audio/Attack/Fireball.wav", 
                "speed": 12, 
-               "resistance": 3,
+               "mass": 5,
                "combat_config":{
                 "melee_attacks": [{"damage": 9, "cooldown": 1000}],
                "melee_attack_radius": 60, 
@@ -364,7 +373,7 @@ monster_data = {
                 "attack_type": "melee", 
                 "attack_sound": "../Audio/Attack/Slash.wav", 
                 "speed": 6,
-                "resistance": 3,
+                "mass": 30,
                 "combat_config":{
                 "melee_attacks": [{"damage": 6, "cooldown": 1000}],
                 "melee_attack_radius": 50, 
@@ -388,7 +397,7 @@ monster_data = {
         "attack_type": "melee",
         "attack_sound": "../Audio/Attack/Slash.wav",
         "speed": 9,
-        "resistance": 3,
+        "mass": 20,
         "combat_config":{
         "melee_attack_radius": 50,
         "notice_radius": 2500,
@@ -412,7 +421,7 @@ monster_data = {
             "attack_type": "melee",
             "attack_sound": "../Audio/Attack/Slash.wav",
             "speed": 15,
-            "resistance": 3,
+            "mass": 70,
             "combat_config":{
             "melee_attack_radius": 50,
             "notice_radius": 2500,
@@ -436,7 +445,7 @@ monster_data = {
             "attack_type": "ranged",
             "attack_sound": "../Audio/Attack/Slash.wav",
             "speed": 7,
-            "resistance": 3,
+            "mass": 40,
             "combat_config":{
             "melee_attack_radius":0,  # TODO: just to not error out, i actually need to refine this, if he doesnt have melee attack of parry possibility, he should not have radius, 
                                       # infact, each parry, like each attack should have its own radius, 
@@ -464,7 +473,7 @@ monster_data = {
             "attack_type": "ranged",
             "attack_sound": "../Audio/Attack/Slash.wav",
             "speed": 1,
-            "resistance": 3,
+            "mass": 200,
             "combat_config":{
             "melee_attack_radius":0,  # TODO: just to not error out, i actually need to refine this, if he doesnt have melee attack of parry possibility, he should not have radius, 
                                       # infact, each parry, like each attack should have its own radius, 
@@ -492,7 +501,7 @@ monster_data = {
             "attack_type": "mixed",
             "attack_sound": "../Audio/Attack/Slash.wav",
             "speed": 7,
-            "resistance": 3,
+            "mass": 70,
             "combat_config": {
                 "special_attacks":[{"name":"Teleport",
                                     "chance":float(0.01),
@@ -548,7 +557,7 @@ monster_data = {
 		"attack_type": "melee",
 		"attack_sound": "../Audio/Attack/Claw.wav",
 		"speed": 4,
-		"resistance": 3,
+		"mass": 70,
 		"combat_config": {
 			"melee_attacks": [{"damage": 6, "cooldown": 1000}],
 			"melee_attack_radius": 80,
@@ -566,7 +575,7 @@ monster_data = {
 		"attack_type": "melee",
 		"attack_sound": "../Audio/Attack/Slash.wav",
 		"speed": 4,
-		"resistance": 3,
+		"mass": 70,
 		"combat_config": {
 			"melee_attacks": [{"damage": 6, "cooldown": 1000}],
 			"melee_attack_radius": 80,
@@ -580,7 +589,7 @@ monster_data = {
 		"attack_type": "melee",
 		"attack_sound": "../Audio/Attack/Claw.wav",
 		"speed": 3,
-		"resistance": 3,
+		"mass": 80,
 		"combat_config": {
 			"melee_attacks": [{"damage": 10, "cooldown": 1200}],
 			"melee_attack_radius": 80,
@@ -594,7 +603,7 @@ monster_data = {
 		"attack_type": "melee",
 		"attack_sound": "../Audio/Attack/Slash.wav",
 		"speed": 3,
-		"resistance": 3,
+		"mass": 80,
 		"combat_config": {
 			"melee_attacks": [{"damage": 10, "cooldown": 1200}],
 			"melee_attack_radius": 80,
@@ -608,7 +617,7 @@ monster_data = {
          'attack_type': 'ranged',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 4,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 0,
                            'notice_radius': 2500,
                            'melee_attacks': [],
@@ -627,7 +636,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 4,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 8, 'cooldown': 1000}],
@@ -644,7 +653,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 3,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 8, 'cooldown': 1000}],
@@ -661,7 +670,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 5,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 8, 'cooldown': 1000}],
@@ -678,7 +687,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 3,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 9, 'cooldown': 1000}],
@@ -695,7 +704,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 5,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 8, 'cooldown': 1000}],
@@ -712,7 +721,7 @@ monster_data = {
          'attack_type': 'ranged',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 5,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 0,
                            'notice_radius': 2500,
                            'melee_attacks': [],
@@ -731,7 +740,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 4,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 9, 'cooldown': 1000}],
@@ -748,7 +757,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 4,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 8, 'cooldown': 1000}],
@@ -765,7 +774,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 5,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 6, 'cooldown': 1000}],
@@ -782,7 +791,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 4,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 8, 'cooldown': 1000}],
@@ -799,7 +808,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 4,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 8, 'cooldown': 1000}],
@@ -816,7 +825,7 @@ monster_data = {
          'attack_type': 'ranged',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 4,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 0,
                            'notice_radius': 2500,
                            'melee_attacks': [],
@@ -835,7 +844,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 4,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 9, 'cooldown': 1000}],
@@ -852,7 +861,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 3,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 8, 'cooldown': 1000}],
@@ -869,7 +878,7 @@ monster_data = {
          'attack_type': 'ranged',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 4,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 0,
                            'notice_radius': 2500,
                            'melee_attacks': [],
@@ -888,7 +897,7 @@ monster_data = {
          'attack_type': 'ranged',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 3,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 0,
                            'notice_radius': 2500,
                            'melee_attacks': [],
@@ -909,7 +918,7 @@ monster_data = {
          'attack_type': 'ranged',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 3,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 0,
                            'notice_radius': 2500,
                            'melee_attacks': [],
@@ -930,7 +939,7 @@ monster_data = {
          'attack_type': 'ranged',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 2,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 0,
                            'notice_radius': 2500,
                            'melee_attacks': [],
@@ -951,7 +960,7 @@ monster_data = {
          'attack_type': 'melee',
          'attack_sound': '../Audio/Attack/Slash.wav',
          'speed': 6,
-         'resistance': 3,
+         'mass': 70,
          'combat_config': {'melee_attack_radius': 50,
                            'notice_radius': 2500,
                            'melee_attacks': [{'damage': 10, 'cooldown': 1000}],

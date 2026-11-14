@@ -58,10 +58,6 @@ _IDENTITY_COLORS = (
 _IDENTITY_STRENGTH = 0.1  # 0..1 multiply toward identity; cranked for A/B test
 # Targeting mark reads larger than the rock so the danger zone is obvious.
 _TARGETING_SCALE_BOOST = 1.5
-# Knockback resist: missing strength uses this; each point shaves a little shove.
-_DEFAULT_KNOCKBACK_STRENGTH = 5.0
-_STRENGTH_RESIST_PER_POINT = 0.015
-_MIN_KNOCKBACK_FACTOR = 0.55
 
 
 def _scale_frames(frames, scale: float) -> list[pygame.Surface]:
@@ -623,24 +619,6 @@ class MeteorStrike(pygame.sprite.Sprite):
             )
             resolver.apply(ctx)
 
-    def _target_knockback_factor(self, target) -> float:
-        """Stronger targets shrug off a bit of explosion shove."""
-        strength = _DEFAULT_KNOCKBACK_STRENGTH
-        stats = getattr(target, "stats", None)
-        if isinstance(stats, dict) and stats.get("strength") is not None:
-            try:
-                strength = float(stats["strength"])
-            except (TypeError, ValueError):
-                pass
-        else:
-            raw = getattr(target, "strength", None)
-            if raw is not None:
-                try:
-                    strength = float(raw)
-                except (TypeError, ValueError):
-                    pass
-        return max(_MIN_KNOCKBACK_FACTOR, 1.0 - _STRENGTH_RESIST_PER_POINT * strength)
-
     def _apply_explosion_knockback(self):
         """Radial impulse from impact center — same pattern as leap slam."""
         if self.knockback <= 0:
@@ -665,7 +643,7 @@ class MeteorStrike(pygame.sprite.Sprite):
             # to the footprint's edge: the circle the hit test used.
             reach = hit_core.ground_reach((cx, cy), hit_core.foot_shape(target), VIEW_ELEVATION_DEG)
             falloff = max(0.35, 1.0 - min(reach, radius) / radius)
-            mag = self.knockback * falloff * self._target_knockback_factor(target)
+            mag = self.knockback * falloff  # mass and strength: Entity.knockback_scale
             resolver.apply(
                 InteractionContext(
                     kind="impulse",

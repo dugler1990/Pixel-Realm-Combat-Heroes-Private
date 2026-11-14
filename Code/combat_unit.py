@@ -161,7 +161,7 @@ class CombatUnit(Entity):
         self.health = monster_info["health"]
         self.exp = monster_info["exp"]
         self.speed = monster_info["speed"]
-        self.resistance = monster_info["resistance"]
+        self.mass = monster_info["mass"]  # knockback_scale (Entity.py)
         # Enemy mana (player uses energy). Default 0 = specials with mana_cost never fire.
         self.max_energy = float(monster_info.get("energy", monster_info.get("mana", 0)))
         self.energy = self.max_energy
@@ -874,9 +874,6 @@ class CombatUnit(Entity):
             self.combat_context["add_exp"](self.exp)
             self.death_sound.play()
             
-    def hit_reaction(self):
-        if not self.vulnerable:
-            self.direction *= -self.resistance
 
     def _sync_mesh_layout(self):
         """Refresh capsule AABB when frame / facing / height change. Clears sheet mask."""
@@ -939,7 +936,6 @@ class CombatUnit(Entity):
             self.move(speed = self.speed,
                       QuadTree = QuadTree ,
                       entity_quad_tree = entity_quad_tree)
-            self.hit_reaction()
         self._update_mesh_facing(dt)
         self.animate()
         self.cooldowns()

@@ -30,6 +30,7 @@ from Interaction import InteractionContext, InteractionResolver  # noqa: E402
 from combat_unit import CombatUnit  # noqa: E402
 from Player import BasePlayer  # noqa: E402
 from Settings import monster_data  # noqa: E402
+from Entity import knockback_scale  # noqa: E402
 
 
 class _StubRect:
@@ -234,7 +235,8 @@ def test_combat_unit_accepts_hostile_impulse():
     )
     assert enemy.can_receive_interaction(ctx) is True
     assert _resolver().apply(ctx) is True
-    assert enemy.hitbox.x == before_x + 8
+    # Shoved by its mass: the first monster is the demon (Entity.knockback_scale).
+    assert enemy.hitbox.x == before_x + int(8 * knockback_scale(enemy))
 
 
 def test_impulse_cancels_dash_runtime():
