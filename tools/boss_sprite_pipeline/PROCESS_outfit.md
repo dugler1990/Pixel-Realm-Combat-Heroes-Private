@@ -31,12 +31,21 @@ Run, and rerun the same command after each stop:
 & $PY -m tools.boss_sprite_pipeline.outfit barb naked --host <ip> --port <port>    # pod steps (trellis, sam3, holopart)
 & $PY -m tools.boss_sprite_pipeline.outfit barb naked --only trellis --pick eight_views
 & $PY -m tools.boss_sprite_pipeline.outfit barb naked --only paint --accept 1      # or --redo <view> ...
+& $PY -m tools.boss_sprite_pipeline.outfit barb naked --only front --use <image>    # an image you have as the attempt
+& $PY -m tools.boss_sprite_pipeline.outfit barb naked --only install --accept 1    # body: write the hero entry
 ```
 After the outfit's last pod step the driver prints **stop the pod**. You start and stop pods. Each step's output
 also goes to `<run>/logs/<step>.log`.
 
-Steps (`outfit.py` header): body `front back sides trellis skeleton paint export`; armour adds `views sam3 cut
-holopart merge worn slots sheet` before `export`; cut (a piece from an existing mesh) is those alone.
+Steps (`outfit.py` header): body `front back sides trellis skeleton paint export install`; armour adds `views sam3
+cut holopart merge worn slots sheet` before `export`; cut (a piece from an existing mesh) is those alone + `export
+install`.
+- `--use <image>` (front, back, sides with `--view`): the image is the next attempt, no call: same outline / joint
+  checks and sheet as a drawing, recorded `supplied`; then `--accept N`.
+- `install`: armour / cut stop while a piece's base is missing from `Graphics/Standard_Items/item_bases.json`
+  (`equipment.piece_base`: the outfit's `material` + the piece), then `equip_install.py`. Body: the hero entry
+  (character `roster` + outfit `start_equipment`) at a gate; `--accept 1` appends it to
+  `Graphics/PlayerSelectionDict.json` (free position, hand formatting kept). Review and commit both files.
 
 TRELLIS models (a choice; default `eight_views`, an outfit's `"trellis_models"` or `--models` overrides):
 | model | drawings |
@@ -52,12 +61,15 @@ the gate from `trellis/TRELLIS_SHEET.png` (front, his left side, back per model)
 Files:
 | What | Where |
 |---|---|
-| outfit settings and prompts | `outfits/<character>/<outfit>.json` (paths relative to the data root) |
+| character settings | `outfits/<character>/character.json`: rig, roles, clips, game entry (`outfit_fields.py`) |
+| outfit settings and prompts | `outfits/<character>/<outfit>.json`, merged over the character file (paths relative to the data root) |
+| field table | `outfit_fields.py`: every setting, its file, the kinds that need it; a missing one stops with its name |
+| paint looks | `repaint/looks/*.json` (required; `"extends"` another; the barb's extend `barb_bare.json`) |
 | run state | `<data>/generated/bosses/<character>/outfits/<outfit>/run.json` |
 | drawings + gates | `<run>/gate/` (`gate_front.json`, `gate_back.json`, `gate_side_<view>.json`, sheets, cut-outs) |
 | TRELLIS models + sheet | `<run>/trellis/<model>_from_front.glb`, `TRELLIS_SHEET.png` |
 | logs | `<run>/logs/<step>.log` |
-| body pack | `Graphics/Meshes/<pack>/` (+ the printed `PlayerSelectionDict.json` entry, pasted by hand) |
+| body pack | `Graphics/Meshes/<pack>/` (+ the hero entry, written by `install`) |
 | slot packs | `<run>/packs/<slot>/` (not in Graphics: the game cannot draw them yet) |
 
 Settings that matter:
@@ -104,6 +116,12 @@ Settings that matter:
   loincloth. Look reworded (`shots`); repaint of pelvis_front / pelvis_back pending, after the pick.
 - 2026-11-14: models choice, sides step, TRELLIS sheet, token reuse, pod address / status, step logs, $ per step.
   `--only sides` on naked: 6 views found done; `--only trellis --models front_back_sides,eight_views`: sheet, gate.
+
+- 2026-11-14 (`feat/outfit-config`): character file + field table, barb out of the code (export entry and clips
+  source, paint look, `player_clips` picks, retarget row), page forms, `--use`, `install`. Check
+  `_checks/barb_unchanged.py <tree> <out.json>` on main vs the branch: every step's commands, the looks, the naked
+  export entry + clips.json, the retarget row and clip choice identical; merged outfits only gain the character
+  keys; `install` is a new step. `--use` with the naked front drawing: cut-out pixel-identical, scores identical.
 
 ## Tried and dropped
 

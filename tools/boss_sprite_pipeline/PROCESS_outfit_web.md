@@ -20,6 +20,13 @@ Code\sprite_venv\Scripts\python.exe -m tools.boss_sprite_pipeline.outfit_web    
   (r / r1 / rb, a reason, an image: uploaded to `<run>/gate/uploads/`, sent as `@path`), Pick (TRELLIS), Accept
   paint / Repaint views.
 - Two lanes: a pod step and a local step can run at once, for different outfits.
+- New character / New outfit (blank or a copy), Outfit / <character> settings: a form per file from
+  `outfit_fields.py`; files picked from the character's data folder or uploaded to
+  `<data>/generated/bosses/<character>/inputs/`. Save is refused with the list of what is missing or wrong. The
+  page writes `outfits/<c>/*.json` (repo: review and commit). `#settings/<c>[/<outfit>]` opens a form.
+- "Use this image" under a view's redraw form: the image as the next attempt (`--use`), then Accept.
+- install: missing piece stats as a form (start from an existing base) → `item_bases.json`; a body's hero entry
+  with a write button → `PlayerSelectionDict.json`.
 
 Files: `outfit_web.py` (server), `web/outfit.html` (page), `tests/test_outfit_web.py` (fake driver).
 
@@ -36,6 +43,10 @@ Files: `outfit_web.py` (server), `web/outfit.html` (page), `tests/test_outfit_we
   real runs (barb fullplate, loincloth, naked) with headless Chrome screenshots: outfit list, TRELLIS gate with
   the 2-model sheet, sides strip of 8 views, paint grid. Pod status against a stopped pod: the error shows.
 - Not yet done: a step run from a button on a real outfit (paid calls / a pod); clicking in a real browser.
+
+- 2026-11-14: settings forms, use-an-image, install panel (`feat/outfit-config`). 24 tests
+  (`test_outfit_pipeline.py`, `test_outfit_web.py`). Headless Chrome: fullplate outfit form, barb character form,
+  fullplate run view, looked at. Not yet: a real save / use / install clicked in a browser.
 
 ## Tried and dropped
 

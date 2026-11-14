@@ -1,5 +1,7 @@
 # Plan: characters and outfits set up from the web page, no barb in the code
 
+Status 2026-11-14: steps 0-6 built (branch below); 7 (the proof from the page, paid calls + a pod) not done.
+
 Written 2026-11-14. Branch `feat/outfit-config` (worktree `Pixel-Realm-outfit-config`), from `main` `b581b6e6`.
 Builds on the outfit pipeline (`outfit_pipeline.plan.md`, `PROCESS_outfit.md`) and its web page
 (`outfit_web.plan.md`, `PROCESS_outfit_web.md`).
