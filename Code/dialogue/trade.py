@@ -11,7 +11,7 @@ import pygame
 
 import legion_ui as L
 from ImageCache import ImageCache
-from Inventory import BACKPACK_COLS, FOCUS_BACKPACK
+from Inventory import BACKPACK_COLS
 from Item import Item
 
 _CODE = Path(__file__).resolve().parents[1]
@@ -270,14 +270,12 @@ class TradeWindow:
         self._sync_cursor()
 
     def _sync_cursor(self):
+        """The inventory window's cursor on the pack slot chosen here (it is drawn only on the pack side)."""
         inventory = getattr(self._player, "inventory", None)
-        if inventory is None or not hasattr(inventory, "selected_backpack_index"):
-            return
+        view = getattr(inventory, "view", None)
         slots = self._pack_slots()
-        if slots:
-            inventory.selected_backpack_index = min(self.pack_index, len(slots) - 1)
-        if self.side == 1:
-            inventory.focus_region = FOCUS_BACKPACK
+        if view is not None and slots:
+            view.cursor = inventory.backpack_start_index + min(self.pack_index, len(slots) - 1)
 
     def _draw_shop(self, backend, kit, slab):
         L.draw(backend, kit.picture("slab.png", width=slab.w), slab.topleft)

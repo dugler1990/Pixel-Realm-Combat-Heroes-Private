@@ -1,0 +1,153 @@
+[
+ {
+  "item_id": "barb_fullplate_belt",
+  "item_type": "armour",
+  "spawn_type": "droppable",
+  "positions": [],
+  "image_path": "../Graphics/Standard_Items/outfits/barb_fullplate_belt.png",
+  "effect": {
+   "mesh_piece": "barb_fullplate/belt",
+   "belt_slots": 2
+  },
+  "effect_type": "waist_equip",
+  "outfit": "barb/fullplate"
+ },
+ {
+  "item_id": "barb_fullplate_boot_l",
+  "item_type": "armour",
+  "spawn_type": "droppable",
+  "positions": [],
+  "image_path": "../Graphics/Standard_Items/outfits/barb_fullplate_boot_l.png",
+  "effect": {
+   "mesh_piece": "barb_fullplate/boot_l",
+   "slot": "boots",
+   "side": "l"
+  },
+  "effect_type": "armour_equip",
+  "outfit": "barb/fullplate"
+ },
+ {
+  "item_id": "barb_fullplate_boot_r",
+  "item_type": "armour",
+  "spawn_type": "droppable",
+  "positions": [],
+  "image_path": "../Graphics/Standard_Items/outfits/barb_fullplate_boot_r.png",
+  "effect": {
+   "mesh_piece": "barb_fullplate/boot_r",
+   "slot": "boots",
+   "side": "r"
+  },
+  "effect_type": "armour_equip",
+  "outfit": "barb/fullplate"
+ },
+ {
+  "item_id": "barb_fullplate_chest",
+  "item_type": "armour",
+  "spawn_type": "droppable",
+  "positions": [],
+  "image_path": "../Graphics/Standard_Items/outfits/barb_fullplate_chest.png",
+  "effect": {
+   "mesh_piece": "barb_fullplate/chest",
+   "slot": "armor"
+  },
+  "effect_type": "armour_equip",
+  "outfit": "barb/fullplate"
+ },
+ {
+  "item_id": "barb_fullplate_gauntlet_l",
+  "item_type": "armour",
+  "spawn_type": "droppable",
+  "positions": [],
+  "image_path": "../Graphics/Standard_Items/outfits/barb_fullplate_gauntlet_l.png",
+  "effect": {
+   "mesh_piece": "barb_fullplate/gauntlet_l",
+   "slot": "arm",
+   "side": "l"
+  },
+  "effect_type": "armour_equip",
+  "outfit": "barb/fullplate"
+ },
+ {
+  "item_id": "barb_fullplate_gauntlet_r",
+  "item_type": "armour",
+  "spawn_type": "droppable",
+  "positions": [],
+  "image_path": "../Graphics/Standard_Items/outfits/barb_fullplate_gauntlet_r.png",
+  "effect": {
+   "mesh_piece": "barb_fullplate/gauntlet_r",
+   "slot": "arm",
+   "side": "r"
+  },
+  "effect_type": "armour_equip",
+  "outfit": "barb/fullplate"
+ },
+ {
+  "item_id": "barb_fullplate_pants_l",
+  "item_type": "armour",
+  "spawn_type": "droppable",
+  "positions": [],
+  "image_path": "../Graphics/Standard_Items/outfits/barb_fullplate_pants_l.png",
+  "effect": {
+   "mesh_piece": "barb_fullplate/pants_l",
+   "slot": "legs",
+   "side": "l"
+  },
+  "effect_type": "armour_equip",
+  "outfit": "barb/fullplate"
+ },
+ {
+  "item_id": "barb_fullplate_pants_r",
+  "item_type": "armour",
+  "spawn_type": "droppable",
+  "positions": [],
+  "image_path": "../Graphics/Standard_Items/outfits/barb_fullplate_pants_r.png",
+  "effect": {
+   "mesh_piece": "barb_fullplate/pants_r",
+   "slot": "legs",
+   "side": "r"
+  },
+  "effect_type": "armour_equip",
+  "outfit": "barb/fullplate"
+ },
+ {
+  "item_id": "barb_fullplate_shoulder_l",
+  "item_type": "armour",
+  "spawn_type": "droppable",
+  "positions": [],
+  "image_path": "../Graphics/Standard_Items/outfits/barb_fullplate_shoulder_l.png",
+  "effect": {
+   "mesh_piece": "barb_fullplate/shoulder_l",
+   "slot": "shoulder",
+   "side": "l"
+  },
+  "effect_type": "armour_equip",
+  "outfit": "barb/fullplate"
+ },
+ {
+  "item_id": "barb_fullplate_shoulder_r",
+  "item_type": "armour",
+  "spawn_type": "droppable",
+  "positions": [],
+  "image_path": "../Graphics/Standard_Items/outfits/barb_fullplate_shoulder_r.png",
+  "effect": {
+   "mesh_piece": "barb_fullplate/shoulder_r",
+   "slot": "shoulder",
+   "side": "r"
+  },
+  "effect_type": "armour_equip",
+  "outfit": "barb/fullplate"
+ },
+ {
+  "item_id": "barb_loincloth_loincloth",
+  "item_type": "armour",
+  "spawn_type": "droppable",
+  "positions": [],
+  "image_path": "../Graphics/Standard_Items/outfits/barb_loincloth_loincloth.png",
+  "effect": {
+   "mesh_piece": "barb_loincloth/loincloth",
+   "belt_slots": 1
+  },
+  "effect_type": "waist_equip",
+  "outfit": "barb/loincloth"
+ }
+]

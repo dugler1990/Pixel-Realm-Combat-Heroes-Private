@@ -17,6 +17,12 @@ class ItemSpawner:
         """Load item ID to configuration mapping from a JSON file."""
         with open(standard_objects_path, 'r') as file:
             standard_item_configs = json.load(file)
+        # Wearable pieces made by the outfit pipeline (tools/boss_sprite_pipeline/equip_install.py), beside it.
+        import os
+        outfit_path = os.path.join(os.path.dirname(standard_objects_path), "outfit_items.json")
+        if os.path.isfile(outfit_path):
+            with open(outfit_path, 'r') as file:
+                standard_item_configs = standard_item_configs + json.load(file)
         self.item_mapping = {item['item_id']: item for item in standard_item_configs}
         
 

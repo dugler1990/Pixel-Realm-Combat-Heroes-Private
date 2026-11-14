@@ -11,10 +11,11 @@ Pack clips: `idle`, `move` (one stride, in place), `attack` (tools/boss_sprite_p
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 
-from Settings import FPS
+from Settings import FPS, VIEW_ELEVATION_DEG
 
 # Screen degrees (y down) the 4-way attack statuses point at; the weapon is placed from the same status.
 CARDINAL_DEG = {"right": 0.0, "down": 90.0, "left": 180.0, "up": 270.0}
@@ -74,6 +75,8 @@ class PlayerMesh:
         self.px_per_frame = travel * scale                       # ground px walked per move frame
         self.facing_deg = 90.0
         self._attack_time = None
+        self.pieces = {}                 # worn pieces drawn now: pack name -> MeshBoss
+        self._piece_cache = {}           # every piece loaded so far (None: failed to load)
 
     def update(self, player, dt=None):
         if dt is None or dt <= 0:
@@ -102,3 +105,45 @@ class PlayerMesh:
 
     def yaw_deg(self):
         return yaw_for_heading(self.facing_deg, self.forward_deg)
+
+    # --- worn pieces -------------------------------------------------------------------------
+    # A piece (armour slot, loincloth: Graphics/Meshes/<outfit>/<slot>) is a skinned pack on the same skeleton
+    # and clips as the body, in the same model space; each pack has its own pivot (its bottom centre). So a
+    # piece is drawn about the BODY's pivot, at the body's scale, on the body's frame.
+    PIECE_CLEAR_PAD = 0.15        # the body clears depth this much wider: pauldrons stick out of his outline
+
+    def set_pieces(self, names):
+        """The worn pieces, by pack name; packs are loaded once and kept."""
+        from mesh_boss import MeshBoss
+        cache = self._piece_cache
+        for name in names:
+            if name not in cache:
+                try:
+                    cache[name] = MeshBoss(name, self.skin.action)
+                except Exception as exc:                     # a missing pack: draw the rest
+                    logging.getLogger(__name__).warning("piece %r not loaded: %s", name, exc)
+                    cache[name] = None
+        self.pieces = {name: cache[name] for name in names if cache[name] is not None}
+
+    def draw(self, backend, feet, light_dir=(-0.4, -0.5, 0.75), ambient=0.35):
+        """The body, then each worn piece in its depth. False when the backend has no mesh pass."""
+        draw = getattr(backend, "draw_mesh_boss", None)
+        if draw is None:
+            return False
+        body = self.skin.pack
+        yaw = self.yaw_deg()
+        scale = self.height_px / max(body.height_units, 1e-6)
+        frame = self.skin.frame_index
+        if not self.pieces:
+            return self.skin.draw(backend, feet, yaw, self.height_px)
+        if not draw(body, frame, feet, yaw, scale, VIEW_ELEVATION_DEG, light_dir, ambient,
+                    clear_pad=self.PIECE_CLEAR_PAD):
+            return False
+        action, step = self.skin.action, int(self.skin.frame)
+        for piece in self.pieces.values():
+            # the body's clip and frame in the clip, looked up in the piece's own ranges (export_outfit.py makes
+            # them from one clips blend, so today they are the same numbers)
+            lo, hi = piece.pack.ranges.get(action, (frame, frame))
+            draw(piece.pack, min(lo + step, hi), feet, yaw, scale, VIEW_ELEVATION_DEG, light_dir, ambient,
+                 pivot=body.pivot, clear_depth=False)
+        return True

@@ -164,11 +164,8 @@ def test_retry_history_is_capped(tmp_path):
 
 def test_footprint_overlay_marks_missing_and_spilled():
     """The picture must mark exactly the pixels the score counts, or they tell different stories."""
-    from tools.painted_map_pipeline.world_levels.checks import (
-        OVERLAY_MISSING,
-        OVERLAY_SPILLED,
-        footprint_overlay,
-    )
+    from tools.painted_map_pipeline.shape_gate import OVERLAY_MISSING, OVERLAY_SPILLED
+    from tools.painted_map_pipeline.world_levels.checks import footprint_overlay
 
     mask = Image.new("L", (60, 60), 0)
     ImageDraw.Draw(mask).rectangle((10, 10, 39, 39), fill=255)
@@ -184,6 +181,37 @@ def test_footprint_overlay_marks_missing_and_spilled():
     assert overlay[12, 12][0] > 100 and overlay[12, 12][2] > 100     # magenta side
     assert overlay[45, 45][1] > 100 and overlay[45, 45][2] > 100     # cyan side
     assert tuple(overlay[25, 25]) not in {OVERLAY_MISSING, OVERLAY_SPILLED}   # agreed area
+
+
+def test_footprint_overlay_pixels_unchanged_by_the_shape_gate_move():
+    """The overlay moved into shape_gate; every pixel must come out as the old formula drew it,
+    at one threshold and at a split pair (an interior's shortfall below its spill threshold)."""
+    from tools.painted_map_pipeline.shape_gate import (
+        OVERLAY_MISSING,
+        OVERLAY_SPILLED,
+        OVERLAY_STRENGTH,
+    )
+    from tools.painted_map_pipeline.world_levels.checks import footprint_overlay
+
+    rng = np.random.default_rng(3)
+    # every brightness range: unpainted, between the two thresholds, painted
+    drawn = Image.fromarray(rng.integers(0, 40, (48, 64, 3), dtype=np.uint8))
+    mask_arr = np.zeros((48, 64), np.uint8)
+    mask_arr[8:40, 10:50] = 255
+    mask = Image.fromarray(mask_arr)
+    for content, missing in ((None, None), (40, 10)):
+        limit = 40 if content is None else content
+        missing_limit = limit if missing is None else missing
+        rgb = drawn.convert("RGB")
+        summed = np.asarray(rgb).sum(axis=2)
+        inside = mask_arr > 0
+        marked = np.asarray(rgb).copy()
+        marked[inside & ~(summed > missing_limit)] = OVERLAY_MISSING
+        marked[(summed > limit) & ~inside] = OVERLAY_SPILLED
+        old = np.asarray(Image.blend(rgb, Image.fromarray(marked), OVERLAY_STRENGTH))
+        new = np.asarray(footprint_overlay(drawn, mask, content_luma_threshold=content,
+                                           missing_luma_threshold=missing))
+        assert np.array_equal(old, new)
 
 
 def test_attachment_is_one_shot_and_last_in_the_roster(tmp_path):
@@ -452,3 +480,16 @@ def test_coverage_fails_when_the_generation_is_smaller_than_its_polygon():
     exact = Image.new("RGB", (200, 200), (0, 0, 0))
     ImageDraw.Draw(exact).rectangle((20, 20, 180, 180), fill=(180, 140, 90))
     assert coverage(exact, mask)["passed"]
+
+
+def test_parse_gate_retry_r1_attaches_the_overlay_with_the_gates_own_texts(tmp_path):
+    """Every gate (interiors, views) parses `r1` here and passes its own note and directive."""
+    from tools.painted_map_pipeline.world_levels.retry import parse_gate_retry
+
+    overlay = tmp_path / "attempt_01_shape.png"
+    Image.new("RGB", (8, 8)).save(overlay)
+    criticism, attach = parse_gate_retry("r1 the left arm", overlay, "the note", "the directive")
+    assert attach == [overlay]
+    assert criticism == "the note. the directive the left arm"
+    criticism, attach = parse_gate_retry("r too dark", overlay, "the note", "the directive")
+    assert (criticism, attach) == ("too dark", [])

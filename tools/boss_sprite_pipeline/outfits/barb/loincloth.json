@@ -1,0 +1,73 @@
+{
+ "_about": "His loincloth cut from the current barb (barb_final.glb, painted) as a piece, like the armour pieces. Worn on the naked body (naked.json). The first run is a SAM prompt trial.",
+ "character": "barb",
+ "kind": "cut",
+ "source_mesh": "generated/bosses/barb/rigfix/barb_final.glb",
+ "rig_fit": "generated/bosses/barb/rigfix/barb_final.glb",
+ "rig_game": "generated/bosses/barb/rigfix/barb_final_nb.glb",
+ "roles": "generated/bosses/barb/gear_test/barb_roles.json",
+ "greedy_dirs": "generated/bosses/barb/explode2/fullplate/greedy_dirs_f75.json",
+ "views": 32,
+ "clips_blend": "generated/bosses/barb/anim_test/retarget_player/player.blend",
+ "pack": "barb_loincloth",
+ "holopart": true,
+ "worn_on": "naked",
+ "sam": {
+  "prompts": {
+   "upper": [
+    "head",
+    "hair",
+    "beard",
+    "chest",
+    "belly",
+    "arm",
+    "hand",
+    "belt",
+    "loincloth"
+   ],
+   "lower": [
+    "belt",
+    "loincloth",
+    "cloth",
+    "thigh",
+    "leg",
+    "knee",
+    "foot"
+   ],
+   "full": [
+    "head",
+    "hair",
+    "chest",
+    "arm",
+    "hand",
+    "belt",
+    "loincloth",
+    "cloth",
+    "thigh",
+    "leg",
+    "foot"
+   ]
+  },
+  "prompt_to_part": {
+   "loincloth": "loincloth",
+   "cloth": "loincloth",
+   "belt": "loincloth",
+   "head": "body",
+   "hair": "body",
+   "beard": "body",
+   "chest": "body",
+   "belly": "body",
+   "arm": "body",
+   "hand": "body",
+   "thigh": "body",
+   "leg": "body",
+   "knee": "body",
+   "foot": "body"
+  },
+  "priority": {
+   "loincloth": 1.6,
+   "body": 0.8
+  },
+  "paired": []
+ }
+}

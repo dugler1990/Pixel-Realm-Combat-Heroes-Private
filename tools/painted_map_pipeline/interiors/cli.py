@@ -52,6 +52,7 @@ from pathlib import Path
 
 from ..building_interiors import BuildingInteriorError, load_building
 from ..review_gate import ask as _ask, prompt_sent as _prompt_sent, sent as _sent, show as _show
+from ..world_levels.retry import parse_gate_retry
 from . import art as art_mod
 from . import ask_model
 from . import checks as layout_checks
@@ -914,27 +915,6 @@ def _shape_texts():
     return FOOTPRINT_OVERLAY_NOTE, FOOTPRINT_OVERLAY_DIRECTIVE
 
 
-def _parse_gate_retry(raw: str, overlay):
-    """`r1` / `r <why> @image <note>` at a gate -> (criticism, attachments).
-
-    Shares `world_levels.retry` with the level review loop so there is one syntax to remember.
-    A bare `r` is NOT handled here: it still means "draw more" in both gates, exactly as it
-    always has, and the caller checks for it first.
-    """
-    from ..world_levels.retry import shape_retry, split_retry
-
-    if raw[:2].lower() == "r1":
-        if not overlay or not Path(overlay).is_file():
-            raise FileNotFoundError(
-                "no shape overlay for this draw (nothing to point at) -- draw one first")
-        note, directive = _shape_texts()
-        _reason, image, text = shape_retry(raw, Path(overlay), note, directive)
-        return text, [image]
-    reason, image, note = split_retry(raw)
-    criticism = " ".join(part for part in (reason, note) if part).strip()
-    return criticism, ([image] if image else [])
-
-
 def _parse_augment_retry(answer: str, shape, composited) -> tuple:
     """`r2` / `r12` on an augmented render -> (criticism, attachments).
 
@@ -1047,7 +1027,7 @@ def _plan_gate(spec, work: Path, args, redraw: bool = False):
                 print("  --synthetic draws one plan; there is nothing to redraw")
                 continue
             try:
-                criticism, attach = _parse_gate_retry(raw_answer, shape)
+                criticism, attach = parse_gate_retry(raw_answer, shape, *_shape_texts())
             except (FileNotFoundError, OSError) as exc:
                 print(f"  {exc}")
                 criticism, attach = "", ()
@@ -1196,7 +1176,7 @@ def _render_gate(plan, work: Path, args):
                 if is_drift_retry:
                     criticism, attach = _parse_augment_retry(answer, shape, drawn[choice])
                 else:
-                    criticism, attach = _parse_gate_retry(raw_answer, shape)
+                    criticism, attach = parse_gate_retry(raw_answer, shape, *_shape_texts())
             except (FileNotFoundError, OSError) as exc:
                 print(f"  {exc}")
                 criticism, attach = "", ()

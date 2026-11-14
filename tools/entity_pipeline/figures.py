@@ -22,7 +22,7 @@ from tools.sprite_assets.cut_sheet import (
     detect_gutter_grid,
     sheet_background,
 )
-from tools.sprite_assets.cut_sheet import distance_from
+from tools.sprite_assets.cut_sheet import distance_from, flat_background
 from tools.sprite_assets.pack_sequence import write_contact_sheet
 from tools.sprite_assets.remove_bg import matte_black_bg, trim_transparent
 
@@ -257,22 +257,8 @@ def cut_sprite(image: Image.Image) -> Image.Image:
     rgb_image = image.convert("RGB")
     rgb = np.asarray(rgb_image, dtype=np.float32)
     dist = distance_from(rgb, sheet_background(rgb))
-    background = dist < 75
-    labels, count = ndimage.label(background)
-    height, width = background.shape
-    border = np.zeros_like(background)
-    border[0, :] = border[-1, :] = border[:, 0] = border[:, -1] = True
-    clear = np.zeros_like(background)
-    for index in range(1, count + 1):
-        component = labels == index
-        if np.any(component & border):
-            clear |= component
-    pockets = (~clear) & (dist < 22)
-    pocket_labels, pocket_count = ndimage.label(pockets)
-    for index in range(1, pocket_count + 1):
-        component = pocket_labels == index
-        if int(component.sum()) >= 45:
-            clear |= component
+    height, width = dist.shape
+    clear = flat_background(rgb, pockets=True)
     rgba = np.array(rgb_image.convert("RGBA"))
     rgba[clear, 3] = 0
     # The sheet's anti-aliased crumbs sit outside the ink. Keep peeling them.

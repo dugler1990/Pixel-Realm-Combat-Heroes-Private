@@ -1,0 +1,9 @@
+{
+ "upper": ["head", "hair", "beard", "breastplate", "shoulder armor", "upper arm armor", "elbow armor", "forearm armor",
+           "hand", "glove", "belt", "armored skirt", "waist armor"],
+ "lower": ["belt", "armored skirt", "waist armor", "thigh armor", "knee armor", "shin armor", "armored boot", "foot",
+           "shoe", "hand", "forearm armor"],
+ "full": ["head", "hair", "beard", "breastplate", "shoulder armor", "upper arm armor", "elbow armor", "forearm armor",
+          "hand", "glove", "belt", "armored skirt", "waist armor", "thigh armor", "knee armor", "shin armor",
+          "armored boot", "foot", "shoe"]
+}

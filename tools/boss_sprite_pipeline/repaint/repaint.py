@@ -10,8 +10,12 @@ Here: 8 cameras round the body + 3 round the head, and the views are blended per
     $PY tools/boss_sprite_pipeline/repaint/repaint.py gen     <work_dir> <reference_picture.png> [view ...]
     $PY tools/boss_sprite_pipeline/repaint/repaint.py project <rigged.glb> <work_dir>
 
+All steps in order, the same way every time: paint_outfit.py (views if needed, gen missing, project, diag).
+
 views    flat (unlit texture) + clay (shape) render per camera, cams.json
-gen      front body view first; every other view also gets the front result as a colour anchor
+gen      front body view first; every other view also gets the front result as a colour anchor.
+         Each painting is checked as it arrives with project's alignment rule (aligns()) and repainted
+         up to ALIGN_RETRIES more times. "missing" = views without a usable painting.
 project  per texel, the views that saw it blend with weight facing^4 (the most head-on view
          wins, edges blend); head close-ups override the body views on the head. Texels no
          camera saw get the old texture pushed through the old->new colour map fitted on the
@@ -95,6 +99,8 @@ PART_SHOTS = [
 # A look file (looks/*.json, given to `views --look`, remembered in cams.json) overrides any key, can
 # limit the views ("views": names) and re-word close-ups ("shots": {name: {"shows", "paint"}}).
 # "part_res": close-up size in px (default PART_RES); "quality": gpt-image-2 quality (default high);
+# "provider": "openai" (default, gpt-image-2) or "leonardo" with "model" (e.g. "nano-banana-2": $0.039 at
+# 1024 vs gpt-image-2 medium $0.099 on the barb's face, quality_test.py 2026-11-02);
 # "regions": {"arm": {"scale": 1.3, "shift_up": 0.04}} widens / raises a close-up frame (shift in heights).
 DEFAULT_LOOK = {
     "subject": "barbarian hero",
@@ -128,6 +134,54 @@ def load_look(path):
     if path:
         look.update(json.load(open(path, encoding="utf-8")))
     return look
+
+
+# A painting is used only if it lines up with the model: gen repaints a view that fails (up to
+# ALIGN_RETRIES more times, keeping the best) and project drops one that still fails.
+ALIGN_ECC_MIN = 0.95
+ALIGN_SCALE = (0.85, 1.18)
+ALIGN_RETRIES = 2
+
+
+def aligns(ecc, scale):
+    return ecc >= ALIGN_ECC_MIN and ALIGN_SCALE[0] <= scale <= ALIGN_SCALE[1]
+
+
+def align_painting(work, name, paint):
+    """The image models redraw the figure a little larger/shifted than the mesh. Fit one affine warp
+    (ECC on silhouette + shading, 720 px) of the painting onto the model's own renders and apply it.
+    Returns (aligned RGB, ecc, scale); a dense optical flow was tried and smears the painting."""
+    import cv2
+    import numpy as np
+    from PIL import Image
+
+    def on_grey(path):
+        im = np.asarray(Image.open(path).convert("RGBA")).astype(np.float32)
+        a = im[..., 3:4] / 255.0
+        return (im[..., :3] * a + 128 * (1 - a)).astype(np.uint8), a[..., 0]
+    clay, alpha = on_grey(os.path.join(work, name + "_clay.png"))
+    flat, _ = on_grey(os.path.join(work, name + "_flat.png"))
+    Hh, Ww = clay.shape[:2]
+    p = np.asarray(paint.resize((Ww, Hh), Image.LANCZOS))
+    s = 720 / max(Hh, Ww)
+
+    def feat(img, mask):
+        g = cv2.cvtColor(cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA), cv2.COLOR_RGB2GRAY)
+        return cv2.GaussianBlur(0.6 * mask + 0.4 * g.astype(np.float32) / 255, (0, 0), 3)
+    small_p = cv2.resize(p, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+    guide = feat(cv2.addWeighted(clay, 0.5, flat, 0.5, 0), (cv2.resize(alpha, None, fx=s, fy=s) > 0.5).astype(np.float32))
+    target = feat(p, (np.abs(small_p.astype(int) - 128).max(2) > 14).astype(np.float32))
+    warp = np.eye(2, 3, dtype=np.float32)
+    try:
+        cc, warp = cv2.findTransformECC(guide, target, warp, cv2.MOTION_AFFINE,
+                                        (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 300, 1e-6), None, 5)
+    except cv2.error:
+        return None, 0.0, 0.0
+    warp[:, 2] /= s
+    scale = float(np.sqrt(abs(np.linalg.det(warp[:, :2]))))
+    out = cv2.warpAffine(p, warp, (Ww, Hh), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
+                         borderMode=cv2.BORDER_CONSTANT, borderValue=GREY)
+    return Image.fromarray(out), float(cc), scale
 
 
 # ============================================================================ blender side
@@ -313,6 +367,29 @@ if MODE in ("views", "project"):
         sc.render.filepath = path
         bpy.ops.render.render(write_still=True)
 
+    def render_bone_id(sc, obj, cam, path):
+        """Each pixel's main bone (the "boneid" colour attribute: (index + 1) / 256), 32-bit EXR, no AA."""
+        def build(nt, out):
+            em = nt.nodes.new("ShaderNodeEmission")
+            at = nt.nodes.new("ShaderNodeAttribute")
+            at.attribute_name = "boneid"
+            nt.links.new(at.outputs["Color"], em.inputs[0])
+            nt.links.new(em.outputs[0], out.inputs[0])
+        mat = emission_material("boneid", build)
+        eevee(sc, 1, png=False)
+        sc.render.filter_size = 0.0
+        sc.render.image_settings.file_format = "OPEN_EXR"
+        sc.render.image_settings.color_depth = "32"
+        sc.render.image_settings.color_mode = "RGBA"
+        sc.render.image_settings.exr_codec = "ZIP"
+        with_material(obj, mat, lambda: render(sc, path))
+        img = bpy.data.images.load(path)
+        img.colorspace_settings.name = "Non-Color"
+        w, h = img.size
+        px = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)   # bottom-up rows, like render_uv_id
+        bpy.data.images.remove(img)
+        return np.rint(px[..., 0] * 256).astype(np.int32) - 1                # -1 = background
+
     def render_uv_id(sc, obj, cam, path):
         """(u, v, |facing|, coverage) of the original UV map, 32-bit EXR, no AA."""
         fwd = cam.matrix_world.to_3x3() @ Vector((0, 0, -1))
@@ -414,25 +491,47 @@ if MODE == "gen":
     import numpy as np
     from PIL import Image
 
+    from pathlib import Path
+
     sys.path.insert(0, BOSS)
+    from tools.painted_map_pipeline.leonardo_api import LeonardoApiError, generate_with_image_reference  # noqa: E402
     from tools.painted_map_pipeline.openai_api import edit_image  # noqa: E402
 
     WORK, REF = os.path.abspath(sys.argv[2]), os.path.abspath(sys.argv[3])
     only = set(sys.argv[4:])
-    if not os.environ.get("OPENAI_API_KEY"):
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as k:
-            os.environ["OPENAI_API_KEY"] = winreg.QueryValueEx(k, "OPENAI_API_KEY")[0]
     all_views = saved_views(WORK)
     _cams = os.path.join(WORK, "cams.json")
     L = load_look(json.load(open(_cams)).get("look") if os.path.isfile(_cams) else None)
+    PROVIDER = L.get("provider", "openai")
+    if PROVIDER == "openai" and not os.environ.get("OPENAI_API_KEY"):
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as k:
+            os.environ["OPENAI_API_KEY"] = winreg.QueryValueEx(k, "OPENAI_API_KEY")[0]
+    # Leonardo's Nano Banana takes Gemini's own sizes (its known-good 5056x3392 is Gemini's 4K 3:2); if it
+    # rejects a view's size (no charge), the nearest-shape 1K size is used and projection rescales it.
+    GEMINI_1K = [(1024, 1024), (848, 1264), (1264, 848), (896, 1200), (1200, 896), (928, 1152), (1152, 928),
+                 (768, 1376), (1376, 768)]
     costs = []
 
-    def has_painting(name):
+    def usable(name):
+        """A finished painting that lines up with the model. A check.json from before the alignment
+        check gets it computed and stored."""
         acc = os.path.join(WORK, "gen", name, "ACCEPTED.txt")
-        return os.path.isfile(acc) and os.path.isfile(os.path.join(open(acc).read().strip(), "output.png"))
-    # selection: view names, "parts" (all close-ups), "missing" (every view with no finished painting yet)
+        if not os.path.isfile(acc):
+            return False
+        a = open(acc).read().strip()
+        out, cj = os.path.join(a, "output.png"), os.path.join(a, "check.json")
+        if not os.path.isfile(out):
+            return False
+        c = json.load(open(cj)) if os.path.isfile(cj) else {}
+        if "aligns" not in c:
+            _, c["ecc"], c["scale"] = align_painting(WORK, name, Image.open(out).convert("RGB"))
+            c["aligns"] = aligns(c["ecc"], c["scale"])
+            json.dump(c, open(cj, "w"))
+        return c["aligns"]
+    # selection: view names, "parts" (all close-ups), "missing" (every view without a usable painting:
+    # none yet, or one that does not line up with the model)
     views = [v for v in all_views if not only or v["name"] in only or ("parts" in only and v["kind"] == "part")
-             or ("missing" in only and not has_painting(v["name"]))]
+             or ("missing" in only and not usable(v["name"]))]
     log(f"gen: {len(views)} views: {' '.join(v['name'] for v in views)}")
 
     def part_prompt(v):
@@ -497,51 +596,143 @@ if MODE == "gen":
         open(os.path.join(a, "prompt.txt"), "w").write(p + "\n")
         w, h = v["res"]
         t = time.time()
-        info = edit_image(prompt=p, input_images=[__import__("pathlib").Path(x) for x in imgs], mask=None,
-                          output_path=__import__("pathlib").Path(os.path.join(a, "output.png")), width=w, height=h,
-                          config={"quality": L.get("quality", "high"), "config_source": "barb_paint"})
+        out, ims = Path(a, "output.png"), [Path(x) for x in imgs]
+        if PROVIDER == "leonardo":
+            cfg = {"model": L.get("model", "nano-banana-2")}
+            # A refused request (or a refused upload) makes no image and costs nothing, so it is retried; a
+            # failure after the generation exists (timeout, download) is not, so nothing is paid twice.
+            for wait in (20, 40, 80, 160, None):
+                try:
+                    info = generate_with_image_reference(prompt=p, input_images=ims, output_path=out, width=w, height=h, config=cfg)
+                    break
+                except LeonardoApiError as e:
+                    s = str(e)
+                    if "VALIDATION" in s.upper():
+                        if (w, h) != tuple(v["res"]) or (w, h) in GEMINI_1K:
+                            raise
+                        w, h = min(GEMINI_1K, key=lambda z: abs(math.log(z[0] / z[1] * h / w)))
+                        log(f"  {v['name']}: Leonardo refused {v['res'][0]}x{v['res'][1]}, painting at {w}x{h}")
+                    elif wait and any(k in s for k in ("rejected the request", "(429)", "(502)", "(503)", "(504)")):
+                        log(f"  {v['name']}: {s[:300]} - retry in {wait} s")
+                        time.sleep(wait)
+                    else:
+                        raise
+            usage, cost = None, info.get("cost_usd")
+        else:
+            info = edit_image(prompt=p, input_images=ims, mask=None, output_path=out, width=w, height=h,
+                              config={"quality": L.get("quality", "high"), "config_source": "barb_paint"})
+            usage = info.get("usage")
+            cost = usd(usage)
         alpha = np.asarray(Image.open(os.path.join(WORK, v["name"] + "_flat.png")).convert("RGBA"))[..., 3] > 8
-        rgb = np.asarray(Image.open(os.path.join(a, "output.png")).convert("RGB")).astype(int)
+        rgb = np.asarray(Image.open(out).convert("RGB").resize(alpha.shape[::-1], Image.LANCZOS)).astype(int)
         ng = np.abs(rgb - np.array(GREY)).max(2) > 18
         iou = float((ng & alpha).sum() / max((ng | alpha).sum(), 1))
-        cost = usd(info.get("usage"))
-        costs.append(cost)
-        json.dump({"iou": iou, "usage": info.get("usage"), "usd": cost, "seconds": time.time() - t},
-                  open(os.path.join(a, "check.json"), "w"))
-        log(f"GEN {v['name']} attempt_{n} iou {iou:.3f} {time.time() - t:.0f}s ${cost:.2f}")
+        _, ecc, scale = align_painting(WORK, v["name"], Image.open(out).convert("RGB"))
+        ok = aligns(ecc, scale)
+        costs.append(cost or 0.0)
+        json.dump({"iou": iou, "ecc": ecc, "scale": scale, "aligns": ok, "provider": PROVIDER,
+                   "model": L.get("model", "gpt-image-2"), "size": [w, h], "usage": usage, "usd": cost,
+                   "seconds": time.time() - t}, open(os.path.join(a, "check.json"), "w"))
+        log(f"GEN {v['name']} attempt_{n} iou {iou:.3f} ecc {ecc:.3f} scale {scale:.2f} "
+            + ("lines up" if ok else "DOES NOT LINE UP") + f" {time.time() - t:.0f}s "
+            + (f"${cost:.3f}" if cost is not None else "cost not reported"))
         return a
+
+    def paint_view(v, anchor):
+        """Paint until the painting lines up with the model (project's own rule), at most
+        1 + ALIGN_RETRIES tries. Returns the attempt to use: the first that lines up, else the best ecc."""
+        best = None
+        for k in range(1 + ALIGN_RETRIES):
+            try:
+                a = run(v, anchor)
+            except Exception as e:                     # a failed repaint keeps the best earlier attempt
+                if best is None:
+                    raise
+                log(f"  {v['name']}: repaint failed ({e}); keeping {best[0]}")
+                break
+            c = json.load(open(os.path.join(a, "check.json")))
+            if c["aligns"]:
+                return a
+            if best is None or c["ecc"] > best[1]:
+                best = (a, c["ecc"])
+            if k < ALIGN_RETRIES:
+                log(f"  {v['name']}: does not line up with the model - repainting")
+        log(f"  {v['name']}: no attempt lines up; project will drop it (best: {best[0]})")
+        return best[0]
 
     front = os.path.join(WORK, "gen", "body_000")
     accepted = lambda name: os.path.join(WORK, "gen", name, "ACCEPTED.txt")
     if any(v["name"] == "body_000" for v in views):
-        a = run(next(v for v in views if v["name"] == "body_000"), None)
+        a = paint_view(next(v for v in views if v["name"] == "body_000"), None)
         open(accepted("body_000"), "w").write(a + "\n")
         views = [v for v in views if v["name"] != "body_000"]
     anchor = os.path.join(open(accepted("body_000")).read().strip(), "output.png")
     with cf.ThreadPoolExecutor(4) as ex:
-        futs = {ex.submit(run, v, nearest_body_painting(v) if v["kind"] == "part" else anchor): v for v in views}
+        futs = {ex.submit(paint_view, v, nearest_body_painting(v) if v["kind"] == "part" else anchor): v for v in views}
         for f in cf.as_completed(futs):
             v = futs[f]
             try:
                 done = f.result()                      # raises if the call failed: then write nothing
             except Exception as e:                     # one failed view must not lose the others
                 log(f"GEN_FAIL {v['name']} {e}")
+                d = os.path.join(WORK, "gen", v["name"])   # keep the reason with the attempt, not only on screen
+                last = max((x for x in os.listdir(d) if x.startswith("attempt_")), key=lambda x: int(x.split("_")[1]))
+                open(os.path.join(d, last, "error.txt"), "w").write(f"{type(e).__name__}: {e}\n")
                 continue
             open(accepted(v["name"]), "w").write(done + "\n")
     total = 0.0
     for root, _, files in os.walk(os.path.join(WORK, "gen")):
         if "check.json" in files:
-            total += usd(json.load(open(os.path.join(root, "check.json"))).get("usage"))
+            c = json.load(open(os.path.join(root, "check.json")))
+            total += c["usd"] if c.get("usd") is not None else usd(c.get("usage"))
     log(f"COST this run ${sum(costs):.2f} ({len(costs)} paintings); all paintings in {WORK}: ${total:.2f}")
+    bad = [v["name"] for v in all_views if not usable(v["name"])]
+    log(f"NOT USABLE ({len(bad)}): {' '.join(bad)}" if bad else "ALL VIEWS USABLE")
     log("GEN_DONE")
 
 # ---------------------------------------------------------------------------- project
 if MODE == "project":
     GLB, WORK = os.path.abspath(sys.argv[2]), os.path.abspath(sys.argv[3])
+    # project <glb> <work> [roles.json]: with the roles, a close-up only paints pixels whose main bone is in its
+    # own region (REGION_BONES) - not what pokes into its frame. The full plate's leg_l_front close-up framed
+    # the left hand at its edge, painted it bare skin, and as close-ups override the body views the gauntlet
+    # came out orange (2026-11-04).
+    ROLES_PROJ = os.path.abspath(sys.argv[4]) if len(sys.argv) > 4 else None
     OUT = os.path.join(WORK, "result")
     os.makedirs(OUT, exist_ok=True)
     t0 = time.time()
     body, bsdf, img, chart = load(GLB, upscale=True)
+    REGION_IDX, PART_REGION = {}, {name: region for name, region, *_ in PART_SHOTS}
+    if ROLES_PROJ:
+        rp = json.load(open(ROLES_PROJ))
+        gn = [g.name for g in body.vertex_groups]
+        Wv = np.zeros((len(body.data.vertices), len(gn)), np.float32)
+        for vx in body.data.vertices:
+            for g in vx.groups:
+                Wv[vx.index, g.group] = g.weight
+        bcol = np.zeros((len(Wv), 4), np.float32)
+        bcol[:, 0] = (Wv.argmax(1) + 1) / 256.0
+        bcol[:, 3] = 1
+        body.data.color_attributes.new("boneid", "FLOAT_COLOR", "POINT").data.foreach_set("color", bcol.ravel())
+        rig = next(o for o in bpy.data.objects if o.type == "ARMATURE")
+
+        def with_children(b):                  # hand / foot / head: their finger, toe, jaw bones too
+            return [b] + [c.name for c in rig.data.bones[b].children_recursive] if b in rig.data.bones else [b]
+        REGION_BONES = {
+            "face": with_children(rp["head"]) + [rp["neck"]], "head": with_children(rp["head"]) + [rp["neck"]],
+            "chest": [rp[k] for k in ("spine", "spine2", "chest", "neck") if k in rp]
+                     + [rp["arm_l"]["shoulder"], rp["arm_r"]["shoulder"]],
+            "pelvis": [rp["root"], rp["spine"], rp["leg_l"]["hip"], rp["leg_r"]["hip"]],
+            "legs": [rp["root"]] + [rp[f"leg_{s}"][k] for s in "lr" for k in ("hip", "knee", "ankle")],
+        }
+        for s in "lr":
+            a, g = rp[f"arm_{s}"], rp[f"leg_{s}"]
+            REGION_BONES[f"hand_{s}"] = [a["wrist"]] + with_children(a["hand"])
+            REGION_BONES[f"arm_{s}"] = [a["shoulder"], a["elbow"], a["wrist"]]
+            REGION_BONES[f"leg_{s}"] = [g["hip"], g["knee"], g["ankle"]]
+            REGION_BONES[f"foot_{s}"] = with_children(g["ankle"])
+        REGION_IDX = {r: {gn.index(b) for b in bl if b in gn} for r, bl in REGION_BONES.items()}
+        log(f"close-ups limited to their own regions ({len(REGION_IDX)} regions)")
     sc = bpy.context.scene
     meta = json.load(open(os.path.join(WORK, "cams.json")))
     fr = {k: (tuple(v[0]), v[1]) for k, v in meta["frames"].items()}
@@ -550,39 +741,8 @@ if MODE == "project":
     atlas = np.array(img.pixels[:], dtype=np.float32).reshape(H, W, 4)
     old = atlas[..., :3].copy()
 
-    import cv2
-
     def align(paint, v):
-        """gpt-image-2 redraws the figure a little larger/shifted than the mesh. Fit one affine warp
-        (ECC on silhouette + shading, 720 px) of the painting onto the model's own renders and apply it.
-        Returns (aligned RGB, ecc, scale); a dense optical flow was tried and smears the painting."""
-        def on_grey(path):
-            im = np.asarray(Image.open(path).convert("RGBA")).astype(np.float32)
-            a = im[..., 3:4] / 255.0
-            return (im[..., :3] * a + 128 * (1 - a)).astype(np.uint8), a[..., 0]
-        clay, alpha = on_grey(os.path.join(WORK, v["name"] + "_clay.png"))
-        flat, _ = on_grey(os.path.join(WORK, v["name"] + "_flat.png"))
-        Hh, Ww = clay.shape[:2]
-        p = np.asarray(paint.resize((Ww, Hh), Image.LANCZOS))
-        s = 720 / max(Hh, Ww)
-
-        def feat(img, mask):
-            g = cv2.cvtColor(cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA), cv2.COLOR_RGB2GRAY)
-            return cv2.GaussianBlur(0.6 * mask + 0.4 * g.astype(np.float32) / 255, (0, 0), 3)
-        small_p = cv2.resize(p, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
-        guide = feat(cv2.addWeighted(clay, 0.5, flat, 0.5, 0), (cv2.resize(alpha, None, fx=s, fy=s) > 0.5).astype(np.float32))
-        target = feat(p, (np.abs(small_p.astype(int) - 128).max(2) > 14).astype(np.float32))
-        warp = np.eye(2, 3, dtype=np.float32)
-        try:
-            cc, warp = cv2.findTransformECC(guide, target, warp, cv2.MOTION_AFFINE,
-                                            (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 300, 1e-6), None, 5)
-        except cv2.error:
-            return None, 0.0, 0.0
-        warp[:, 2] /= s
-        scale = float(np.sqrt(abs(np.linalg.det(warp[:, :2]))))
-        out = cv2.warpAffine(p, warp, (Ww, Hh), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
-                             borderMode=cv2.BORDER_CONSTANT, borderValue=GREY)
-        return Image.fromarray(out), float(cc), scale
+        return align_painting(WORK, v["name"], paint)
 
     PATCH = {"views": [], "dropped": []}
 
@@ -622,7 +782,7 @@ if MODE == "project":
                 log("no paint for", v["name"])
                 continue
             paint, cc, scale = align(Image.open(out_png).convert("RGB"), v)
-            if paint is None or cc < 0.95 or not 0.85 <= scale <= 1.18:
+            if paint is None or not aligns(cc, scale):
                 log(f"DROP {v['name']}: will not align onto the mesh (ecc {cc:.3f}, scale {scale:.2f}) - a ghost source")
                 PATCH["dropped"].append({"view": v["name"], "ecc": round(cc, 4), "scale": round(scale, 3)})
                 continue
@@ -638,6 +798,12 @@ if MODE == "project":
             for _ in range(3):
                 bgm = bgm | np.roll(bgm, 1, 0) | np.roll(bgm, -1, 0) | np.roll(bgm, 1, 1) | np.roll(bgm, -1, 1)
             ok = (cov > 0.5) & (alpha > 0.5) & (f > 0.2) & ~bgm
+            region_note = ""
+            if kind == "part" and PART_REGION.get(v["name"]) in REGION_IDX:
+                bid = render_bone_id(sc, body, cam, os.path.join(OUT, f"boneid_{v['name']}.exr"))
+                inreg = np.isin(bid, list(REGION_IDX[PART_REGION[v["name"]]]))
+                region_note = f"  outside its region: {int((ok & ~inreg).sum())} px dropped"
+                ok &= inreg
             t = np.clip((f - 0.2) / 0.5, 0, 1)
             sm = t * t * (3 - 2 * t)
             wgt = (sm * f ** 12)[ok]                  # near winner-takes-all: overlapping views must not stack into ghosts
@@ -665,7 +831,7 @@ if MODE == "project":
                 PATCH["winner"][won] = len(PATCH["views"])
                 PATCH["wmax"][won] = tmp[won]
                 PATCH["views"].append(dict(v, ecc=cc, scale=scale))
-            log(f"splat {v['name']}  {ok.sum()} px  ecc {cc:.3f} scale {scale:.2f}  {time.time() - t0:.0f}s{note}")
+            log(f"splat {v['name']}  {ok.sum()} px  ecc {cc:.3f} scale {scale:.2f}  {time.time() - t0:.0f}s{note}{region_note}")
         hit = wsum > 0
         col = np.zeros((H, W, 3), np.float32)
         col[hit] = acc[hit] / wsum[hit][:, None]
@@ -764,6 +930,8 @@ if MODE == "project":
         log(f"BEFORE_AFTER not saved: {e}")
 
     img.pack()
+    if "boneid" in body.data.color_attributes:           # only for the region masks: not part of the model
+        body.data.color_attributes.remove(body.data.color_attributes["boneid"])
     bpy.ops.object.select_all(action="DESELECT")
     arm = next((o for o in bpy.data.objects if o.type == "ARMATURE"), None)
     for o in (body, arm):

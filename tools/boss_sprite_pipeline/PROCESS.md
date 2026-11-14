@@ -554,7 +554,7 @@ and does **not** survive a new pod; log in on the box with `hf auth login` (old 
 
 **rembg / opaque input:** TRELLIS `preprocess_image` uses the alpha channel **only if** it exists *and* is not all-255
 *(verified upstream)*. The round2 PNGs are opaque (alpha all 255), so TRELLIS falls to the rembg branch. Either feed
-real-alpha cutouts, or apply `_mesh_skip_rembg_restart.py`'s patch (`if rembg_model is None: output = input.convert('RGBA')`).
+real-alpha cutouts (`tools.sprite_assets.cut_sheet.figure_cutout`, which `view_gate.py` writes on accept), or apply `_mesh_skip_rembg_restart.py`'s patch (`if rembg_model is None: output = input.convert('RGBA')`).
 `--no_rembg` is a **paint** flag; it does nothing for TRELLIS.
 
 **Generate + remesh:**
@@ -583,9 +583,10 @@ Four characters, one 48 GB A6000 with 200 GB disk, mesh→paint→bake→rig all
 Everything below is a place where following §4/§6 literally does **not** work.
 
 **Cut the reference to real alpha first.** The gpt-image references are opaque black-background
-JPGs. §6 says a black opaque background gets built into the mesh, and it does. `scratchpad/
-cutout.py` flood-fills from the four corners (not a global threshold — he is mostly dark, a
-threshold eats him) and writes RGBA. Unexpected bonus: cutting the gaps between arm and torso
+JPGs. §6 says a black opaque background gets built into the mesh, and it does. The cut-out is
+`tools.sprite_assets.cut_sheet.figure_cutout`: it clears the background connected to the border (not a
+global threshold — he is mostly dark, a threshold eats him) and writes RGBA; it was a scratchpad
+`cutout.py` then. Unexpected bonus: cutting the gaps between arm and torso
 gave TRELLIS **separated arms**, so these rigs need no `ARM_ELEV_CAP` at all — arms go fully
 overhead with no armpit web. That single defect drove a week of demon workarounds.
 
@@ -638,6 +639,7 @@ parallel; `UV_REUSE` fired on each (682k–742k verts), so the 1 h 10 m xatlas n
 | ⚠️ `ssh host 'cmd'` does **not** load RunPod's env | Non-interactive/non-login shells have **no** `RUNPOD_POD_ID` / `RUNPOD_API_KEY`, so `runpodctl` fails with `API key not found` and `accepts 1 arg(s), received 0`. Use the **TTY session** (`pod.py`) for `runpodctl`, or pass the pod id explicitly after `runpodctl config --apiKey "$RUNPOD_API_KEY"`. |
 | CRLF | A Windows-edited `.sh` breaks bash (`$'\r'`). First byte of `trellis2_setup.sh` must be `#` (`0x23`), not `0x0d`; `sed -i 's/\r$//'` after upload. Do not "debug bash." |
 | `groups: cannot find name for group ID` / `nohup … Terminated` | RunPod noise / HUP on disconnect. Ignore the first; `pgrep` after reconnect for the second. |
+| HF token onto the pod | He copies a read token to the clipboard; from PowerShell: `Get-Clipboard \| ssh -i …\ppp -p <port> root@<ip> "mkdir -p /workspace/.cache/huggingface && tr -cd 'A-Za-z0-9_' > /workspace/.cache/huggingface/token"`. **`tr -cd`, not `tr -d '\r\n'`**: his PowerShell pipes a UTF-8 BOM first (40 bytes, no `hf_` prefix, 401, 2026-11-07). Check: 37 bytes, `hf_` prefix, `curl …/api/whoami-v2` 200, DINOv3 `config.json` 200. Never print it. |
 
 ---
 

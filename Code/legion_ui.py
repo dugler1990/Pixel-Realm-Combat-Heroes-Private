@@ -325,6 +325,24 @@ class Kit:
             return [out]
         return _keep(self.tag + ("dimmer", w, h), build)[0]
 
+    def fit_glow(self, w, h):
+        """Inside a slot the held item fits: a faint gold wash and a thin gold edge (the cursor's highlight
+        is the wider glow round it)."""
+        def build():
+            out = pygame.Surface((w, h), pygame.SRCALPHA)
+            out.fill((*GOLD, 70))
+            pygame.draw.rect(out, (*GOLD, 255), (0, 0, w, h), max(2, self.px(3)))
+            return [out]
+        return _keep(self.tag + ("fit_glow", w, h), build)[0]
+
+    def faded(self, w, h):
+        """Over a slot the held item does not fit: darker, still readable."""
+        def build():
+            out = pygame.Surface((w, h), pygame.SRCALPHA)
+            out.fill((0, 0, 0, 150))
+            return [out]
+        return _keep(self.tag + ("faded", w, h), build)[0]
+
     def highlight(self, w, h):
         """A gold edge and glow round a chosen card, `glow` px wider on each side."""
         glow = self.px(10)

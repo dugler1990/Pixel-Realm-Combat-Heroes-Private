@@ -44,13 +44,25 @@ if os.path.isdir(paint):
         c = json.load(open(chk))
         u = c.get("usage") or {}
         i, o = u.get("input_tokens_details", {}), u.get("output_tokens_details", {})
-        usd = (i.get("text_tokens", 0) * 5 + i.get("image_tokens", 0) * 8 + o.get("image_tokens", 0) * 30) / 1e6
+        usd = c.get("usd")                         # recorded per call; older gpt-image-2 runs: from the tokens
+        if usd is None:
+            usd = (i.get("text_tokens", 0) * 5 + i.get("image_tokens", 0) * 8 + o.get("image_tokens", 0) * 30) / 1e6
         total += usd
         view, att = chk.split(os.sep)[-3:-1]
-        rows.append(f"| {view} | {att} | {c.get('iou', 0):.3f} | {o.get('image_tokens', 0)} | ${usd:.2f} | {c.get('seconds', 0):.0f} s |")
-    out += ["## 1 paint - generations (gpt-image-2: $5 text in, $8 image in, $30 image out per 1M tokens)", "",
-            "| view | attempt | silhouette IoU | output tokens | cost | time |", "|---|---|---|---|---|---|"]
-    out += rows + [f"| **total** | {len(rows)} | | | **${total:.2f}** | |", ""]
+        model = c.get("model", "gpt-image-2")
+        size = "x".join(map(str, c["size"])) if c.get("size") else ""
+        line = (f"{c['ecc']:.3f} / {c['scale']:.2f} / {'yes' if c['aligns'] else '**no**'}"
+                if "aligns" in c else "not checked")
+        acc = os.path.join(paint, "gen", view, "ACCEPTED.txt")
+        used = os.path.isfile(acc) and os.path.basename(open(acc).read().strip()) == att
+        rows.append(f"| {view} | {att}{' (used)' if used else ''} | {model} {size} | {c.get('iou', 0):.3f} | {line} "
+                    f"| ${usd:.3f} | {c.get('seconds', 0):.0f} s |")
+    out += ["## 1 paint - generations (cost as recorded per call; gpt-image-2 without a record: $5 text in, "
+            "$8 image in, $30 image out per 1M tokens)", "",
+            "Lines up = repaint's rule (ecc >= 0.95, scale 0.85-1.18): gen repaints a view that fails, project drops it.", "",
+            "| view | attempt | model | silhouette IoU | ecc / scale / lines up | cost | time |",
+            "|---|---|---|---|---|---|---|"]
+    out += rows + [f"| **total** | {len(rows)} | | | | **${total:.2f}** | |", ""]
     pj = os.path.join(paint, "result", "patches", "patches.json")
     if os.path.isfile(pj):
         p = json.load(open(pj))

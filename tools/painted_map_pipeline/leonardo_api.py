@@ -196,7 +196,10 @@ def create_v2_generation(
     init_image_ids: list[str],
     config: dict,
     capture: dict | None = None,
+    strengths: list[str] | None = None,
 ) -> str:
+    """`strengths`: one image-reference strength per init image (LOW / MID / HIGH); default the config's
+    ``reference_strength`` for every image."""
     api_key = _api_key(config)
     base = _generation_base_url(config)
     model = str(config.get("model") or DEFAULT_NANO_BANANA_2_MODEL)
@@ -217,11 +220,13 @@ def create_v2_generation(
             f"the known-good size for this pipeline is 5056x3392"
         )
 
+    if strengths is not None and len(strengths) != len(init_image_ids):
+        raise LeonardoApiError(f"{len(strengths)} strengths for {len(init_image_ids)} reference images")
     image_refs = []
-    for image_id in init_image_ids:
+    for i, image_id in enumerate(init_image_ids):
         entry: dict = {"image": {"id": image_id, "type": "UPLOADED"}}
         if supports_reference_strength:
-            entry["strength"] = reference_strength
+            entry["strength"] = str(strengths[i]).upper() if strengths is not None else reference_strength
         image_refs.append(entry)
 
     parameters: dict = {
@@ -262,6 +267,9 @@ def _readable_api_error(result, width: int, height: int, model: str) -> str:
     entries = result if isinstance(result, list) else [result]
     code = message = ""
     for entry in entries:
+        if isinstance(entry, str):                 # some refusals are plain text, not an envelope
+            message = message or entry
+            continue
         if not isinstance(entry, dict):
             continue
         extensions = entry.get("extensions") or {}
@@ -275,15 +283,15 @@ def _readable_api_error(result, width: int, height: int, model: str) -> str:
         elif not isinstance(details, dict):
             details = {}
         code = code or str(details.get("code") or extensions.get("code") or "")
-        message = message or str(details.get("message") or entry.get("message") or "")
+        message = message or str(details.get("message") or entry.get("message") or entry.get("error") or "")
     reason = f"Leonardo rejected the request ({code or 'unknown error'})"
     if "VALIDATION" in code.upper():
         reason += (
             f": {width}x{height} for model '{model}' is most likely an unsupported generation "
             f"size (the known-good size for this pipeline is 5056x3392)"
         )
-    elif message:
-        reason += f": {message}"
+    if message:
+        reason += f": {message[:400]}"
     raw = json.dumps(result, default=str)
     if len(raw) > 800:
         raw = raw[:800] + "..."
@@ -459,6 +467,7 @@ def generate_with_image_reference(
     width: int,
     height: int,
     config: dict,
+    strengths: list[str] | None = None,
 ) -> dict:
     if not input_images:
         raise LeonardoApiError("v2 image reference requires at least one input image")
@@ -471,6 +480,7 @@ def generate_with_image_reference(
         init_image_ids=init_image_ids,
         config=config,
         capture=capture,
+        strengths=strengths,
     )
     result = wait_for_generation(generation_id, config)
     urls = _extract_image_urls(result)

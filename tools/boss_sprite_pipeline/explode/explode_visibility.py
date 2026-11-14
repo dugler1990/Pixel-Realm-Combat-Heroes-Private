@@ -29,9 +29,13 @@ import numpy as np
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
-FLAGS = ("--pose", "--greedy", "--json")
+FLAGS = ("--pose", "--greedy", "--json", "--facing")
 opt = {f: sys.argv[sys.argv.index(f) + 1] for f in FLAGS if f in sys.argv}
 POSE, GREEDY, JSON_OUT = opt.get("--pose"), opt.get("--greedy"), opt.get("--json")
+# --facing <deg>: in the greedy pick a point counts as seen from a direction only if its surface faces
+# that direction within <deg> (either side: TRELLIS normals are not reliably outward). A grazing view
+# shows a surface as a sliver a few pixels wide that SAM cannot label.
+FACING = float(opt["--facing"]) if "--facing" in opt else None
 ARGV = [a for i, a in enumerate(sys.argv) if a not in FLAGS and (i == 0 or sys.argv[i - 1] not in FLAGS)]
 GLB = ARGV[1]
 N = 20000
@@ -112,6 +116,16 @@ if GREEDY:
         p = Vector(p)
         for j, d in enumerate(D):
             vis[j, i] = bvh.ray_cast(p + d * eps, d, far)[0] is None
+    if FACING is not None:
+        nrm = np.cross(b[pick] - a[pick], c[pick] - a[pick])
+        nrm /= np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-12)
+        vis &= np.abs(np.array([tuple(d) for d in D]) @ nrm.T) >= math.cos(math.radians(FACING))
+        ceil = vis.any(0)
+        print(f"FACING <= {FACING:.0f} deg: {100 * ceil.mean():.1f}% of the surface can be seen head-on enough "
+              f"(any direction: {100 * (~hidden).mean():.1f}%)", flush=True)
+        DIAG["settings"]["facing_deg"] = FACING
+        DIAG["results"]["visible_facing_pct"] = round(100 * float(ceil.mean()), 2)
+        hidden = ~ceil
     got = np.zeros(N, bool)
     order = []
     for _ in range(len(D)):
