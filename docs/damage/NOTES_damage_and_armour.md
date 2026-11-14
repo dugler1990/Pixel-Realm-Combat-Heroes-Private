@@ -95,14 +95,17 @@ The existing hit test stays (`hit_core.py`): rect, then mask against mask.
 4. No contact point (rect fallback, ground blasts): blasts need none; rect fallback uses the centre
    of the overlap.
 
-## Knockback and mass (today: three paths, mass ignored)
+## Knockback and mass (done: chunk 1, `refactor/knockback-mass`)
 
-- `Entity.weight` (`Entity.py:84`) only scales input acceleration (`Entity.py:356`).
-- `apply_impulse` (`Entity.py:1137`) moves by the force as given.
-- Enemy `resistance` multiplies knockback on enemies (`Enemy.py:558`, `combat_unit.py:879`,
-  `friendly.py:571`): a knockback strength, not a defence.
-- `MeleeCombatStrategy.py:63-66` writes `player.rect` directly: skips the wall check.
-- Target: one path through `apply_impulse`, dividing by body mass + gear weight.
+- One live path: `Entity.apply_impulse`. Leap slam and meteors reach it through `impulse` contexts.
+- It scales every shove by `Entity.knockback_scale(body)`: `REFERENCE_MASS` (90, the barb) /
+  (`mass` + `gear_weight`), kept in [0.1, 3.0], times the strength cut
+  `max(0.55, 1 − 0.015 × strength)` (no strength, no cut). Constants in `Settings.py`.
+- `monster_data` has `mass` per monster; `gear_weight` is 0 until armour has weights (item bases).
+- Was wrong in the first version of this doc: "three paths". `hit_reaction` + enemy `resistance`
+  never ran (no enemy sets `vulnerable` False); the parry `player.rect` write is in
+  `MeleeCombatStrategy.py` / `MixedCombatStrategy.py`, which nothing imports. Both were dead code.
+- `Entity.weight` (walking acceleration only) is untouched.
 
 ## Conditions and the scheduler
 
@@ -266,9 +269,8 @@ coverage in the card plan.
 
 | file | change | chunk |
 |---|---|---|
-| `Entity.py` `apply_impulse` | divide by `mass_total()` (body mass + gear weight), strength cut | 1 |
-| `Enemy.py:558`, `combat_unit.py:879`, `friendly.py:571` | knockback through `apply_impulse`; `resistance` retired into `mass` | 1 |
-| `MeleeCombatStrategy.py:63-66` | `player.rect` write → `apply_impulse` | 1 |
+| `Entity.py` `apply_impulse` | scaled by `knockback_scale` (mass, gear weight, strength) — done | 1 |
+| `Enemy.py`, `combat_unit.py`, `friendly.py`, `meteor_strike.py`, `Settings.py` | `resistance` → `mass`; dead `hit_reaction` and meteor's own strength factor removed — done | 1 |
 | `attack_sprite.py` `init_attack` | new `attack_def` field (compiled def); `attack_type` stays for particles only | 2 |
 | `Weapon.py`, `Particles.py` `ParticleEffect` | pass `attack_def` from `weapon_data` / `magic_data` / the ranged attack | 2 |
 | `CombatStrategy.py:140` (enemy melee strike) | pass `attack_def` from the melee attack config | 2 |
@@ -294,8 +296,10 @@ Flags found while reading:
   `combat_unit.py:841`), not in the resolver.
 - demon_dog, venom_plant and ice_mage share `demon_dog_projectile` with the same damage 15.
 - `PolarBear.py`, `Eskimo.py` keep an older `get_damage(player, attack_type)` path.
-- Enemy `resistance` is knockback strength; knockback write in `MeleeCombatStrategy.py:63-66` skips
-  walls.
+- `MeleeCombatStrategy.py`, `MixedCombatStrategy.py`, `RangedCombatStrategy.py` are not imported
+  anywhere (the live strategies are classes in `CombatStrategy.py`). Left alone.
+- Enemies never set `vulnerable = False` (commented out in every `get_damage`), so they have no
+  i-frames; repeat hits are limited only by each attack's `rehit_ms`.
 
 ## Tests
 
@@ -327,7 +331,7 @@ Per chunk:
 
 | chunk | test file | checks |
 |---|---|---|
-| 1 knockback | `tests/damage/test_knockback.py` (+ existing `tests/abilities/test_impulse_interaction.py`) | heavy body moves less; gear weight counts; no write passes a wall; melee strategy uses `apply_impulse` |
+| 1 knockback | `tests/damage/test_knockback.py` (+ existing `tests/abilities/test_impulse_interaction.py`) | reference body moves the force; heavy moves less; gear weight counts; limits; strength cut; every monster has a mass (done) |
 | 2 attack defs | `tests/damage/test_damage_data.py` | every `attack` / `body` key in Settings exists in the data; unknown key fails loudly; ids stable; an attack with no def deals today's amount (regression) |
 | 3 contact | `tests/damage/test_contact.py` | `touch_point` returns the overlap pixel; `entry_point` finds the edge pixel along the flight; rect fallback gives the centre |
 | 4 layers | `tests/damage/test_defence_profile.py` | worn pieces → layers per region in order; hole pixel → flesh; profile shared until a piece is damaged; equip marks dirty |
@@ -350,7 +354,8 @@ barb, venom starts.
 Each becomes its own plan. Order follows the arrows; 1 is independent. Every chunk: its tests above,
 its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the hit path.
 
-1. **Knockback merge.** One impulse path, mass-based, walls respected; `resistance` → `mass`.
+1. **Knockback by mass.** Done: `.cursor/plans/knockback_mass.plan.md`, branch
+   `refactor/knockback-mass`.
 2. **Attack defs and bodies.** `damage_data.py`, `config/damage/*.json` (attacks, bodies, properties,
    categories, kinds), `attack` / `body` keys in Settings, `attack_def` on every attack sprite and
    strike. Still flat damage. → 3, 5
@@ -379,7 +384,8 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 
 ## Method that works
 
-(empty)
+- Baseline before code: run the tests that touch the change in the chunk's worktree, save the
+  FAILED lines, compare after (`diff` of the names). The whole suite is too slow for this.
 
 ## Known errors
 
@@ -393,6 +399,10 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
   per chunk. Read for it: `Settings.py` monster_data, `Interaction.py`, `Player.py:165-255`,
   `combat_unit.py:790-860`, `CombatStrategy.py:130-160`, `Particles.py:243-300`, `Weapon.py`,
   `attack_sprite.py`, `Level4_tmxdev.py:1555-1595, 2130-2150`, `tests/test_hit_core.py`.
+- 2026-11-14: chunk 1 (knockback by mass) on `refactor/knockback-mass`. Targeted tests (abilities,
+  rts, hit_core, server enemy authority, walk phasing, wall collision, enemy puppet, entity gates,
+  co-op damage, headless level, mesh contact, mesh player, equipment): before 11 failed / 241 passed;
+  after 11 failed (the same names) / 284 passed (43 new in `tests/damage/`). Not checked in play.
 
 ## Tried and dropped
 
