@@ -29,6 +29,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 OUTFITS = ("naked", "fullplate", "loincloth")
+FAKE_OUT = 'EXPORT_OK {}\nEQUIP_INSTALL_OK {"items": []}'      # what a faked command prints (the markers steps read)
 
 
 def norm(obj, tree: str):
@@ -48,7 +49,7 @@ def commands(of, outfit: str) -> dict:
     out = {}
     for step in of.STEPS[of.Ctx("barb", outfit).o["kind"]]:
         rec = []
-        of.call = lambda cmd, ok=None, cwd=None, show=True, rec=rec: rec.append([str(c) for c in cmd]) or "EXPORT_OK"
+        of.call = lambda cmd, ok=None, cwd=None, show=True, rec=rec: rec.append([str(c) for c in cmd]) or FAKE_OUT
         of.pod = lambda ctx, s, a, token=False, extra=(), rec=rec: rec.append(["POD", s, token, *map(str, extra)]) or 0
         of.trellis_sheet = lambda ctx, models, rec=rec: rec.append(["SHEET", *models]) or Path("SHEET")
         of.shutil = SimpleNamespace(copy=lambda *a: None, rmtree=lambda *a, **k: None, move=lambda *a: None)

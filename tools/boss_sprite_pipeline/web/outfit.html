@@ -158,7 +158,7 @@ function drawMain() {
   const o = cur(), d = S.detail; if (!o || !d) return;
   const key = o.character + "/" + o.outfit, r = running(key), s = o.steps.find(x => x.name === S.step);
   let h = `<h2>${esc(key)} <span class="dim">(${o.kind})</span>
-    <button onclick="editSettings('outfit')">Outfit settings</button> <button onclick="editSettings('character')">${esc(o.character)} settings</button></h2>
+    <span style="font-size:13px; font-weight:400"><button onclick="editSettings('outfit')">Outfit settings</button> <button onclick="editSettings('character')">${esc(o.character)} settings</button></span></h2>
     <div class="dim">${esc(o.about)}</div>`;
   if (o.kind !== "cut") {
     h += `<h3>TRELLIS models</h3><div class="row">` + d.all_models.map(m =>
@@ -259,12 +259,70 @@ function panel(step, d, busy) {
       <button ${busy ? "disabled" : ""} onclick="act({action:'redo', step:'paint', views:document.getElementById('redo').value.split(/[\\s,]+/).filter(Boolean)})">Repaint</button></div>`;
     return h + `<div class="grid">${d.paint.map(p => img(p)).join("")}</div>`;
   }
+  if (step === "install") return installPanel(d, run, busy);
   const pics = { cut:["cut_front", "cut_back", "cut_sheet"], merge:["cut_front", "cut_back"], worn:["worn"],
                  slots:["slots_sheet"], sheet:["slots_sheet"] }[step] || [];
   let h = pics.filter(k => d.images[k]).map(k => img(d.images[k], "big")).join("");
   if (step === "export" && run.result) h += `<pre>${esc(run.result)}</pre>`;
   if (step === "skeleton" && run.outputs) h += `<pre>${esc(JSON.stringify(run.outputs, null, 1))}</pre>`;
   return h || `<p class="dim">${run.status === "done" ? "Done." : "Run it."}</p>`;
+}
+
+// --- install: the hero entry (body) or the pieces' stats (armour, cut) --------------------------------------------
+function installPanel(d, run, busy) {
+  if (d.kind === "body") {
+    if (!run.entry) return `<p class="dim">Run install: it shows the hero entry for PlayerSelectionDict.json.</p>`;
+    let h = `<pre>${esc(JSON.stringify(run.entry, null, 1))}</pre>`;
+    if (run.status === "gate") h += `<div class="row"><button class="main" ${busy ? "disabled" : ""} onclick="act({action:'accept', step:'install', n:1})">Write it to PlayerSelectionDict.json</button>
+      <span class="dim">Start gear: the outfit settings' start_equipment.</span></div>`;
+    return h + (run.note ? `<p class="dim">${esc(run.note)}</p>` : "");
+  }
+  if (run.items && run.status === "done") return `<p class="okc">Installed: ${run.items.map(esc).join(", ")}</p>`;
+  const missing = run.missing_bases || [];
+  if (!missing.length) return `<p class="dim">Run install: it checks every piece has stats (item_bases.json), then puts the packs, icons and items in the game.</p>`;
+  setTimeout(() => basesForm(missing), 0);
+  return `<h3>Stats for the new pieces</h3><p class="dim">Each piece names a base (left and right share one). First numbers; the item card and combat read them.</p><div id="bases"></div>`;
+}
+async function basesForm(missing) {
+  const el = document.getElementById("bases"); if (!el || el.dataset.for === missing.join()) return;
+  el.dataset.for = missing.join();
+  const P = await api("/api/item_properties"), known = Object.keys(P.bases);
+  let h = `<div class="row"><span class="dim">Start each from</span> <select id="b_from"><option value="">blank</option>${known.map(k => `<option>${k}</option>`).join("")}</select>
+    <button onclick="fillBases()">Fill</button></div>`;
+  for (const b of missing) {
+    h += `<div class="attempt"><b>${esc(b)}</b><div class="grid" style="grid-template-columns:repeat(3, 1fr)">`;
+    h += P.identity.map(k => `<label>${k} <input type="text" id="b_${b}_${k}" size="24"></label>`).join("");
+    h += P.properties.map(p => p.format === "list"
+      ? `<label>${p.label} <span class="dim">(${P.regions.join(", ")})</span> <input type="text" id="b_${b}_${p.id}" size="30"></label>`
+      : p.format === "yes-no" ? `<label>${p.label} <select id="b_${b}_${p.id}"><option>false</option><option>true</option></select></label>`
+      : `<label>${p.label}${p.format === "percent" ? " (0-1)" : ""} <input type="number" step="any" id="b_${b}_${p.id}" style="width:90px"></label>`).join("");
+    h += `</div></div>`;
+  }
+  h += `<div class="row"><button class="main" onclick="saveBases()">Save stats</button> <span class="dim">then Run install</span></div><pre id="baseserr" class="err" style="display:none"></pre>`;
+  el.innerHTML = h;
+  S.basesP = P; S.basesMissing = missing;
+}
+function fillBases() {
+  const P = S.basesP, from = P.bases[document.getElementById("b_from").value]; if (!from) return;
+  for (const b of S.basesMissing) for (const [k, v] of Object.entries(from)) {
+    const el = document.getElementById(`b_${b}_${k}`); if (!el) continue;
+    el.value = Array.isArray(v) ? v.join(", ") : String(v ?? "");
+  }
+}
+async function saveBases() {
+  const P = S.basesP, bases = {};
+  for (const b of S.basesMissing) {
+    const base = {};
+    for (const k of P.identity) { const v = document.getElementById(`b_${b}_${k}`).value.trim(); if (v) base[k] = v; }
+    for (const p of P.properties) {
+      const v = document.getElementById(`b_${b}_${p.id}`).value.trim(); if (v === "") continue;
+      base[p.id] = p.format === "list" ? v.split(",").map(x => x.trim()).filter(Boolean) : p.format === "yes-no" ? v === "true" : Number(v);
+    }
+    bases[b] = base;
+  }
+  const err = document.getElementById("baseserr");
+  try { await api("/api/bases", { bases }); err.style.display = "none"; toast("stats saved: Run install"); }
+  catch (e) { err.textContent = e.message.split("; ").join("\n"); err.style.display = "block"; }
 }
 
 async function drawLog() {

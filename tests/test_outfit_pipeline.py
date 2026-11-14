@@ -15,7 +15,7 @@ OUTFITS = Path(of.TOOLS) / "outfits"
 
 def test_export_is_last_and_pod_steps_are_known():
     for kind, steps in of.STEPS.items():
-        assert steps[-1] == "export", kind
+        assert steps[-2:] == ["export", "install"], kind
         assert set(steps) <= set(of.RUN), kind
     assert of.STEPS["armour"].index("worn") > of.STEPS["armour"].index("merge")
     assert of.STEPS["armour"].index("slots") > of.STEPS["armour"].index("worn")
@@ -148,3 +148,50 @@ def test_a_look_is_required_and_can_extend_another(tmp_path):
     (tmp_path / "bad.json").write_text(json.dumps({"subject": "x"}), encoding="utf-8")
     with pytest.raises(SystemExit, match="has no design"):
         lf.load_look(tmp_path / "bad.json")
+
+
+# --- install: into the game -------------------------------------------------------------------------------------
+
+def test_install_appends_stats_and_heroes_leaving_the_files_as_they_were(tmp_path, monkeypatch):
+    from tools.boss_sprite_pipeline import install_outfit as io
+    bases, sel = tmp_path / "item_bases.json", tmp_path / "sel.json"
+    bases.write_bytes(io.BASES.read_bytes())
+    sel.write_bytes(io.SELECTION.read_bytes())
+    leather = {"name": "Leather chest", "set": None, "stopping_power": 12, "absorb": 0.35, "weight": 4,
+               "coverage": ["chest", "back"], "conductivity": 0, "insulation": 0.4, "flammability": 0.5,
+               "sealed": False, "durability": 150}
+    before = bases.read_bytes()
+    assert io.add_bases({"leather_chest": leather}, bases) == ["leather_chest"]
+    after = bases.read_bytes()
+    assert after.startswith(before.rstrip()[:-1].rstrip()) and json.loads(after)["leather_chest"] == leather
+    for bad, why in (({"leather_chest": leather}, "already"), ({"x": {**leather, "shine": 1}}, "unknown field"),
+                     ({"x": {**leather, "absorb": 3}}, "0 to 1"), ({"x": {**leather, "coverage": ["tail"]}}, "list of")):
+        with pytest.raises(ValueError, match=why):
+            io.add_bases(bad, bases)
+    entry = {"name": "barb_test_mesh", "mesh_pack": "barb_test", "display_name": "T", "selection_position": {}}
+    raw = sel.read_bytes()
+    added = io.add_hero(entry, sel)
+    data = json.loads(sel.read_text(encoding="utf-8"))
+    taken = [(p["selection_position"]["x"], p["selection_position"]["y"]) for p in data["Players"][:-1]]
+    assert data["Players"][-1] == added and (added["selection_position"]["x"], 0) not in taken
+    assert sel.read_bytes().startswith(raw[:raw.rfind(b"]")].rstrip())    # the hand-made entries untouched
+    with pytest.raises(ValueError, match="already"):
+        io.add_hero(entry, sel)
+
+
+def test_install_needs_the_stats_of_every_piece(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from tools.boss_sprite_pipeline import install_outfit as io
+    (tmp_path / "packs").mkdir()
+    (tmp_path / "packs" / "slot_packs.json").write_text(json.dumps({"chest": {}, "boot_l": {}, "boot_r": {}}))
+    ctx = SimpleNamespace(work=tmp_path, o={"material": "plate"})
+    assert io.needed_bases(ctx) == ["plate_boot", "plate_chest"] and io.missing_bases(ctx) == []
+    ctx.o["material"] = "leather"
+    assert io.missing_bases(ctx) == ["leather_boot", "leather_chest"]
+    recorded = {}
+    ctx.record = lambda step, **kw: recorded.update(kw)
+    ctx.o["kind"] = "armour"
+    with pytest.raises(of.Stop, match="no stats yet for leather_boot, leather_chest"):
+        of.s_install(ctx, SimpleNamespace(accept=None))
+    assert recorded["missing_bases"] == ["leather_boot", "leather_chest"]

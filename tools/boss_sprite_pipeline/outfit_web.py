@@ -373,6 +373,11 @@ def make_handler(jobs: Jobs, pod: Pod):
                     return self.json(fields())
                 if u.path == "/api/config":
                     return self.json(config(q.get("character"), q.get("outfit")))
+                if u.path == "/api/item_properties":           # the stats form (Code/item_properties.py)
+                    from tools.boss_sprite_pipeline import install_outfit as io
+                    return self.json({"properties": [dict(p.__dict__) for p in io.IP.PROPERTIES],
+                                      "identity": list(io.IP.IDENTITY), "regions": list(io.IP.REGIONS),
+                                      "bases": io.IP.load_bases(io.BASES)})
                 if u.path == "/api/files":
                     return self.json({"files": list_files(q["character"], q["type"])})
                 if u.path == "/api/log":
@@ -420,6 +425,9 @@ def make_handler(jobs: Jobs, pod: Pod):
                         raise ValueError(f"the clipboard does not hold a {name} key")
                     os.environ[env] = value
                     return self.json({"set": True})
+                if u.path == "/api/bases":
+                    from tools.boss_sprite_pipeline import install_outfit as io
+                    return self.json({"added": io.add_bases(b["bases"])})
                 if u.path == "/api/character":
                     return self.json(save_character(b["character"], b["data"]))
                 if u.path == "/api/outfit":

@@ -40,10 +40,10 @@ from tools.boss_sprite_pipeline import characters, outfit_fields
 TOOLS = Path(__file__).resolve().parent
 REPO = TOOLS.parents[1]
 STEPS = {
-    "body": ["front", "back", "sides", "trellis", "skeleton", "paint", "export"],
+    "body": ["front", "back", "sides", "trellis", "skeleton", "paint", "export", "install"],
     "armour": ["front", "back", "sides", "trellis", "skeleton", "paint", "views", "sam3", "cut", "holopart", "merge",
-               "worn", "slots", "sheet", "export"],
-    "cut": ["views", "sam3", "cut", "holopart", "merge", "worn", "slots", "sheet", "export"],
+               "worn", "slots", "sheet", "export", "install"],
+    "cut": ["views", "sam3", "cut", "holopart", "merge", "worn", "slots", "sheet", "export", "install"],
 }
 POD_STEPS = {"trellis", "sam3", "holopart"}
 # TRELLIS models and the drawings each needs. The default is a setting: an outfit's "trellis_models" or --models
@@ -421,10 +421,36 @@ def s_export(ctx: Ctx, a) -> None:
     ctx.record("export", status="done", result=out.split("EXPORT_OK", 1)[1].strip()[:400])
 
 
+def s_install(ctx: Ctx, a) -> None:
+    """Into the game (install_outfit.py): body: the hero entry, written once accepted; armour / cut: the pieces'
+    stats must exist, then equip_install.py makes the packs, icons and items."""
+    from tools.boss_sprite_pipeline import install_outfit as io
+    if ctx.o["kind"] == "body":
+        entry = io.hero(ctx)
+        there = io.listed(entry)
+        if there is None and a.accept is None:
+            ctx.record("install", status="gate", entry=entry)
+            raise Stop(f"the hero entry to add to {io.SELECTION.name}:\n{json.dumps(entry, indent=1)}\n"
+                       f"  write it: outfit.py {ctx.character} {ctx.outfit} --only install --accept 1")
+        if there is None:
+            entry = io.add_hero(entry)
+        ctx.record("install", status="done", entry=entry, note=None if there is None else "already listed")
+        return
+    missing = io.missing_bases(ctx)
+    if missing:
+        ctx.record("install", status="gate", missing_bases=missing)
+        raise Stop(f"no stats yet for {', '.join(missing)}: fill them in on the page (install) or in "
+                   f"{io.BASES.name}, then run install again")
+    out = call([sys.executable, "-m", "tools.boss_sprite_pipeline.equip_install", ctx.character, ctx.outfit],
+               ok="EQUIP_INSTALL_OK")
+    items = json.loads(out.split("EQUIP_INSTALL_OK", 1)[1].strip().splitlines()[0])["items"]
+    ctx.record("install", status="done", missing_bases=[], items=items)
+
+
 RUN = {"front": lambda c, a: view_gate(c, "front", a), "back": lambda c, a: view_gate(c, "back", a),
        "sides": s_sides, "trellis": s_trellis, "skeleton": s_skeleton, "paint": s_paint, "views": s_views, "sam3": s_sam3,
        "cut": s_cut, "holopart": s_holopart, "merge": s_merge, "worn": s_worn, "slots": s_slots, "sheet": s_sheet,
-       "export": s_export}
+       "export": s_export, "install": s_install}
 
 
 def backfill(ctx: Ctx) -> None:
