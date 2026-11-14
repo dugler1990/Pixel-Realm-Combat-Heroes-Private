@@ -10,7 +10,8 @@
    "belt_slots": 2
   },
   "effect_type": "waist_equip",
-  "outfit": "barb/fullplate"
+  "outfit": "barb/fullplate",
+  "base": "plate_belt"
  },
  {
   "item_id": "barb_fullplate_boot_l",
@@ -24,7 +25,8 @@
    "side": "l"
   },
   "effect_type": "armour_equip",
-  "outfit": "barb/fullplate"
+  "outfit": "barb/fullplate",
+  "base": "plate_boot"
  },
  {
   "item_id": "barb_fullplate_boot_r",
@@ -38,7 +40,8 @@
    "side": "r"
   },
   "effect_type": "armour_equip",
-  "outfit": "barb/fullplate"
+  "outfit": "barb/fullplate",
+  "base": "plate_boot"
  },
  {
   "item_id": "barb_fullplate_chest",
@@ -51,7 +54,8 @@
    "slot": "armor"
   },
   "effect_type": "armour_equip",
-  "outfit": "barb/fullplate"
+  "outfit": "barb/fullplate",
+  "base": "plate_chest"
  },
  {
   "item_id": "barb_fullplate_gauntlet_l",
@@ -65,7 +69,8 @@
    "side": "l"
   },
   "effect_type": "armour_equip",
-  "outfit": "barb/fullplate"
+  "outfit": "barb/fullplate",
+  "base": "plate_gauntlet"
  },
  {
   "item_id": "barb_fullplate_gauntlet_r",
@@ -79,7 +84,8 @@
    "side": "r"
   },
   "effect_type": "armour_equip",
-  "outfit": "barb/fullplate"
+  "outfit": "barb/fullplate",
+  "base": "plate_gauntlet"
  },
  {
   "item_id": "barb_fullplate_pants_l",
@@ -93,7 +99,8 @@
    "side": "l"
   },
   "effect_type": "armour_equip",
-  "outfit": "barb/fullplate"
+  "outfit": "barb/fullplate",
+  "base": "plate_pants"
  },
  {
   "item_id": "barb_fullplate_pants_r",
@@ -107,7 +114,8 @@
    "side": "r"
   },
   "effect_type": "armour_equip",
-  "outfit": "barb/fullplate"
+  "outfit": "barb/fullplate",
+  "base": "plate_pants"
  },
  {
   "item_id": "barb_fullplate_shoulder_l",
@@ -121,7 +129,8 @@
    "side": "l"
   },
   "effect_type": "armour_equip",
-  "outfit": "barb/fullplate"
+  "outfit": "barb/fullplate",
+  "base": "plate_shoulder"
  },
  {
   "item_id": "barb_fullplate_shoulder_r",
@@ -135,7 +144,8 @@
    "side": "r"
   },
   "effect_type": "armour_equip",
-  "outfit": "barb/fullplate"
+  "outfit": "barb/fullplate",
+  "base": "plate_shoulder"
  },
  {
   "item_id": "barb_loincloth_loincloth",
@@ -148,6 +158,7 @@
    "belt_slots": 1
   },
   "effect_type": "waist_equip",
-  "outfit": "barb/loincloth"
+  "outfit": "barb/loincloth",
+  "base": "loincloth"
  }
 ]

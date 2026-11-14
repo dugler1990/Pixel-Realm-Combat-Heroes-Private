@@ -274,7 +274,16 @@ Each becomes its own plan. Order follows the arrows; 1 is independent.
 
 ## Method that works
 
-(empty)
+- Item stats: `Graphics/Standard_Items/item_bases.json` (hand-written, by base id: `plate_chest`, `loincloth`).
+  An item names its base in `base`; outfit items get it from `equip_install.py`
+  (`equipment.piece_base`: the outfit json's `"material"` + the piece, left and right share one). Stats never
+  go in `outfit_items.json` (rewritten on install).
+- Properties: one row each in `Code/item_properties.py` (`PROPERTIES`: id, label, group, format, better,
+  card line / detail, template, optional threshold `at`). A new property = a row + a field in the bases.
+  Weight class (light / medium / heavy): `WEIGHT_CLASSES` by body slot kind.
+- Card text: `Code/item_card.py` `build(item)` (no pygame); drawn by `inventory_view.CardPanel` (rows made
+  once per item / durability / detail key / size, TextSlot per row). Shift held: every number.
+- Tests: `tests/test_item_card.py`.
 
 ## Known errors
 
@@ -284,6 +293,11 @@ Each becomes its own plan. Order follows the arrows; 1 is independent.
 
 - 2026-11-14: design talk; this doc written. No code changed.
 - 2026-11-14: item card plan written (`.cursor/plans/item_card.plan.md`).
+- 2026-11-14: card chunks 1 + 3 (no verdicts), plate and loincloth (branch `feat/item-card`). First numbers:
+  plate stopping_power 40, absorb 0.15, conductivity 0.9, insulation 0.2; loincloth 0 / 0.05 / 0 / 0.1,
+  flammability 0.8. Weight class thresholds per slot kind invented (to tune). Window rendered (CPU) at 800×600,
+  1280×720, 1920×1080, card and detail view looked at. Pack cells shrink to make room; rows keep their
+  heights so the arrow moves are unchanged (test_inventory_nav passes as before).
 
 ## Tried and dropped
 
