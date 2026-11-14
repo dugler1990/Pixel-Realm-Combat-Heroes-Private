@@ -19,7 +19,7 @@ import contact_debug
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from Entity import Entity
-from Support import mask_midbottom_world, sprite_feet_sort_y
+from Support import mask_midbottom_world, mesh_feet_world, sprite_feet_sort_y
 from AnimatedEnvironmentSprite import AnimatedEnvironmentSprite
 from Torch import Torch
 from Building import VIEW_DOOR, VIEW_IN, VIEW_OUT
@@ -729,15 +729,7 @@ class YSortCameraGroup(pygame.sprite.Group):
             self._draw_sorted_sprite(sprite, offset_pos)
 
     def _mesh_feet_screen(self, sprite):
-        hitbox = getattr(sprite, "hitbox", None)
-        if getattr(sprite, "sprite_anchor_px", None) is not None and hitbox is not None:
-            feet = hitbox.midbottom
-        elif getattr(sprite, "mask", None) is not None:
-            feet = mask_midbottom_world(sprite.rect, sprite.mask)
-        elif hitbox is not None:
-            feet = hitbox.midbottom
-        else:
-            feet = sprite.rect.midbottom
+        feet = mesh_feet_world(sprite)
         return (feet[0] - self.offset.x, feet[1] - self.offset.y)
 
     def _draw_sorted_sprite(self, sprite, offset_pos):
