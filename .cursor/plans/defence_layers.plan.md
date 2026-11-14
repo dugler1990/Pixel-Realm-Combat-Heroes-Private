@@ -96,12 +96,12 @@ says so (Decisions).
 
 1. **Merge `main` into this branch** (item card files). Doc conflicts are small (Method that works,
    Log); I resolve them.
-2. **The hero's hit body stays the sprite mask**; the region is read from the mesh capsules at the
+2. **Agreed (Douglas): the hero's hit body stays the sprite mask**; the region is read from the mesh capsules at the
    contact. The sprite pose is not the mesh pose, so a hit can land a region off. Switching the mesh
    hero to capsule hits (like the demon) is exact, but plays differently and the server's player is a
    sprite: a later chunk.
-3. **Worn weight shoves less**: `gear_weight = defence.weight`. Full plate is 34 → the barb moves
-   90 / 124 = 73% as far. Now, or with chunk 5?
+3. **Agreed (Douglas): worn weight counts now**: `gear_weight = defence.weight`. Full plate is 34 →
+   the barb moves 90 / 124 = 73% as far.
 4. **Holes and partial cover**: a region is covered or not (the item's `coverage`). The master doc's
    per-bone (u, angle) coverage bitmaps baked at export wait until a piece needs a gap (visor slit,
    armpit).
@@ -144,7 +144,7 @@ says so (Decisions).
 
 ## Check in play (Douglas)
 
-Nothing to see unless decision 3 is "now": the plated barb is shoved less by leap slams and meteors.
+The plated barb is shoved less by the demon's claw and meteors (73% in full plate).
 
 ## Open
 
