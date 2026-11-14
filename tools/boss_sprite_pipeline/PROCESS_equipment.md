@@ -17,6 +17,9 @@ Code\sprite_venv\Scripts\python.exe -m tools.boss_sprite_pipeline.equip_install 
 - Piece → item: one table, `Code/equipment.py` `PIECES` (+ `BELT_POCKETS`). Armour: `armour_equip`
   `{slot, side, mesh_piece}`; belt / loincloth: `waist_equip` `{belt_slots, mesh_piece}` (loincloth 1 pocket,
   armour belt 2, simple belt 1). `belt_equip` = old name of `waist_equip`, read the same.
+- Each item gets `"base"` (its stats in `Graphics/Standard_Items/item_bases.json`): the outfit json's
+  `"material"` + the piece, left and right sharing one (`plate_boot`); no material: the piece (`loincloth`).
+  A new outfit needs its bases written there (`docs/damage/NOTES_damage_and_armour.md`).
 - Sides are the hero's: `_l` = his left (+X in model space) = screen right on the doll (it faces you).
 - Start gear: the hero's `Graphics/PlayerSelectionDict.json` entry, `"start_equipment": {"wear": [...],
   "pack": [...]}` (`equipment.start_equipment`, matched by `mesh_pack`; none: the simple belt). Seeded by

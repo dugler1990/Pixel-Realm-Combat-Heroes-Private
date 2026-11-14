@@ -12,9 +12,16 @@ class Item:
                  float_speed=0.3,
                  float_direction=1,
                  float_amplitude=5,
-                 belt_allowed=False):
+                 belt_allowed=False,
+                 base=None,
+                 name=None,
+                 description=''):
 
         #print(pos)
+        self.base = base            # base stats id (item_bases.json); the item card reads it
+        self.name = name
+        self.description = description
+        self.durability = None      # durability now; None: the base's max (wear comes later)
         self.pos = pos  # Position where the item should appear
         self.item_id = item_id
         self.item_type = item_type  # consumable / weapon / etc. from standard_items.json

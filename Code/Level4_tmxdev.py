@@ -974,6 +974,9 @@ class Level4:
                 float_direction=item.float_direction,
                 float_amplitude=item.float_amplitude,
                 belt_allowed=getattr(item, "belt_allowed", False),
+                base=getattr(item, "base", None),
+                name=getattr(item, "name", None),
+                description=getattr(item, "description", ""),
             )
             self.layout_manager.add_item_visual(item_instance)
 

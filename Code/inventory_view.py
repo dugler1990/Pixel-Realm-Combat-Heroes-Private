@@ -5,16 +5,28 @@ The model (Inventory.py) holds the items; this reads it and calls its changes (l
 Keys: arrows (d-pad) move to the nearest slot in that direction, over the doll, the pack and the belt. Enter
 lifts / places; on armour in the pack with nothing in hand, it puts it on. U uses a pack item. Tab jumps to
 the next area. While an item is held, the body and belt slots it fits glow and the others fade.
+
+The item card (right of the pack) shows the item under the cursor, or the held one over an empty slot
+(item_card.py says what; CardPanel draws it). Hold Shift: every property as a number.
 """
 import pygame
 
 import equipment
+import item_card
 import legion_ui as L
 from ImageCache import ImageCache
 from Inventory import BACKPACK_COLS, BACKPACK_ROWS, BELT_SLOT_COUNT, BODY, PACK, BELT
 
 ARROWS = {pygame.K_LEFT: (-1, 0), pygame.K_RIGHT: (1, 0), pygame.K_UP: (0, -1), pygame.K_DOWN: (0, 1)}
 DOLL_ASPECT = 678 / 1384           # doll.png width / height
+DETAIL_KEYS = (pygame.K_LSHIFT, pygame.K_RSHIFT)
+CARD_SHARE = 0.42                  # the item card's share of the width right of the doll (the pack has the rest)
+CARD_MIN_W = 150                   # preview px; narrower (trade's half window): no card
+CARD_STYLE = {                     # card row kind: (font role, size, colour)
+    "name": ("display", 20, L.GOLD), "type": ("body", 12, L.MUTED), "verdict": ("body", 13, L.TEXT),
+    "line": ("body", 13, L.TEXT), "flavour": ("body", 12, L.MUTED), "label": ("body", 12, L.MUTED),
+    "value": ("medium", 12, L.TEXT), "hint": ("body", 12, L.MUTED),
+}
 
 
 def neighbour(centres, cur, dx, dy):
@@ -35,11 +47,108 @@ def neighbour(centres, cur, dx, dy):
     return best
 
 
+def wrap(font, text, width):
+    """Text broken at word breaks to fit `width` px: a list of lines."""
+    rows, current = [], ""
+    for word in str(text).split():
+        trial = (current + " " + word).strip()
+        if current and font.size(trial)[0] > width:
+            rows.append(current)
+            current = word
+        else:
+            current = trial
+    return rows + [current] if current else rows
+
+
+class CardPanel:
+    """The card for the item under the cursor (item_card.build). Its rows are made once, when the item, its
+    durability, the detail key or the size changes; each row draws through its own TextSlot, which renders only
+    when its text changes. Nothing is rebuilt per frame."""
+
+    def __init__(self):
+        self._key = None
+        self._rows = []          # (style, text, align "left" | "right", y from the top of the text area)
+        self._slots = {}         # (row index, style) -> TextSlot
+
+    def _make_rows(self, kit, item, width, detail):
+        card = item_card.build(item)
+        rows, y = [], 0
+
+        def add(style, text, gap=0):
+            nonlocal y
+            role, size, _ = CARD_STYLE[style]
+            font = kit.font(role, size)
+            y += gap
+            for line in wrap(font, text, width):
+                rows.append((style, line, "left", y))
+                y += font.get_linesize()
+
+        def rule():
+            nonlocal y
+            y += kit.px(6)
+            rows.append(("rule", "", "left", y))
+            y += kit.px(8)
+
+        add("name", card.name)
+        if card.type_line:
+            add("type", card.type_line, kit.px(2))
+        if card.verdicts:                       # from the rule function (next chunk); empty until then
+            rule()
+            for text in card.verdicts:
+                add("verdict", text)
+        if detail and card.detail:
+            rule()
+            line_h = kit.font(*CARD_STYLE["value"][:2]).get_linesize()
+            for label, value in card.detail:
+                rows.append(("label", label, "left", y))
+                rows.append(("value", value, "right", y))
+                y += line_h
+        elif card.lines:
+            rule()
+            for text in card.lines:
+                add("line", text)
+        if card.flavour:
+            add("flavour", card.flavour, kit.px(10))
+        if card.detail and not detail:
+            add("hint", "Hold Shift: every number", kit.px(10))
+        return rows
+
+    def draw(self, backend, kit, rect, item, detail):
+        L.draw(backend, kit.plaque(rect.w, rect.h), rect.topleft)
+        if item is None:
+            return
+        pad = kit.px(18)
+        width = rect.w - 2 * pad
+        key = (item, item_card.state(item), detail, width, kit.size)
+        if key != self._key:
+            if self._key is None or self._key[-1] != kit.size:
+                self._slots = {}                # TextSlots hold a font size: new ones for a new window size
+            self._rows = self._make_rows(kit, item, width, detail)
+            self._key = key
+        x, top = rect.x + pad, rect.y + pad
+        for i, (style, text, align, y) in enumerate(self._rows):
+            if top + y > rect.bottom - pad:
+                break
+            if style == "rule":
+                L.draw(backend, kit.rule(width), (x, top + y))
+                continue
+            slot = self._slots.get((i, style))
+            if slot is None:
+                role, size, colour = CARD_STYLE[style]
+                slot = self._slots[(i, style)] = L.TextSlot(backend, kit, role, size, colour)
+            if align == "right":
+                slot.draw(text, (x + width, top + y), "topright")
+            else:
+                slot.draw(text, (x, top + y))
+
+
 class InventoryView:
     def __init__(self, inventory):
         self.inv = inventory
         self.cursor = inventory.backpack_start_index        # index into inventory.slots
         self._gold = None                                   # the gold count's TextSlot, made on first draw
+        self.card = CardPanel()
+        self.detail = False                                 # Shift held: the card shows every number
 
     # --- which slots the cursor may visit ----------------------------------------------------------------
 
@@ -99,13 +208,19 @@ class InventoryView:
             slot.rect = pygame.Rect(bx + i * (cell + gap), inner.bottom - cell, cell, cell)
         pack_x = doll.right + kit.px(40)
         label_h = kit.font("body", 12).get_height() + kit.px(8)
-        side = min((inner.right - pack_x - (BACKPACK_COLS - 1) * kit.px(10)) // BACKPACK_COLS,
-                   (inner.bottom - top - label_h - (BACKPACK_ROWS - 1) * kit.px(10)) // BACKPACK_ROWS)
-        for i, slot in enumerate(inv.pack_slots()):
+        room = inner.right - pack_x
+        card_w = round(room * CARD_SHARE)
+        if card_w < kit.px(CARD_MIN_W):             # too narrow (trade's half window): no card
+            card_w = 0
+        pack_w = room - card_w - (kit.px(24) if card_w else 0)
+        row_h = (inner.bottom - top - label_h - (BACKPACK_ROWS - 1) * kit.px(10)) // BACKPACK_ROWS
+        side = min((pack_w - (BACKPACK_COLS - 1) * kit.px(10)) // BACKPACK_COLS, row_h)
+        for i, slot in enumerate(inv.pack_slots()):         # rows fill the height, so they face the doll's rows
             r, c = divmod(i, BACKPACK_COLS)
-            slot.rect = pygame.Rect(pack_x + c * (side + kit.px(10)), top + label_h + r * (side + kit.px(10)),
-                                    side, side)
-        return slab, inner, doll, (pack_x, top)
+            cy = top + label_h + r * (row_h + kit.px(10)) + row_h // 2
+            slot.rect = pygame.Rect(pack_x + c * (side + kit.px(10)), cy - side // 2, side, side)
+        card = pygame.Rect(inner.right - card_w, top, card_w, inner.bottom - top) if card_w else None
+        return slab, inner, doll, (pack_x, top), card
 
     def draw(self, backend, placed=None, show_highlight=True):
         """The window in the Legion look. Trade draws it while `visible` is false, on `placed`, and can hide
@@ -115,7 +230,7 @@ class InventoryView:
             return
         self._check_cursor()
         kit = L.kit_for(backend)
-        slab, inner, doll, (pack_x, pack_y) = self.layout(kit, placed)
+        slab, inner, doll, (pack_x, pack_y), card = self.layout(kit, placed)
         L.draw(backend, kit.picture("slab.png", width=slab.w), slab.topleft)
         L.draw(backend, kit.label("Inventory", "display", 32, L.GOLD), inner.topleft)
         if self._gold is None:
@@ -145,6 +260,8 @@ class InventoryView:
             elif held is not None and area != PACK:        # where the held item goes
                 L.draw(backend, kit.fit_glow(r.w, r.h) if inv.can_place(slot, held) else kit.faded(r.w, r.h),
                        r.topleft)
+        if card is not None:
+            self.card.draw(backend, kit, card, inv.slots[self.cursor].item or held, self.detail)
         self._draw_hand(backend, kit)
 
     def _draw_hand(self, backend, kit):
@@ -180,6 +297,7 @@ class InventoryView:
             return
         if not inv.visible:
             return
+        self.detail = any(keys.is_key_pressed(k) for k in DETAIL_KEYS)
         self._check_cursor()
         if keys.is_key_just_pressed(pygame.K_TAB):
             self.next_area()
