@@ -89,9 +89,10 @@ The existing hit test stays (`hit_core.py`): rect, then mask against mask.
 3. **Which layer is there** (only bodies with worn layers; chunk 4, `defence_layers.plan.md`):
    - The region (head, chest, `upper_arm l`, ...) under the contact, then the profile's layers for
      that region, outer first. A region is covered or not (the item's `coverage`).
-   - Mesh hero: hits still land on his sprite mask (the mesh is draw-only); the region is his
-     nearest projected body capsule at the contact → bone → `regions.json`. Torso is chest or back
-     by the attack's direction against his facing. ~53-167 µs, landed hits on armoured bodies only.
+   - Mesh hero: hits still land on his sprite mask (the mesh is draw-only); the region is the
+     front-most of his projected body capsules at the contact → bone → `regions.json`. Torso is chest or back
+     by the attack's direction against his facing. 61 µs (cached per frame) / 329 µs, landed hits on
+     armoured bodies only.
    - Sprite hero wearing items: height bands on the hitbox. Sprite enemies wear nothing: one layer
      (their hide) everywhere, no lookup.
    - Was in this doc before chunk 4: per-slot sprite masks per frame (no sprite body wears pieces)
@@ -382,7 +383,7 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
    `hit_core.touch_point` / `find_contacts` / `entry_point` / `EntryPoints`, `Shape.solid`,
    `InteractionContext.contact`, `strike(contacts=)`; sprites, enemy swings, dashes carry it; blasts
    None. `DEBUG_DRAW_CONTACTS` dots (`contact_debug.py`). → 4, 11
-4. **Bodies and layers.** Plan: `.cursor/plans/defence_layers.plan.md`, branch
+4. **Bodies and layers.** Done: `.cursor/plans/defence_layers.plan.md`, branch
    `refactor/defence-layers`. `bodies.json` + `kinds.json` (natural layer, kind; mass stays in
    `monster_data`), `defence_profile.py` (layers per region slot, worn weight), hero rebuilt on equip,
    enemies share one per body; `body_regions.py` + `regions.json` (contact → region on the mesh hero).
@@ -408,6 +409,9 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 - New enemy `tribey_dart`: art from tribey_spear, or new?
 - Warriors 16 / 17: `curse_bolt` (unholy) / `sun_bolt` (holy) are guesses; 05 could be `lance`.
   Workers and chiefs: `unarmed` is a guess.
+- Inertia (asked 2026-11-14): `Entity.weight` slows speeding up and turning, but every body has 1.0;
+  coasting friction is the surface's, the same for all. Big bodies sliding longer = tie `weight` to
+  mass + gear. Not built; a chunk of its own if wanted.
 
 ## Method that works
 
@@ -436,6 +440,10 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 ## Known errors
 
 - Settings.py has CRLF line endings: a regex edit with `\n` matches nothing. Use `\r?\n`.
+- `tests/test_entity_pipeline.py` fails (FileNotFoundError `Code\Settings.py`) when run in one pytest
+  call after any test that imports `Settings`: Settings (and 9 other modules) `os.chdir` into `Code/`
+  and `wire.SETTINGS` is relative to the repo root. Same cause as the known `test_entity_gates`
+  failures. Run it on its own (22 passed). Not fixed (older than this work).
 - `Path.read_text()` turns CRLF into LF, so a script that checks for `\r\n` after it finds none
   and writes the file back with LF (git shows no diff, autocrlf, but the working copy changes).
   Read and write bytes (`read_bytes`) and keep the file's own endings.
@@ -467,7 +475,17 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
   `Code/NOTES_performance.md`: `find_contacts` +3-7 % over `find_hits`; `entry_point` ~20 µs, so
   lazy (`EntryPoints`). Debug dots not seen yet (camera draw has no test). Not checked in play.
 
+- 2026-11-14: chunk 4 (bodies and layers) on `refactor/defence-layers` (with `main` merged in for the
+  item card). 19 bodies (warriors split by what they are, from a picture with Douglas), camel /
+  catapult / scorpion masses, defence profiles (worn weight → knockback: full plate 31 → 74%), region
+  lookup (front-most capsule). Targeted set + item card: 11 failed (the same names) / 450 passed.
+  Not checked in play.
+
 ## Tried and dropped
+
+- **Hit region by the nearest capsule edge** (chunk 4, as first planned): from the side, a hit landed
+  on the arm hidden behind the body, and big capsules swallowed the neck. Replaced by the front-most
+  capsule under the contact (depth toward the camera); region map at 4 facings compared both.
 
 - **Armour points subtracted from damage** (D2 style): late-game darts beat plate; replaced by
   penetration vs stopping power plus force.

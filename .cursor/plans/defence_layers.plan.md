@@ -37,13 +37,17 @@ says so (Decisions).
 
 ### Data: `config/damage/bodies.json`, `kinds.json`
 
-- `kinds.json`: `living`, `undead`, `demon` (names only; `KIND_MULT` comes in chunk 9).
+- `kinds.json`: `living`, `undead`, `demon`, `construct` (the catapult) (names only; `KIND_MULT` comes in
+  chunk 9).
 - `bodies.json`: per body def `kind` and `natural` (`stopping_power`, `absorb`, `flammability`,
   `conductivity`: the item property ids). Resistances and starting states come with their chunks
   (7, 8, 9, 6). Mass stays in `monster_data`.
-- Rows: the roster's 12 (`barb` ... `ice_mage`), plus guesses for the rest (Douglas to confirm):
-  `eskimo` (furs: 5 / 0.2 / 0.6 / 0) for eskimo worker and chief, `tribesman` for jungle worker and
-  chief, `warrior` (leather: 10 / 0.1 / 0.5 / 0) for warriors 00-19.
+- Rows: the roster's 12 (`barb` ... `ice_mage`) plus, agreed with Douglas from a picture of each:
+  `eskimo` (eskimo worker, chief), `tribesman` (jungle worker, chief), `warrior` (00 01 02 04 08 10
+  12 13 14 15), `robed` (11 16 17), `beastman` (03), `camel_rider` (05 06 07 09), `siege` (18,
+  construct), `scorpion` (19). Masses: camels 500, catapult 800, scorpion 30 (were 70).
+- `wire.body_for(label)`: new warriors get a body (and mass) from their label; a body already in the
+  entry stays (07 "Desert Chieftain" rides a camel, which the label does not say).
 - `monster_data` entries get `"body"`; the hero is `barb` (one hero body for now).
 
 ### `damage_data.py`
@@ -81,13 +85,18 @@ says so (Decisions).
 - `Graphics/Meshes/barb/regions.json`: bone → region (`torso` for 1-2, meaning chest or back;
   sides from the table above). Hand-written from the geometry; a test checks every bone has one and
   its rest position agrees (height band, side by x sign).
-- `region_at(skin, feet, contact, toward)`: the nearest projected capsule (distance to its segment
-  minus radius) at the skin's frame and yaw, feet as the camera draws it → bone → region. `torso` is
+- `mesh_slot(skin, feet, contact, toward)`: of the projected capsules under the contact, the one
+  whose front is nearest the camera (depth `gy·cos e + gz·sin e`); under none, the nearest edge. At
+  the skin's frame and yaw, feet as the camera draws it (`Support.mesh_feet_world`, shared with the
+  camera) → bone → region. (Built: the plan's "nearest edge" alone let a side hit land on the arm
+  hidden behind him; seen on a region map at 4 facings.) Collarbones 6 / 13 are torso: their capsules
+  cover the upper chest. `torso` is
   `chest` when the attack comes at his front (`toward` against his facing), else `back`. `toward`: the
   attack's travel on the ground (chunk 5 passes it: projectile `movement`, else source → target).
 - Projection cached on the skin per (frame, yaw): hits in one frame share it.
-- Measured (barb, uncached): pose 58 µs, + project 112 µs, + nearest 167 µs per hit; nearest alone
-  (cached) 53 µs. Only for **landed hits on a body with worn layers** (the hero), so a few a second.
+- Measured before building (nearest edge): 167 µs uncached, 53 µs cached. As built (front-most,
+  machine ~40% busy): 329 µs uncached, 61 µs cached. Only for **landed hits on a body with worn
+  layers** (the hero), so a few a second.
 - Sprite hero (no mesh) wearing items: height bands on his hitbox (the barb's rest heights:
   head > 0.60 ... foot < 0.06), side by x against his centre and facing.
 - Enemies: no lookup (one layer everywhere).
@@ -105,14 +114,15 @@ says so (Decisions).
 4. **Holes and partial cover**: a region is covered or not (the item's `coverage`). The master doc's
    per-bone (u, angle) coverage bitmaps baked at export wait until a piece needs a gap (visor slit,
    armpit).
-5. Guesses: `eskimo`, `tribesman`, `warrior` bodies above.
+5. **Agreed (Douglas)**: the bodies and masses above.
 
 ## Tests
 
-- `tests/damage/test_damage_data.py`: bodies and kinds load; every `monster_data` entry has a body
-  that exists; unknown body / kind / field fails loudly; natural numbers match the roster.
-- New `tests/damage/test_defence_profile.py`: full plate (7 bases, 12 pieces) → all 17 region slots
-  plate then hide, weight 34; plate chest alone → chest and back plate, the rest hide; loincloth →
+- `tests/damage/test_bodies.py` (built there, not in test_damage_data): bodies and kinds load; every
+  `monster_data` entry has a body that exists; unknown body / kind / field fails loudly; natural
+  numbers match the roster; `wire.body_for` agrees with Settings except 07.
+- New `tests/damage/test_defence_profile.py`: full plate as it exists (10 pieces, no helmet item) →
+  every slot but head and neck plate then hide, weight 31; plate chest alone → chest and back plate, the rest hide; loincloth →
   waist only;
   `shoulder_l` covers `upper_arm l` not `r`; two pieces on one region → harder outside; weight sums;
   enemies of one body share one profile; equip / unequip through `Inventory` rebuilds the hero's.
@@ -146,7 +156,20 @@ says so (Decisions).
 
 The plated barb is shoved less by the demon's claw and meteors (74% in full plate).
 
+## Log
+
+- 2026-11-14: built in commits `96936bb5` (data), `dc7053c6` (profiles), `b0430aef` (regions), after
+  the plan and the merge of `main` (`5c972b10`). Targeted set + item card: 11 failed (the same names)
+  / 450 passed (new files test_bodies, test_defence_profile, test_body_regions; the set now also
+  runs test_item_card). The machine was busy
+  (other agents' Blender jobs): the set took 4:37, collection alone up to a minute. Region map
+  (`scratchpad/region_map.py`, not kept) checked at 4 facings. Not checked in play.
+
 ## Open
+
+- Mid-shin can read as thigh, the neck is rarely hit: the capsules are as fat as the body. Plate covers
+  both, so nothing changes today.
+- No helmet item: the head and neck are bare in full plate.
 
 - Co-op: the server does not know what a remote hero wears; chunk 5 (server-resolved hits) needs it
   sent on equip.
