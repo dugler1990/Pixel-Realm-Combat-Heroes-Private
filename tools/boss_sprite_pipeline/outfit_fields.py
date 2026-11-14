@@ -77,6 +77,11 @@ FIELDS = (
           steps=('front',)),
     Field("back", "outfit", ("body", "armour"), "text", "Back drawing prompt (not needed for a back in images).",
           steps=('back',)),
+    Field("view_prompts", "outfit", (), "json",
+          "Prompt file for the drawn views (view_prompts/*.json): front, back, side, 3/4 and the redraw texts. The "
+          "outfit's own front / back / side / quarter / retry_bigger win over it.", steps=("front", "back", "sides")),
+    Field("view_checks", "outfit", (), "json",
+          "Pass rules for the views (view_checks/*.json; default.json when not set).", steps=("front", "back", "sides")),
     Field("side", "outfit", (), "text", "Side view prompt.", steps=('sides',)),
     Field("quarter", "outfit", (), "text", "3/4 view prompt.", steps=('sides',)),
     Field("side_config", "outfit", (), "json", "Image model config for the side views.", steps=('sides',)),

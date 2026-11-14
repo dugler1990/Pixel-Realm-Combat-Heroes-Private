@@ -1,0 +1,49 @@
+{
+ "_about": "view_gate's pass rules and measuring heights (were its constants until 2026-11-14; measured on the barb's fronts and backs: view_gate.py comments, explode2/PROCESS_explode2.md). An outfit may name another file in view_checks.",
+ "bands": [
+  [
+   "shoulder",
+   0.8
+  ],
+  [
+   "chest",
+   0.72
+  ],
+  [
+   "waist",
+   0.6
+  ],
+  [
+   "hips",
+   0.52
+  ],
+  [
+   "thigh",
+   0.42
+  ],
+  [
+   "knee",
+   0.3
+  ],
+  [
+   "calf",
+   0.2
+  ],
+  [
+   "ankle",
+   0.08
+  ]
+ ],
+ "back_min_iou": 0.95,
+ "back_max_band": 1.0,
+ "margin": 0.005,
+ "head": 0.13,
+ "soles": 0.02,
+ "front_max_missing": 0.02,
+ "side_max_off": 0.02,
+ "joint_max_off": 1.5,
+ "joint_judged": [
+  "hip",
+  "knee"
+ ]
+}

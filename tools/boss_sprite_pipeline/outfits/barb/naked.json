@@ -29,5 +29,6 @@
    "barb_fullplate_shoulder_l",
    "barb_fullplate_shoulder_r"
   ]
- }
+ },
+ "view_prompts": "tools/boss_sprite_pipeline/view_prompts/barb_plate_armour.json"
 }

@@ -68,5 +68,6 @@
  "trellis_models": [
   "front_back"
  ],
- "trellis_models_note": "v9 (2026-11-09) was built before the models choice: front only, front + back, front + back + both sides; front + back picked."
+ "trellis_models_note": "v9 (2026-11-09) was built before the models choice: front only, front + back, front + back + both sides; front + back picked.",
+ "view_prompts": "tools/boss_sprite_pipeline/view_prompts/barb_plate_armour.json"
 }
