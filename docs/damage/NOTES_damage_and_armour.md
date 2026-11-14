@@ -419,6 +419,10 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 - New enemy `tribey_dart`: art from tribey_spear, or new?
 - Warriors 16 / 17: `curse_bolt` (unholy) / `sun_bolt` (holy) are guesses; 05 could be `lance`.
   Workers and chiefs: `unarmed` is a guess.
+- **Co-op drift** (2026-11-14, not the focus): the server decides enemy hits on players against one
+  idle sprite frame (`RemotePlayer` server mode), never animated, so in co-op hits on the hero differ
+  from what anyone sees. Fix when wanted: the client sends its pose (frame, facing) with its position;
+  the server hits the same capsules (`visual_hits.plan.md` (c)).
 - Inertia (asked 2026-11-14): `Entity.weight` slows speeding up and turning, but every body has 1.0;
   coasting friction is the surface's, the same for all. Big bodies sliding longer = tie `weight` to
   mass + gear. Not built; a chunk of its own if wanted.

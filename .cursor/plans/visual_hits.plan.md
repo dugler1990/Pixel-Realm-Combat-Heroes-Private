@@ -85,14 +85,14 @@ angle around it) a stuck arrow can sit on (chunk 11).
 4. (b) `bake_coverage.py`, baked files for `barb_fullplate` and `barb_loincloth`, lookup at the hit,
    tests, picture.
 5. Fight scene test.
-6. (c) co-op pose, if decided now.
-7. Delete what 4b leaves unused; perf line; docs; log.
+6. Delete what 4b leaves unused; perf line; docs; log.
 
 ## Decisions (Douglas)
 
-1. Co-op now (c) or later? Without it, co-op hits on the hero stay on the idle sprite frame.
-2. The hero's hit shape changes from the sprite to his capsules: he is hit where he is drawn, a few
-   px fatter or thinner in places. OK?
+1. **Co-op later (Douglas, 2026-11-14).** (c) is not built here; the server keeps hitting the idle
+   sprite frame. Noted in the master doc's Open.
+2. **Capsules (Douglas, 2026-11-14)**: the hero is hit on his capsules. If it looks bad in play, refine
+   the capsules; worst case, change path (exact outline).
 
 ## Open
 
