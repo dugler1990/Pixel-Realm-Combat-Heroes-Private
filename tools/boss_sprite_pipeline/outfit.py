@@ -1,7 +1,7 @@
 """The outfit pipeline's driver: one command per character + outfit (PROCESS_outfit.md).
 
     python -m tools.boss_sprite_pipeline.outfit <character> <outfit> [--status] [--backfill]
-        [--from STEP] [--only STEP] [--host IP --port PORT] [--models a,b] [--view V]
+        [--from STEP] [--only STEP] [--to STEP] [--host IP --port PORT] [--models a,b] [--view V]
         [--retry R | --accept N | --pick M | --redo VIEW...]
 
 Runs the outfit's steps in order from the first one not done, recording each in
@@ -126,6 +126,16 @@ class Ctx:
         """The TRELLIS models this run builds: --models (kept in run.json), else the outfit's, else the default."""
         return list(self.run.get("models") or self.o.get("trellis_models") or DEFAULT_MODELS)
 
+    def given(self, view: str) -> Path | None:
+        """Your own image for a view (the outfit's "images"), else None: used instead of drawing it."""
+        rel = (self.o.get("images") or {}).get(view)
+        if not rel:
+            return None
+        p = self.data(rel)
+        if not p.is_file():
+            raise Stop(f"images.{view}: no file {p}")
+        return p
+
     def views(self) -> list[str]:
         """The drawings the chosen models need."""
         need = {v for m in self.models() for v in MODEL_VIEWS[m]}
@@ -163,8 +173,10 @@ def view_gate(ctx: Ctx, view: str, a) -> None:
     gate_json = gate_dir / f"gate_{view}.json"
     base = [sys.executable, "-m", "tools.boss_sprite_pipeline.view_gate", view, "--out", gate_dir,
             "--outfit", ctx.file]
+    given = ctx.given(view)
     if view == "front":
-        base += ["--input", ctx.data(o["concept"])]
+        # The front check compares with the concept; a given front with no concept is its own (nothing to compare).
+        base += ["--input", ctx.data(o["concept"]) if o.get("concept") else given]
     else:
         base += ["--front", ctx.out("front", "draw")]
     gate = json.loads(gate_json.read_text(encoding="utf-8")) if gate_json.is_file() else {}
@@ -172,6 +184,8 @@ def view_gate(ctx: Ctx, view: str, a) -> None:
         call(base + ["--accept", a.accept], ok="accepted attempt")
     elif a.use:                                      # an image you have as the next attempt (same checks)
         call(base + ["--use", ctx.data(a.use)], ok="PENDING")
+    elif gate.get("status") != "accepted" and given and not a.retry:
+        use_given(base, gate_json, gate, given, always=view == "front" and not o.get("concept"))
     elif gate.get("status") != "accepted":
         call(base + ["--no-ask"] + (["--retry", a.retry] if a.retry else []), ok="PENDING")
     gate = json.loads(gate_json.read_text(encoding="utf-8"))
@@ -185,6 +199,18 @@ def view_gate(ctx: Ctx, view: str, a) -> None:
     draw = next(t["draw"] for t in gate["attempts"] if t["attempt"] == n)
     ctx.record(view, status="done", accepted=n, outputs={"draw": draw, "cutout": str(gate_dir / f"{view}.png"),
                                                          "gate": str(gate_json)})
+
+
+def use_given(cmd: list, gate_json: Path, gate: dict, given: Path, always: bool = False) -> None:
+    """A view's own image (the outfit's "images"): checked like a drawing, accepted when the check passes (always:
+    nothing to check it against). Once tried it is not tried again: a failed check waits at the gate (accept it
+    anyway, use another image, or redraw)."""
+    if any(t.get("supplied") == str(given.resolve()) for t in gate.get("attempts", [])):
+        return
+    call(cmd + ["--use", given], ok="PENDING")
+    last = json.loads(gate_json.read_text(encoding="utf-8"))["attempts"][-1]
+    if always or (last.get("scores") or {}).get("passed"):
+        call(cmd + ["--accept", last["attempt"]], ok="accepted attempt")
 
 
 def s_sides(ctx: Ctx, a) -> None:
@@ -206,7 +232,7 @@ def s_sides(ctx: Ctx, a) -> None:
         cutout = gate_dir / f"side_{v}.png"
         if cutout.is_file():
             continue
-        if v in MIRROR_OF and mirror:
+        if v in MIRROR_OF and mirror and not ctx.given(v):     # a right-hand view of your own is not mirrored
             src = gate_dir / f"side_{MIRROR_OF[v]}.png"
             from PIL import Image, ImageOps
             ImageOps.mirror(Image.open(src)).save(cutout)
@@ -225,6 +251,11 @@ def s_sides(ctx: Ctx, a) -> None:
             continue
         if mine and a.use:
             call(cmd + ["--use", ctx.data(a.use)], ok="PENDING")
+            gate = json.loads(gate_json.read_text(encoding="utf-8"))
+        elif ctx.given(v) and not (mine and a.retry):
+            use_given(cmd, gate_json, gate, ctx.given(v))
+            if (gate_dir / f"side_{v}.png").is_file():
+                continue
             gate = json.loads(gate_json.read_text(encoding="utf-8"))
         if not gate.get("attempts") or (mine and a.retry):
             call(cmd + ["--no-ask"] + (["--retry", a.retry] if mine and a.retry else []), ok="PENDING")
@@ -495,6 +526,7 @@ def main(argv=None) -> None:
     ap.add_argument("--backfill", action="store_true")
     ap.add_argument("--from", dest="start")
     ap.add_argument("--only")
+    ap.add_argument("--to", help="stop before this step (the page's run-on: up to the next pod or local step)")
     ap.add_argument("--host")
     ap.add_argument("--port")
     ap.add_argument("--retry")
@@ -521,10 +553,12 @@ def main(argv=None) -> None:
         status(ctx)
         return
     steps = STEPS[ctx.o["kind"]]
-    for s in (a.only, a.start):
+    for s in (a.only, a.start, a.to):
         if s and s not in steps:
             sys.exit(f"{s} is not a step of a {ctx.o['kind']} outfit: {steps}")
     todo = [a.only] if a.only else steps[steps.index(a.start):] if a.start else [s for s in steps if not ctx.done(s)]
+    if a.to and not a.only:
+        todo = [s for s in todo if steps.index(s) < steps.index(a.to)]
     global LOG
     for name in todo:
         print(f"=== {name}", flush=True)
@@ -533,6 +567,10 @@ def main(argv=None) -> None:
         LOG.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} {name} {' '.join(sys.argv[1:])}\n")
         COST[0] = 0.0
         try:
+            miss = outfit_fields.missing(ctx.o, name)
+            if miss:
+                raise Stop("this step needs settings the files do not have (Outfit / character settings):\n  "
+                           + "\n  ".join(miss))
             RUN[name](ctx, a)
         except Stop as stop:
             LOG.write(f"STOPPED: {stop}\n")

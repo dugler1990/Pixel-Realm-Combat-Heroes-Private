@@ -47,6 +47,10 @@
               justify-content:center; z-index:9; cursor:zoom-out; }
   .lightbox img { max-width:96vw; max-height:96vh; background:#fff; }
   img.zoom { cursor:zoom-in; }
+  img.thumb { max-height:120px; background:#fff; border-radius:4px; }
+  .char { border-top:1px solid var(--line); padding-top:8px; margin-top:8px; }
+  .slots { display:flex; flex-wrap:wrap; gap:10px; }
+  .slot { border:1px solid var(--line); border-radius:6px; padding:6px; width:230px; }
   #toast { position:fixed; right:16px; bottom:16px; background:var(--bad); color:#fff; padding:10px 14px;
            border-radius:6px; display:none; max-width:520px; white-space:pre-wrap; z-index:10; }
 </style>
@@ -113,15 +117,19 @@ function drawHeader() {
 setInterval(async () => { if (S.state && S.state.pod.host) { try { await api("/api/pod/status"); } catch (e) {} } }, 10000);
 
 function drawNav() {
-  document.getElementById("nav").innerHTML = `<div class="row"><button onclick="newCharacter()">New character</button>
-    <button onclick="newOutfit()">New outfit</button></div>` + S.state.outfits.map(o => {
-    const key = o.character + "/" + o.outfit, r = running(key);
-    const click = o.error ? `editBroken('${o.character}', '${o.outfit}')` : `select('${key}')`;
-    return `<div class="outfit ${key === S.sel ? "sel" : ""}" onclick="${click}">
-      <div class="name">${esc(key)}</div><div class="kind">${o.kind}${o.models.length ? " · " + o.models.join(", ") : ""}</div>
-      ${o.error ? `<div class="err" style="font-size:12px">${esc(o.error)}</div>` : ""}
-      <div class="chips">${o.steps.map(s => `<span class="chip ${r && r.step === s.name ? "running" : s.status}">${s.name}</span>`).join("")}</div></div>`;
-  }).join("");
+  // One block per character: its name, its settings and new-outfit buttons, then its outfits by name.
+  const chars = [...new Set([...(S.state.characters || []), ...S.state.outfits.map(o => o.character)])].sort();
+  document.getElementById("nav").innerHTML = `<div class="row"><button onclick="newCharacter()">New character</button></div>` +
+    chars.map(c => `<div class="char"><div class="row"><b>${esc(c)}</b>
+      <button onclick="charSettings('${c}')">settings</button> <button onclick="newOutfit('${c}')">+ outfit</button></div>` +
+      S.state.outfits.filter(o => o.character === c).map(o => {
+        const key = o.character + "/" + o.outfit, r = running(key);
+        const click = o.error ? `editBroken('${o.character}', '${o.outfit}')` : `select('${key}')`;
+        return `<div class="outfit ${key === S.sel ? "sel" : ""}" onclick="${click}">
+          <div class="name">${esc(o.outfit)}</div><div class="kind">${o.kind}${o.models.length ? " · " + o.models.join(", ") : ""}</div>
+          ${o.error ? `<div class="err" style="font-size:12px">${esc(o.error)}</div>` : ""}
+          <div class="chips">${o.steps.map(s => `<span class="chip ${r && r.step === s.name ? "running" : s.status}">${s.name}</span>`).join("")}</div></div>`;
+      }).join("") + `</div>`).join("");
 }
 async function select(key) { S.form = null; S.sel = key; S.step = null; S.detail = null; S.sig = null; await loadDetail(); }
 async function loadDetail() {
@@ -157,19 +165,31 @@ async function setPod() {
 function drawMain() {
   const o = cur(), d = S.detail; if (!o || !d) return;
   const key = o.character + "/" + o.outfit, r = running(key), s = o.steps.find(x => x.name === S.step);
-  let h = `<h2>${esc(key)} <span class="dim">(${o.kind})</span>
-    <span style="font-size:13px; font-weight:400"><button onclick="editSettings('outfit')">Outfit settings</button> <button onclick="editSettings('character')">${esc(o.character)} settings</button></span></h2>
+  let h = `<h2>${esc(o.outfit)} <span class="dim">(${o.kind} · character ${esc(o.character)})</span>
+    <span style="font-size:13px; font-weight:400"><button onclick="editSettings('outfit')">Outfit settings</button> <button onclick="editSettings('character')">Character settings</button></span></h2>
     <div class="dim">${esc(o.about)}</div>`;
+  if (o.missing && o.missing.length) {
+    h += `<div class="attempt"><b>Still to fill in</b> <span class="dim">(each is asked for when its step runs)</span>: ` +
+      o.missing.map(m => `${m.field} <span class="dim">(${m.level}; ${m.steps.join(", ")})</span>`).join(" · ") + `</div>`;
+  }
   if (o.kind !== "cut") {
     h += `<h3>TRELLIS models</h3><div class="row">` + d.all_models.map(m =>
       `<label><input type="checkbox" class="mdl" value="${m}" ${d.models.includes(m) ? "checked" : ""}> ${LABEL[m]}</label>`).join("") +
-      `<button onclick="saveModels()">Save</button></div><div class="dim">Drawings needed: ${d.views.join(", ")}</div>`;
+      `<button onclick="saveModels()">Save</button></div>`;
+    // The views the models need: your image (from Outfit settings > images), the accepted cut-out, or drawn.
+    h += `<div class="row" style="align-items:flex-start">` + d.views.map(v => {
+      const mine = o.images[v], cut = d.cutouts[v];
+      const how = mine ? "your image" : (v in d.mirror_of && d.mirror_right ? "mirrored from " + d.mirror_of[v] : "drawn from the prompt");
+      return `<div style="text-align:center"><b>${v}</b><br>${cut ? img(cut, "thumb") : mine ? thumbImg(mine) : `<div class="dim" style="height:120px;width:80px"></div>`}<br>
+        <span class="dim">${how}${cut ? " · done" : ""}</span></div>`;
+    }).join("") + `</div><div class="dim">Give your own images in Outfit settings → images; views without one are drawn.</div>`;
   }
   h += `<div class="chips" style="margin:12px 0">${o.steps.map(x => `<span class="chip ${r && r.step === x.name ? "running" : x.status} ${x.name === S.step ? "sel" : ""}" onclick="pickStep('${x.name}')">${x.name}</span>`).join("")}</div>`;
   const busy = !!r, laneBusy = S.state.jobs.running.some(j => j.lane === (POD_STEPS.has(S.step) ? "pod" : "local"));
   h += `<div class="row"><b>${S.step}</b> <span class="${s.status === "done" ? "okc" : s.status === "gate" ? "gatec" : "dim"}">${s.status}</span>
         ${s.cost_usd ? `<span class="dim">$${s.cost_usd}</span>` : ""} ${s.pod_minutes ? `<span class="dim">${s.pod_minutes} pod min</span>` : ""}
         <button class="main" ${busy || laneBusy ? "disabled" : ""} onclick="act({action:'run', step:'${S.step}'})">Run ${S.step}${POD_STEPS.has(S.step) ? " (pod)" : ""}</button>
+        ${o.next ? `<button ${busy ? "disabled" : ""} onclick="act({action:'on'})" title="from ${o.next} until a gate, a failed step or a pod / local switch">Run on from ${o.next}</button>` : ""}
         ${busy ? `<span class="dim">running: ${esc(r.label)}</span>` : ""}</div>`;
   h += panel(S.step, d, busy);
   h += `<h3>Log</h3><pre id="log"></pre>`;
@@ -349,28 +369,37 @@ const FILE_TYPES = ["image", "glb", "blend", "json"];
 async function fieldsTable() { if (!S.fields) S.fields = await api("/api/fields"); return S.fields; }
 function isNote(k) { return k.startsWith("_") || k.endsWith("_note"); }
 
+// New character / outfit: the name and "start from" are typed in the form itself. A new character needs nothing to
+// be saved: its fields are asked for by the steps that read them (the rig only from the skeleton step on).
 async function newCharacter() {
-  const cfg = await api("/api/config"), have = Object.keys(cfg.characters);
-  const name = prompt("New character name (letters, digits, _ and -):"); if (!name) return;
-  const copy = have.length ? prompt(`Start from a copy of (empty: blank): ${have.join(", ")}`, "") : "";
-  const data = copy ? ((await api(`/api/config?character=${encodeURIComponent(copy)}`)).character || {}) : {};
-  openForm({ level:"character", character:name, data, isNew:true });
+  const cfg = await api("/api/config");
+  openForm({ level:"character", character:"", data:{}, isNew:true, copies:Object.keys(cfg.characters) });
 }
-async function newOutfit() {
-  const cfg = await api("/api/config"), chars = Object.keys(cfg.characters);
-  if (!chars.length) return toast("make a character first");
-  const c = prompt(`Character: ${chars.join(", ")}`, S.sel ? S.sel.split("/")[0] : chars[0]); if (!c) return;
-  const name = prompt("New outfit name (letters, digits, _ and -):"); if (!name) return;
-  const all = Object.entries(cfg.characters).flatMap(([ch, os]) => os.map(o => ch + "/" + o));
-  const copy = prompt(`Start from a copy of (empty: blank): ${all.join(", ")}`, "");
-  let data = { kind:"armour" };
-  if (copy) {
-    const [cc, co] = copy.split("/");
-    data = (await api(`/api/config?character=${encodeURIComponent(cc)}&outfit=${encodeURIComponent(co)}`)).outfit || data;
-    delete data.existing;                                    // outputs of the other run: not this one's
-  }
-  data.pack = c + "_" + name;
-  openForm({ level:"outfit", character:c, outfit:name, data, isNew:true });
+async function newOutfit(c, kind) {
+  const cfg = await api("/api/config");
+  const copies = Object.entries(cfg.characters).flatMap(([ch, os]) => os.map(o => ch + "/" + o));
+  openForm({ level:"outfit", character:c, outfit:"", data:{ kind: kind || "armour", trellis_models:["front_back_sides"] },
+             isNew:true, copies });
+}
+async function charSettings(c) {
+  S.sel = null;
+  const cfg = await api(`/api/config?character=${encodeURIComponent(c)}`);
+  openForm({ level:"character", character:c, data: cfg.character || {} });
+}
+async function copyFrom(src) {
+  if (!src) return;
+  const F = S.form, [cc, co] = src.split("/");
+  const cfg = await api(`/api/config?character=${encodeURIComponent(cc)}${co ? "&outfit=" + encodeURIComponent(co) : ""}`);
+  keepNames();
+  F.data = JSON.parse(JSON.stringify((co ? cfg.outfit : cfg.character) || {}));
+  delete F.data.existing; delete F.data.images;            // the other run's outputs and images: not this one's
+  delete F.data.pack;
+  drawForm();
+}
+function keepNames() {                                     // the new form's name / character boxes into S.form
+  const F = S.form, n = document.getElementById("nf_name"), c = document.getElementById("nf_char");
+  if (n) { if (F.level === "outfit") F.outfit = n.value.trim(); else F.character = n.value.trim(); }
+  if (c) F.character = c.value;
 }
 async function editSettings(level) {
   const o = cur();
@@ -386,17 +415,27 @@ async function editBroken(c, o) {
 async function openForm(F) { S.form = F; await fieldsTable(); drawForm(); }
 function closeForm() { S.form = null; S.sig = null; refresh(); }
 
+const FIRST = ["kind", "trellis_models", "images"];        // an outfit form starts with what it is and its images
 function formRows() {
   const F = S.form;
-  return S.fields.fields.filter(f => f.name !== "character" &&
+  const rows = S.fields.fields.filter(f => f.name !== "character" &&
     (F.level === "character" ? f.level === "character" : f.level === "outfit" || f.name in F.data));
+  const rank = f => FIRST.includes(f.name) ? FIRST.indexOf(f.name) : FIRST.length;
+  return rows.map((f, i) => [rank(f), i, f]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[2]);
 }
 function drawForm() {
   const F = S.form, kind = F.level === "outfit" ? (F.data.kind || "armour") : null;
-  let h = `<h2>${F.isNew ? "New " : ""}${F.level}: ${esc(F.character)}${F.outfit ? "/" + esc(F.outfit) : ""}</h2>
-    <p class="dim">${F.level === "character" ? "What every outfit of this character shares (outfits/" + esc(F.character) + "/character.json)."
-      : "What this outfit sets (outfits/" + esc(F.character) + "/" + esc(F.outfit) + ".json); the character file gives the rest."}
-      * = needed by ${kind ? "a " + kind + " outfit" : "some outfit kind"}. File paths: relative to the data root (${esc(S.state ? S.state.data_root : "")}), looks and configs to the repo.</p>`;
+  let h = `<h2>${F.isNew ? "New " : ""}${F.level}${F.isNew ? "" : ": " + esc(F.character) + (F.outfit ? "/" + esc(F.outfit) : "")}</h2>`;
+  if (F.isNew) {
+    const chars = S.state ? S.state.characters : [];
+    h += `<div class="attempt"><div class="row"><b>name</b> <input type="text" id="nf_name" size="30"
+        value="${esc(F.level === "outfit" ? F.outfit : F.character)}" placeholder="letters, digits, _ and -">` +
+      (F.level === "outfit" ? ` <b>character</b> <select id="nf_char">${chars.map(c => `<option ${c === F.character ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>` : "") +
+      ` <b>start from</b> <select onchange="copyFrom(this.value)"><option value="">blank</option>${(F.copies || []).map(c => `<option>${esc(c)}</option>`).join("")}</select></div></div>`;
+  }
+  h += `<p class="dim">${F.level === "character" ? "What every outfit of this character shares (its character.json). Nothing is needed to save: each field is asked for by the step that reads it."
+      : "What this outfit sets; the character file gives the rest."}
+      * = needed by ${kind ? "a " + kind + " outfit" : "some outfit kind"}, when the steps named run. File paths: relative to the data root (${esc(S.state ? S.state.data_root : "")}), looks and configs to the repo.</p>`;
   h += `<div class="attempt"><div class="row"><b>about</b> <span class="dim">a note: what this is</span></div>
     <textarea id="f__about" rows="2" cols="100">${esc(F.data._about || "")}</textarea></div>`;
   h += formRows().map(f => fieldRow(f, F.data[f.name], kind)).join("");
@@ -405,9 +444,20 @@ function drawForm() {
   document.getElementById("main").innerHTML = h;
 }
 function fieldRow(f, v, kind) {
-  const need = kind ? f.kinds.includes(kind) : f.kinds.length > 0, id = "f_" + f.name;
+  const given = S.form.data.images || {}, byImage = S.fields.given_by_image[f.name];
+  const need = (kind ? f.kinds.includes(kind) : f.kinds.length > 0) && !(byImage && given[byImage]), id = "f_" + f.name;
   let input;
-  if (FILE_TYPES.includes(f.type)) {
+  if (f.type === "views") {                                // one slot per view: your image, or empty (drawn)
+    const models = S.form.data.trellis_models || [], want = new Set(models.flatMap(m => S.fields.model_views[m] || []));
+    input = `<div class="slots">` + f.choices.map(view => {
+      const n = "images__" + view, val = (v || {})[view] || "";
+      return `<div class="slot"><b>${view}</b> ${want.has(view) ? `<span class="okc">needed</span>` : `<span class="dim">not needed by the models</span>`}<br>
+        <input type="text" id="f_${n}" size="28" value="${esc(val)}" placeholder="${want.has(view) ? "empty: drawn" : ""}" onchange="thumb('${n}', 'image')"><br>
+        <select onfocus="fillFiles(this, 'image')" onchange="if (this.value) { document.getElementById('f_${n}').value = this.value; thumb('${n}', 'image'); }"><option value="">pick a file…</option></select>
+        <input type="file" accept="image/png,image/jpeg,image/webp" onchange="uploadInput(this, '${n}', 'image')">
+        <div id="th_${n}">${val ? thumbImg(val) : ""}</div></div>`;
+    }).join("") + `</div>`;
+  } else if (FILE_TYPES.includes(f.type)) {
     input = `<input type="text" id="${id}" size="80" value="${esc(v || "")}" onchange="thumb('${f.name}', '${f.type}')">
       <select onfocus="fillFiles(this, '${f.type}')" onchange="if (this.value) { document.getElementById('${id}').value = this.value; thumb('${f.name}', '${f.type}'); }"><option value="">pick a file…</option></select>
       <label class="dim">or upload <input type="file" onchange="uploadInput(this, '${f.name}', '${f.type}')"></label>
@@ -418,7 +468,8 @@ function fieldRow(f, v, kind) {
   } else if (f.type === "bool") {
     input = `<select id="${id}"><option value=""></option><option ${v === true ? "selected" : ""}>true</option><option ${v === false ? "selected" : ""}>false</option></select>`;
   } else if (f.type === "list" && f.choices.length) {
-    input = f.choices.map(c => `<label><input type="checkbox" class="${id}" value="${c}" ${(v || []).includes(c) ? "checked" : ""}> ${c}</label>`).join(" ");
+    const on = f.name === "trellis_models" ? ` onchange="keepForm(); drawForm()"` : "";
+    input = f.choices.map(c => `<label><input type="checkbox" class="${id}" value="${c}" ${(v || []).includes(c) ? "checked" : ""}${on}> ${LABEL[c] || c}</label>`).join(" ");
   } else if (f.type === "list") {
     input = `<input type="text" id="${id}" size="80" value="${esc((v || []).join(", "))}"> <span class="dim">comma-separated</span>`;
   } else if (f.type === "dict") {
@@ -431,7 +482,7 @@ function fieldRow(f, v, kind) {
   } else {
     input = `<input type="text" id="${id}" size="50" value="${esc(v || "")}">`;
   }
-  return `<div class="attempt"><div class="row"><b>${f.name}${need ? " *" : ""}</b> <span class="dim">${esc(f.help)}</span></div>
+  return `<div class="attempt"><div class="row"><b>${f.name}${need ? " *" : ""}</b> <span class="dim">${esc(f.help)}${f.steps.length ? " · read by: " + f.steps.join(", ") : ""}</span></div>
     <div class="row">${input}</div></div>`;
 }
 function absPath(p) { return /^[A-Za-z]:|^\//.test(p) ? p : S.state.data_root + "/" + p; }
@@ -442,7 +493,8 @@ function thumb(name, type) {
 }
 async function fillFiles(sel, type) {
   if (sel.dataset.filled) return;
-  sel.dataset.filled = "1";
+  sel.dataset.filled = "1"; keepNames();
+  if (!S.form.character) { sel.dataset.filled = ""; return toast("type the name first"); }
   try {
     const r = await api(`/api/files?character=${encodeURIComponent(S.form.character)}&type=${type}`);
     sel.innerHTML = `<option value="">pick a file… (${r.files.length})</option>` + r.files.map(f => `<option>${esc(f)}</option>`).join("");
@@ -450,6 +502,7 @@ async function fillFiles(sel, type) {
 }
 async function uploadInput(input, name, type) {
   const f = input.files[0]; if (!f) return;
+  keepNames(); if (!S.form.character) return toast("type the name first");
   const data = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(f); });
   try {
     const up = await api("/api/upload", { character:S.form.character, input:true, name:f.name, data });
@@ -463,6 +516,15 @@ function collect() {
   const about = document.getElementById("f__about").value.trim();
   if (about) out._about = about;
   for (const f of formRows()) {
+    if (f.type === "views") {
+      const got = {};
+      for (const view of f.choices) {
+        const el = document.getElementById("f_images__" + view), s = el ? el.value.trim() : "";
+        if (s) got[view] = s;
+      }
+      if (Object.keys(got).length) out[f.name] = got;
+      continue;
+    }
     if (f.type === "list" && f.choices.length) {
       const ticked = [...document.querySelectorAll(".f_" + f.name + ":checked")].map(x => x.value);
       if (ticked.length) out[f.name] = ticked;
@@ -480,25 +542,33 @@ function collect() {
   }
   return out;
 }
-function keepForm() { try { S.form.data = collect(); } catch (e) {} }
+function keepForm() { keepNames(); try { S.form.data = collect(); } catch (e) {} }
 async function saveForm() {
   const F = S.form, err = document.getElementById("formerr");
+  keepNames();
   try {
     const data = collect();
+    if (F.level === "outfit" && !data.pack) data.pack = F.character + "_" + F.outfit;
+    if (F.isNew) {                                         // never over another one's file
+      const cfg = await api("/api/config");
+      if (F.level === "character" ? F.character in cfg.characters : (cfg.characters[F.character] || []).includes(F.outfit))
+        throw new Error(`${F.character}${F.level === "outfit" ? "/" + F.outfit : ""} already exists`);
+    }
     if (F.level === "character") await api("/api/character", { character:F.character, data });
     else await api("/api/outfit", { character:F.character, outfit:F.outfit, data });
   } catch (e) {
     err.textContent = e.message.split("; ").join("\n"); err.style.display = "block";
     return;
   }
-  const key = F.outfit ? F.character + "/" + F.outfit : S.sel;
+  const key = F.outfit ? F.character + "/" + F.outfit : null, newChar = F.isNew && F.level === "character";
   S.form = null;
   await refresh();
+  if (newChar) return newOutfit(F.character, "body");      // a new character: its first outfit, its body
   if (key && S.state.outfits.some(o => o.character + "/" + o.outfit === key && !o.error)) await select(key);
   else drawNav();
 }
 
-// #barb/naked/trellis opens that outfit at that step; #settings/barb/naked its settings form
+// #<character>/<outfit>/<step> opens that outfit at that step; #settings/<character>[/<outfit>] its settings form
 (async () => {
   await refresh();
   const h = decodeURIComponent(location.hash.slice(1)).split("/");
@@ -508,6 +578,7 @@ async function saveForm() {
     return openForm({ level: h[2] ? "outfit" : "character", character:h[1], outfit:h[2],
                       data: (h[2] ? cfg.outfit : cfg.character) || {} });
   }
+  if (h[0] === "new") return h[1] ? newOutfit(h[1]) : newCharacter();   // #new: a character; #new/<character>: an outfit
   if (h.length >= 2) { await select(h[0] + "/" + h[1]); if (h[2]) pickStep(h[2]); }
 })();
 </script>

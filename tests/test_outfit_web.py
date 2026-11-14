@@ -153,7 +153,10 @@ def test_a_new_character_and_outfit_from_the_page(server, tmp_path, monkeypatch)
     assert json.loads((tmp_path / "outfits" / "wizard" / "character.json").read_text(encoding="utf-8")) == char
     robe = {"kind": "body", "pack": "wizard_robe", "front": "f", "back": "b", "paint_look": "l.json"}
     code, r = post(base + "/api/outfit", {"character": "wizard", "outfit": "robe", "data": robe})
-    assert code == 400 and "no concept" in r["error"]                     # named, never filled in
+    assert code == 200 and any(m.startswith("no concept") for m in r["missing"])   # named, never filled in
+    code, r = post(base + "/api/outfit", {"character": "wizard", "outfit": "robe",
+                                          "data": {**robe, "images": {"front": "generated/none.png"}}})
+    assert code == 400 and "images.front: no file" in r["error"]
     code, r = post(base + "/api/upload", {"character": "wizard", "input": True, "name": "front.png",
                                           "data": "data:image/png;base64,iVBORw0KGgo="})
     assert code == 200 and r["rel"].startswith("generated/bosses/wizard/inputs/") and Path(r["path"]).is_file()
@@ -180,7 +183,21 @@ def test_names_and_broken_files(server, tmp_path, monkeypatch):
     (tmp_path / "outfits" / "w" / "character.json").write_text("{}", encoding="utf-8")
     (tmp_path / "outfits" / "w" / "hat.json").write_text('{"kind": "armour"}', encoding="utf-8")
     row = json.loads(get(base + "/api/state")[1])["outfits"][0]
-    assert row["outfit"] == "hat" and "no rig_fit" in row["error"]         # listed with what is missing
+    assert row["outfit"] == "hat" and "no character" in row["error"]       # listed with what is missing
+
+
+def test_run_on_stays_in_its_lane(server):
+    from tools.boss_sprite_pipeline import outfit as of
+    _, _, _, pod = server
+    ctx = of.Ctx("barb", "naked")                       # front done, back at its gate
+    assert ow.build_args(ctx, {"action": "on"}, pod) == ("back", ["--to", "trellis"], "local")
+    for s in ("back", "sides"):
+        ctx.run["steps"][s] = {"status": "done"}
+    with pytest.raises(ValueError, match="pod"):
+        ow.build_args(ctx, {"action": "on"}, pod)
+    pod.host, pod.port = "1.2.3.4", "22"
+    assert ow.build_args(ctx, {"action": "on"}, pod) == ("trellis", ["--to", "skeleton", "--host", "1.2.3.4",
+                                                                     "--port", "22"], "pod")
 
 
 def test_use_an_image_for_a_view(server, tmp_path):

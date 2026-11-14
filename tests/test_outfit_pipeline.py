@@ -55,11 +55,15 @@ def test_a_missing_field_is_named_never_filled_in():
     o = {"character": "x", "kind": "armour", "pack": "x_plate", "roles": "r.json", "clips_blend": "c.blend",
          "concept": "c.png", "paint_look": "l.json", "front": "f", "back": "b", "sam": {}, "greedy_dirs": "g.json",
          "rig_game": "g.glb"}
-    bad = outfit_fields.problems(o)
-    assert len(bad) == 1 and bad[0].startswith("no rig_fit (character file)")
-    assert outfit_fields.problems({**o, "rig_fit": "f.glb", "colour": 1}) == ["unknown field 'colour'"]
-    assert outfit_fields.problems({**o, "rig_fit": "f.glb", "views": "32"}) == ["views must be a number"]
+    assert outfit_fields.problems(o) == []                              # the rig is asked for by its steps
+    bad = outfit_fields.missing(o, "skeleton")
+    assert len(bad) == 1 and bad[0].startswith("no rig_fit (character file, read by skeleton, worn)")
+    assert outfit_fields.missing(o, "front") == [] and [f.name for f in outfit_fields.needed(o)] == ["rig_fit"]
+    assert outfit_fields.problems({**o, "colour": 1}) == ["unknown field 'colour'"]
+    assert outfit_fields.problems({**o, "views": "32"}) == ["views must be a number"]
     assert outfit_fields.problems({**o, "kind": "hat"})[0].startswith("kind must be one of")
+    assert outfit_fields.problems({"kind": "body"})[0].startswith("no character")  # read by every step
+    assert outfit_fields.problems({**o, "images": {"top": "a.png"}})[0].startswith("images must be")
     with pytest.raises(SystemExit, match="clips.attack"):
         characters.need({"clips": {"idle": "a"}}, "x", "clips.attack")
 
@@ -107,6 +111,98 @@ def test_models_decide_the_drawings(tmp_path, monkeypatch):
     assert ctx.views() == ["front", "back", "left", "right"]
     for v, src in of.MIRROR_OF.items():                                 # a mirrored view comes after its source
         assert of.SIDE_ORDER.index(src) < of.SIDE_ORDER.index(v)
+
+
+def test_a_new_body_from_your_images_needs_no_prompt_concept_or_rig():
+    o = {"character": "x", "kind": "body", "images": {"front": "f.png", "back": "b.png", "left": "l.png"}}
+    assert outfit_fields.problems(o) == []
+    for step in ("front", "back", "sides", "trellis"):
+        assert outfit_fields.missing(o, step) == [], step
+    assert {f.name for f in outfit_fields.needed({**o, "images": {"back": "b.png"}})} >= {"concept", "front"}
+    assert "rig_fit" in [f.name for f in outfit_fields.needed(o)]       # still named, for the skeleton step
+
+
+class FakeGate:
+    """view_gate as the driver sees it: --use records an attempt (passing or not), --accept accepts it."""
+
+    def __init__(self, gate_dir: Path, passed: bool):
+        self.dir, self.passed, self.cmds = gate_dir, passed, []
+
+    def __call__(self, cmd, ok=None, cwd=None, show=True):
+        cmd = [str(c) for c in cmd]
+        self.cmds.append(cmd)
+        view = cmd[3] if cmd[3] != "side" else "side_" + cmd[cmd.index("--side") + 1]
+        gj = self.dir / f"gate_{view}.json"
+        gate = json.loads(gj.read_text(encoding="utf-8")) if gj.is_file() else {"attempts": []}
+        if "--use" in cmd:
+            n = len(gate["attempts"]) + 1
+            gate["attempts"].append({"attempt": n, "draw": str(self.dir / f"{view}_{n}.png"),
+                                     "supplied": str(Path(cmd[cmd.index("--use") + 1]).resolve()),
+                                     "scores": {"passed": self.passed}})
+            gate.update(status="pending", sheet="s.png")
+        elif "--accept" in cmd:
+            gate.update(status="accepted", accepted=int(cmd[cmd.index("--accept") + 1]))
+            (self.dir / f"{view}.png").write_bytes(b"x")
+        else:
+            raise AssertionError(f"drew instead of using the image: {cmd}")
+        self.dir.mkdir(parents=True, exist_ok=True)
+        gj.write_text(json.dumps(gate), encoding="utf-8")
+        return "PENDING"
+
+
+def given_ctx(tmp_path, monkeypatch, images):
+    monkeypatch.setenv("OUTFIT_DATA_ROOT", str(tmp_path))
+    for rel in images.values():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_bytes(b"x")
+    ctx = of.Ctx("barb", "naked")
+    ctx.o = {**ctx.o, "images": images}
+    ctx.o.pop("concept")
+    ctx.run["models"] = ["front_back_sides"]
+    return ctx
+
+
+def test_your_images_are_used_not_drawn(tmp_path, monkeypatch):
+    images = {"front": "in/f.png", "back": "in/b.png", "left": "in/l.png", "right": "in/r.png"}
+    ctx = given_ctx(tmp_path, monkeypatch, images)
+    gate = FakeGate(ctx.work / "gate", passed=True)
+    monkeypatch.setattr(of, "call", gate)
+    a = type("A", (), {"accept": None, "use": None, "retry": None, "view": None})()
+    of.view_gate(ctx, "front", a)
+    assert gate.cmds[0][gate.cmds[0].index("--input") + 1] == str(tmp_path / "in/f.png")   # no concept: its own
+    assert "--use" in gate.cmds[0] and "--accept" in gate.cmds[1] and ctx.done("front")
+    of.view_gate(ctx, "back", a)
+    of.s_sides(ctx, a)
+    assert ctx.done("back") and ctx.done("sides")
+    assert (ctx.work / "gate" / "side_right.png").is_file()             # given, so not mirrored from the left
+    assert sum("--use" in c for c in gate.cmds) == 4
+
+
+def test_a_failed_check_on_your_image_waits_and_does_not_draw(tmp_path, monkeypatch):
+    ctx = given_ctx(tmp_path, monkeypatch, {"front": "in/f.png", "back": "in/b.png"})
+    ctx.o["concept"] = "in/f.png"                                       # a concept: the front is checked, here fails
+    gate = FakeGate(ctx.work / "gate", passed=False)
+    monkeypatch.setattr(of, "call", gate)
+    a = type("A", (), {"accept": None, "use": None, "retry": None, "view": None})()
+    with pytest.raises(of.Stop, match="front attempt 1"):
+        of.view_gate(ctx, "front", a)
+    with pytest.raises(of.Stop, match="front attempt 1"):               # again: still waiting, nothing drawn
+        of.view_gate(ctx, "front", a)
+    assert len(gate.cmds) == 1
+
+
+def test_a_step_stops_naming_the_fields_it_reads(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("OUTFIT_DATA_ROOT", str(tmp_path))
+    real = of.Ctx.__init__
+
+    def no_rig(self, *a):
+        real(self, *a)
+        self.o.pop("rig_fit")
+        self.record("trellis", status="done", outputs={"picked": "m.glb"})
+    monkeypatch.setattr(of.Ctx, "__init__", no_rig)
+    with pytest.raises(SystemExit) as stop:
+        of.main(["barb", "naked", "--only", "skeleton"])
+    assert stop.value.code == 2 and "no rig_fit (character file, read by skeleton" in capsys.readouterr().out
 
 
 def test_pod_step_stops_without_a_pod(monkeypatch):

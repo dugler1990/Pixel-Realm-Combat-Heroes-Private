@@ -162,7 +162,10 @@ def outfits() -> list[dict]:
                      "steps": [{"name": s, "status": ctx.step(s).get("status", "-"),
                                 "cost_usd": ctx.step(s).get("cost_usd"), "pod_minutes": ctx.step(s).get("pod_minutes"),
                                 "time": ctx.step(s).get("time")} for s in steps],
-                     "next": next((s for s in steps if not ctx.done(s)), None)})
+                     "next": next((s for s in steps if not ctx.done(s)), None),
+                     "missing": [{"field": f.name, "level": f.level, "steps": list(f.steps)}
+                                 for f in outfit_fields.needed(ctx.o)],
+                     "images": ctx.o.get("images") or {}})
     return rows
 
 
@@ -203,6 +206,18 @@ def build_args(ctx: of.Ctx, body: dict, pod: Pod) -> tuple[str | None, list[str]
         if not models:
             raise ValueError("tick at least one model")
         return None, ["--models", ",".join(models), "--status"], "local"
+    if action == "on":                     # run on from the first step not done, to the next gate or pod step
+        todo = [s for s in steps if not ctx.done(s)]
+        if not todo:
+            raise ValueError("every step is done")
+        lane = "pod" if todo[0] in of.POD_STEPS else "local"
+        other = next((s for s in todo if (s in of.POD_STEPS) != (lane == "pod")), None)   # where the lane changes
+        args = ["--to", other] if other else []
+        if lane == "pod":
+            if not (pod.host and pod.port):
+                raise ValueError("next is a pod step: paste the pod's ssh line first")
+            args += ["--host", pod.host, "--port", pod.port]
+        return todo[0], args, lane
     if step not in steps:
         raise ValueError(f"{step!r} is not a step of a {ctx.o['kind']} outfit")
     args = ["--only", step]
@@ -257,7 +272,8 @@ FILES_MAX = 400
 
 
 def fields() -> dict:
-    return {"fields": [dict(f.__dict__) for f in outfit_fields.FIELDS], "kinds": list(outfit_fields.KINDS)}
+    return {"fields": [dict(f.__dict__) for f in outfit_fields.FIELDS], "kinds": list(outfit_fields.KINDS),
+            "model_views": of.MODEL_VIEWS, "given_by_image": outfit_fields.GIVEN_BY_IMAGE}
 
 
 def config(character: str | None, outfit: str | None) -> dict:
@@ -301,13 +317,18 @@ def save_outfit(character: str, outfit: str, data: dict) -> dict:
     if not characters.path(character).is_file():
         raise ValueError(f"no character {character!r}: make it first")
     data = {**data, "character": character}
+    merged = {**characters.load(character), **data}
     bad = outfit_fields.file_problems(data, "outfit")
-    bad += [p for p in outfit_fields.problems({**characters.load(character), **data}) if p not in bad]
+    bad += [p for p in outfit_fields.problems(merged) if p not in bad]
+    for view, rel in (data.get("images") or {}).items():
+        if isinstance(rel, str) and not (Path(rel) if Path(rel).is_absolute() else data_root() / rel).is_file():
+            bad.append(f"images.{view}: no file {rel}")
     if bad:
         raise ValueError("; ".join(bad))
     path = characters.OUTFITS / character / f"{outfit}.json"
     write_json(path, data)
-    return {"saved": str(path)}
+    # Saved: what is still to fill in is named per step (each is checked when its step runs).
+    return {"saved": str(path), "missing": outfit_fields.missing(merged)}
 
 
 def list_files(character: str, ftype: str) -> list[str]:
@@ -364,7 +385,9 @@ def make_handler(jobs: Jobs, pod: Pod):
                 if u.path == "/api/state":
                     keys = {k: bool(os.environ.get(env)) for k, (env, _) in KEYS.items()}
                     return self.json({"outfits": outfits(), "jobs": jobs.snapshot(), "pod": pod.info(), "keys": keys,
-                                      "data_root": str(data_root())})
+                                      "data_root": str(data_root()),
+                                      "characters": sorted(p.parent.name for p in
+                                                           characters.OUTFITS.glob(f"*/{characters.FILE}"))})
                 if u.path == "/api/run":
                     return self.json(run_detail(q["character"], q["outfit"]))
                 if u.path == "/api/pod/status":
