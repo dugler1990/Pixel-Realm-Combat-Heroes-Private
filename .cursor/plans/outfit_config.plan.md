@@ -16,6 +16,9 @@ Builds on the outfit pipeline (`outfit_pipeline.plan.md`, `PROCESS_outfit.md`) a
   - `export_outfit.py` `export_body`: game entry with "Barbarian", `barbarian.png`, `../Graphics/barb/`, the
     barb's roster / base stats / evasion loadout.
   - `repaint/repaint.py` `DEFAULT_LOOK`: with no look file, the paint prompts describe the barb.
+  - `player_clips.py`: defaults `settle_01`, `jokesillyrun`, `overheadchop` 45-60,108-138 are the barb's picks.
+  - `retarget_bvh.py` `TARGETS["barb"]`: his rig, roles and quirks in the code table (the bosses' rows stay).
+  (Found by `character_pipeline.plan.md` in `Pixel-Realm-characters`, whose step 1 defers to this plan.)
 - A view (front, back, sides) can only come from a drawing call. An image you already have cannot be used
   (an upload is only sent to the image model as a reference for a redraw).
 - After `export`, getting pieces into the game is terminal + hand edits: `equip_install.py`, the stats in
@@ -36,6 +39,9 @@ view drawn or supplied, every gate clicked, the pieces in the game. The scripts 
   outfit), kinds that need it (body / armour / cut), type (image / glb / blend / json / text / number / bool /
   list / choice), help line. The page's forms, the checks and the tests come from this table; a new field is a
   row, no new form code. (Same idea as `item_properties.py`.)
+- **`rig_fit` is the character's own rig.** The skeleton step (`explode2/outfit_skeleton.py`) fits every new
+  mesh onto `rig_fit` by height and head: right for outfits of that body, wrong for another body shape. Its help
+  line says so; a new character never borrows another's `rig_fit`.
 - **No character default in code.** A missing field is an error naming the field, never the barb's value.
 - **Inputs live in the data root.** Uploads go to `<data>/generated/bosses/<character>/inputs/` (kept, named by
   time + original name). The page may write the character / outfit JSON and `item_bases.json` /
@@ -46,13 +52,15 @@ view drawn or supplied, every gate clicked, the pieces in the game. The scripts 
 ## 1. Character file and the field table
 
 - `outfits/barb/character.json`: `rig_fit`, `rig_game`, `roles`, `clips_blend`, `greedy_dirs`, `views`,
-  `clips_from` (pack whose clips.json a body export copies, today `barb`), and the game entry: `display_name`,
-  `painting`, `player_info_dir`, `roster_stats`, `base_stats`, `evasion_loadout`.
+  `clips_from` (pack whose clips.json a body export copies, today `barb`), `roster` (the game entry:
+  `display_name`, `painting`, `player_info_dir`, `roster_stats`, `base_stats`, `evasion_loadout`), `clips`
+  (idle / move / attack source names + attack frames, for `player_clips.py`), `retarget` (`bind_match`,
+  `arm_elev_cap`, `digitigrade`, for `retarget_bvh.py`).
 - The 3 barb outfit files lose the repeated keys.
 - `Ctx`: loads character + outfit, merges, checks against the field table (missing / wrong type / file not
   found: one error listing all).
-- Check: the merged dict of each barb outfit equals today's file (test), and `--status` / `--dry-run` of each
-  step prints the same commands as before (diffed).
+- Check: the merged dict of each barb outfit equals today's file (compared with `git show main:...`), and
+  `--status` / `--dry-run` of each step prints the same commands as before (diffed).
 
 ## 2. Barb out of the code
 
@@ -60,8 +68,12 @@ view drawn or supplied, every gate clicked, the pieces in the game. The scripts 
   `display_name` / `start_equipment`.
 - `repaint.py`: `DEFAULT_LOOK` moves to `repaint/looks/barb_bare.json`; no look = an error. Old barb runs whose
   cams.json has no look get `barb_bare.json` written into cams.json once (the only migration).
-- Check: `views --dry-run` prompts for barb naked / fullplate identical to before (diffed); grep: no `barb` in
-  the pipeline code outside comments and the barb's own files.
+- `player_clips.py --character <c>`: clip names and frames from the character file; no defaults.
+- `retarget_bvh.py --target <c>`: a character file with `retarget` first, else the code table (bosses).
+  The barb's row leaves the table.
+- Check (proof stays the barb), before / after, diffed: every step's `--dry-run` commands; the `views` prompts
+  for naked / fullplate; the `naked` export entry JSON; `retarget_bvh --target barb` profile; `player_clips`
+  clip choice. Grep: no `barb` in the pipeline code outside comments and the barb's own files.
 
 ## 3. New character / new outfit from the page
 
@@ -116,8 +128,15 @@ dropped, kept as each step lands.
 
 ## Not in this plan
 
-- Making a new character's base assets (concept render, 3D body, rig, clips): the boss pipeline (`pipeline.py`,
-  `PLAN.md`); the page only picks them.
+- Making a new character's base assets. Not `pipeline.py` / `PLAN.md`: that is the September boss route
+  (Hunyuan by default, procedural clips). The barb was made: one gpt-image-2.5 "flare" image → TRELLIS → UniRig →
+  `rigfix/rig_reweight.py` heat 0.5, plain skinning not dual quaternion (`PROCESS_rigfix.md`, "Current best
+  barb") → `anun_roles.py` → `explode2/fix_neutral_bone.py` (`barb_final_nb.glb`) → `retarget_bvh.py --source
+  anunaki` → `player_clips.py`. A new character's first rig is a real gap: UniRig has no `pod.py` step and last
+  ran through the September `gpu_box/setup.sh` / `GpuExec` route. Draft: `character_pipeline.plan.md` step 2
+  (branch `docs/characters`, worktree `Pixel-Realm-characters`). The page only picks the made files.
+- Armour made for one body on another: nothing in `equipment.fits()` stops barb plate going on another mesh
+  hero (`character_pipeline.plan.md` step 3).
 - Animations from the page (kimodo / retarget).
 - A batch queue of outfits.
 - Hiding the body under worn pieces; the helmet model.
