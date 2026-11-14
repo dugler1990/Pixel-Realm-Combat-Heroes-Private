@@ -37,19 +37,27 @@ Written, nothing built. Branch `feat/new-character` from `feat/outfit-config` (n
 `barb_unchanged.py`: same; tests pass.
 
 ## 1. Kind `character` ("New character" on the page)
-Steps: `concept front back sides trellis rig reweight roles paint game_rig clips export install`.
+Steps: `concept front back sides trellis rig reweight roles paint game_rig clips sprites export install`.
 Phases on the page: Views (concept front back sides) · 3D model (trellis rig reweight roles paint game_rig) ·
-Animation (clips) · Game (export install). Needs nothing in the character file to start; each step writes
-what it makes into it (field table, page writes JSON). New outfit fields: `concept_prompt`, `concept_config`.
+Animation (clips) · Game (sprites export install). Needs nothing in the character file to start; each step
+writes what it makes into it (field table, page writes JSON). New outfit fields: `concept_prompt`,
+`concept_config`, `concept_refs`, `concept_count`.
 
 ### concept
 - `images.front` given: that is the concept, no call.
-- Else `concept_prompt` → `image_client.generate` (config `concept_config`, default the barb's gpt-image-2.5
-  "flare" config), N candidates (outfit `concept_count`, 4) into `<run>/concept/`. Gate: pick one, or regenerate
-  with a reason (`r <why>`, as the view gates).
-- Check on each candidate: one person found (`pose_heights.py` joints), whole body in frame (head and feet),
-  white background, arms away from the body (shoulder–wrist angle from the joints; UniRig and the retarget
-  want an A-pose). Shown on the sheet, PASS / FAIL like the view gates.
+- Else a text prompt with context images → `image_client.generate`, N candidates (`concept_count`, 4) into
+  `<run>/concept/`. Gate: pick one, or regenerate with a reason (`r <why>`, as the view gates).
+- The model is a setting (`concept_config`: any image config, gpt-image-2.5 flare / gpt-image-2 / Leonardo).
+  Each passes context its own way and `image_client` already does it per provider (gpt-image: the images in the
+  request, named "Image 1, 2..." in the prompt; Leonardo: a reference strength per image). Context sent:
+  1. the pose image: the barb's A-pose (his front outline with the shoulder / hip / knee / ankle lines,
+     `body_silhouette.py` + `with_joint_lines`, as the view gates send), so every character stands like him;
+  2. `concept_refs`: your style / look images (optional, uploaded on the page).
+  The prompt says which image is which, as `view_gate` does.
+- Pose: A-pose, the barb's (what UniRig, the retarget and the armour route were all proven on). Check on each
+  candidate: one person found (`pose_heights.py`), whole body in frame, white background, joint heights and
+  the shoulder–wrist angle within a set tolerance of the barb's (measured once on his front, kept in
+  `view_checks/default.json`). PASS / FAIL on the sheet like the view gates.
 
 ### front
 The picked concept is the front, accepted without a redraw (as a given front with no concept today). Back and
@@ -83,13 +91,24 @@ a generic one).
   quirks written with defaults bind_match false, arm_elev_cap 90, digitigrade false, editable) →
   `<run>/clips/animated.blend` + one preview per clip (`make_mp4.py` / frame strip).
 - Gate: the page lists the clips with previews; pick idle, move, attack and the attack frames → `clips` in the
-  character file. `player_clips.py --character <c>` → `clips_blend`.
+  character file. `player_clips.py --character <c>` → `clips_blend`. Source: the anunaki SOMA set only.
+
+### sprites: its own sprite body
+In the game a mesh hero is drawn over a sprite hero: `Player` loads `player_info_dir` (`down_idle/0.png` sets
+its size and hit body, the frames drive it) and draws the mesh on top (`barb_mesh` and `barb_armour_mesh` both
+use `../Graphics/barb/`). A new player gets its own folder `Graphics/<c>/`, rendered from its painted mesh and
+clips: `render_frames.py` (one camera, the same framing for every frame) + `pack_frames.py`, adapted to the
+player layout (`down up left right`, each `_idle _move _attack`, plus the plain direction folders,
+`selection_screen`, `sit_down sit_idle sit_up`, `slide_left slide_right`, as `Graphics/barb/`). Sit and slide:
+from the anunaki clips nearest them (picked at the clips gate), else a still pose. Portrait (`painting`): a
+render of the painted mesh, or the concept cropped; you pick. Gate: a contact sheet of every folder.
 
 ### export, install
 - Export: the body pack with its own clips.json from `clips_blend` (today a body copies `clips_from`'s:
   `clips_from` becomes optional, set = copy, not set = own).
-- Install: the hero entry from `roster` (asked for at install: display name, stats, loadout) → 
-  `PlayerSelectionDict.json` (exists).
+- Install: the hero entry from `roster` → `PlayerSelectionDict.json` (exists): `player_info_dir` its own
+  `../Graphics/<c>/`, `painting` its portrait, `mesh_pack` its pack; display name, stats, loadout asked for
+  at install.
 
 ## 2. Page
 - "New character" opens the character kind: name, then concept (prompt box or upload), TRELLIS models, image
@@ -103,18 +122,24 @@ a generic one).
   `barb_final_nb.glb` (bone and weight counts); retarget + player_clips frame counts vs today's `player.blend`.
 - concept: dry-run prints prompt and config; one paid run (4 candidates, ~$0.5) when you say so.
 - rig (pod): one run on a pod you start, on the barb's TRELLIS mesh; compare bone count / roles with his.
+- sprites: render the barb's own mesh + clips into a scratch folder; frame sizes and anchor vs `Graphics/barb/`
+  on the contact sheet: same figure height and feet line (not the same pixels).
 - End to end: one new character you choose, through install, worn in game. Paid calls and a pod: yours to run.
 
-## Open questions (yours)
-- Concept model: gpt-image-2.5 flare (the barb) or Leonardo; how many candidates.
-- Pose: A-pose required, or the concept's own pose if the arms are clear of the body?
-- Roster: a mesh hero still names `painting` (portrait) and `player_info_dir` (sprite folder). What does a new
-  character use: a generated portrait, a shared sprite folder?
-- Clips: the anunaki SOMA set only for now?
+## Decided (2026-11-14, you)
+- Concept: text prompt, the model a setting, context passed the way each model takes it.
+- Pose: the A-pose we use (the barb's).
+- A new player is its own player: its own sprite folder and portrait, not the barb's.
+- Clips: the anunaki set for now.
+
+## Open
+- Sit and slide frames when no anunaki clip is close: a still pose, or skip those folders (does the game need
+  them for every hero? check `Player` before building `sprites`).
 
 ## Order and branches
 `feat/new-character` from `feat/outfit-config`, own worktree. 0 → 1 (concept front back sides; then rig;
-then reweight roles game_rig; then clips; then export install) → 2. One commit per step, barb check each time.
+then reweight roles game_rig; then clips; then sprites; then export install) → 2. One commit per step, barb
+check each time.
 
 ## Not in this plan
 - Armour fits only the body it was made on (`equipment.fits()`): `character_pipeline.plan.md` step 3.
