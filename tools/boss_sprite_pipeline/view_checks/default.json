@@ -54,5 +54,11 @@
   ],
   "frame_margin": 0.01,
   "background_min": 235
+ },
+ "concept_object": {
+  "_note": "a weapon's concept candidates: one piece, upright, clear of the edges",
+  "frame_margin": 0.01,
+  "background_min": 235,
+  "main_piece_min": 0.9
  }
 }

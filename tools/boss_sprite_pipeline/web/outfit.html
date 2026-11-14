@@ -213,7 +213,7 @@ function drawMain() {
       // done: the gate's cut-out, else the step's recorded drawing (outfits backfilled from before the driver)
       const mine = o.images[v], cut = d.cutouts[v] || ((d.run.steps[v] || {}).outputs || {}).draw
         || ((d.run.steps.sides || {}).outputs || {})[v];
-      const how = mine ? "your image" : v === "front" && o.kind === "character" ? "the concept"
+      const how = mine ? "your image" : v === "front" && ["character", "weapon"].includes(o.kind) ? "the concept"
         : (v in d.mirror_of && d.mirror_right ? "mirrored from " + d.mirror_of[v] : "drawn from the prompt");
       return `<div style="text-align:center"><b>${v}</b><br>${cut ? img(cut, "thumb") : mine ? thumbImg(mine) : `<div class="dim" style="height:120px;width:80px"></div>`}<br>
         <span class="dim">${how}${cut ? " · done" : ""}</span></div>`;
@@ -340,11 +340,13 @@ function panel(step, d, busy) {
     return h + `<div class="grid">${d.paint.map(p => img(p)).join("")}</div>`;
   }
   if (step === "install") return installPanel(d, run, busy);
-  if (step === "roles") {
+  if (step === "roles" || step === "grip") {               // a check image to accept, or change and run again
     const out = run.outputs || {};
-    return (run.status === "gate" ? `<div class="row"><button class="main" ${busy ? "disabled" : ""} onclick="act({action:'accept', step:'roles', n:1})">Accept roles</button>
-      <span class="dim">wrong: edit ${esc(out.roles || "roles.json")}, then Run Bone roles again</span></div>` : "")
-      + (out.check ? img(out.check, "big") : `<p class="dim">Run it: roles from the skeleton, then the body posed with them.</p>`);
+    const fix = step === "roles" ? `wrong: edit ${esc(out.roles || "roles.json")}, then Run Bone roles again`
+      : `not held right: change weapon_length / grip_offset / grip_turn / grip_hand in Outfit settings, then Run Grip again`;
+    return (run.status === "gate" ? `<div class="row"><button class="main" ${busy ? "disabled" : ""} onclick="act({action:'accept', step:'${step}', n:1})">Accept</button>
+      <span class="dim">${fix}</span></div>` : "")
+      + (out.check ? img(out.check, "big") : `<p class="dim">${step === "roles" ? "Run it: roles from the skeleton, then the body posed with them." : "Run it: the weapon put in his hand and shown."}</p>`);
   }
   const pics = { cut:["cut_front", "cut_back", "cut_sheet"], merge:["cut_front", "cut_back"], worn:["worn"],
                  slots:["slots_sheet"], sheet:["slots_sheet"] }[step] || [];
@@ -444,10 +446,13 @@ async function newCharacter() {
 // A new character's first outfit is its base (kind character), with the generic prompts and a concept model set.
 const CHARACTER_START = { view_prompts:"tools/boss_sprite_pipeline/view_prompts/character.json",
                           concept_config:"tools/painted_map_pipeline/openai.gpt-image-2.json", concept_count:4 };
+const KIND_START = { character: CHARACTER_START,
+                     weapon: { ...CHARACTER_START, view_prompts:"tools/boss_sprite_pipeline/view_prompts/weapon.json",
+                               weapon_length:0.45 } };
 async function newOutfit(c, kind) {
   const cfg = await api("/api/config");
   const copies = Object.entries(cfg.characters).flatMap(([ch, os]) => os.map(o => ch + "/" + o));
-  const data = { kind: kind || "armour", trellis_models:["front_back_sides"], ...(kind === "character" ? CHARACTER_START : {}) };
+  const data = { kind: kind || "armour", trellis_models:["front_back_sides"], ...(KIND_START[kind] || {}) };
   openForm({ level:"outfit", character:c, outfit: kind === "character" ? "base" : "", data, isNew:true, copies });
 }
 async function charPage(c) {
@@ -508,7 +513,7 @@ async function openForm(F) { S.form = F; S.charPage = null; await fieldsTable();
 function closeForm() { const c = S.form.character, back = !S.sel && S.form.level === "character" && !S.form.isNew;
                        S.form = null; S.sig = null; if (back) return charPage(c); refresh(); }
 
-const FIRST = ["kind", "concept_prompt", "concept_refs", "trellis_models", "images"];        // an outfit form starts with what it is and its images
+const FIRST = ["kind", "concept_prompt", "concept_refs", "weapon_length", "trellis_models", "images"];        // an outfit form starts with what it is and its images
 // The fields this form shows: a character's, or the outfit fields its kind's steps read (and any already set).
 function formRows() {
   const F = S.form, kind = F.data.kind || "armour", steps = S.fields.kind_steps[kind] || [];
@@ -572,7 +577,7 @@ function fieldRow(f, v, kind) {
       <span id="th_${f.name}">${f.type === "image" && v ? thumbImg(v) : ""}</span>`;
   } else if (f.name === "kind") {                         // what the outfit is: one card per kind
     input = `<input type="hidden" id="${id}" value="${esc(v || "armour")}"><div class="kinds">` + f.choices.map(k =>
-      `<div class="kindcard ${k === (v || "armour") ? "sel" : ""}" onclick="keepForm(); S.form.data.kind = '${k}'; drawForm()">
+      `<div class="kindcard ${k === (v || "armour") ? "sel" : ""}" onclick="keepForm(); S.form.data = { ...(KIND_START['${k}'] || {}), ...S.form.data, kind:'${k}' }; drawForm()">
         <b>${esc(kindName(k))}</b> <span class="dim" style="font-size:11px">(${k})</span><br><span class="dim">${esc(S.fields.kind_ui[k][1])}</span></div>`).join("") + `</div>`;
   } else if (f.type === "choice") {
     const on = "";

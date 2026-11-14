@@ -57,7 +57,7 @@ def test_a_missing_field_is_named_never_filled_in():
          "rig_game": "g.glb"}
     assert outfit_fields.problems(o) == []                              # the rig is asked for by its steps
     bad = outfit_fields.missing(o, "skeleton")
-    assert len(bad) == 1 and bad[0].startswith("no rig_fit (character file, read by skeleton, worn)")
+    assert len(bad) == 1 and bad[0].startswith("no rig_fit (character file, read by skeleton, worn, grip)")
     assert outfit_fields.missing(o, "front") == [] and [f.name for f in outfit_fields.needed(o)] == ["rig_fit"]
     assert outfit_fields.problems({**o, "colour": 1}) == ["unknown field 'colour'"]
     assert outfit_fields.problems({**o, "views": "32"}) == ["views must be a number"]

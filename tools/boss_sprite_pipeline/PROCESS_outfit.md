@@ -138,6 +138,10 @@ Settings that matter:
   the driver on the barb's `gear_test/barb_base_rigged.glb` (rig backfilled) and `rigfix/barb_final.glb` (paint
   backfilled): reweight 45 s = `barb_heat0.5.glb`, roles = `barb_roles.json`, game_rig = `barb_final_nb.glb`,
   exact. 37 tests.
+- 2026-11-14: kind `weapon` (first attempt): concept / views / TRELLIS as a new character, `grip` step
+  (`explode2/weapon_grip.py`, ~30 s). Test sword in the barb's hand through the driver: handle end found (radius
+  0.098 vs 0.153 at the tip), 45 % of his height, tip forward of the grip (y -0.40 vs -0.03; his toes point -Y),
+  follows the raised arm. 39 tests. Export / install not built.
 
 ## Tried and dropped
 

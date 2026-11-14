@@ -147,4 +147,34 @@ def test_the_base_run_fills_the_character_file(tmp_path, monkeypatch):
     characters.update("wiz", rig_game="g.glb", views=32)
     assert characters.load("wiz") == {"roles": "r.json", "rig_game": "g.glb", "views": 32}
     assert ctx.rel(tmp_path / "generated" / "x.glb") == "generated/x.glb"
-    assert "rig" in of.POD_STEPS and of.NOT_BUILT == {"clips", "sprites", "export", "install"}
+    assert "rig" in of.POD_STEPS and of.NOT_BUILT["character"] == {"clips", "sprites", "export", "install"}
+
+
+def test_a_weapon_needs_its_holder_rig_only_at_the_grip():
+    o = {"character": "barb", "kind": "weapon", "pack": "barb_sword", "concept_prompt": "a short iron sword",
+         "view_prompts": "tools/boss_sprite_pipeline/view_prompts/weapon.json",
+         "concept_config": "tools/painted_map_pipeline/openai.gpt-image-2.json", "weapon_length": 0.45}
+    assert outfit_fields.problems(o) == []
+    for step in ("concept", "front", "back", "sides", "trellis"):
+        assert outfit_fields.missing(o, step) == [], step
+    assert {f.name for f in outfit_fields.needed(o, "grip")} == {"rig_fit", "roles"}
+    assert "weapon_length" in {f.name for f in outfit_fields.needed({k: v for k, v in o.items() if k != "weapon_length"})}
+    assert of.STEPS["weapon"][-3:] == ["grip", "export", "install"] and of.NOT_BUILT["weapon"] == {"export", "install"}
+    assert set(of.STEPS["weapon"]) <= set(ow.STEP_UI) and "grip" in of.RUN
+
+
+def test_the_weapon_concept_check_wants_one_upright_piece(tmp_path):
+    limits = json.loads(cg.CHECKS.read_text(encoding="utf-8"))["concept_object"]
+    guide = of.TOOLS / "view_prompts" / "weapon_guide.png"
+    assert cg.check_object(guide, limits)["passed"]
+    flat = tmp_path / "flat.png"
+    Image.open(guide).rotate(90).save(flat)
+    assert "not upright" in cg.check_object(flat, limits)["failing"]
+    two = tmp_path / "two.png"
+    im = Image.new("RGB", (400, 400), "white")
+    im.paste((0, 0, 0), (50, 50, 80, 300))
+    im.paste((0, 0, 0), (300, 50, 330, 300))
+    im.save(two)
+    assert any("in pieces" in f for f in cg.check_object(two, limits)["failing"])
+    block = json.loads((of.TOOLS / "view_prompts" / "weapon.json").read_text(encoding="utf-8"))["concept"]
+    assert block["check"] == "object" and cg.build_prompt(block, "a short iron sword", 0, None).startswith("a short iron")

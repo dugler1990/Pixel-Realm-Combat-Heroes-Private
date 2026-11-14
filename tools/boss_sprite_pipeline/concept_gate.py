@@ -14,8 +14,10 @@ From the outfit file (outfit_fields.py):
 Context goes in the way each model takes it (image_client): the images in the request, named "Image 1..." in the
 prompt; Leonardo gets a strength per image (the pose HIGH, the look images MID).
 
-Each candidate: pose_heights.py --arms on it: one person, arms within the range from straight down, the figure
-clear of the edges, a white background. <out>/gate_concept.json records the attempts (pending until accepted),
+Each candidate, a character (the block's "check": "figure", the default): pose_heights.py --arms on it: one person,
+arms within the range from straight down, the figure clear of the edges, a white background. An object ("check":
+"object", a weapon): one main piece, upright (taller than wide), clear of the edges, a white background
+(view_checks "concept_object"). <out>/gate_concept.json records the attempts (pending until accepted),
 <out>/CONCEPT_SHEET.png shows the latest candidates with PASS / FAIL. --accept N copies attempt N to
 <out>/concept.png. Prints PENDING / accepted attempt N, and the cost the client prints.
 """
@@ -100,6 +102,36 @@ def check(path: Path, pose: dict | None, limits: dict) -> dict:
     return s
 
 
+def check_object(path: Path, limits: dict) -> dict:
+    """PASS / FAIL of an object candidate (a weapon): one main piece, upright, clear of the edges, white around."""
+    from scipy import ndimage
+    im = np.asarray(Image.open(path).convert("RGB")).astype(np.int16)
+    h, w = im.shape[:2]
+    figure = (im < 240).any(axis=2)
+    ys, xs = np.nonzero(figure)
+    m = limits["frame_margin"]
+    border = np.concatenate([im[0], im[-1], im[:, 0], im[:, -1]])
+    lab, n = ndimage.label(ndimage.binary_closing(figure, iterations=3))
+    sizes = np.bincount(lab.ravel())[1:] if n else np.array([0])
+    s = {"background": round(float(border.mean()), 1), "main_piece": round(float(sizes.max() / max(sizes.sum(), 1)), 3),
+         "clear_of_edges": bool(len(ys)) and ys.min() > m * h and ys.max() < (1 - m) * h
+         and xs.min() > m * w and xs.max() < (1 - m) * w,
+         "upright": bool(len(ys)) and float(np.ptp(ys)) > float(np.ptp(xs))}
+    fail = []
+    if not len(ys):
+        fail.append("nothing drawn")
+    if s["main_piece"] < limits["main_piece_min"]:
+        fail.append(f"in pieces ({s['main_piece']:.0%} in the largest)")
+    if not s["upright"]:
+        fail.append("not upright")
+    if not s["clear_of_edges"]:
+        fail.append("touches the edge (cut off)")
+    if s["background"] < limits["background_min"]:
+        fail.append(f"background not white ({s['background']:.0f})")
+    s["passed"], s["failing"] = not fail, fail
+    return s
+
+
 def concept_sheet(attempts: list[dict], path: Path) -> Path:
     tile, head = 384, 64
     out = Image.new("RGB", (tile * len(attempts), tile * 3 // 2 + head), (25, 25, 28))
@@ -140,7 +172,9 @@ def main() -> None:
     if "concept" not in vp:
         sys.exit(f"{o['view_prompts']} has no concept block")
     block = vp["concept"]
-    limits = json.loads(repo_file(o.get("view_checks") or CHECKS).read_text(encoding="utf-8"))["concept"]
+    is_object = block.get("check") == "object"
+    checks = json.loads(repo_file(o.get("view_checks") or CHECKS).read_text(encoding="utf-8"))
+    limits = checks["concept_object" if is_object else "concept"]
     a.out.mkdir(parents=True, exist_ok=True)
     gate_json = a.out / "gate_concept.json"
     gate = json.loads(gate_json.read_text(encoding="utf-8")) if gate_json.is_file() else {"attempts": []}
@@ -190,9 +224,10 @@ def main() -> None:
             {"images": [str(p) for p in images], "strengths": strengths, "result": result}, indent=1, default=str),
             encoding="utf-8")
         new.append({"attempt": n, "draw": str(draw), "prompt": prompt, "why": why})
-    found = poses([Path(t["draw"]) for t in new])
+    found = {} if is_object else poses([Path(t["draw"]) for t in new])
     for t in new:
-        t["scores"] = check(Path(t["draw"]), found.get(t["draw"]), limits)
+        t["scores"] = (check_object(Path(t["draw"]), limits) if is_object
+                       else check(Path(t["draw"]), found.get(t["draw"]), limits))
         print(f"  attempt {t['attempt']}: {'PASS' if t['scores']['passed'] else 'FAIL ' + '; '.join(t['scores']['failing'])}")
     gate["attempts"] += new
     sheet = concept_sheet(new, a.out / "CONCEPT_SHEET.png")

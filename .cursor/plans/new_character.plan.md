@@ -153,6 +153,18 @@ render of the painted mesh, or the concept cropped; you pick. Gate: a contact sh
 then reweight roles game_rig; then clips; then sprites; then export install) → 2. One commit per step, barb
 check each time.
 
+## 3. Weapons (first attempt, built 2026-11-14)
+Kind `weapon`, an outfit of the character who holds it: `concept front back sides trellis grip export install`.
+- concept: `view_prompts/weapon.json` (upright, handle down; `weapon_guide.png` gives the placement only); check
+  "object" (`view_checks` `concept_object`): one main piece, upright, clear of the edges, white background.
+- grip: `explode2/weapon_grip.py`: long axis by PCA, handle = the thinner end, scaled to `weapon_length` x the
+  holder's height, grip point (`grip_offset` from the handle end) at the palm (40 % along the hand bone), pointing
+  where his feet point, square to the hand bone, `grip_turn` about it; parented to the hand bone. GRIP_CHECK.png:
+  rest and arms raised. Checked on a test sword (boxes) in the barb's hand: handle found, 45 % of his height,
+  moves with the arm; turn -60 points it across him.
+- Not built: export / install (a weapon pack, an item with stats, drawn in the game: the game has no weapon slot
+  in `equipment.PIECES`), a closed hand, two-handed grips, fitting the attack clip.
+
 ## Not in this plan
 - Armour fits only the body it was made on (`equipment.fits()`): `character_pipeline.plan.md` step 3.
 - Non-humanoid bodies (wings, tails: NOTES_rig_jaw_sam3 §2), new slot rules for robes / capes.

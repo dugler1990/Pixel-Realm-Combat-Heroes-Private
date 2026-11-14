@@ -1,0 +1,27 @@
+{
+ "_about": "View prompts for a weapon (kind weapon): its concept from a description, upright with the handle down (weapon_guide.png: placement only), then back, sides and 3/4s drawn from the accepted front.",
+ "concept": {
+  "pose_ref": "tools/boss_sprite_pipeline/view_prompts/weapon_guide.png",
+  "check": "object",
+  "prompt": "{description}\n\nA single game weapon shown on its own: standing upright, the handle at the bottom and the tip or head at the top, placed like the grey shape in Image 1. Copy only that placement from Image 1, not its shape. The whole weapon in the picture, nothing cut off, centred, an orthographic view straight at its broad side, plain white background, no hands, no character, no stand, no shadow, no text.",
+  "refs": "\n\nImages {first} to {last} show how the weapon looks: follow their shape, materials, colours and painting style. Image 1 is only the placement.",
+  "refs_one": "\n\nImage {first} shows how the weapon looks: follow its shape, materials, colours and painting style. Image 1 is only the placement.",
+  "retry": "\n\nThe last attempt was rejected: {why}. Fix that, keeping everything else."
+ },
+ "prompts": {
+  "back": "Draw the weapon in Image 1 seen from its other side, turned half a turn about its upright axis. Image 2 is its exact outline from that side: fill it exactly, with the same size and position, nothing outside it and no gaps. The same weapon: same materials, colours and painting style, white background.",
+  "back_masked": "Image 1 is a placeholder: the black shape is exactly where the weapon must be. Repaint the masked area: draw the weapon in Image 2 seen from its other side, filling the black shape completely and exactly, with no black left. The same materials, colours and painting style. Plain white background.",
+  "side": "Draw the weapon in Image 1 seen exactly edge-on from its {side} side, a 90 degree side view, turned toward the {edge} edge of the image. Image 2 is the same weapon from its other side. The same weapon, upright, the handle at the bottom, its top and bottom at the same height in the image as in Image 1, orthographic, the same painting style and a white background.",
+  "quarter": "Draw the weapon in Image 1 seen from {view}: a 45 degree three-quarter view, turned toward the {edge} edge of the image. Image 2 is the same weapon from its other side. The same weapon, upright, the handle at the bottom, its top and bottom at the same height in the image as in Image 1, orthographic, the same painting style and a white background."
+ },
+ "retry_texts": {
+  "back": [
+   "shape_note:white",
+   "This image represents how you have differed from the outline in image 2, which your drawing must fill exactly, this shape needs to be pixel perfect relative to that outline, if not the image is not valid and cannot be used, this is the most important directive it takes precedence over any other contradictory statements earlier in the prompt, thanks."
+  ],
+  "back_masked": [
+   "shape_note:white",
+   "This image represents how you have differed from the black shape in image 1, which your drawing must fill exactly, this shape needs to be pixel perfect relative to that shape, if not the image is not valid and cannot be used, this is the most important directive it takes precedence over any other contradictory statements earlier in the prompt, thanks."
+  ]
+ }
+}

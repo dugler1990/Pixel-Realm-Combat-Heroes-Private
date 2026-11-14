@@ -16,7 +16,8 @@ from dataclasses import dataclass
 ALL = ("body", "armour", "cut")              # the kinds made on a character that has its rig
 TRELLIS_MODELS = ("front_only", "front_back", "front_back_sides", "eight_views")   # = outfit.MODEL_VIEWS keys
 VIEWS = ("front", "back", "left", "front_left", "back_left", "right", "front_right", "back_right")
-KINDS = ALL + ("character",)                # character: a new character, concept to install (its rig too)
+KINDS = ALL + ("character", "weapon")      # character: a new character, concept to install (its rig too);
+                                            # weapon: a weapon held by the outfit's character
 
 
 @dataclass(frozen=True)
@@ -32,15 +33,15 @@ class Field:
 
 FIELDS = (
     # --- character -------------------------------------------------------------------------------------------
-    Field("rig_fit", "character", ALL, "glb",
+    Field("rig_fit", "character", ALL + ("weapon",), "glb",
           "The character's own rig (UniRig, reweighted). The skeleton step fits every new mesh onto it by height and "
           "head, and worn tests pose pieces on it: it must be this character's body, never another character's.",
-          steps=('skeleton', 'worn')),
+          steps=('skeleton', 'worn', 'grip')),
     Field("rig_game", "character", ("armour", "cut"), "glb",
           "The game rig: rig_fit with neutral-bone vertices rehomed (*_nb.glb). Slots go on it; retarget's target.",
           steps=('slots', 'export')),
-    Field("roles", "character", ALL, "json", "Bone roles of the rig (anun_roles.py): which bone is which.",
-          steps=('paint', 'worn', 'slots', 'export')),
+    Field("roles", "character", ALL + ("weapon",), "json", "Bone roles of the rig (anun_roles.py): which bone is which.",
+          steps=('paint', 'worn', 'slots', 'export', 'grip')),
     Field("clips_blend", "character", ALL, "blend",
           "player_clips.py output: the rig with the idle / move / attack actions every pack is skinned to.",
           steps=('export',)),
@@ -63,15 +64,23 @@ FIELDS = (
           KINDS),
     Field("pack", "outfit", KINDS, "text", "Mesh pack name in Graphics/Meshes/ (<character>_<outfit>).",
           steps=('export', 'install')),
-    Field("concept_prompt", "outfit", ("character",), "text",
-          "A new character's description: what it is and how it looks. Sent with the A-pose stick figure and any "
+    Field("concept_prompt", "outfit", ("character", "weapon"), "text",
+          "The description of the new character or weapon: what it is and how it looks. Sent with the A-pose stick figure and any "
           "concept_refs (view_prompts' concept block). Not needed when images has a front.", steps=("concept",)),
-    Field("concept_config", "outfit", ("character",), "json",
+    Field("concept_config", "outfit", ("character", "weapon"), "json",
           "The image model for the concept (an image_client config: tools/painted_map_pipeline/openai.gpt-image-2.json, "
           "a Leonardo config ...).", steps=("concept",)),
     Field("concept_refs", "outfit", (), "list", "Images of how the character should look (style, face, clothes), "
           "paths relative to the data root.", steps=("concept",)),
     Field("concept_count", "outfit", (), "number", "Concept candidates per call (4).", steps=("concept",)),
+    Field("weapon_length", "outfit", ("weapon",), "number",
+          "The weapon's length as a share of the holder's height: dagger 0.2, sword 0.45, greatsword 0.6, staff 1.0.",
+          steps=("grip",)),
+    Field("grip_offset", "outfit", (), "number", "Where the hand holds it: a share of its length from the handle end "
+          "(0.12).", steps=("grip",)),
+    Field("grip_turn", "outfit", (), "number", "Degrees about the hand bone: 0 points it forward out of the fist.",
+          steps=("grip",)),
+    Field("grip_hand", "outfit", (), "choice", "Which hand holds it (his right: r).", ("r", "l"), steps=("grip",)),
     Field("images", "outfit", (), "views",
           "Your own images, one per view (front, back, left, front_left, ...): used instead of drawing that view, "
           "checked the same way, accepted when the check passes. Views not given are drawn from their prompt.",
@@ -87,7 +96,7 @@ FIELDS = (
           steps=('front',)),
     Field("back", "outfit", ("body", "armour"), "text", "Back drawing prompt (not needed for a back in images).",
           steps=('back',)),
-    Field("view_prompts", "outfit", ("character",), "json",
+    Field("view_prompts", "outfit", ("character", "weapon"), "json",
           "Prompt file for the drawn views (view_prompts/*.json): front, back, side, 3/4 and the redraw texts. The "
           "outfit's own front / back / side / quarter / retry_bigger win over it.", steps=("front", "back", "sides")),
     Field("view_checks", "outfit", (), "json",

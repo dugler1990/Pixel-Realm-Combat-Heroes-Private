@@ -47,9 +47,11 @@ STEPS = {
     # A new character (new_character.plan.md): what it makes is written into its character file.
     "character": ["concept", "front", "back", "sides", "trellis", "rig", "reweight", "roles", "paint", "game_rig",
                   "clips", "sprites", "export", "install"],
+    # A weapon held by the outfit's character: drawn and built on its own, then put in his hand (grip).
+    "weapon": ["concept", "front", "back", "sides", "trellis", "grip", "export", "install"],
 }
 # Steps of the character kind not built yet (new_character.plan.md, in order): they stop saying so.
-NOT_BUILT = {"clips", "sprites", "export", "install"}
+NOT_BUILT = {"character": {"clips", "sprites", "export", "install"}, "weapon": {"export", "install"}}
 SHARED_GREEDY = "generated/shared/greedy_dirs_f75.json"     # the cut's camera directions, one file for every character
 BARB_GREEDY = "generated/bosses/barb/explode2/fullplate/greedy_dirs_f75.json"   # where it was made
 POD_STEPS = {"trellis", "sam3", "holopart", "rig"}
@@ -150,8 +152,8 @@ class Ctx:
     def given(self, view: str) -> Path | None:
         """Your own image for a view (the outfit's "images"), else None: used instead of drawing it."""
         rel = (self.o.get("images") or {}).get(view)
-        if not rel and view == "front" and self.o["kind"] == "character" and self.done("concept"):
-            rel = self.step("concept").get("outputs", {}).get("concept")   # a new character: its accepted concept
+        if not rel and view == "front" and self.o["kind"] in ("character", "weapon") and self.done("concept"):
+            rel = self.step("concept").get("outputs", {}).get("concept")   # a new character / weapon: its concept
         if not rel:
             return None
         p = self.data(rel)
@@ -300,6 +302,24 @@ def s_game_rig(ctx: Ctx, a) -> None:
     characters.update(ctx.character, rig_game=ctx.rel(out),
                       **({} if "greedy_dirs" in have else {"greedy_dirs": SHARED_GREEDY}),
                       **({} if "views" in have else {"views": 32}))
+
+
+def s_grip(ctx: Ctx, a) -> None:
+    """A weapon in its holder's hand (explode2/weapon_grip.py): the handle found from its shape, sized to him, held
+    in the hand bone; the check sheet shows it at rest and with the arms raised. Change weapon_length / grip_offset /
+    grip_turn / grip_hand in the outfit settings and run again; accept when it looks held."""
+    o, out = ctx.o, ctx.work / "grip"
+    check = out / "GRIP_CHECK.png"
+    if a.accept is not None and check.is_file():
+        ctx.record("grip", status="done", outputs={"grip": str(out / "grip.json"), "check": str(check)})
+        return
+    call([ctx.bpy, TOOLS / "explode2" / "weapon_grip.py", ctx.out("trellis", "picked"), ctx.data(o["rig_fit"]),
+          ctx.data(o["roles"]), out, "--length", o["weapon_length"], "--offset", o.get("grip_offset", 0.12),
+          "--turn", o.get("grip_turn", 0), "--hand", o.get("grip_hand", "r")], ok="GRIP_OK")
+    ctx.record("grip", status="gate", outputs={"grip": str(out / "grip.json"), "check": str(check)})
+    raise Stop(f"grip: look at {check}\n"
+               f"  accept:  outfit.py {ctx.character} {ctx.outfit} --only grip --accept 1\n"
+               f"  adjust:  weapon_length / grip_offset / grip_turn / grip_hand in the outfit file, then --only grip")
 
 
 def not_built(ctx: Ctx, a) -> None:
@@ -587,7 +607,7 @@ def s_install(ctx: Ctx, a) -> None:
 
 
 RUN = {"concept": s_concept, "rig": s_rig, "reweight": s_reweight, "roles": s_roles, "game_rig": s_game_rig,
-       "clips": not_built, "sprites": not_built,
+       "clips": not_built, "sprites": not_built, "grip": s_grip,
        "front": lambda c, a: view_gate(c, "front", a), "back": lambda c, a: view_gate(c, "back", a),
        "sides": s_sides, "trellis": s_trellis, "skeleton": s_skeleton, "paint": s_paint, "views": s_views, "sam3": s_sam3,
        "cut": s_cut, "holopart": s_holopart, "merge": s_merge, "worn": s_worn, "slots": s_slots, "sheet": s_sheet,
@@ -681,7 +701,7 @@ def main(argv=None) -> None:
             if miss:
                 raise Stop("this step needs settings the files do not have (Outfit / character settings):\n  "
                            + "\n  ".join(miss))
-            if ctx.o["kind"] == "character" and name in NOT_BUILT:
+            if name in NOT_BUILT.get(ctx.o["kind"], ()):
                 not_built(ctx, a)
             RUN[name](ctx, a)
         except Stop as stop:

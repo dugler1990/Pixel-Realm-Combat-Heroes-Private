@@ -287,6 +287,8 @@ KIND_UI = {
     "character": ("New character", "An original character: concept from a description (or your image), views, 3D "
                                    "model, rig, clips, its own sprites, into the game. Its rig is then used by its "
                                    "armour sets."),
+    "weapon": ("Weapon", "A weapon from a description (or your image): views, 3D model, then put in this "
+                         "character's hand (grip), sized to him. Export to the game comes later."),
 }
 PHASES = [("views", "Views"), ("model", "3D model"), ("pieces", "Pieces"), ("animation", "Animation"), ("game", "Game")]
 STEP_UI = {  # step: (label, phase, what it does)
@@ -307,6 +309,8 @@ STEP_UI = {  # step: (label, phase, what it does)
                                            "the game rig."),
     "sheet": ("Pieces sheet", "pieces", "One picture of every piece."),
     "rig": ("Rig", "model", "UniRig gives the 3D model a skeleton and skin weights (pod)."),
+    "grip": ("Grip", "model", "The weapon in his hand: handle found from its shape, sized to him; adjust "
+                              "weapon_length / grip_offset / grip_turn in Outfit settings and run again."),
     "reweight": ("Reweight", "model", "Smoother skin weights (bone heat)."),
     "roles": ("Bone roles", "model", "Which bone is which: shoulder, elbow, knee ..."),
     "game_rig": ("Game rig", "model", "The rig the game and the armour use (neutral bone fixed)."),
