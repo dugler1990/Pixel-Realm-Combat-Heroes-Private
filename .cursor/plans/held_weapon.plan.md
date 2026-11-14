@@ -65,7 +65,15 @@ install`.
    prompts were tuned on: **the first paid run stops at the masks**, looked at before HoloPart.
 5. HoloPart: optional cleanup. It completes unseen backs of shells, not a handle's missing middle inside a fist: a
    blob there fails the sheet, and the route A mesh of the same weapon is swapped in.
-6. hand_pose (`explode2/weapon_hand_pose.py`): render the posed figure front and side, orthographic, **on white**;
+6. pose (the main way, user 2026-11-14): a 3D pose model on the drawn front (HMR 2.0 / 4D-Humans, SMPLer-X or Meta
+   Sapiens: never set up here; a pod install and a test first) gives the holder's whole 3D pose. His rig is posed
+   into it (the model's joints mapped to his bone roles, as `retarget_bvh.py` maps clip skeletons), the TRELLIS figure
+   fitted onto the posed rig (as `outfit_skeleton.py` fits armour onto the A-pose rig: height and head), and from
+   there it is the armour flow in posed space: cut the weapon, attach it to the hand bone, rig back to rest. This
+   removes "it is not in the A-pose" for the whole body and most of the arm-length gap. Check first: licences (SMPL's
+   body model is non-commercial; prefer a model not tied to it) and the joint mapping. Fallback: the two-view rtmlib
+   step below.
+6b. hand_pose fallback (`explode2/weapon_hand_pose.py`): render the posed figure front and side, orthographic, **on white**;
    rtmlib body model (shoulder, elbow, wrist per side; the `.venv-pose` detector). Front gives x and height, side
    gives depth and height. Match a side joint to a front joint by height, not by the detector's left / right labels
    (they swap in profile). Gate when the two views disagree in height, not only on low scores. Greatsword: both hands
