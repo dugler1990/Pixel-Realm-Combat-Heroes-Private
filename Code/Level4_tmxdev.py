@@ -1562,17 +1562,33 @@ class Level4:
         sprite never hits its owner or itself; one without an owner (a parried projectile)
         is its own source. A sprite with `stops` set (arrows, stones) stops at the first
         body it lands on.
+
+        Each hit carries its contact (InteractionContext.contact): the shared pixel, or for
+        a sprite moving this frame (is_moving, movement) the pixel where it entered the
+        body, walked back along its movement (hit_core.entry_point).
         """
         # A copy: stop() kills the sprite, which takes it out of the group.
         for attack_sprite in list(group):
             owner = attack_sprite.owner
-            targets = hit_core.find_hits(
-                hit_core.shape_of(attack_sprite),
+            shape = hit_core.shape_of(attack_sprite)
+            found = hit_core.find_contacts(
+                shape,
                 self.attackable_sprites,
                 exclude=(owner, attack_sprite) + tuple(also_exclude),
             )
-            if not targets:
+            if not found:
                 continue
+            movement = getattr(attack_sprite, "movement", None) if getattr(attack_sprite, "is_moving", False) else None
+            if movement is not None and (movement[0] or movement[1]):
+                # This frame's travel plus the shot's own length: where it can have entered.
+                reach = int(math.hypot(movement[0], movement[1])) + max(shape.rect.size)
+                contacts = {
+                    id(target): hit_core.entry_point(point, movement, body_shape, reach)
+                    for target, point, body_shape in found
+                }
+            else:
+                contacts = {id(target): point for target, point, _ in found}
+            targets = [target for target, _, _ in found]
             fields = dict(
                 kind=attack_sprite.interaction_kind,
                 source_kind=attack_sprite.source_kind,
@@ -1587,11 +1603,11 @@ class Level4:
             hits, rehit_ms = attack_sprite.hits, attack_sprite.rehit_ms
             if attack_sprite.stops:
                 for target in targets:
-                    if self.interaction_resolver.strike([target], hits, rehit_ms, **fields):
+                    if self.interaction_resolver.strike([target], hits, rehit_ms, contacts=contacts, **fields):
                         attack_sprite.stop()
                         break
             else:
-                self.interaction_resolver.strike(targets, hits, rehit_ms, **fields)
+                self.interaction_resolver.strike(targets, hits, rehit_ms, contacts=contacts, **fields)
 
     def player_attack_logic(self):
         """The player's weapon swings and spells."""

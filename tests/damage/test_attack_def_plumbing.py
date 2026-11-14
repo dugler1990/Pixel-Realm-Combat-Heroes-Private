@@ -94,7 +94,8 @@ def test_enemy_melee_strike_sends_the_def():
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(combat_strategy.hit_core, "shape_of", lambda e: SimpleNamespace(rect=pygame.Rect(0, 0, 9, 9)))
         mp.setattr(combat_strategy.hit_core, "bodies_near", lambda tree, rect, eid: [])
-        mp.setattr(combat_strategy.hit_core, "find_hits", lambda shape, bodies, exclude=(): [target])
+        mp.setattr(combat_strategy.hit_core, "find_contacts",
+                   lambda shape, bodies, exclude=(): [(target, (1, 2), None)])
         combat_strategy.CombatStrategy.land_melee_swing(strategy, enemy, target, None)
     assert resolver.strike.call_args.kwargs["attack_def"] is attack("tribal_club")
 
@@ -163,7 +164,8 @@ def test_attack_sprite_strike_copies_the_def_into_the_context():
     level = SimpleNamespace(attackable_sprites=[target], interaction_resolver=Mock())
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(Level4_tmxdev.hit_core, "shape_of", lambda s: "shape")
-        mp.setattr(Level4_tmxdev.hit_core, "find_hits", lambda shape, bodies, exclude=(): [target])
+        mp.setattr(Level4_tmxdev.hit_core, "find_contacts",
+                   lambda shape, bodies, exclude=(): [(target, (1, 2), None)])
         Level4._strike_with_attack_sprites(level, [sprite])
     assert level.interaction_resolver.strike.call_args.kwargs["attack_def"] is attack("arrow")
 

@@ -149,10 +149,11 @@ class DashAbility(PlayerAbility):
         if resolver is None or shape is None:
             return
         nearby = hit_core.bodies_near(entity_quad_tree, shape.rect, getattr(entity, "id", -1))
-        targets = hit_core.find_hits(shape, nearby, exclude=(entity,))
+        found = hit_core.find_contacts(shape, nearby, exclude=(entity,))
         resolver.strike(
-            targets,
+            [target for target, _, _ in found],
             hits=runtime["hits"] if runtime["hit_once_per_target"] else None,
+            contacts={id(target): point for target, point, _ in found},
             rehit_ms=runtime["rehit_ms"],
             kind="damage",
             source_kind="dash",

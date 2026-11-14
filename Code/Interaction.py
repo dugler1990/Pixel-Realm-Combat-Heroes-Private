@@ -26,6 +26,9 @@ class InteractionContext:
     tags: Set[str] = field(default_factory=set)
     # The AttackDef (damage_data.py) this hit is; None for an old path. Not read yet (chunk 5).
     attack_def: Any = None
+    # World pixel where the hit landed (hit_core.find_contacts); None for blasts and old
+    # paths. Not read yet (chunks 4, 11).
+    contact: Optional[Tuple[int, int]] = None
 
 
 class FactionPolicy:
@@ -482,15 +485,16 @@ class InteractionResolver:
         self._record_resolved(ctx)
         return True
 
-    def strike(self, targets, hits=None, rehit_ms=None, **fields) -> list:
+    def strike(self, targets, hits=None, rehit_ms=None, contacts=None, **fields) -> list:
         """Apply one flat-damage attack to every target it touched: team prefilter, the
         attack's repeat rule, then apply.
 
         `hits` is the attack's own record, target id -> time of its last hit (ms); None
         keeps no record, so every call applies. With a record, `rehit_ms` None hits each
         target once per attack, and a number lets the same target be hit again after that
-        many ms (0 = every frame). `fields` are InteractionContext fields; strike fills in
-        `target`. Returns the targets the attack landed on.
+        many ms (0 = every frame). `contacts` maps target id -> the world pixel it was hit
+        at (ctx.contact); None leaves contact None. `fields` are InteractionContext fields;
+        strike fills in `target` and `contact`. Returns the targets the attack landed on.
         """
         landed = []
         kind = fields.get("kind", "damage")
@@ -503,7 +507,8 @@ class InteractionResolver:
                     continue
             if not self.can_potentially_affect(source_team, getattr(target, "team_id", None), kind):
                 continue
-            if self.apply(InteractionContext(target=target, **fields)):
+            contact = contacts.get(key) if contacts else None
+            if self.apply(InteractionContext(target=target, contact=contact, **fields)):
                 landed.append(target)
                 if hits is not None:
                     hits[key] = now

@@ -167,3 +167,177 @@ def test_entry_point_returns_the_point_when_it_cannot_walk():
     assert hit_core.entry_point((110, 210), (0, 0), body) == (110, 210)
     assert hit_core.entry_point((5, 5), (1, 0), body) == (5, 5)          # not on the body
     assert hit_core.entry_point((110, 210), (1, 0), None) == (110, 210)
+
+
+# --- contact on the hit ------------------------------------------------------------------
+
+from types import SimpleNamespace  # noqa: E402
+from unittest.mock import Mock  # noqa: E402
+
+pygame.init()
+pygame.display.set_mode((64, 64))
+
+import CombatStrategy as combat_strategy  # noqa: E402
+import meteor_strike  # noqa: E402
+from abilities import leap_slam as leap_slam_module  # noqa: E402
+from abilities.dash import DashAbility  # noqa: E402
+from abilities.leap_slam import ChargedLeapSlamAbility  # noqa: E402
+from damage_data import attack  # noqa: E402
+from Interaction import InteractionContext, InteractionResolver  # noqa: E402
+from Level4_tmxdev import Level4  # noqa: E402
+from Settings import ability_data  # noqa: E402
+
+
+def _resolver_stub():
+    return SimpleNamespace(apply=Mock(return_value=True), can_potentially_affect=lambda *a: True,
+                           _now_ms=lambda: 0)
+
+
+def _target(x=100, y=100, w=40, h=40):
+    return SimpleNamespace(rect=pygame.Rect(x, y, w, h), mask=pygame.mask.Mask((w, h), fill=True),
+                           team_id="enemy")
+
+
+def _attack_sprite(rect, **extra):
+    fields = dict(owner=None, interaction_kind="damage", source_kind="enemy_projectile",
+                  source_team="enemy_1", amount=6, attack_type="magic", tags=set(), hits={},
+                  rehit_ms=None, stops=False, attack_def=attack("arrow"),
+                  rect=rect, mask=pygame.mask.Mask(rect.size, fill=True))
+    fields.update(extra)
+    return SimpleNamespace(**fields)
+
+
+def test_strike_gives_each_context_its_targets_contact():
+    resolver = _resolver_stub()
+    a, b = SimpleNamespace(team_id="enemy"), SimpleNamespace(team_id="enemy")
+    InteractionResolver.strike(resolver, [a, b], contacts={id(a): (1, 2), id(b): (3, 4)},
+                               kind="damage", source_kind="x", amount=3)
+    got = {id(c.args[0].target): c.args[0].contact for c in resolver.apply.call_args_list}
+    assert got == {id(a): (1, 2), id(b): (3, 4)}
+
+
+def test_strike_without_contacts_leaves_contact_none():
+    resolver = _resolver_stub()
+    InteractionResolver.strike(resolver, [SimpleNamespace(team_id="enemy")], kind="damage",
+                               source_kind="x", amount=3)
+    assert resolver.apply.call_args.args[0].contact is None
+    assert InteractionContext(kind="damage", source_kind="x").contact is None
+
+
+def _strike_level(target):
+    return SimpleNamespace(attackable_sprites=[target], interaction_resolver=Mock())
+
+
+def _contact_of(level, target):
+    return level.interaction_resolver.strike.call_args.kwargs["contacts"][id(target)]
+
+
+def test_arrow_moving_right_lands_on_the_bodys_left_edge():
+    target = _target()
+    # A 16x4 arrow whose tip is 10 px into the body after this frame's 12 px move.
+    arrow = _attack_sprite(pygame.Rect(94, 118, 16, 4), is_moving=True,
+                           movement=pygame.math.Vector2(12, 0))
+    level = _strike_level(target)
+    Level4._strike_with_attack_sprites(level, [arrow])
+    contact = _contact_of(level, target)
+    assert contact[0] == 100 and 118 <= contact[1] < 122
+
+
+def test_arrow_moving_left_lands_on_the_bodys_right_edge():
+    # pygame's scan finds the overlap's left-most pixels first, so this needs the walk back.
+    target = _target()
+    arrow = _attack_sprite(pygame.Rect(130, 118, 16, 4), is_moving=True,
+                           movement=pygame.math.Vector2(-12, 0))
+    level = _strike_level(target)
+    Level4._strike_with_attack_sprites(level, [arrow])
+    assert hit_core.touch_point(hit_core.shape_of(arrow), hit_core.shape_of(target))[0] < 139
+    contact = _contact_of(level, target)
+    assert contact[0] == 139 and 118 <= contact[1] < 122
+
+
+def test_arrow_moving_up_lands_on_the_bodys_bottom_row():
+    target = _target()
+    arrow = _attack_sprite(pygame.Rect(118, 130, 4, 16), is_moving=True,
+                           movement=pygame.math.Vector2(0, -12))
+    level = _strike_level(target)
+    Level4._strike_with_attack_sprites(level, [arrow])
+    contact = _contact_of(level, target)
+    assert contact[1] == 139 and 118 <= contact[0] < 122
+
+
+def test_stopping_arrow_passes_its_contact_too():
+    target = _target()
+    arrow = _attack_sprite(pygame.Rect(94, 118, 16, 4), is_moving=True,
+                           movement=pygame.math.Vector2(12, 0), stops=True, stop=Mock())
+    level = _strike_level(target)
+    Level4._strike_with_attack_sprites(level, [arrow])
+    assert _contact_of(level, target)[0] == 100
+    arrow.stop.assert_called_once()
+
+
+def test_a_weapon_not_moving_lands_on_the_shared_pixel():
+    target = _target()
+    blade = _attack_sprite(pygame.Rect(130, 90, 20, 30))
+    level = _strike_level(target)
+    Level4._strike_with_attack_sprites(level, [blade])
+    contact = _contact_of(level, target)
+    assert contact == hit_core.touch_point(hit_core.shape_of(blade), hit_core.shape_of(target))
+    assert pygame.Rect(130, 100, 10, 20).collidepoint(contact)
+
+
+def test_enemy_melee_swing_passes_the_contact():
+    target = _target()
+    resolver = Mock()
+    strategy = SimpleNamespace(combat_context={"level": SimpleNamespace(interaction_resolver=resolver)})
+    enemy = SimpleNamespace(melee_swing={"attack": {"damage": 5}, "hits": {}}, status="attack",
+                            frame_index=0, id=1, team_id="enemy_1",
+                            rect=pygame.Rect(130, 90, 20, 30), mask=pygame.mask.Mask((20, 30), fill=True))
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(combat_strategy.hit_core, "bodies_near", lambda tree, rect, eid: [])
+        combat_strategy.CombatStrategy.land_melee_swing(strategy, enemy, target, None)
+    contact = resolver.strike.call_args.kwargs["contacts"][id(target)]
+    assert pygame.Rect(130, 100, 10, 20).collidepoint(contact)
+
+
+def test_dash_passes_the_contact():
+    target = _target()
+    resolver = Mock()
+    ability = DashAbility("slide", ability_data["slide"])
+    entity = SimpleNamespace(level=SimpleNamespace(interaction_resolver=resolver), id=1, team_id="player",
+                             rect=pygame.Rect(130, 90, 20, 30), mask=pygame.mask.Mask((20, 30), fill=True))
+    runtime = {"damage": 5, "hits": {}, "hit_once_per_target": True, "rehit_ms": None,
+               "attack_type": "weapon", "attack_def": attack("dash_hit")}
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(hit_core, "bodies_near", lambda tree, rect, eid: [target])
+        ability._apply_damage_on_hit(entity, None, None, runtime)
+    contact = resolver.strike.call_args.kwargs["contacts"][id(target)]
+    assert pygame.Rect(130, 100, 10, 20).collidepoint(contact)
+
+
+def test_leap_slam_blast_has_no_contact():
+    target = SimpleNamespace(team_id="enemy")
+    resolver = Mock()
+    resolver.can_potentially_affect.return_value = True
+    entity = SimpleNamespace(level=SimpleNamespace(attackable_sprites=[target], interaction_resolver=resolver),
+                             team_id="player", hitbox=pygame.Rect(0, 0, 20, 10))
+    ability = ChargedLeapSlamAbility("leap_slam", ability_data["leap_slam"])
+    foot = hit_core.Shape(pygame.mask.Mask((10, 6), fill=True), 20, 0)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(leap_slam_module.hit_core, "find_hits", lambda *a, **k: [target])
+        mp.setattr(leap_slam_module.hit_core, "foot_shape", lambda s: foot)
+        ability._resolve_landing_aoe(entity, None, None, {"charge_ratio": 1.0})
+    contexts = [c.args[0] for c in resolver.apply.call_args_list]
+    assert contexts and all(c.contact is None for c in contexts)
+    assert all(c.attack_def is attack("leap_slam") for c in contexts)
+
+
+def test_meteor_blast_has_no_contact():
+    resolver = Mock()
+    resolver.can_potentially_affect.return_value = True
+    target = SimpleNamespace(team_id="player")
+    strike = SimpleNamespace(level=SimpleNamespace(interaction_resolver=resolver), source_team="enemy",
+                             owner=None, attack_def=attack("meteor_impact"),
+                             residual_attack_def=attack("meteor_embers"),
+                             _hosts_in_radius=lambda: [target])
+    meteor_strike.MeteorStrike._apply_damage(strike, 10, phase="impact")
+    assert resolver.apply.call_args.args[0].contact is None
