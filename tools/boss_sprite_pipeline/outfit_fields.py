@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 ALL = ("body", "armour", "cut")
+TRELLIS_MODELS = ("front_only", "front_back", "front_back_sides", "eight_views")   # = outfit.MODEL_VIEWS keys
 KINDS = ALL
 
 
@@ -63,7 +64,8 @@ FIELDS = (
     Field("margin", "outfit", (), "number", "Outline margin for the front check."),
     Field("display_joints", "outfit", (), "bool", "Show the joints on the outline sent with the front."),
     Field("retry_bigger", "outfit", (), "text", "The 'rb' redraw line (armour too tight)."),
-    Field("trellis_models", "outfit", (), "list", "TRELLIS models to build (front_only, front_back, ...)."),
+    Field("trellis_models", "outfit", (), "list", "TRELLIS models to build (each needs its drawings).",
+          TRELLIS_MODELS),
     Field("sam", "outfit", ("armour", "cut"), "dict", "SAM3 prompts: {prompts: file or table, prompt_to_part}."),
     Field("holopart", "outfit", (), "bool", "Run HoloPart on the cut (true)."),
     Field("worn_on", "outfit", (), "text", "Body outfit the worn test uses once painted (else rig_fit)."),
@@ -81,25 +83,40 @@ def is_note(key: str) -> bool:
     return key.startswith("_") or key.endswith("_note")
 
 
+def value_problem(key: str, v) -> str | None:
+    """What is wrong with one value (unknown key, wrong type), else None."""
+    f = BY_NAME.get(key)
+    if f is None:
+        return f"unknown field {key!r}"
+    if f.type in FILE_TYPES and not isinstance(v, str):
+        return f"{key} must be a path"
+    if f.type == "choice" and v not in f.choices:
+        return f"{key} must be one of {list(f.choices)}"
+    if f.type in _PY and (not isinstance(v, _PY[f.type]) or (f.type == "number" and isinstance(v, bool))):
+        return f"{key} must be a {f.type}"
+    if f.type == "list" and f.choices and not set(v) <= set(f.choices):
+        return f"{key}: each one of {list(f.choices)}"
+    return None
+
+
+def file_problems(data: dict, level: str) -> list[str]:
+    """One file's own problems: unknown keys, wrong types; a character file holds only character fields."""
+    out = []
+    for key, v in data.items():
+        if is_note(key):
+            continue
+        bad = value_problem(key, v)
+        if bad:
+            out.append(bad)
+        elif level == "character" and BY_NAME[key].level != "character":
+            out.append(f"{key} belongs in an outfit file")
+    return out
+
+
 def problems(o: dict, where: str = "") -> list[str]:
     """What is wrong with a merged character + outfit: missing fields its kind needs, unknown keys, wrong types."""
-    out = []
     kind = o.get("kind")
     if kind not in KINDS:
         return [f"{where}kind must be one of {list(KINDS)}, not {kind!r}"]
-    for f in FIELDS:
-        if kind in f.kinds and f.name not in o:
-            out.append(f"{where}no {f.name} ({f.level} file): {f.help}")
-    for key, v in o.items():
-        if is_note(key):
-            continue
-        f = BY_NAME.get(key)
-        if f is None:
-            out.append(f"{where}unknown field {key!r}")
-        elif f.type in FILE_TYPES and not isinstance(v, str):
-            out.append(f"{where}{key} must be a path")
-        elif f.type == "choice" and v not in f.choices:
-            out.append(f"{where}{key} must be one of {list(f.choices)}")
-        elif f.type in _PY and (not isinstance(v, _PY[f.type]) or (f.type == "number" and isinstance(v, bool))):
-            out.append(f"{where}{key} must be a {f.type}")
-    return out
+    out = [f"{where}no {f.name} ({f.level} file): {f.help}" for f in FIELDS if kind in f.kinds and f.name not in o]
+    return out + [f"{where}{p}" for p in file_problems(o, "outfit")]

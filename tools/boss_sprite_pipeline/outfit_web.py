@@ -147,7 +147,7 @@ class Pod:
 
 def outfits() -> list[dict]:
     rows = []
-    for f in sorted((of.TOOLS / "outfits").glob("*/*.json")):
+    for f in sorted(characters.OUTFITS.glob("*/*.json")):
         if f.name == characters.FILE:
             continue
         try:
@@ -241,6 +241,87 @@ def build_args(ctx: of.Ctx, body: dict, pod: Pod) -> tuple[str | None, list[str]
     return step, args, lane
 
 
+# --- settings files: characters and outfits made and edited from the page (outfit_fields.py) -------------------
+
+EXT = {"image": (".png", ".jpg", ".jpeg", ".webp"), "glb": (".glb",), "blend": (".blend",), "json": (".json",)}
+REPO_JSON = ("tools/boss_sprite_pipeline/repaint/looks", "tools/boss_sprite_pipeline/explode2",
+             "tools/painted_map_pipeline")          # repo folders a json field may point into (looks, configs)
+FILES_MAX = 400
+
+
+def fields() -> dict:
+    return {"fields": [dict(f.__dict__) for f in outfit_fields.FIELDS], "kinds": list(outfit_fields.KINDS)}
+
+
+def config(character: str | None, outfit: str | None) -> dict:
+    """The raw files (not merged) and what exists, for the forms."""
+    have = {p.parent.name: sorted(o.stem for o in p.parent.glob("*.json") if o.name != characters.FILE)
+            for p in sorted(characters.OUTFITS.glob(f"*/{characters.FILE}"))}
+    out = {"characters": have, "character": None, "outfit": None}
+    if character:
+        name_ok(character)
+        p = characters.path(character)
+        out["character"] = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+    if character and outfit:
+        name_ok(outfit)
+        p = characters.OUTFITS / character / f"{outfit}.json"
+        out["outfit"] = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+    return out
+
+
+def name_ok(name: str) -> str:
+    if not NAME.match(name or "") or name == characters.FILE[:-5]:
+        raise ValueError(f"a name is letters, digits, _ and -, not {name!r}")
+    return name
+
+
+def write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def save_character(character: str, data: dict) -> dict:
+    name_ok(character)
+    bad = outfit_fields.file_problems(data, "character")
+    if bad:
+        raise ValueError("; ".join(bad))
+    write_json(characters.path(character), data)
+    return {"saved": str(characters.path(character))}
+
+
+def save_outfit(character: str, outfit: str, data: dict) -> dict:
+    name_ok(character), name_ok(outfit)
+    if not characters.path(character).is_file():
+        raise ValueError(f"no character {character!r}: make it first")
+    data = {**data, "character": character}
+    bad = outfit_fields.file_problems(data, "outfit")
+    bad += [p for p in outfit_fields.problems({**characters.load(character), **data}) if p not in bad]
+    if bad:
+        raise ValueError("; ".join(bad))
+    path = characters.OUTFITS / character / f"{outfit}.json"
+    write_json(path, data)
+    return {"saved": str(path)}
+
+
+def list_files(character: str, ftype: str) -> list[str]:
+    """Files a field of this type can point at: the character's data folder (paths relative to the data root), and
+    for json the repo folders of looks and configs (repo-relative). Newest first."""
+    name_ok(character)
+    if ftype not in EXT:
+        raise ValueError(f"not a file type: {ftype!r}")
+    found = []
+    roots = [(data_root(), data_root() / "generated" / "bosses" / character)]
+    if ftype == "json":
+        roots += [(of.REPO, of.REPO / d) for d in REPO_JSON]
+    for base, top in roots:
+        for dirpath, _, names in os.walk(top):
+            for n in names:
+                if n.lower().endswith(EXT[ftype]):
+                    p = Path(dirpath) / n
+                    found.append((p.stat().st_mtime, p.relative_to(base).as_posix()))
+    return [rel for _, rel in sorted(found, reverse=True)[:FILES_MAX]]
+
+
 def read_clipboard() -> str:
     r = subprocess.run(["powershell", "-NoProfile", "-Command", "Get-Clipboard"], capture_output=True, text=True,
                        timeout=20)
@@ -281,6 +362,12 @@ def make_handler(jobs: Jobs, pod: Pod):
                     return self.json(run_detail(q["character"], q["outfit"]))
                 if u.path == "/api/pod/status":
                     return self.json(pod.refresh())
+                if u.path == "/api/fields":
+                    return self.json(fields())
+                if u.path == "/api/config":
+                    return self.json(config(q.get("character"), q.get("outfit")))
+                if u.path == "/api/files":
+                    return self.json({"files": list_files(q["character"], q["type"])})
                 if u.path == "/api/log":
                     ctx = of.Ctx(q["character"], q["outfit"])
                     if not NAME.match(q.get("step", "")):
@@ -326,9 +413,21 @@ def make_handler(jobs: Jobs, pod: Pod):
                         raise ValueError(f"the clipboard does not hold a {name} key")
                     os.environ[env] = value
                     return self.json({"set": True})
+                if u.path == "/api/character":
+                    return self.json(save_character(b["character"], b["data"]))
+                if u.path == "/api/outfit":
+                    return self.json(save_outfit(b["character"], b["outfit"], b["data"]))
                 if u.path == "/api/upload":
-                    ctx = of.Ctx(b["character"], b["outfit"])
                     name = re.sub(r"[^A-Za-z0-9_.\-]", "_", b.get("name") or "attach.png")
+                    if b.get("input"):                  # an input file of a character: kept in its inputs folder
+                        if not name.lower().endswith(sum(EXT.values(), ())):
+                            raise ValueError(f"one of {sum(EXT.values(), ())}")
+                        folder = data_root() / "generated" / "bosses" / name_ok(b["character"]) / "inputs"
+                        dst = folder / f"{time.strftime('%Y%m%d_%H%M%S')}_{name}"
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        dst.write_bytes(base64.b64decode(b["data"].split(",", 1)[-1]))
+                        return self.json({"path": str(dst), "rel": dst.relative_to(data_root()).as_posix()})
+                    ctx = of.Ctx(b["character"], b["outfit"])
                     if not name.lower().endswith((".png", ".jpg")):
                         raise ValueError("png or jpg only")
                     dst = ctx.work / "gate" / "uploads" / f"{time.strftime('%Y%m%d_%H%M%S')}_{name}"

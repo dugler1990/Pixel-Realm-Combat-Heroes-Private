@@ -88,6 +88,7 @@ async function refresh() {
   try { S.state = await api("/api/state"); } catch (e) { return; }
   drawHeader(); drawNav();
   const o = cur();
+  if (S.form) return;                                   // a settings form is open: leave it alone
   if (o) {
     const r = running(S.sel);
     const stale = Date.now() - (S.fetchedAt || 0) > (r ? 2500 : 6000);
@@ -112,14 +113,17 @@ function drawHeader() {
 setInterval(async () => { if (S.state && S.state.pod.host) { try { await api("/api/pod/status"); } catch (e) {} } }, 10000);
 
 function drawNav() {
-  document.getElementById("nav").innerHTML = S.state.outfits.map(o => {
+  document.getElementById("nav").innerHTML = `<div class="row"><button onclick="newCharacter()">New character</button>
+    <button onclick="newOutfit()">New outfit</button></div>` + S.state.outfits.map(o => {
     const key = o.character + "/" + o.outfit, r = running(key);
-    return `<div class="outfit ${key === S.sel ? "sel" : ""}" onclick="select('${key}')">
+    const click = o.error ? `editBroken('${o.character}', '${o.outfit}')` : `select('${key}')`;
+    return `<div class="outfit ${key === S.sel ? "sel" : ""}" onclick="${click}">
       <div class="name">${esc(key)}</div><div class="kind">${o.kind}${o.models.length ? " · " + o.models.join(", ") : ""}</div>
+      ${o.error ? `<div class="err" style="font-size:12px">${esc(o.error)}</div>` : ""}
       <div class="chips">${o.steps.map(s => `<span class="chip ${r && r.step === s.name ? "running" : s.status}">${s.name}</span>`).join("")}</div></div>`;
   }).join("");
 }
-async function select(key) { S.sel = key; S.step = null; S.detail = null; S.sig = null; await loadDetail(); }
+async function select(key) { S.form = null; S.sel = key; S.step = null; S.detail = null; S.sig = null; await loadDetail(); }
 async function loadDetail() {
   const o = cur(); if (!o) return;
   let d;
@@ -153,7 +157,9 @@ async function setPod() {
 function drawMain() {
   const o = cur(), d = S.detail; if (!o || !d) return;
   const key = o.character + "/" + o.outfit, r = running(key), s = o.steps.find(x => x.name === S.step);
-  let h = `<h2>${esc(key)} <span class="dim">(${o.kind})</span></h2><div class="dim">${esc(o.about)}</div>`;
+  let h = `<h2>${esc(key)} <span class="dim">(${o.kind})</span>
+    <button onclick="editSettings('outfit')">Outfit settings</button> <button onclick="editSettings('character')">${esc(o.character)} settings</button></h2>
+    <div class="dim">${esc(o.about)}</div>`;
   if (o.kind !== "cut") {
     h += `<h3>TRELLIS models</h3><div class="row">` + d.all_models.map(m =>
       `<label><input type="checkbox" class="mdl" value="${m}" ${d.models.includes(m) ? "checked" : ""}> ${LABEL[m]}</label>`).join("") +
@@ -267,10 +273,171 @@ async function drawLog() {
   el.textContent = (lines || []).join("\n") || "(no log yet)";
   if (atEnd) el.scrollTop = el.scrollHeight;
 }
-// #barb/naked/trellis opens that outfit at that step
+// --- settings: character and outfit files, forms from the field table (outfit_fields.py) -------------------------
+const LONG = new Set(["front", "back", "side", "quarter", "retry_bigger"]);
+const FILE_TYPES = ["image", "glb", "blend", "json"];
+async function fieldsTable() { if (!S.fields) S.fields = await api("/api/fields"); return S.fields; }
+function isNote(k) { return k.startsWith("_") || k.endsWith("_note"); }
+
+async function newCharacter() {
+  const cfg = await api("/api/config"), have = Object.keys(cfg.characters);
+  const name = prompt("New character name (letters, digits, _ and -):"); if (!name) return;
+  const copy = have.length ? prompt(`Start from a copy of (empty: blank): ${have.join(", ")}`, "") : "";
+  const data = copy ? ((await api(`/api/config?character=${encodeURIComponent(copy)}`)).character || {}) : {};
+  openForm({ level:"character", character:name, data, isNew:true });
+}
+async function newOutfit() {
+  const cfg = await api("/api/config"), chars = Object.keys(cfg.characters);
+  if (!chars.length) return toast("make a character first");
+  const c = prompt(`Character: ${chars.join(", ")}`, S.sel ? S.sel.split("/")[0] : chars[0]); if (!c) return;
+  const name = prompt("New outfit name (letters, digits, _ and -):"); if (!name) return;
+  const all = Object.entries(cfg.characters).flatMap(([ch, os]) => os.map(o => ch + "/" + o));
+  const copy = prompt(`Start from a copy of (empty: blank): ${all.join(", ")}`, "");
+  let data = { kind:"armour" };
+  if (copy) {
+    const [cc, co] = copy.split("/");
+    data = (await api(`/api/config?character=${encodeURIComponent(cc)}&outfit=${encodeURIComponent(co)}`)).outfit || data;
+    delete data.existing;                                    // outputs of the other run: not this one's
+  }
+  data.pack = c + "_" + name;
+  openForm({ level:"outfit", character:c, outfit:name, data, isNew:true });
+}
+async function editSettings(level) {
+  const o = cur();
+  const cfg = await api(`/api/config?character=${o.character}${level === "outfit" ? "&outfit=" + o.outfit : ""}`);
+  openForm({ level, character:o.character, outfit: level === "outfit" ? o.outfit : undefined,
+             data: (level === "outfit" ? cfg.outfit : cfg.character) || {} });
+}
+async function editBroken(c, o) {
+  S.sel = c + "/" + o;
+  const cfg = await api(`/api/config?character=${c}&outfit=${o}`);
+  openForm({ level:"outfit", character:c, outfit:o, data: cfg.outfit || {} });
+}
+async function openForm(F) { S.form = F; await fieldsTable(); drawForm(); }
+function closeForm() { S.form = null; S.sig = null; refresh(); }
+
+function formRows() {
+  const F = S.form;
+  return S.fields.fields.filter(f => f.name !== "character" &&
+    (F.level === "character" ? f.level === "character" : f.level === "outfit" || f.name in F.data));
+}
+function drawForm() {
+  const F = S.form, kind = F.level === "outfit" ? (F.data.kind || "armour") : null;
+  let h = `<h2>${F.isNew ? "New " : ""}${F.level}: ${esc(F.character)}${F.outfit ? "/" + esc(F.outfit) : ""}</h2>
+    <p class="dim">${F.level === "character" ? "What every outfit of this character shares (outfits/" + esc(F.character) + "/character.json)."
+      : "What this outfit sets (outfits/" + esc(F.character) + "/" + esc(F.outfit) + ".json); the character file gives the rest."}
+      * = needed by ${kind ? "a " + kind + " outfit" : "some outfit kind"}. File paths: relative to the data root (${esc(S.state ? S.state.data_root : "")}), looks and configs to the repo.</p>`;
+  h += `<div class="attempt"><div class="row"><b>about</b> <span class="dim">a note: what this is</span></div>
+    <textarea id="f__about" rows="2" cols="100">${esc(F.data._about || "")}</textarea></div>`;
+  h += formRows().map(f => fieldRow(f, F.data[f.name], kind)).join("");
+  h += `<div class="row"><button class="main" onclick="saveForm()">Save</button> <button onclick="closeForm()">Cancel</button></div>
+    <pre id="formerr" class="err" style="display:none"></pre>`;
+  document.getElementById("main").innerHTML = h;
+}
+function fieldRow(f, v, kind) {
+  const need = kind ? f.kinds.includes(kind) : f.kinds.length > 0, id = "f_" + f.name;
+  let input;
+  if (FILE_TYPES.includes(f.type)) {
+    input = `<input type="text" id="${id}" size="80" value="${esc(v || "")}" onchange="thumb('${f.name}', '${f.type}')">
+      <select onfocus="fillFiles(this, '${f.type}')" onchange="if (this.value) { document.getElementById('${id}').value = this.value; thumb('${f.name}', '${f.type}'); }"><option value="">pick a file…</option></select>
+      <label class="dim">or upload <input type="file" onchange="uploadInput(this, '${f.name}', '${f.type}')"></label>
+      <span id="th_${f.name}">${f.type === "image" && v ? thumbImg(v) : ""}</span>`;
+  } else if (f.type === "choice") {
+    const on = f.name === "kind" ? ` onchange="keepForm(); S.form.data.kind = this.value; drawForm()"` : "";
+    input = `<select id="${id}"${on}><option value=""></option>${f.choices.map(c => `<option ${c === v ? "selected" : ""}>${c}</option>`).join("")}</select>`;
+  } else if (f.type === "bool") {
+    input = `<select id="${id}"><option value=""></option><option ${v === true ? "selected" : ""}>true</option><option ${v === false ? "selected" : ""}>false</option></select>`;
+  } else if (f.type === "list" && f.choices.length) {
+    input = f.choices.map(c => `<label><input type="checkbox" class="${id}" value="${c}" ${(v || []).includes(c) ? "checked" : ""}> ${c}</label>`).join(" ");
+  } else if (f.type === "list") {
+    input = `<input type="text" id="${id}" size="80" value="${esc((v || []).join(", "))}"> <span class="dim">comma-separated</span>`;
+  } else if (f.type === "dict") {
+    const text = v ? JSON.stringify(v, null, 1) : "";
+    input = `<textarea id="${id}" rows="${Math.max(2, Math.min(14, text.split("\n").length))}" cols="100">${esc(text)}</textarea> <span class="dim">JSON</span>`;
+  } else if (f.type === "number") {
+    input = `<input type="number" step="any" id="${id}" value="${v ?? ""}">`;
+  } else if (LONG.has(f.name)) {
+    input = `<textarea id="${id}" rows="4" cols="100">${esc(v || "")}</textarea>`;
+  } else {
+    input = `<input type="text" id="${id}" size="50" value="${esc(v || "")}">`;
+  }
+  return `<div class="attempt"><div class="row"><b>${f.name}${need ? " *" : ""}</b> <span class="dim">${esc(f.help)}</span></div>
+    <div class="row">${input}</div></div>`;
+}
+function absPath(p) { return /^[A-Za-z]:|^\//.test(p) ? p : S.state.data_root + "/" + p; }
+function thumbImg(p) { return `<img class="zoom" style="max-height:120px" src="/img?path=${encodeURIComponent(absPath(p))}" onclick="zoom(this.src)">`; }
+function thumb(name, type) {
+  const v = document.getElementById("f_" + name).value.trim();
+  document.getElementById("th_" + name).innerHTML = type === "image" && v ? thumbImg(v) : "";
+}
+async function fillFiles(sel, type) {
+  if (sel.dataset.filled) return;
+  sel.dataset.filled = "1";
+  try {
+    const r = await api(`/api/files?character=${encodeURIComponent(S.form.character)}&type=${type}`);
+    sel.innerHTML = `<option value="">pick a file… (${r.files.length})</option>` + r.files.map(f => `<option>${esc(f)}</option>`).join("");
+  } catch (e) { toast(e.message); }
+}
+async function uploadInput(input, name, type) {
+  const f = input.files[0]; if (!f) return;
+  const data = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(f); });
+  try {
+    const up = await api("/api/upload", { character:S.form.character, input:true, name:f.name, data });
+    document.getElementById("f_" + name).value = up.rel;
+    thumb(name, type);
+  } catch (e) { toast(e.message); }
+}
+function collect() {
+  const F = S.form, out = {};
+  for (const [k, v] of Object.entries(F.data)) if (isNote(k) && k !== "_about") out[k] = v;   // other notes kept
+  const about = document.getElementById("f__about").value.trim();
+  if (about) out._about = about;
+  for (const f of formRows()) {
+    if (f.type === "list" && f.choices.length) {
+      const ticked = [...document.querySelectorAll(".f_" + f.name + ":checked")].map(x => x.value);
+      if (ticked.length) out[f.name] = ticked;
+      continue;
+    }
+    const el = document.getElementById("f_" + f.name); if (!el) continue;
+    const s = el.value.trim(); if (s === "") continue;
+    if (f.type === "number") out[f.name] = Number(s);
+    else if (f.type === "bool") out[f.name] = s === "true";
+    else if (f.type === "dict") {
+      try { out[f.name] = JSON.parse(s); } catch (e) { throw new Error(`${f.name}: not valid JSON (${e.message})`); }
+    }
+    else if (f.type === "list") out[f.name] = s.split(",").map(x => x.trim()).filter(Boolean);
+    else out[f.name] = s;
+  }
+  return out;
+}
+function keepForm() { try { S.form.data = collect(); } catch (e) {} }
+async function saveForm() {
+  const F = S.form, err = document.getElementById("formerr");
+  try {
+    const data = collect();
+    if (F.level === "character") await api("/api/character", { character:F.character, data });
+    else await api("/api/outfit", { character:F.character, outfit:F.outfit, data });
+  } catch (e) {
+    err.textContent = e.message.split("; ").join("\n"); err.style.display = "block";
+    return;
+  }
+  const key = F.outfit ? F.character + "/" + F.outfit : S.sel;
+  S.form = null;
+  await refresh();
+  if (key && S.state.outfits.some(o => o.character + "/" + o.outfit === key && !o.error)) await select(key);
+  else drawNav();
+}
+
+// #barb/naked/trellis opens that outfit at that step; #settings/barb/naked its settings form
 (async () => {
   await refresh();
   const h = decodeURIComponent(location.hash.slice(1)).split("/");
+  if (h[0] === "settings" && h[1]) {                    // #settings/<character>[/<outfit>]: its settings form
+    const cfg = await api(`/api/config?character=${h[1]}${h[2] ? "&outfit=" + h[2] : ""}`);
+    if (h[2]) S.sel = h[1] + "/" + h[2];
+    return openForm({ level: h[2] ? "outfit" : "character", character:h[1], outfit:h[2],
+                      data: (h[2] ? cfg.outfit : cfg.character) || {} });
+  }
   if (h.length >= 2) { await select(h[0] + "/" + h[1]); if (h[2]) pickStep(h[2]); }
 })();
 </script>

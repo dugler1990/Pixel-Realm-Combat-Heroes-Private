@@ -71,7 +71,7 @@ class Stop(Exception):
 class Ctx:
     def __init__(self, character: str, outfit: str):
         self.character, self.outfit = character, outfit
-        self.file = TOOLS / "outfits" / character / f"{outfit}.json"
+        self.file = characters.OUTFITS / character / f"{outfit}.json"
         if outfit == characters.FILE[:-5] or not self.file.is_file():
             sys.exit(f"no outfit file {self.file}")
         # The character file under the outfit file: an outfit key overrides the character's (outfit_fields.py).
