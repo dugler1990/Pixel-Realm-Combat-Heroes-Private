@@ -1,7 +1,8 @@
 """Turn retargeted clips into the three a mesh player needs: idle, move, attack.
 
     .venv-bpy/Scripts/python.exe player_clips.py <animated.blend> <out.blend>
-        [--idle settle_01] [--move jokesillyrun] [--attack overheadchop] [--attack-frames 45-60,108-138]
+        --character <c> [--idle X] [--move X] [--attack X] [--attack-frames 45-60,108-138] [--dry-run]
+    (clip picks from outfits/<c>/character.json "clips"; a flag overrides one; --dry-run prints them and stops)
 
 The input is a retarget_bvh.py output (one action per clip). Writes <out.blend> with exactly the actions
 idle, move, attack (the names MeshBoss resolves) and <out>.json with what was done.
@@ -33,10 +34,21 @@ def opt(name, default):
     return default
 
 
-IDLE = opt("--idle", "settle_01")
-MOVE = opt("--move", "jokesillyrun")
-ATTACK = opt("--attack", "overheadchop")
-ATTACK_FRAMES = [[int(v) for v in r.split("-")] for r in opt("--attack-frames", "45-60,108-138").split(",")]
+CHARACTER = opt("--character", None)
+_frames = opt("--attack-frames", None)
+CHOICE = {"idle": opt("--idle", None), "move": opt("--move", None), "attack": opt("--attack", None),
+          "attack_frames": [[int(v) for v in r.split("-")] for r in _frames.split(",")] if _frames else None}
+if any(v is None for v in CHOICE.values()):         # the rest from the character file; no defaults
+    if not CHARACTER:
+        sys.exit("player_clips.py: give --character <c> (outfits/<c>/character.json \"clips\") or all of --idle "
+                 "--move --attack --attack-frames")
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import characters  # noqa: E402
+    CHOICE = {k: v if v is not None else characters.clip_choice(CHARACTER)[k] for k, v in CHOICE.items()}
+if "--dry-run" in ARGS:
+    print("PLAYER_CLIPS_CHOICE", json.dumps(CHOICE))
+    sys.exit(0)
+IDLE, MOVE, ATTACK, ATTACK_FRAMES = CHOICE["idle"], CHOICE["move"], CHOICE["attack"], CHOICE["attack_frames"]
 SRC, OUT = (os.path.abspath(a) for a in ARGS[:2])
 CYCLE_MIN, CYCLE_MAX = 12, 48      # frames
 ROOT = "bone_0"

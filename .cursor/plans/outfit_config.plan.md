@@ -66,8 +66,9 @@ view drawn or supplied, every gate clicked, the pieces in the game. The scripts 
 
 - `export_outfit.py`: clips.json from `clips_from`; the game entry from the character file + the outfit's
   `display_name` / `start_equipment`.
-- `repaint.py`: `DEFAULT_LOOK` moves to `repaint/looks/barb_bare.json`; no look = an error. Old barb runs whose
-  cams.json has no look get `barb_bare.json` written into cams.json once (the only migration).
+- `repaint.py`: `DEFAULT_LOOK` moves to `repaint/looks/barb_bare.json` (`repaint/look_file.py`); no look = an
+  error. A look may `"extends"` another: the barb's outfit looks extend `barb_bare.json`. A run whose cams.json
+  has `"look": null` (made before looks were required) stops with what to set; no data file is rewritten.
 - `player_clips.py --character <c>`: clip names and frames from the character file; no defaults.
 - `retarget_bvh.py --target <c>`: a character file with `retarget` first, else the code table (bosses).
   The barb's row leaves the table.

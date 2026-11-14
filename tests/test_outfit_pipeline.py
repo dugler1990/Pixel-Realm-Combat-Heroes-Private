@@ -115,3 +115,36 @@ def test_pod_step_stops_without_a_pod(monkeypatch):
     ctx = of.Ctx("barb", "naked")
     with pytest.raises(of.Stop, match="--host"):
         of.pod_args(ctx, type("A", (), {"host": None, "port": None})())
+
+
+def test_the_hero_entry_comes_from_the_character_file_not_the_barb():
+    from types import SimpleNamespace
+
+    from tools.boss_sprite_pipeline import export_outfit as eo
+
+    roster = {"display_name": "Ice wizard", "painting": "wizard.png", "player_info_dir": "../Graphics/wizard/",
+              "roster_stats": ["magic"], "evasion_loadout": ["blink"], "base_stats": {"health": 900}}
+    o = {"pack": "wizard_robe", "roster": roster}
+    entry = eo.hero_entry(o, SimpleNamespace(character="wizard", outfit="robe"))
+    assert entry["display_name"] == "Ice wizard (robe, mesh)" and entry["painting"] == "wizard.png"
+    assert "barb" not in json.dumps(entry).lower()
+    with pytest.raises(SystemExit, match="roster has no painting"):
+        eo.hero_entry({**o, "roster": {k: v for k, v in roster.items() if k != "painting"}},
+                      SimpleNamespace(character="wizard", outfit="robe"))
+
+
+def test_a_look_is_required_and_can_extend_another(tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("look_file", Path(of.TOOLS) / "repaint" / "look_file.py")
+    lf = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lf)
+    with pytest.raises(SystemExit, match="no look file"):
+        lf.load_look(None)
+    base = {k: k for k in lf.REQUIRED}
+    (tmp_path / "base.json").write_text(json.dumps({"_about": "base", **base}), encoding="utf-8")
+    (tmp_path / "robe.json").write_text(json.dumps({"extends": "base.json", "design": "blue robe"}), encoding="utf-8")
+    look = lf.load_look(tmp_path / "robe.json")
+    assert look["design"] == "blue robe" and look["subject"] == "subject" and "_about" not in look
+    (tmp_path / "bad.json").write_text(json.dumps({"subject": "x"}), encoding="utf-8")
+    with pytest.raises(SystemExit, match="has no design"):
+        lf.load_look(tmp_path / "bad.json")

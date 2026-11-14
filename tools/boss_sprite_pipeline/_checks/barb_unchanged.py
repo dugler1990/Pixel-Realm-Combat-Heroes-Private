@@ -69,8 +69,8 @@ def commands(of, outfit: str) -> dict:
 def looks(tree: Path) -> dict:
     rp = tree / "tools" / "boss_sprite_pipeline" / "repaint"
     src = (rp / "repaint.py").read_text(encoding="utf-8")
-    if (rp / "looks.py").is_file():                       # after: the look loader is its own module
-        spec = importlib.util.spec_from_file_location("looks_mod", rp / "looks.py")
+    if (rp / "look_file.py").is_file():                   # after: the look loader is its own module
+        spec = importlib.util.spec_from_file_location("look_file", rp / "look_file.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         load, bare = mod.load_look, mod.load_look(rp / "looks" / "barb_bare.json")
@@ -86,7 +86,7 @@ def looks(tree: Path) -> dict:
     for f in sorted((rp / "looks").glob("*.json")):
         if f.name != "barb_bare.json":
             res[f.name] = load(str(f))
-    return res
+    return {name: {k: v for k, v in look.items() if not k.startswith("_")} for name, look in res.items()}  # no notes
 
 
 def export(of, tree: Path) -> dict:
