@@ -94,6 +94,7 @@ Settings that matter:
 | TRELLIS reinstalled on every run (~2.5 min when cached) | install check `import trellis2` fails outside the TRELLIS.2 folder | fixed: installed = `setup.log` holds INSTALL_OK |
 | Leonardo: generation FAILED, `moderationClassification: ['NSFW']` | naked side view / pelvis_back close-up | sides: `side_config` gpt-image-2; paint: reworded pelvis shots (to check) |
 | OpenAI 429 `credit_balance_exhausted` | no credit on the key's organisation | add credit (billing of the organisation that owns the key) |
+| reweight killed at exit 143 after 15 min; reweighted.glb already written | once, while the disk stalled (a one-file search timed out too); cause not found | ran again: 45 s, exit 0 |
 
 ## Log
 
@@ -133,6 +134,10 @@ Settings that matter:
   degrees, clear of the edges, white background), the accepted concept is the front, back / sides from
   `view_prompts/character.json`. Barb front checked: PASS, arms 28.7 / 28.0. 36 tests (`test_new_character.py`
   + the outfit ones). No paid concept call yet.
+- 2026-11-14: character kind rig steps: rig (pod.py unirig, not run yet), reweight / roles / game_rig run through
+  the driver on the barb's `gear_test/barb_base_rigged.glb` (rig backfilled) and `rigfix/barb_final.glb` (paint
+  backfilled): reweight 45 s = `barb_heat0.5.glb`, roles = `barb_roles.json`, game_rig = `barb_final_nb.glb`,
+  exact. 37 tests.
 
 ## Tried and dropped
 

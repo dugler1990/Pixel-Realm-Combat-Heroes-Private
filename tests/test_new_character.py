@@ -128,7 +128,7 @@ def test_the_accepted_concept_is_the_front_and_unbuilt_steps_say_so(tmp_path, mo
     assert front[0][front[0].index("--input") + 1] == str(cdir / "concept.png") and "--accept" in front[1]
     assert ctx.done("front")
     with pytest.raises(SystemExit):
-        of.main(["wiz", "base", "--only", "rig"])
+        of.main(["wiz", "base", "--only", "clips"])
     assert "not built yet" in capsys.readouterr().out
 
 
@@ -138,3 +138,13 @@ def test_your_front_skips_the_concept(tmp_path, monkeypatch):
     ctx = character_ctx(tmp_path, monkeypatch, {"images": {"front": "in/f.png"}})
     of.s_concept(ctx, type("A", (), {"accept": None, "use": None, "retry": None})())
     assert ctx.step("concept")["status"] == "skipped" and ctx.given("front") == tmp_path / "in" / "f.png"
+
+
+def test_the_base_run_fills_the_character_file(tmp_path, monkeypatch):
+    from tools.boss_sprite_pipeline import characters
+    ctx = character_ctx(tmp_path, monkeypatch)
+    characters.update("wiz", roles="r.json")
+    characters.update("wiz", rig_game="g.glb", views=32)
+    assert characters.load("wiz") == {"roles": "r.json", "rig_game": "g.glb", "views": 32}
+    assert ctx.rel(tmp_path / "generated" / "x.glb") == "generated/x.glb"
+    assert "rig" in of.POD_STEPS and of.NOT_BUILT == {"clips", "sprites", "export", "install"}

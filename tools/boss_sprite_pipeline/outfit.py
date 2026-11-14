@@ -49,8 +49,10 @@ STEPS = {
                   "clips", "sprites", "export", "install"],
 }
 # Steps of the character kind not built yet (new_character.plan.md, in order): they stop saying so.
-NOT_BUILT = {"rig", "reweight", "roles", "paint", "game_rig", "clips", "sprites", "export", "install"}
-POD_STEPS = {"trellis", "sam3", "holopart"}
+NOT_BUILT = {"clips", "sprites", "export", "install"}
+SHARED_GREEDY = "generated/shared/greedy_dirs_f75.json"     # the cut's camera directions, one file for every character
+BARB_GREEDY = "generated/bosses/barb/explode2/fullplate/greedy_dirs_f75.json"   # where it was made
+POD_STEPS = {"trellis", "sam3", "holopart", "rig"}
 # TRELLIS models and the drawings each needs. The default is a setting: an outfit's "trellis_models" or --models
 # overrides it (2026-11-13, naked barb: front + back + sides and 8 views both better than front + back by eye).
 MODEL_VIEWS = {
@@ -90,6 +92,20 @@ class Ctx:
         self.run_json = self.work / "run.json"
         self.run = json.loads(self.run_json.read_text(encoding="utf-8")) if self.run_json.is_file() else {
             "character": character, "outfit": outfit, "steps": {}}
+
+    def rel(self, p) -> str:
+        """A path as the files keep it: relative to the data root when inside it."""
+        p = Path(p)
+        try:
+            return p.resolve().relative_to(self.root.resolve()).as_posix()
+        except ValueError:
+            return str(p)
+
+    def own(self, step: str, key: str, field: str) -> Path:
+        """A new character's own file from its base run (step output), else the character file's field."""
+        if self.o["kind"] == "character":
+            return self.out(step, key)
+        return self.data(self.o[field])
 
     def data(self, rel: str) -> Path:
         p = Path(rel)
@@ -230,6 +246,60 @@ def s_concept(ctx: Ctx, a) -> None:
                    f"  again:   outfit.py {ctx.character} {ctx.outfit} --only concept --retry \"r <why>\"")
     ctx.record("concept", status="done", accepted=gate["accepted"],
                outputs={"concept": gate["concept"], "sheet": gate.get("sheet"), "gate": str(gate_json)})
+
+
+def s_rig(ctx: Ctx, a) -> None:
+    """UniRig on the pod (pod.py unirig): the picked TRELLIS mesh gets a skeleton and skin weights."""
+    mesh = ctx.out("trellis", "picked")
+    minutes = pod(ctx, "unirig", a, extra=["--mesh", mesh])
+    rigged = ctx.work / "rig" / "rigged.glb"
+    if not rigged.is_file():
+        raise Stop(f"UniRig gave no {rigged}")
+    ctx.record("rig", status="done", pod_minutes=minutes, outputs={"rigged": str(rigged)})
+
+
+def s_reweight(ctx: Ctx, a) -> None:
+    """Bone-heat weights (rigfix/rig_reweight.py heat 0.5, the barb's best: PROCESS_rigfix.md)."""
+    out = ctx.work / "rig" / "reweighted.glb"
+    call([ctx.bpy, TOOLS / "rigfix" / "rig_reweight.py", ctx.out("rig", "rigged"), out, "heat", 0.5])
+    if not out.is_file():
+        raise Stop(f"rig_reweight.py wrote no {out}")
+    ctx.record("reweight", status="done", outputs={"rigged": str(out)})
+
+
+def s_roles(ctx: Ctx, a) -> None:
+    """Which bone is which (rigfix/anun_roles.py, from the skeleton's shape), then the body posed with them
+    (explode2/pose_render.py): look at it, accept; wrong roles: edit roles.json and run the step again."""
+    rigged, roles = ctx.out("reweight", "rigged"), ctx.work / "rig" / "roles.json"
+    check = ctx.work / "rig" / "ROLES_CHECK.png"
+    if a.accept is None or not roles.is_file():
+        if not roles.is_file() or ctx.step("roles").get("status") != "gate":
+            call([ctx.bpy, TOOLS / "rigfix" / "anun_roles.py", rigged, roles])
+        call([ctx.bpy, TOOLS / "explode2" / "pose_render.py", rigged, roles, check])
+        ctx.record("roles", status="gate", outputs={"roles": str(roles), "check": str(check)})
+        raise Stop(f"bone roles: look at {check} (rest and the cut pose: arms raised, legs apart)\n"
+                   f"  accept:  outfit.py {ctx.character} {ctx.outfit} --only roles --accept 1\n"
+                   f"  wrong:   edit {roles}, then outfit.py {ctx.character} {ctx.outfit} --only roles")
+    ctx.record("roles", status="done", outputs={"roles": str(roles), "check": str(check)})
+    characters.update(ctx.character, roles=ctx.rel(roles))
+
+
+def s_game_rig(ctx: Ctx, a) -> None:
+    """The rig the game, the slots and the retarget use: the painted body with its neutral-bone vertices rehomed
+    (explode2/fix_neutral_bone.py). Also gives the character the shared cut camera directions."""
+    out = ctx.work / "rig" / "game_rig_nb.glb"
+    call([ctx.bpy, TOOLS / "explode2" / "fix_neutral_bone.py", ctx.out("paint", "painted"), out])
+    if not out.is_file():
+        raise Stop(f"fix_neutral_bone.py wrote no {out}")
+    shared = ctx.data(SHARED_GREEDY)
+    if not shared.is_file():
+        shared.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ctx.data(BARB_GREEDY), shared)
+    ctx.record("game_rig", status="done", outputs={"rig_game": str(out)})
+    have = characters.load(ctx.character)
+    characters.update(ctx.character, rig_game=ctx.rel(out),
+                      **({} if "greedy_dirs" in have else {"greedy_dirs": SHARED_GREEDY}),
+                      **({} if "views" in have else {"views": 32}))
 
 
 def not_built(ctx: Ctx, a) -> None:
@@ -383,9 +453,12 @@ def s_paint(ctx: Ctx, a) -> None:
         painted = next(iter(glob.glob(str(paint / "result" / "*_painted.glb"))), None)
         ctx.record("paint", status="done", outputs={"painted": painted,
                                                     "check": str(paint / "result" / "after_0_body_0.png")})
+        if o["kind"] == "character" and painted:          # its painted, reweighted body: what outfits fit onto
+            characters.update(ctx.character, rig_fit=ctx.rel(painted))
         return
-    cmd = [ctx.bpy, TOOLS / "repaint" / "paint_outfit.py", ctx.out("skeleton", "rigged"), paint,
-           ctx.out("front", "draw"), ctx.data(o["roles"]), ctx.tool(o["paint_look"])]
+    rigged = ctx.out("reweight", "rigged") if o["kind"] == "character" else ctx.out("skeleton", "rigged")
+    cmd = [ctx.bpy, TOOLS / "repaint" / "paint_outfit.py", rigged, paint,
+           ctx.out("front", "draw"), ctx.own("roles", "roles", "roles"), ctx.tool(o["paint_look"])]
     call(cmd + (["--redo"] + a.redo if a.redo else []), ok="PAINT_OUTFIT_DONE")
     check = paint / "result" / "after_0_body_0.png"
     ctx.record("paint", status="gate", outputs={"check": str(check)})
@@ -513,7 +586,7 @@ def s_install(ctx: Ctx, a) -> None:
     ctx.record("install", status="done", missing_bases=[], items=items)
 
 
-RUN = {"concept": s_concept, "rig": not_built, "reweight": not_built, "roles": not_built, "game_rig": not_built,
+RUN = {"concept": s_concept, "rig": s_rig, "reweight": s_reweight, "roles": s_roles, "game_rig": s_game_rig,
        "clips": not_built, "sprites": not_built,
        "front": lambda c, a: view_gate(c, "front", a), "back": lambda c, a: view_gate(c, "back", a),
        "sides": s_sides, "trellis": s_trellis, "skeleton": s_skeleton, "paint": s_paint, "views": s_views, "sam3": s_sam3,

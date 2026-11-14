@@ -84,7 +84,7 @@
 <div id="toast" onclick="this.style.display='none'"></div>
 <script>
 const S = { state:null, sel:null, step:null, detail:null, detailAt:0, logStep:null };
-const POD_STEPS = new Set(["trellis", "sam3", "holopart"]);
+const POD_STEPS = new Set(["trellis", "sam3", "holopart", "rig"]);
 const LABEL = { front_only:"front only", front_back:"front + back", front_back_sides:"front + back + sides",
                 eight_views:"8 views (front, back, sides, 3/4s)" };
 
@@ -340,6 +340,12 @@ function panel(step, d, busy) {
     return h + `<div class="grid">${d.paint.map(p => img(p)).join("")}</div>`;
   }
   if (step === "install") return installPanel(d, run, busy);
+  if (step === "roles") {
+    const out = run.outputs || {};
+    return (run.status === "gate" ? `<div class="row"><button class="main" ${busy ? "disabled" : ""} onclick="act({action:'accept', step:'roles', n:1})">Accept roles</button>
+      <span class="dim">wrong: edit ${esc(out.roles || "roles.json")}, then Run Bone roles again</span></div>` : "")
+      + (out.check ? img(out.check, "big") : `<p class="dim">Run it: roles from the skeleton, then the body posed with them.</p>`);
+  }
   const pics = { cut:["cut_front", "cut_back", "cut_sheet"], merge:["cut_front", "cut_back"], worn:["worn"],
                  slots:["slots_sheet"], sheet:["slots_sheet"] }[step] || [];
   let h = pics.filter(k => d.images[k]).map(k => img(d.images[k], "big")).join("");

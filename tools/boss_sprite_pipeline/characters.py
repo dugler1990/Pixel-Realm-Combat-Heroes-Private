@@ -29,6 +29,16 @@ def load(character: str) -> dict:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+def update(character: str, **fields) -> dict:
+    """Write fields into a character's file (a new character's base run fills it as it goes). Keeps the others."""
+    p = path(character)
+    c = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    c.update(fields)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(c, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    return c
+
+
 def need(c: dict, character: str, dotted: str):
     """c's value at a dotted name ("clips.attack"), else stop naming the field."""
     v = c

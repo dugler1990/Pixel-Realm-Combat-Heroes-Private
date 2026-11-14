@@ -14,8 +14,14 @@ Branch `feat/new-character` (worktree `Pixel-Realm-new-character`), from `feat/o
 - 1 concept / front / back / sides built (kind `character`, `concept_gate.py`, `view_prompts/character.json` +
   `a_pose.png`, page panel). The A-pose: the barb's arms measure 28 degrees from straight down
   (`pose_heights.py --arms`); candidates pass at 18-40. Not run with a paid call yet. trellis: the existing step.
-- Next: rig (pod), then reweight roles game_rig, paint, clips, sprites, export install. Those steps stop with
-  "not built yet".
+- rig (pod: `pod.py unirig`, `gpu_box/unirig_pod.sh` from NOTES_rig_jaw_sam3 section 1), reweight, roles (gate:
+  `pose_render.py` sheet), paint (its own reweighted mesh and roles; writes `rig_fit`), game_rig (writes
+  `rig_game`, shared `greedy_dirs`, views 32) built. Checked on the barb's own UniRig output through the driver:
+  reweight = `rigfix/barb_heat0.5.glb`, roles = `gear_test/barb_roles.json`, game_rig (on `barb_final.glb`) =
+  `barb_final_nb.glb`, all exact (`_checks/rig_compare.py`: 29 bones, weight difference 0). The pod install
+  is not run yet.
+- Correction: `rig_fit` is the painted, reweighted body (as `barb_final.glb`), written by paint, not by reweight.
+- Next: clips, sprites, export, install (they stop with "not built yet").
 
 ## What exists and is reused
 | Step | Tool | State |
