@@ -13,7 +13,9 @@ from Settings import (
     DEBUG_DRAW_MASKS,
     DEBUG_DRAW_EFFECT_RECTS,
     DEBUG_DRAW_FACTION_OUTLINES,
+    DEBUG_DRAW_CONTACTS,
 )
+import contact_debug
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from Entity import Entity
@@ -108,6 +110,7 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.runtime_debug_effect_rects = DEBUG_DRAW_EFFECT_RECTS
         self.runtime_debug_player_highlight = DEBUG_DRAW_MASKS
         self.runtime_debug_faction_outlines = DEBUG_DRAW_FACTION_OUTLINES
+        self.runtime_debug_contacts = DEBUG_DRAW_CONTACTS
         self.height_overlay = None
         self.height_overlay_origin = (0, 0)
 
@@ -582,6 +585,13 @@ class YSortCameraGroup(pygame.sprite.Group):
                 )
                 team_id = getattr(sprite, "team_id", None)
                 self.backend.draw_rect(_faction_outline_color(team_id), rect_screen, 2)
+
+        # Where recent hits landed (InteractionContext.contact).
+        if self.runtime_debug_contacts:
+            for x, y in contact_debug.recent(pygame.time.get_ticks()):
+                self.backend.draw_circle(
+                    (255, 0, 0), (int(x - self.offset.x), int(y - self.offset.y)), 3
+                )
 
     #@profile
     

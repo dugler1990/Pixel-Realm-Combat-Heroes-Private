@@ -341,3 +341,53 @@ def test_meteor_blast_has_no_contact():
                              _hosts_in_radius=lambda: [target])
     meteor_strike.MeteorStrike._apply_damage(strike, 10, phase="impact")
     assert resolver.apply.call_args.args[0].contact is None
+
+
+# --- debug dots --------------------------------------------------------------------------
+
+import contact_debug  # noqa: E402
+
+
+def _landed_hit(resolver, contact):
+    target = SimpleNamespace(team_id="enemy", receive_interaction=Mock())
+    ctx = InteractionContext(kind="damage", source_kind="x", source_team="player", target=target,
+                             amount=1, contact=contact)
+    assert resolver.apply(ctx)
+
+
+@pytest.fixture
+def debug_contacts(monkeypatch):
+    contact_debug.clear()
+    yield
+    contact_debug.clear()
+
+
+def test_flag_off_records_nothing(monkeypatch, debug_contacts):
+    monkeypatch.setattr(contact_debug, "ENABLED", False)
+    _landed_hit(InteractionResolver(), (5, 6))
+    assert contact_debug.recent(10**9, keep_ms=10**9) == []
+
+
+def test_flag_on_records_landed_contacts_and_drops_old_ones(monkeypatch, debug_contacts):
+    monkeypatch.setattr(contact_debug, "ENABLED", True)
+    resolver = InteractionResolver()
+    monkeypatch.setattr(resolver, "_now_ms", lambda: 1000)
+    _landed_hit(resolver, (5, 6))
+    _landed_hit(resolver, None)                       # a blast: nothing to draw
+    assert contact_debug.recent(1000) == [(5, 6)]
+    assert contact_debug.recent(1600) == [(5, 6)]
+    assert contact_debug.recent(1601) == []
+
+
+def test_only_the_last_64_are_kept(debug_contacts):
+    for i in range(100):
+        contact_debug.record((i, 0), 0)
+    kept = contact_debug.recent(0)
+    assert len(kept) == 64 and kept[0] == (36, 0)
+
+
+def test_camera_starts_with_the_settings_flag():
+    import Settings
+    import YsortCameraGroup
+    assert Settings.DEBUG_DRAW_CONTACTS is False
+    assert YsortCameraGroup.DEBUG_DRAW_CONTACTS is Settings.DEBUG_DRAW_CONTACTS

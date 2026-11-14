@@ -3,6 +3,7 @@ import json
 import os
 from typing import Any, Dict, Optional, Set, Tuple
 
+import contact_debug
 from game_logging import get_debug_logger
 
 _interaction_log = get_debug_logger("combat")
@@ -470,6 +471,8 @@ class InteractionResolver:
             self._record_rejected_reason("no_receive_interaction")
             return False
         target.receive_interaction(ctx)
+        if contact_debug.ENABLED and ctx.contact is not None:
+            contact_debug.record(ctx.contact, self._now_ms())
         # Neutral retaliation registration happens after a successful hostile damage interaction.
         if ctx.kind == "damage" and ctx.source_team is not None:
             self.faction_policy.register_retaliation(target, ctx.source_team, self._now_ms())

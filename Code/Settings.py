@@ -100,6 +100,7 @@ DEBUG_DRAW_MASKS = False  # Draw collision masks for all entities and objects
 DEBUG_DRAW_OBSTACLE_TINT = True  # Semi-transparent class hue on SAM3 / shape obstacle tiles
 DEBUG_DRAW_EFFECT_RECTS = False  # Draw effect collision rects in red
 DEBUG_DRAW_FACTION_OUTLINES = False  # Seeds GameSettings.debug_faction_outlines; toggle also in settings (Ctrl+Shift+S)
+DEBUG_DRAW_CONTACTS = False  # A red dot where each hit landed, for 0.6 s (contact_debug.py)
 # Temporary: lock weather wind so GPU fluid smoke drift is easy to verify (180° = left / -x).
 DEBUG_PIN_WIND = False
 DEBUG_PIN_WIND_DIRECTION = 180.0
