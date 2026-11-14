@@ -1,4 +1,6 @@
 import pygame
+from damage_data import body_of
+from defence_profile import natural_profile
 import math
 from Settings import *
 from Entity import Entity
@@ -162,6 +164,8 @@ class CombatUnit(Entity):
         self.exp = monster_info["exp"]
         self.speed = monster_info["speed"]
         self.mass = monster_info["mass"]  # knockback_scale (Entity.py)
+        # What is between a hit and the flesh (defence_profile.py): its hide, shared per body.
+        self.defence = natural_profile(body_of(monster_info))
         # Enemy mana (player uses energy). Default 0 = specials with mana_cost never fire.
         self.max_energy = float(monster_info.get("energy", monster_info.get("mana", 0)))
         self.energy = self.max_energy

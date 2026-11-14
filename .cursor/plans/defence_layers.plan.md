@@ -100,8 +100,8 @@ says so (Decisions).
    contact. The sprite pose is not the mesh pose, so a hit can land a region off. Switching the mesh
    hero to capsule hits (like the demon) is exact, but plays differently and the server's player is a
    sprite: a later chunk.
-3. **Agreed (Douglas): worn weight counts now**: `gear_weight = defence.weight`. Full plate is 34 →
-   the barb moves 90 / 124 = 73% as far.
+3. **Agreed (Douglas): worn weight counts now**: `gear_weight = defence.weight`. The full-plate set
+   that exists (10 pieces, no helmet item yet) is 31 → the barb moves 90 / 121 = 74% as far.
 4. **Holes and partial cover**: a region is covered or not (the item's `coverage`). The master doc's
    per-bone (u, angle) coverage bitmaps baked at export wait until a piece needs a gap (visor slit,
    armpit).
@@ -144,7 +144,7 @@ says so (Decisions).
 
 ## Check in play (Douglas)
 
-The plated barb is shoved less by the demon's claw and meteors (73% in full plate).
+The plated barb is shoved less by the demon's claw and meteors (74% in full plate).
 
 ## Open
 

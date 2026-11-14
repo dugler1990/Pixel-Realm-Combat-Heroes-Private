@@ -14,6 +14,8 @@ from AttackSelection import AttackSelection
 from Settings import *
 from Support import frames_to_masks
 from Interaction import InteractionContext
+from damage_data import body
+import defence_profile
 from abilities.registry import build_action_controller, load_evasion_loadout
 
 class BasePlayer(Entity):
@@ -22,6 +24,8 @@ class BasePlayer(Entity):
     WALK_STATUSES = frozenset({"up", "down", "left", "right"})
     # Draw-only 3D mesh (player_mesh.PlayerMesh) when the selected hero has a mesh_pack; None = sprite.
     mesh_skin = None
+    # Body def (bodies.json) of every hero for now; one per hero when a second hero has a mesh.
+    BODY = "barb"
 
     def __init__(self,
                  pos,
@@ -47,6 +51,9 @@ class BasePlayer(Entity):
         self.is_dead = False
         self.previous_tile = None
         self.power_level = 1
+        # What is between a hit and the flesh (defence_profile.py); rebuilt on equip.
+        self.body_def = body(self.BODY)
+        self.defence = defence_profile.natural_profile(self.body_def)
         self.inventory = Inventory(self, input_manager)
         
         self.level = level
@@ -338,8 +345,12 @@ class BasePlayer(Entity):
         return self.inventory.add_item(item)
 
     def refresh_equipment(self):
-        """A mesh player wears the armour in its body slots (Inventory.worn_pieces); a sprite player: nothing
-        to draw. Called after every inventory change (Inventory.sync_belt_from_waist)."""
+        """What is worn changed. His defence profile and gear weight (knockback) follow every hero; a mesh
+        player also wears the pieces in its body slots (Inventory.worn_pieces). Called after every inventory
+        change (Inventory.sync_belt_from_waist)."""
+        worn = [s.item for s in self.inventory.body_slots() if not s.empty]
+        self.defence = defence_profile.build_profile(self.body_def, defence_profile.worn_from_items(worn))
+        self.gear_weight = self.defence.weight
         skin = getattr(self, "mesh_skin", None)
         if skin is not None:
             skin.set_pieces(self.inventory.worn_pieces())
