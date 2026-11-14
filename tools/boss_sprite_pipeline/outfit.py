@@ -35,6 +35,8 @@ import sys
 import time
 from pathlib import Path
 
+from tools.boss_sprite_pipeline import characters, outfit_fields
+
 TOOLS = Path(__file__).resolve().parent
 REPO = TOOLS.parents[1]
 STEPS = {
@@ -70,9 +72,13 @@ class Ctx:
     def __init__(self, character: str, outfit: str):
         self.character, self.outfit = character, outfit
         self.file = TOOLS / "outfits" / character / f"{outfit}.json"
-        if not self.file.is_file():
+        if outfit == characters.FILE[:-5] or not self.file.is_file():
             sys.exit(f"no outfit file {self.file}")
-        self.o = json.loads(self.file.read_text(encoding="utf-8"))
+        # The character file under the outfit file: an outfit key overrides the character's (outfit_fields.py).
+        self.o = {**characters.load(character), **json.loads(self.file.read_text(encoding="utf-8"))}
+        bad = outfit_fields.problems(self.o)
+        if bad:
+            sys.exit(f"{character}/{outfit}: " + "; ".join(bad))
         self.root = Path(os.environ.get("OUTFIT_DATA_ROOT") or REPO)
         self.bpy = Path(os.environ.get("OUTFIT_BPY") or TOOLS / ".venv-bpy" / "Scripts" / "python.exe")
         self.work = self.root / "generated" / "bosses" / character / "outfits" / outfit

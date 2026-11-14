@@ -30,6 +30,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from tools.boss_sprite_pipeline import characters, outfit_fields
 from tools.boss_sprite_pipeline import outfit as of
 
 WEB = Path(__file__).resolve().parent / "web" / "outfit.html"
@@ -147,7 +148,14 @@ class Pod:
 def outfits() -> list[dict]:
     rows = []
     for f in sorted((of.TOOLS / "outfits").glob("*/*.json")):
-        ctx = of.Ctx(f.parent.name, f.stem)
+        if f.name == characters.FILE:
+            continue
+        try:
+            ctx = of.Ctx(f.parent.name, f.stem)
+        except SystemExit as exc:                      # a file that does not check out: listed with its errors
+            rows.append({"character": f.parent.name, "outfit": f.stem, "kind": "?", "about": "", "models": [],
+                         "steps": [], "next": None, "error": str(exc)})
+            continue
         steps = of.STEPS[ctx.o["kind"]]
         rows.append({"character": ctx.character, "outfit": ctx.outfit, "kind": ctx.o["kind"],
                      "about": ctx.o.get("_about", ""), "models": ctx.models() if ctx.o["kind"] != "cut" else [],
