@@ -181,10 +181,10 @@ faction_policy, loaded once, fail loudly on an unknown key or missing reference:
 
 | file | holds |
 |---|---|
-| `properties.json` | every property: id, label, group, format, better, card rule, template (shared with the card) |
-| `categories.json` | magic categories with parents (`elemental` → fire, ice, lightning; holy; unholy) |
+| ~~`properties.json`~~ | dropped in chunk 2: the property rows live in `Code/item_properties.py` (item card, on `main`) |
+| `categories.json` | magic categories with parents (`elemental` → fire, ice, lightning; holy; unholy). Done: chunk 2 |
 | `kinds.json` | creature kinds and `KIND_MULT` per holy/unholy |
-| `attacks.json` | attack defs (roster below) |
+| `attacks.json` | attack defs (roster below). Done: chunk 2 |
 | `bodies.json` | body defs (roster below) |
 | `conditions.json` | venoms, burning, hot shell, frozen, wet, buffs: clock, save, cure, stacking |
 
@@ -192,8 +192,11 @@ Item bases stay in `Graphics/Standard_Items/item_bases.json` (card plan); a worn
 with the same property names.
 
 Hookups in existing data:
-- `monster_data` (Settings.py): each entry gets `"body": "<body def>"`; each melee / ranged / special
-  attack gets `"attack": "<attack def>"`. Old `damage` stays until the chunk that reads the def.
+- `monster_data` (Settings.py): each entry gets `"body": "<body def>"` (chunk 4/5); each melee /
+  ranged / special attack gets `"attack": "<attack def>"` (done: chunk 2; meteor also
+  `"residual_attack"`). Its `damage` stays and may differ from the def's default (20 warriors share a
+  few defs at their own damage).
+- `tools/entity_pipeline/wire.py` writes `"attack"` for new warriors (`attack_for(label, reach)`).
 - `weapon_data`, `magic_data`, `ability_data` (Settings.py): each gets `"attack": "<attack def>"`.
 - Ranged attack `type` today names the projectile **art** (`demon_dog_projectile`); `attack` names
   what it **does**. demon_dog, venom_plant and ice_mage all fire the same art today: same art,
@@ -231,7 +234,17 @@ Scale: plate `stopping_power` 40, leather 10, skin 0. Force: 100 ≈ a horse's k
 | `thorn` | venom_plant | pierce | 5 | 12 | 2 | venom `plant_venom` 1 |
 | `venom_cloud` | venom_plant (new special) | none, area | 0 | | 0 | venom `plant_venom` 1/s |
 | `staff_strike` | ice_mage | crush | 15 | | 20 | |
-| `ice_shard` | ice_mage multishot | pierce | 8 | 20 | 5 | ice 15 |
+| `ice_shard` | ice_mage multishot and ranged | pierce | 8 | 20 | 5 | ice 15 |
+| `arrow` | warriors 00, 06, 12 | pierce | 6 | 30 | 4 | stops |
+| `stone` | warrior 15 (catapult crew) | crush | 4 | | 15 | stops |
+| `tribal_club` | warrior 13 | crush | 9 | | 30 | |
+| `scimitar` | warriors 03, 04, 07, 10, 11 | pierce | 8 | 20 | 10 | |
+| `spear_thrust` | also warriors 01, 02, 05, 08, 09, 14 | | | | | |
+| `curse_bolt` | warrior 16 (magic-user) | none | 0 | | 0 | unholy 9 |
+| `sun_bolt` | warrior 17 (high priest) | none | 0 | | 0 | holy 8 |
+| `catapult_shot` | warrior 18 (catapult) | blast | 12 | | 200 | stops |
+| `scorpion_sting` | warrior 19 | pierce | 10 | 15 | 3 | venom `scorpion_venom` 1 |
+| `unarmed` | also eskimo / jungle workers and chiefs | | | | | |
 | `crossbow_bolt` | reference (card), later enemy | pierce | 30 | 55 | 25 | |
 | `ballista` | reference (card), later siege | pierce | 80 | 120 | 400 | |
 | `storm_bolt` | reference, later enemy | none | 0 | | 0 | lightning 50 |
@@ -356,9 +369,10 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 
 1. **Knockback by mass.** Done: `.cursor/plans/knockback_mass.plan.md`, branch
    `refactor/knockback-mass`.
-2. **Attack defs and bodies.** `damage_data.py`, `config/damage/*.json` (attacks, bodies, properties,
-   categories, kinds), `attack` / `body` keys in Settings, `attack_def` on every attack sprite and
-   strike. Still flat damage. → 3, 5
+2. **Attack defs.** Done: `.cursor/plans/attack_defs.plan.md`, branch `refactor/attack-defs`.
+   `damage_data.py`, `config/damage/attacks.json` + `categories.json`, `attack` keys in Settings,
+   `attack_def` on every attack sprite and strike; projectiles stop by the def. Still flat damage.
+   Bodies (and `kinds.json`) moved to 4/5; `properties.json` dropped (`item_properties.py`). → 3, 5
 3. **Contact point.** `touch_point`, `entry_point`, `contact` on the context; debug draw. → 4, 11
 4. **Bodies and layers.** `defence_profile.py`; profile on Player / CombatUnit; slot masks for sprite
    bodies; bone map + per-bone coverage for mesh bodies (needs the outfit per-slot draw). → 5
@@ -381,6 +395,8 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 - Lightning jump range and count.
 - `BRUISE_SCALE`, `WET_MULT`, `KIND_MULT`, `DENT_MULT`: first values in chunk 5 / 7, tuned in play.
 - New enemy `tribey_dart`: art from tribey_spear, or new?
+- Warriors 16 / 17: `curse_bolt` (unholy) / `sun_bolt` (holy) are guesses; 05 could be `lance`.
+  Workers and chiefs: `unarmed` is a guess.
 
 ## Method that works
 
@@ -389,7 +405,9 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 
 ## Known errors
 
-(empty)
+- Settings.py has CRLF line endings: a regex edit with `
+` matches nothing. Use `?
+`.
 
 ## Log
 
@@ -403,6 +421,11 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
   rts, hit_core, server enemy authority, walk phasing, wall collision, enemy puppet, entity gates,
   co-op damage, headless level, mesh contact, mesh player, equipment): before 11 failed / 241 passed;
   after 11 failed (the same names) / 284 passed (43 new in `tests/damage/`). Not checked in play.
+- 2026-11-14: chunk 2 (attack defs) on `refactor/attack-defs`. Warriors mapped from
+  `generated/entity_pipeline/pyramid3/sheet.png` (row order = `layout.json`); 13 = club confirmed by
+  Douglas; 07 checked in its attack frames (curved blade). Same targeted set + `tests/damage`:
+  11 failed (the same names) / 332 passed (48 new). `test_entity_pipeline.py`: 22 passed.
+  Not checked in play (nothing should play differently; arrows and stones must still stop).
 
 ## Tried and dropped
 
