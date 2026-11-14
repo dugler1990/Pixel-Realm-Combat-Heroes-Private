@@ -52,6 +52,10 @@ Why walking back from the overlap pixel works: that pixel is in the body; the sh
 on the shot's line through the overlap, within a pixel of where it entered. Cost: one tuple per hit,
 plus ≤ 64 mask reads per **projectile hit** (not per frame, not per candidate).
 
+Built: a walk measured ~20 µs, and pass-through shots overlap a body for several frames, so the walk
+is lazy: `hit_core.EntryPoints(found, step, reach)` has `.get(id)`, and `strike` asks only after its
+repeat and team checks. `step` needn't be a unit vector (`entry_point` normalises it).
+
 ### Context and resolver
 
 - `InteractionContext.contact: Optional[Tuple[int, int]] = None` (world pixels).
@@ -124,3 +128,9 @@ swing leaves one where the blade met the body; meteors leave none.
   angle) is chunk 4.
 - Server-owned enemies hitting players: the server computes the contact; the relay to clients
   carries no contact yet (needed only when the client draws stuck arrows, chunk 11).
+
+## Log
+
+- 2026-11-14: built in 4 commits after the plan. Targeted set: 11 failed (the same names) / 367
+  passed (35 new). Micro-benchmark: `find_hits` 85-99 µs, `find_contacts` 88-106 µs (200
+  candidates, 20 touching); `entry_point` ~20 µs a walk. Debug dots and play not checked.

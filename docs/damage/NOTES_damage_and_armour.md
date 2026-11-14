@@ -83,8 +83,9 @@ The existing hit test stays (`hit_core.py`): rect, then mask against mask.
 1. **The point is already found.** `hit_core.touching` calls `mask.overlap(...)`, which returns the
    first overlapping pixel, and drops it with `is not None` (`hit_core.py:130`). Keep that pixel.
 2. **Projectiles: the entry pixel.** The overlap's first pixel is first in scan order, not where the
-   arrow entered. From the tip, step back along the flight over the body mask with `get_at` until
-   outside: at most the per-frame travel in reads (10–20).
+   arrow entered. From that pixel, step back along the flight over the body mask with `get_at` until
+   outside: at most this frame's travel + the shot's length in reads, capped at 64
+   (`hit_core.entry_point`). ~20 µs a walk, so it runs only for hits that land (`EntryPoints`).
 3. **Which layer is there** (only bodies with worn layers):
    - Sprite bodies: one mask per worn slot per animation frame, built when frames load.
      `slot_mask.get_at(point)`, outer first: 1–3 reads. Holes are transparent pixels.
@@ -373,7 +374,10 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
    `damage_data.py`, `config/damage/attacks.json` + `categories.json`, `attack` keys in Settings,
    `attack_def` on every attack sprite and strike; projectiles stop by the def. Still flat damage.
    Bodies (and `kinds.json`) moved to 4/5; `properties.json` dropped (`item_properties.py`). → 3, 5
-3. **Contact point.** `touch_point`, `entry_point`, `contact` on the context; debug draw. → 4, 11
+3. **Contact point.** Done: `.cursor/plans/contact_point.plan.md`, branch `refactor/contact-point`.
+   `hit_core.touch_point` / `find_contacts` / `entry_point` / `EntryPoints`, `Shape.solid`,
+   `InteractionContext.contact`, `strike(contacts=)`; sprites, enemy swings, dashes carry it; blasts
+   None. `DEBUG_DRAW_CONTACTS` dots (`contact_debug.py`). → 4, 11
 4. **Bodies and layers.** `defence_profile.py`; profile on Player / CombatUnit; slot masks for sprite
    bodies; bone map + per-bone coverage for mesh bodies (needs the outfit per-slot draw). → 5
 5. **Physical resolve.** `damage_rules.physical`, `hit_resolve.py`, resolver calls it, receivers
@@ -402,12 +406,22 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 
 - Baseline before code: run the tests that touch the change in the chunk's worktree, save the
   FAILED lines, compare after (`diff` of the names). The whole suite is too slow for this.
+- The targeted set (~2 min), from the worktree root:
+  `Code/sprite_venv/Scripts/python.exe -m pytest tests/damage tests/abilities tests/rts
+  tests/test_hit_core.py tests/test_server_enemy_authority.py tests/test_walk_animation_phasing.py
+  tests/test_wall_collision.py tests/test_enemy_puppet.py tests/test_entity_gates.py
+  tests/test_coop_player_damage.py tests/test_headless_level.py tests/test_mesh_contact.py
+  tests/test_mesh_player.py tests/test_equipment.py -q -p no:cacheprovider -rfE`.
+  Known failures (11, before chunk 1): test_enemy_dash 1, test_player_charge_controller 1,
+  rts/test_gather 1, test_enemy_puppet 2, test_entity_gates 2, test_coop_player_damage 2,
+  test_mesh_contact 2.
 
 ## Known errors
 
-- Settings.py has CRLF line endings: a regex edit with `
-` matches nothing. Use `?
-`.
+- Settings.py has CRLF line endings: a regex edit with `\n` matches nothing. Use `\r?\n`.
+- `Path.read_text()` turns CRLF into LF, so a script that checks for `\r\n` after it finds none
+  and writes the file back with LF (git shows no diff, autocrlf, but the working copy changes).
+  Read and write bytes (`read_bytes`) and keep the file's own endings.
 
 ## Log
 
@@ -426,6 +440,10 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
   Douglas; 07 checked in its attack frames (curved blade). Same targeted set + `tests/damage`:
   11 failed (the same names) / 332 passed (48 new). `test_entity_pipeline.py`: 22 passed.
   Not checked in play (nothing should play differently; arrows and stones must still stop).
+- 2026-11-14: chunk 3 (contact point) on `refactor/contact-point`. Same targeted set: 11 failed (the
+  same names) / 367 passed (35 new in `tests/damage/test_contact.py`). Micro-benchmark in
+  `Code/NOTES_performance.md`: `find_contacts` +3-7 % over `find_hits`; `entry_point` ~20 µs, so
+  lazy (`EntryPoints`). Debug dots not seen yet (camera draw has no test). Not checked in play.
 
 ## Tried and dropped
 

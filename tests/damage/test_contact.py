@@ -102,6 +102,19 @@ def test_find_contacts_with_a_footprint_body():
     assert contacts and contacts[0][1] == (6, 6)
 
 
+def test_entry_points_walk_only_when_asked(monkeypatch):
+    body = _body()
+    sprite = object()
+    found = [(sprite, (BODY[0] + 9, BODY[1] + 17), body)]
+    calls = []
+    real = hit_core.entry_point
+    monkeypatch.setattr(hit_core, "entry_point", lambda *a: calls.append(a) or real(*a))
+    points = hit_core.EntryPoints(found, (12, 0), 28)
+    assert calls == []
+    assert points.get(id(sprite)) == (BODY[0], BODY[1] + 17)
+    assert points.get(12345) is None and len(calls) == 1
+
+
 def test_find_contacts_none_shape():
     assert hit_core.find_contacts(None, [_Body(0, 0)]) == []
 
@@ -216,6 +229,16 @@ def test_strike_gives_each_context_its_targets_contact():
     assert got == {id(a): (1, 2), id(b): (3, 4)}
 
 
+def test_strike_asks_for_no_contact_when_the_repeat_rule_skips_the_target():
+    resolver = _resolver_stub()
+    target = SimpleNamespace(team_id="enemy")
+    contacts = Mock()
+    InteractionResolver.strike(resolver, [target], hits={id(target): 0}, contacts=contacts,
+                               kind="damage", source_kind="x", amount=3)
+    contacts.get.assert_not_called()
+    resolver.apply.assert_not_called()
+
+
 def test_strike_without_contacts_leaves_contact_none():
     resolver = _resolver_stub()
     InteractionResolver.strike(resolver, [SimpleNamespace(team_id="enemy")], kind="damage",
@@ -229,7 +252,7 @@ def _strike_level(target):
 
 
 def _contact_of(level, target):
-    return level.interaction_resolver.strike.call_args.kwargs["contacts"][id(target)]
+    return level.interaction_resolver.strike.call_args.kwargs["contacts"].get(id(target))
 
 
 def test_arrow_moving_right_lands_on_the_bodys_left_edge():

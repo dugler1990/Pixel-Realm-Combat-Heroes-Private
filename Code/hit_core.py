@@ -184,6 +184,27 @@ def entry_point(point, step, body, max_steps=64):
     return (rx + last[0], ry + last[1])
 
 
+class EntryPoints:
+    """A moving shot's contacts by target id, each walked back (entry_point) only when asked.
+
+    Built from find_contacts. The walk costs ~20 us, so it runs only for the hits that
+    land: InteractionResolver.strike asks after its repeat and team checks.
+    """
+
+    __slots__ = ("_found", "_step", "_reach")
+
+    def __init__(self, found, step, reach):
+        self._found = {id(sprite): (point, body_shape) for sprite, point, body_shape in found}
+        self._step = step
+        self._reach = reach
+
+    def get(self, key, default=None):
+        hit = self._found.get(key)
+        if hit is None:
+            return default
+        return entry_point(hit[0], self._step, hit[1], self._reach)
+
+
 def bodies_near(tree, rect, query_id, margin=32):
     """The entities whose entity-tree entry overlaps `rect` grown by `margin`.
 

@@ -1582,10 +1582,7 @@ class Level4:
             if movement is not None and (movement[0] or movement[1]):
                 # This frame's travel plus the shot's own length: where it can have entered.
                 reach = int(math.hypot(movement[0], movement[1])) + max(shape.rect.size)
-                contacts = {
-                    id(target): hit_core.entry_point(point, movement, body_shape, reach)
-                    for target, point, body_shape in found
-                }
+                contacts = hit_core.EntryPoints(found, movement, reach)
             else:
                 contacts = {id(target): point for target, point, _ in found}
             targets = [target for target, _, _ in found]

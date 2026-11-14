@@ -496,7 +496,8 @@ class InteractionResolver:
         keeps no record, so every call applies. With a record, `rehit_ms` None hits each
         target once per attack, and a number lets the same target be hit again after that
         many ms (0 = every frame). `contacts` maps target id -> the world pixel it was hit
-        at (ctx.contact); None leaves contact None. `fields` are InteractionContext fields;
+        at (ctx.contact), through .get, asked only for targets past the repeat and team
+        checks (hit_core.EntryPoints works this out then); None leaves contact None. `fields` are InteractionContext fields;
         strike fills in `target` and `contact`. Returns the targets the attack landed on.
         """
         landed = []
