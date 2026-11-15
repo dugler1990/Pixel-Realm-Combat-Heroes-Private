@@ -222,17 +222,3 @@ re-measuring bind settings on data that had nothing wrong with it.
 
 - When a character looks mangled, check that the viewer is showing **that character's body**
   before touching a single retarget knob. Measure the delivery path, not just the data.
-
-## The method, decided (user, 2026-11-16): adapt the generic Kimodo skeleton to each character
-Read this before retargeting anything. Kimodo's SOMA skeleton is a generic human; each character (barb, wizard,
-swordsman) has his own proportions. The motion transfers, the stick man's body does not.
-1. Calibrate once per character against ONE shared reference pose: both skeletons in a standard T-pose (Kimodo
-   exports BVH with a standard T-pose: driver `tpose`; the character's rig posed into a T-pose by aiming limbs
-   along fixed axes). One fixed rotation offset per bone. Never each clip's own frame 1 (a clip not starting
-   standing bent the barb's knees backwards), never the source's exact angles (bind_match squeezed the barb into
-   a thin man's pose: the "smurf").
-2. Copy each joint's rotation relative to that calibration; the character keeps his own bone lengths and build.
-3. Root motion scaled by his leg length / the source's.
-4. IK corrections from his own mesh: feet planted on the floor; arms kept clear of his torso (minimum outward
-   angle from his body width); two-handed: off hand onto the grip; bow: string hand at the string.
-Same code for every character; per character only the calibration and his body measurements.
