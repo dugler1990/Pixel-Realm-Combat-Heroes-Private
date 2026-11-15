@@ -4,7 +4,8 @@ Started 2026-11-14. Source talks: `docs/ideas/raw/2026-11-14-armor-and-damage-ty
 folder, untracked) and the Claude Code chat of the same day.
 
 This doc holds the whole system: the design (first half) and how it is built (second half: code
-layout, data files, the attack and body roster, changes per file, tests per chunk). Each chunk
+layout, data files, the attack and body roster, changes per file, tests per chunk). **Where we are and
+what is next: the section "Status and next steps" before Open.** Each chunk
 becomes its own `.cursor/plans/*.plan.md`; when one is written or finished, check it against this doc
 and fix whichever is wrong.
 
@@ -96,10 +97,13 @@ The existing hit test stays (`hit_core.py`): rect, then mask against mask.
      front-most of his projected body capsules at the contact → bone → `regions.json`; a region is
      covered or not (the item's `coverage`). Torso is chest or back by the attack's direction against
      his facing. 61 µs (cached per frame) / 329 µs, landed hits on armoured bodies only.
-   - **Next** (`visual_hits.plan.md`): (a) the mesh hero is hit on his posed capsules, like the demon,
-     so a hit lands where he is drawn; (b) each armour piece bakes, at export, where it covers each
-     bone in (u along the bone, angle around it): the contact's bone + (u, angle) says plate or skin.
-     That (u, angle) is also where a stuck arrow sits (chunk 11).
+   - **Built in 4b** (`visual_hits.plan.md`): the mesh hero is hit on his mesh's own points
+     (`mesh_points.py`: ~2.5k vertices posed per frame, projected like the camera, nearest per pixel),
+     worn pieces in the same outline. At the hit pixel the point in front says which bone (region) and
+     whether it is a worn piece (its item's layer, then the hide) or skin (the hide):
+     `body_regions.hit_layers`. Plate or skin matches the drawn mesh on 96% of arrows within 1 px, all
+     within 2 px (the seams). The point is also where a stuck arrow sits (chunk 11). Capsules stay
+     (`MESH_HERO_HIT_BODY = "capsules"`; the demon; body collision).
    - Sprite hero wearing items: height bands on the hitbox (kept while sprite heroes exist). Sprite
      enemies wear nothing: one layer (their hide) everywhere, no lookup.
    - Dropped before chunk 4: per-slot sprite masks per frame (no sprite body wears pieces).
@@ -149,8 +153,9 @@ Target:
 
 ## Stuck arrows
 
-- Sprite bodies `(offset from rect centre, flipped with facing, angle, depth)`; mesh bodies
-  `(bone, u, angle, direction, depth)`, drawn on the bone.
+- Sprite bodies `(offset from rect centre, flipped with facing, angle, depth)`; mesh bodies: the mesh
+  point the arrow hit (`HitSpot.point`: body or piece, posed with the animation) plus direction and
+  depth, drawn on that point.
 - One transform and one sprite per arrow per frame, batched (same atlas texture). Cap ~8, pooled.
 
 ## Item card
@@ -165,7 +170,9 @@ reference attacks; numbers in a detail view.
 - Fast paths by bitmask: `atk.magic_mask & body.reacts_mask == 0` skips magic; no layers skips the
   layer walk.
 - Compiled data: int ids, flat lists, `__slots__`. No string dict on the hot path.
-- Contact: reuse the overlap pixel; step-back ≤ 20 `get_at`; layer lookup ≤ 3 reads.
+- Contact: reuse the overlap pixel; step-back ≤ 64 `get_at` (only hits that land); what the hit meets
+  on the mesh hero: one outline lookup, 6-9 µs (`hit_layers`); his outline is built per new pose while
+  he is attacked (0.5-1.2 ms; 3.7 ms the first time a frame is used in full plate).
 - Measure each chunk on the fixed 200-entity ice scene; log in `Code/NOTES_performance.md`.
 
 # Part 2: how it is built
@@ -395,11 +402,12 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
    enemies share one per body; `body_regions.py` + `regions.json` (contact → region on the mesh hero).
    Needs `main`'s item card merged. Falls short of "what you see is what you hit": hero hit on his
    sprite, armour per whole region. → 4b
-4b. **Visual hits.** Plan: `.cursor/plans/visual_hits.plan.md`. Mesh hero hit on his posed capsules;
-   armour coverage baked per piece per bone (u, angle); arrows from many directions on the plated barb
-   land on plate or skin as drawn. → 5, 11
+4b. **Visual hits.** Done: `.cursor/plans/visual_hits.plan.md`, branch `refactor/visual-hits`. Mesh
+   hero hit on his mesh's points (capsules kept as the other choice); worn pieces in his outline;
+   `hit_layers` says plate or skin as drawn (96% / 98% of arrows within 1 px, all within 2). → 5, 11
 5. **Physical resolve.** `damage_rules.physical`, `hit_resolve.py`, resolver calls it, receivers
-   simplified. First real behaviour: plate stops the dart. → 10, 12
+   simplified. First real behaviour: plate stops the dart. Layers at a hit come from
+   `body_regions.hit_layers` (mesh hero) or the profile's region (everyone else). → 10, 12
 6. **Conditions and buffs.** `conditions.py`, the level clock, server-owned. → 7, 8, 9
 7. **Elemental.** Fire, ice, lightning rules; wet; piece heat; hot shell; fold `HeatEffect`.
 8. **Venom.** Venoms, saves, antidote items, `venom_cloud` area, new `tribey_dart` enemy.
@@ -409,6 +417,31 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 12. **Item card and character sheet.** `.cursor/plans/item_card.plan.md` (pulled forward; its rule
     function is `damage_rules.physical`, written there first if the card goes before chunk 5).
 13. **Boss with layers.** One key boss using 4, 5, 10 to prove NPC opt-in.
+
+## Status and next steps (2026-11-15)
+
+**Built, on branches, not merged, not checked in play**, each on the one before:
+`refactor/knockback-mass` (1) → `refactor/attack-defs` (2) → `refactor/contact-point` (3) →
+`refactor/defence-layers` (4, with `main` merged in) → `refactor/visual-hits` (4b). Tests: the targeted
+set, same 11 known failures throughout. Nothing plays differently yet except knockback (mass, worn
+weight) and the mesh hero's hit body (his mesh, not his sprite).
+
+**Next, in order:**
+1. **Play-check 1-4b** (Douglas): leap slam the demon (barely moves) vs small enemies (fly); arrows
+   and stones stop on the barb; in full plate he is shoved less; `DEBUG_DRAW_CONTACTS = True`: dots
+   where arrows land, on his drawn body. Only then merge (Douglas's call).
+2. **Chunk 5 plan, then build**: the first visible armour: plate stops the dart (pings off), skin takes
+   it, crush still hurts through plate. Needs: the rules (`damage_rules.physical`), the resolver
+   computing `ctx.amount` (`hit_resolve.py`), receivers that only subtract, and how inner layers are
+   found under the front piece. A new plan in `.cursor/plans/`; this doc's chunk list stays the map.
+3. Then 6 (conditions) → 7 / 8 / 9 (elemental, venom, categories), 10 (wear), 11 (stuck arrows, now
+   simpler: pin to the hit point), 12 (item card verdicts), 13 (boss with layers).
+
+**Owed cleanups and loose ends** (none blocks 5):
+- `WornCloud.frames_of` repeats `PlayerMesh.piece_frames`'s rule: one place.
+- `body_regions.mesh_slot` / `sprite_slot` serve only the capsules choice and sprite heroes now.
+- The test-order `chdir` problem (Known errors), the co-op drift and inertia (below), no helmet item,
+  demon tubes not re-baked, first-use posing cost in full plate (3.7 ms per new frame).
 
 ## Open
 
@@ -495,6 +528,12 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
   lookup (front-most capsule). Targeted set + item card: 11 failed (the same names) / 450 passed.
   Not checked in play.
 
+- 2026-11-15: chunk 4b (visual hits) on `refactor/visual-hits`. Hero hit on capsules first; pictures
+  against the full mesh showed them fat (35% air, 2x too deep from the side); mesh points built and
+  made the default (11% air, 91% same body part, ~same cost). Worn pieces in the outline; plate or skin
+  as drawn on 96% (plate) / 98% (loincloth) of 506 / 512 arrows within 1 px. Capsule bake: ends pulled
+  in (barb re-baked). Targeted set: same 11 failures. Not checked in play.
+
 ## Tried and dropped
 
 - **Mesh hero hit on his 2D sprite mask** (chunk 4, decision 2 of `defence_layers.plan.md`, my
@@ -503,6 +542,11 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
   posed capsules.
 - **Armour per whole region** (chunk 4, decision 4: per-bone coverage deferred): a visible gap in a
   piece still counts as plate. Fails the same Goal; replaced in 4b by coverage baked per piece.
+- **Mesh hero hit on capsules as the default** (4b): one round tube per bone is as deep as it is
+  wide (2x too deep from the side, a wedge of air over the head; 35% air vs the drawn mesh). Kept as
+  the other choice; points are the default.
+- **Armour coverage baked per bone (u, angle)** (4b's first design): not built; the pieces' own points
+  say plate or skin where they are drawn, no bake.
 - **Hit region by the nearest capsule edge** (chunk 4, as first planned): from the side, a hit landed
   on the arm hidden behind the body, and big capsules swallowed the neck. Replaced by the front-most
   capsule under the contact (depth toward the camera); region map at 4 facings compared both.

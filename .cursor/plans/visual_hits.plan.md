@@ -1,101 +1,98 @@
 # Plan: visual hits (damage chunk 4b)
 
-Written 2026-11-14. Branch `refactor/visual-hits`, worktree `..\Pixel-Realm-visual-hits`, from
-`refactor/defence-layers` (chunks 1-4, not merged).
+Written 2026-11-14, rewritten as built 2026-11-15. Branch `refactor/visual-hits`, worktree
+`..\Pixel-Realm-visual-hits`, from `refactor/defence-layers` (chunks 1-4, not merged).
 
 ## Requirement (Douglas, master doc Goal)
 
 What you see is what you hit: an arrow that visibly hits armour pings off; one that visibly hits skin
-can stick in him, where it hit. Chunk 4 fails it in two ways (master doc, Tried and dropped): the mesh
-hero is hit on his 2D sprite, and armour covers whole regions.
+can stick in him, where it hit. Chunk 4 failed it in two ways: the mesh hero was hit on his 2D sprite,
+and armour covered whole regions.
 
 **Done means**: arrows from many directions at the plated barb, in the game's own hit code, each land
-on plate or skin as the armour is drawn there; and the place each one hit is a bone + (u along it,
-angle around it) a stuck arrow can sit on (chunk 11).
+on plate or skin as the armour is drawn there; and each hit names the mesh point it landed on (where a
+stuck arrow sits, chunk 11).
 
-## What is there today (read and measured 2026-11-14)
+## As built
 
-- Hero: hit on his sprite mask (`hit_core.shape_of`: no `hit_shape`, so `mask` at `rect`). The mesh
-  (`player_mesh.PlayerMesh`) is draw-only, sized to the sprite figure, drawn at
-  `Support.mesh_feet_world`.
-- Demon: hit on its posed capsules: `CombatUnit.hit_shape` → `MeshBoss.body_mask` →
-  `mesh_boss.build_body_mask` (rasterized capsules, LRU of 128 masks), and its `rect` is the capsule
-  box (`plant_sprite_on_hitbox`), because `find_hits` drops candidates by `rect` first.
-- Barb capsule outline, 732 poses (every 5th frame × 12 facings), figure 56 px: build 0.42 ms median,
-  27 ms worst (first builds); from the cache 5 µs. The outline's box sticks out of the sprite's 64×63
-  rect by up to 2 px left / right, 11 top, 21 bottom (box with padding, not pixels: to check).
-- Armour pieces (`Graphics/Meshes/barb_fullplate/<piece>`, `barb_loincloth`) are skinned packs on the
-  body's skeleton, in the body's model space (`PlayerMesh.draw` poses them with the body's frame).
-- Co-op: the **server** decides enemy hits on players. Its stand-in (`RemotePlayer`, server mode) is
-  hit on **one idle sprite frame**, never animated. The client only gets `MSG_HIT_PLAYER` (amount).
-  So in co-op, hits on the hero already differ from what anyone sees.
+### The mesh hero is hit on his mesh, as drawn
 
-## Design
+- `Settings.MESH_HERO_HIT_BODY`: `"points"` (default) or `"capsules"`. Both stay: capsules are the
+  demon's hit body and the body-vs-body collision (`body_contact.py`); points are the hero's.
+- **Points** (`Code/mesh_points.py`): ~2.5k of the barb's 107k vertices, one per cell of a grid over
+  the rest pose. Posed per animation frame on first use (linear blend skinning, as the GPU; float32,
+  last 128 frames kept), projected like the camera, each point spread over 2×2 px, nearest per pixel.
+  The outline is the hit mask; per pixel it knows the point in front, its bone, and whether it is skin
+  or a worn piece.
+- **Worn pieces are in the outline** (`WornCloud`): each piece's points at the body's spacing, posed
+  about the body's pivot with the body's clip and step (as `PlayerMesh.piece_frames`, which `draw` uses
+  too). Body + pieces pose in one pass.
+- `BasePlayer.hit_shape()` / `hit_rect` / `hit_outline()`: where the camera draws him
+  (`Support.mesh_feet_world`). `hit_rect` holds his outline (a foot stepping toward the camera is 15 px
+  below the sprite); `hit_core.reaches_past_rect` lists him, so other candidates pay nothing for it.
+  Undrawn mesh (CPU backend) or sprite hero: hit on the sprite as before.
+- **What a hit meets**: `body_regions.hit_layers(hero, contact, toward)` → `HitSpot(slot, layers, piece,
+  point)`. Points: the point in front at the hit pixel; a worn piece → its item's layer (on equip:
+  `defence_profile.piece_layers`) then the hide; skin → the hide. Torso → chest or back by direction.
+  Sprite hero or capsules: the region's layers from the profile (chunk 4).
+- **Capsules improved too** (`bake_body_capsules.py`): ends pulled in while 90% of a bone's points
+  stay inside; barb re-baked (demon not).
 
-### (a) The mesh hero is hit on his capsules
+### Numbers (barb, 56 px figure)
 
-- `BasePlayer.hit_shape()`: with a `mesh_skin`, the capsule outline of his current frame, yaw and size
-  (`MeshBoss.body_mask` at `PlayerMesh.yaw_deg()`, `height_px`), placed at `mesh_feet_world(self)`:
-  the same pose and place the camera draws. Without one: None (sprite heroes as today).
-- Hit box: `find_hits` drops a candidate whose `rect` misses the attack. First check the outline's
-  real pixels against the sprite rect over every pose; if they stick out, the hero gets the demon's
-  rule (his hit rect follows the capsule box). Pick after measuring; no guess.
-- Contacts, the projectile entry walk (chunk 3) and `body_regions.mesh_slot` then run on what is drawn.
-- Speed-up of the region lookup, held to: same answers as now on thousands of points; ≤ 10 µs per
-  hit measured; memory only for poses hit (capped). If it misses, stop and report.
-- Cost to watch: an outline is built per hero frame while an attack is near him (~0.4 ms each, cached
-  5 µs). Measured in the fight scene below.
+| | capsules | points |
+|---|---|---|
+| covers the drawn body (33 poses vs all 107k vertices) | 98% | 98% |
+| hit area where nothing is drawn | 35% (worst 52%) | 11% (worst 12%) |
+| same body part as the drawn mesh | 77% | 91% |
+| new pose outline, body only | 0.36 ms | 0.47 ms |
+| first use of an animation frame, body only | — | +0.75 ms |
+| full plate (6.9k points): first use of a frame / new facing / cached | — | 3.7 ms / 1.0-1.2 ms / 3-6 µs |
+| what the hit meets (`hit_layers`) | 5-60 µs | 6-9 µs |
+| memory | 0 | ≤ 128 posed frames per worn set (float32): ~10 MB full plate |
 
-### (b) Armour where each piece is drawn
+- **Plate or skin as drawn**: 32 poses × 16 arrows through `Level4._strike_with_attack_sprites`,
+  against the full body + armour meshes: full plate 487/506 (96%), loincloth 501/512 (98%) within 1 px;
+  the misses sit on plate-skin seams (both within 2 px: the points are ~1.6 px apart).
+- `find_hits`, 200 candidates: 73 vs 77 µs medians (within noise) with the reaching-body list.
+- One-write depth buffer equal to sort + unique on 637k pixels.
 
-- **Bake** (new `tools/boss_sprite_pipeline/bake_coverage.py`, run per outfit like
-  `bake_body_capsules.py`): for each piece pack, every vertex at rest goes to its nearest body capsule
-  → (bone, u 0..1 along it, angle around it) → that cell is set in a grid per bone (16 u × 16 angle),
-  grown by one cell. Writes `coverage.json` next to the piece's `skin.npz` (with its sha1, like
-  `body.json`). A cell no vertex reaches is skin: gaps stay gaps.
-- **Hit**: the front-most capsule at the contact (already found) gives the bone; the 3D point on its
-  front surface, taken back to rest through the bone's skin matrix, gives (u, angle). Layers at the hit
-  = worn pieces whose cell is set there (harder outside), then the hide.
-- The region profile (chunk 4) stays for weight, the item card and sprite heroes.
-- A piece with no `coverage.json`: falls back to its whole regions, and the game logs it once.
+## Checks done
 
-### (c) Co-op (decision 1)
-
-- The client already reports position and health each tick. Add its pose: clip frame and facing (two
-  numbers). The server's stand-in poses the same capsules and hits them, so a hit on the server lands
-  where that client draws its hero. Without it, co-op stays on the idle sprite frame.
-
-## Checks
-
-- **Fight scene test**: a headless level with the plated barb (mesh) and archers around him at 16
-  angles; real `fire_projectile`, real `_strike_with_attack_sprites`. For each hit: did it land on his
-  capsules, which bone + (u, angle), plate or skin. Expected from the bake: plate everywhere except the
-  bare head (no helmet item) and the baked gaps.
-- **Picture for Douglas**: the barb's capsules at 4 facings, each pixel plate (grey) or skin (tan)
-  from the bake, next to the armour's own preview render, to compare by eye.
-- **Play**: `DEBUG_DRAW_CONTACTS` dots coloured grey (plate) / red (skin).
-- Same-answer check and timing for the region speed-up; outline build cost in the fight scene.
-- Regression: the targeted set.
-
-## Commits
-
-1. This plan.
-2. (a) hero `hit_shape`, hit box rule, tests.
-3. Region lookup speed-up, same-answer check, timing.
-4. (b) `bake_coverage.py`, baked files for `barb_fullplate` and `barb_loincloth`, lookup at the hit,
-   tests, picture.
-5. Fight scene test.
-6. Delete what 4b leaves unused; perf line; docs; log.
+- `tests/damage/test_hero_mesh_hits.py` (every test for both bodies), `test_mesh_points.py`,
+  `test_armour_hits.py` (plate / skin / loincloth / sprite fallback; arrows from 16 directions at two
+  poses: every hit matches the drawn mesh within 2 px, ≥ 85% within 1 px).
+- Pictures (scratch, not kept): the wired code at 4 poses; mesh vs tubes vs points with the air in
+  magenta; plate (grey) / skin (tan) with 16 arrows per pose, green = matches the drawn mesh.
+- Regression: the targeted set + `test_body_capsules`.
+- **Not checked in play.**
 
 ## Decisions (Douglas)
 
-1. **Co-op later (Douglas, 2026-11-14).** (c) is not built here; the server keeps hitting the idle
-   sprite frame. Noted in the master doc's Open.
-2. **Capsules (Douglas, 2026-11-14)**: the hero is hit on his capsules. If it looks bad in play, refine
-   the capsules; worst case, change path (exact outline).
+1. Co-op later: the server keeps hitting the idle sprite frame (master doc Open: co-op drift).
+2. Capsules first (2026-11-14), then points tried and chosen (2026-11-15): capsules looked bad (fat,
+   35% air); points cost about the same. Keep both alive.
 
 ## Open
 
-- Capsules are fitted to the body; an arrow at the very edge of a limb can hit or miss by a few px.
-  Exact outline (the mesh itself) was the other option; capsules chosen (Douglas, 2026-11-14).
-- Sprite heroes (no mesh): height bands and whole regions stay; they are not "what you see".
+- First use of an animation frame in full plate costs 3.7 ms while he is attacked (posing 6.9k points);
+  each frame once, then kept (128 of 305). Pre-posing on equip or fewer piece points if it shows.
+- Only the piece in front counts: a gambeson under plate is not a layer at the hit yet (chunk 5 decides
+  how inner layers are found: each piece's own outline at the pixel, or the profile's region).
+- `WornCloud.frames_of` repeats `PlayerMesh.piece_frames`'s rule (same clip, same step); one place
+  later.
+- No helmet item: the head is skin in full plate.
+- Sprite heroes: height bands and whole regions; not "what you see" (no mesh).
+- Enemies (demon) stay on capsules; move them to points if they need it.
+
+## Tried and dropped
+
+- **Hero hit on capsules as the default**: one round tube per bone is as deep as it is wide; from the
+  side he is ~2× too deep, a wedge of air above the head. Kept as the other choice
+  (`MESH_HERO_HIT_BODY = "capsules"`), not the default.
+- **Armour coverage baked per bone (u, angle)** (this plan's first design (b)): not built; the pieces'
+  own points answer plate or skin exactly where they are drawn, with no bake.
+- **Faster capsule region lookup** (prototype: same answers on 63k points, 62 µs first hit, 5 µs after):
+  not put in; the points answer in 2-9 µs.
+- **Capsule ends pulled in by the full radius**: worst bone kept 66% of its points; replaced by pulling
+  in only while 90% stay inside.
