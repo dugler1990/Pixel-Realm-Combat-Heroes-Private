@@ -99,6 +99,11 @@ install`.
 Not in route B: shields (a plane on the forearm, not a hand slot) until a forearm slot exists.
 
 ## Clips for weapon types (both routes)
+Measured 2026-11-15 (`_checks/hand_gap.py`, palms 40 % along the hand bones, gap / his height; on a hilt about
+0.05-0.10): the barb's clips never bring the hands together. Source Kimodo BVH -> retargeted: twohandswing median
+0.77 (closest 0.37) -> 0.79 (0.54); hammerdown2 0.41 (0.33) -> 0.58 (0.42); overheadchop 0.61 (0.37) -> 0.68 (0.54).
+"Two hand swing" was only the prompt; the retarget widens the gap further (his shoulders). So two-handed weapons need
+new clips with Kimodo's hand constraints AND off-hand IK after the retarget; no bow clip exists.
 - One Kimodo run with a two-handed sword prompt, both hands pinned with its LeftHand / RightHand constraints
   (`NOTES_kimodo_api.md`, never used for this), retargeted to the barb (`retarget_bvh.py --source anunaki`): measure
   the gap between his hands over the clip. Small and steady: a weapon bone (main hand -> off hand) baked in
