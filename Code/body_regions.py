@@ -158,17 +158,50 @@ def sprite_slot(hitbox, figure_px, contact, status, toward=None):
     return defence_profile.region_slot(region, side)
 
 
+def _point_slot(skin, outline, point, toward):
+    slot = _bone_slots(skin.skin.pack).get(int(outline.owner[point]), "torso")
+    return _torso(toward, skin.facing_deg) if slot == "torso" else slot
+
+
 def points_slot(skin, outline, feet, contact, toward=None):
     """The region slot under `contact` on a mesh hero hit on his points: the point in front at that
     pixel (mesh_points.Outline) -> its bone -> region. None if no point is within 2 px."""
-    from mesh_points import cloud
-
-    body = skin.skin
     point = outline.point_at(contact[0] - int(feet[0]), contact[1] - int(feet[1]))
     if point is None:
         return None
-    slot = _bone_slots(body.pack).get(int(cloud(body.pack).owner[point]), "torso")
-    return _torso(toward, skin.facing_deg) if slot == "torso" else slot
+    return _point_slot(skin, outline, point, toward)
+
+
+class HitSpot:
+    """What a hit at one pixel meets. layers: outer first, the hide last. piece: the worn mesh piece in
+    front there (None: skin, or not known). point: the mesh point in front (None: not the points
+    path); with the outline's source, where a stuck arrow would sit (chunk 11)."""
+
+    __slots__ = ("slot", "layers", "piece", "point")
+
+    def __init__(self, slot, layers, piece=None, point=None):
+        self.slot = slot
+        self.layers = layers
+        self.piece = piece
+        self.point = point
+
+
+def hit_layers(hero, contact, toward=None):
+    """What a hit at world `contact` on `hero` meets. Mesh hero on his points: what is drawn in front
+    at that pixel, a worn piece (its item's layer, then the hide) or skin (the hide only). Otherwise
+    (sprite hero, capsules): the region's layers from his defence profile."""
+    natural = hero.body_def.natural
+    found = hero.hit_outline() if hasattr(hero, "hit_outline") else None
+    if found is not None:
+        outline, feet = found
+        point = outline.point_at(contact[0] - int(feet[0]), contact[1] - int(feet[1]))
+        if point is not None:
+            slot = _point_slot(hero.mesh_skin, outline, point, toward)
+            piece = outline.piece_of(point)
+            layer = getattr(hero, "piece_layers", {}).get(piece) if piece else None
+            return HitSpot(slot, (layer, natural) if layer is not None else (natural,), piece, point)
+    slot = hero_slot(hero, contact, toward)
+    return HitSpot(slot, hero.defence.layers_at(slot))
 
 
 def hero_slot(hero, contact, toward=None):

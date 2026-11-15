@@ -112,6 +112,17 @@ def build_profile(body_def, worn):
     return DefenceProfile(body_def, layers, weight, True)
 
 
+def piece_layers(items):
+    """{mesh piece name: LayerDef} for worn items that are drawn as a mesh piece and have a base."""
+    layers = {}
+    for item in items:
+        name = equipment.mesh_piece(item)
+        base = item_properties.base_of(item) if name else None
+        if base is not None:
+            layers[name] = base_layer(item.base, base)
+    return layers
+
+
 def worn_from_items(items):
     """(base id, base, side) for each worn item with a base; weapons, belts without a base and
     empty slots add nothing."""

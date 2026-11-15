@@ -379,26 +379,39 @@ class BasePlayer(Entity):
             return None
         body = skin.skin
         yaw = round(skin.yaw_deg()) % 360
-        key = (self.rect.topleft, id(self.mask), body.frame_index, yaw, skin.height_px, self.hit_points())
+        key = (self.rect.topleft, id(self.mask), body.frame_index, yaw, skin.height_px, self.hit_points(),
+               tuple(skin.pieces))
         if key != self._hit_rect_key:
             fx, fy = mesh_feet_world(self)
             if self.hit_points():
-                dx, dy, w, h = mesh_points.cloud(body.pack).reach_box(body.frame_index, self._mesh_scale(skin))
+                dx, dy, w, h = self._worn_cloud(skin).reach_box(body.frame_index, self._mesh_scale(skin))
             else:
                 dx, dy, w, h, _ = body.body_bounds(yaw, skin.height_px)
             self._hit_rect_value = pygame.Rect(int(fx + dx), int(fy + dy), int(math.ceil(w)), int(math.ceil(h)))
             self._hit_rect_key = key
         return self._hit_rect_value
 
+    _outline_key = None
+    _outline_value = None
+
+    def _worn_cloud(self, skin):
+        """His body and the pieces he wears now, as one point cloud (mesh_points.worn_cloud)."""
+        return mesh_points.worn_cloud(skin.skin.pack, [(name, piece.pack) for name, piece in skin.pieces.items()])
+
     def hit_outline(self):
-        """(mesh_points.Outline, feet) of his pose now, for the points path; None otherwise."""
+        """(mesh_points.Outline, feet) of his pose now, worn pieces in it, for the points path; None
+        otherwise. Kept until his pose, pieces or place change."""
         skin = self._drawn_skin()
         if skin is None or not self.hit_points():
             return None
         body = skin.skin
-        outline = mesh_points.cloud(body.pack).outline(
-            body.frame_index, skin.yaw_deg(), self._mesh_scale(skin))
-        return outline, mesh_feet_world(self)
+        key = (body.frame_index, round(skin.yaw_deg()) % 360, skin.height_px, tuple(skin.pieces),
+               self.rect.topleft, id(self.mask))
+        if key != self._outline_key:
+            outline = self._worn_cloud(skin).outline(body.frame_index, skin.yaw_deg(), self._mesh_scale(skin))
+            self._outline_value = (outline, mesh_feet_world(self))
+            self._outline_key = key
+        return self._outline_value
 
     def hit_shape(self):
         """His mesh where it is drawn (its points, or its capsules); None: hit on the sprite."""
@@ -419,6 +432,8 @@ class BasePlayer(Entity):
         worn = [s.item for s in self.inventory.body_slots() if not s.empty]
         self.defence = defence_profile.build_profile(self.body_def, defence_profile.worn_from_items(worn))
         self.gear_weight = self.defence.weight
+        # mesh piece (as drawn: Graphics/Meshes/<piece>) -> its item's layer, for hits on the points
+        self.piece_layers = defence_profile.piece_layers(worn)
         skin = getattr(self, "mesh_skin", None)
         if skin is not None:
             skin.set_pieces(self.inventory.worn_pieces())
