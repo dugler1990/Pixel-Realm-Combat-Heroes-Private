@@ -70,6 +70,14 @@
     </div>
     <label>Top layer opacity: <b id="opv"></b></label>
     <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.6">
+    <div class="row" style="margin-top:8px">
+      <button id="dragmode" title="P: what a drag (and the arrow keys) moves">Drag: <b id="dragwhat"></b></button>
+      <label class="row" style="margin:0"><input id="showfit" type="checkbox" checked> shape + holes</label>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <span>Holes after a cut: <b id="holes">-</b></span>
+      <button id="fitbest" title="Move to the offset that leaves the fewest holes (shape only, within 40 px)">Fit shape</button>
+    </div>
     <div id="offnote" class="err" style="display:none; margin-top:6px"></div>
 
     <h3>Placement (no API call)</h3>
@@ -105,9 +113,14 @@
 
     <div id="msg"></div>
     <div class="help">
-      Align view: drag to move the padding onto the generation. Ctrl + drag pans, the wheel zooms.
+      Align view: drag to move the padding onto the generation, or (Drag: picture, key P) the
+      picture into the level's shape. Both set the same offset. Ctrl + drag pans, the wheel zooms.
       Arrow keys nudge 1 px, Shift + arrows 10 px. T swaps which layer is on top; the slider sets
       the top layer's opacity.<br>
+      Yellow line: the level's shape (what a cut keeps). Pink: new-cell pixels the picture leaves
+      unpainted at this offset, drawn 2 px thicker so they show zoomed out. Black inside the art
+      is art; only black joined to the outside counts. Fit shape jumps to the offset with the
+      fewest holes; the padding colours are still yours to judge.<br>
       Align colours re-places this attempt with colour alignment on and the offset above: the
       generation is moved back by the offset, so the colours are paired with the padding where it
       really matches (with the warp on, the offset only corrects the pairing).<br>
@@ -124,7 +137,7 @@ const CRS = L.extend({}, L.CRS.Simple, { transformation: new L.Transformation(1,
 const map = L.map('map', { crs: CRS, minZoom: -6, maxZoom: 4, zoomSnap: 0.25, attributionControl: false,
                           dragging: false, boxZoom: false, keyboard: false });
 const S = { levels: [], index: 0, info: null, view: 'align', top: 'padding', busy: false,
-            layers: {}, offset: [0, 0], drag: null };
+            layers: {}, offset: [0, 0], drag: null, dragWhat: 'padding', fitTimer: null, fitToken: 0 };
 
 async function api(path, body) {
   const options = body === undefined ? {} : {
@@ -160,6 +173,8 @@ async function run(label, fn) {
 const level = () => S.levels[S.index];
 const info = () => S.info;
 const warpJob = () => info() && info().renderer === 'warp';
+// The offset can be dragged when there is a padding or an outline to drag it against.
+const canMove = () => S.view === 'align' && warpJob() && !!(S.layers.padding || S.layers.outline);
 
 // -- the map ---------------------------------------------------------------------------------
 
@@ -168,9 +183,23 @@ function imageUrl(kind) {
   return `/api/level/${i.id}/image/${kind}?attempt=${i.attempt}&v=${i.images[kind] || 0}`;
 }
 
+// What stays still on screen: in padding mode the picture (the padding moves by the offset),
+// in picture mode the canvas (the picture moves by minus the offset). Same placement either way.
+function base() { return S.dragWhat === 'picture' ? [-S.offset[0], -S.offset[1]] : [0, 0]; }
+
+function rawBounds() {
+  const [rw, rh] = info().raw_size, [bx, by] = base();
+  return [[by, bx], [rh + by, rw + bx]];
+}
+
 function paddingBounds() {
-  const i = info(), [dx, dy] = S.offset;
-  return [[dy, dx], [i.height + dy, i.width + dx]];
+  const i = info(), [dx, dy] = S.offset, [bx, by] = base();
+  return [[dy + by, dx + bx], [i.height + dy + by, i.width + dx + bx]];
+}
+
+function placeLayers() {
+  if (S.layers.raw) S.layers.raw.setBounds(rawBounds());
+  for (const name of ['padding', 'outline', 'holes']) if (S.layers[name]) S.layers[name].setBounds(paddingBounds());
 }
 
 function clearLayers() {
@@ -184,10 +213,16 @@ function drawLayers(fit) {
   if (!i || i.attempt === null) return;
   const full = [[0, 0], [i.height, i.width]];
   if (S.view === 'align') {
-    const [rw, rh] = i.raw_size;
-    if (i.images.raw) S.layers.raw = L.imageOverlay(imageUrl('raw'), [[0, 0], [rh, rw]]).addTo(map);
+    if (i.images.raw) S.layers.raw = L.imageOverlay(imageUrl('raw'), rawBounds()).addTo(map);
     if (i.has_padding) S.layers.padding = L.imageOverlay(imageUrl('padding'), paddingBounds()).addTo(map);
+    // The level's shape and the holes a cut would leave sit in the canvas frame, so they move
+    // with the padding.
+    if (warpJob() && $('showfit').checked) {
+      S.layers.outline = L.imageOverlay(imageUrl('outline'), paddingBounds()).addTo(map);
+      S.layers.holes = L.imageOverlay(holesUrl(), paddingBounds()).addTo(map);
+    }
     stackLayers();
+    scheduleFit(0);
   } else if (S.view === 'result') {
     if (i.images.result) S.layers.result = L.imageOverlay(imageUrl('result'), full).addTo(map);
     else say('No placed image for this attempt yet.');
@@ -196,7 +231,7 @@ function drawLayers(fit) {
     else say('No shape overlay yet: press Run tests.');
   }
   if (fit) map.fitBounds(full);
-  $('map').classList.toggle('dragpad', S.view === 'align' && !!S.layers.padding && warpJob());
+  $('map').classList.toggle('dragpad', S.view === 'align' && canMove());
 }
 
 function stackLayers() {
@@ -208,12 +243,51 @@ function stackLayers() {
   const [over, under] = S.top === 'padding' ? [padding, raw] : [raw, padding];
   under.setOpacity(1); under.bringToBack();
   over.setOpacity(opacity); over.bringToFront();
+  for (const name of ['outline', 'holes']) if (S.layers[name]) S.layers[name].bringToFront();
 }
 
 function setOffset(dx, dy) {
   S.offset = [Math.round(dx), Math.round(dy)];
   $('dx').value = S.offset[0]; $('dy').value = S.offset[1];
-  if (S.layers.padding) S.layers.padding.setBounds(paddingBounds());
+  placeLayers();
+  scheduleFit(250);
+}
+
+// -- shape fit: how many new-cell pixels a cut would leave unpainted at this offset ------------
+
+function holesUrl() {
+  const i = info();
+  return `/api/level/${i.id}/image/holes?attempt=${i.attempt}&offset=${S.offset.join(',')}&v=${i.images.raw || 0}`;
+}
+
+function scheduleFit(delay) {
+  clearTimeout(S.fitTimer);
+  if (S.view !== 'align' || !info() || info().attempt === null || !warpJob()) { $('holes').textContent = '-'; return; }
+  S.fitTimer = setTimeout(refreshFit, delay);
+}
+
+async function refreshFit() {
+  if (S.busy) return;
+  const i = info(), token = ++S.fitToken;
+  try {
+    const f = await api(`level/${i.id}/fit?attempt=${i.attempt}&offset=${S.offset.join(',')}`);
+    if (token !== S.fitToken) return;
+    const c = f.current;
+    $('holes').textContent = `${c.missing_px.toLocaleString()} px (cut IoU ${c.cut_iou.toFixed(4)})`;
+    if (S.layers.holes) S.layers.holes.setUrl(holesUrl());
+  } catch (err) { if (token === S.fitToken) $('holes').textContent = err.message; }
+}
+
+function setDragWhat(what) {
+  S.dragWhat = what;
+  $('dragwhat').textContent = what;
+  if (info() && info().attempt !== null) placeLayers();
+}
+
+// Moving the picture by (x, y) is the same placement as moving the padding by (-x, -y).
+function moveBy(x, y) {
+  const sign = S.dragWhat === 'picture' ? -1 : 1;
+  setOffset(S.offset[0] + sign * x, S.offset[1] + sign * y);
 }
 
 // Dragging the padding, and Ctrl + drag to pan, by hand: Leaflet cannot drag an image overlay,
@@ -222,7 +296,7 @@ map.on('mousedown', e => {
   if (S.busy || !info() || info().attempt === null) return;
   const ev = e.originalEvent;
   if (ev.button !== 0) return;
-  if (ev.ctrlKey || S.view !== 'align' || !S.layers.padding || !warpJob()) {
+  if (ev.ctrlKey || S.view !== 'align' || !canMove()) {
     S.drag = { pan: true, last: e.containerPoint };
     $('map').classList.add('panning');
   } else {
@@ -237,8 +311,9 @@ map.on('mousemove', e => {
     S.drag.last = e.containerPoint;
     return;
   }
-  setOffset(S.drag.offset[0] + (e.latlng.lng - S.drag.start.lng),
-            S.drag.offset[1] + (e.latlng.lat - S.drag.start.lat));
+  const sign = S.dragWhat === 'picture' ? -1 : 1;
+  setOffset(S.drag.offset[0] + sign * (e.latlng.lng - S.drag.start.lng),
+            S.drag.offset[1] + sign * (e.latlng.lat - S.drag.start.lat));
 });
 const endDrag = () => { S.drag = null; $('map').classList.remove('panning'); };
 map.on('mouseup', endDrag);
@@ -248,11 +323,13 @@ document.addEventListener('keydown', e => {
   if (S.busy || ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
   const step = e.shiftKey ? 10 : 1;
   const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
-  if (moves[e.key] && S.view === 'align' && S.layers.padding && warpJob()) {
-    setOffset(S.offset[0] + moves[e.key][0], S.offset[1] + moves[e.key][1]);
+  if (moves[e.key] && S.view === 'align' && canMove()) {
+    moveBy(moves[e.key][0], moves[e.key][1]);
     e.preventDefault();
   } else if (e.key === 't' || e.key === 'T') {
     swapTop();
+  } else if (e.key === 'p' || e.key === 'P') {
+    setDragWhat(S.dragWhat === 'padding' ? 'picture' : 'padding');
   }
 });
 
@@ -293,7 +370,7 @@ function applyEnabled() {
                     'dx', 'dy', 'reset', 'swap', 'opacity', 'retry', 'r1'])
     $(id).disabled = !has;
   const offsetOk = has && warpJob();
-  for (const id of ['dx', 'dy', 'reset']) $(id).disabled = !offsetOk;
+  for (const id of ['dx', 'dy', 'reset', 'dragmode', 'showfit', 'fitbest']) $(id).disabled = !offsetOk;
   $('offnote').style.display = has && !warpJob() ? 'block' : 'none';
   $('offnote').textContent = has && !warpJob() ? `This attempt used the ${i.renderer} renderer: it undoes its own drift, so no offset.` : '';
   if (has && !i.has_padding) say('No padding on this attempt (no accepted neighbour yet).');
@@ -371,6 +448,20 @@ $('dx').onchange = $('dy').onchange = () => setOffset(Number($('dx').value) || 0
 $('reset').onclick = () => setOffset(0, 0);
 $('swap').onclick = swapTop;
 $('opacity').oninput = stackLayers;
+$('dragmode').onclick = () => setDragWhat(S.dragWhat === 'padding' ? 'picture' : 'padding');
+$('showfit').onchange = () => drawLayers(false);
+$('fitbest').onclick = () => run('finding the offset with the fewest holes...', async () => {
+  const i = info();
+  const f = await api(`level/${i.id}/fit?attempt=${i.attempt}&offset=${S.offset.join(',')}&best=1`);
+  const b = f.best;
+  setOffset(b.offset[0], b.offset[1]);
+  const atEdge = Math.max(Math.abs(b.offset[0]), Math.abs(b.offset[1])) >= 40;
+  say(`Best shape fit: offset ${b.offset[0]}, ${b.offset[1]}: ${b.missing_px.toLocaleString()} px of holes ` +
+      `(was ${f.current.missing_px.toLocaleString()}). Check the padding still lines up, then Re-place with cut.` +
+      (atEdge ? ' At the 40 px search limit: the model probably drew the land a different size, which no shift fixes.' : ''),
+      atEdge);
+});
+setDragWhat('padding');
 // Feather and the toggles only take effect on a re-place, and only show in the Result view.
 for (const id of ['feather', 'warp', 'cut', 'alignon', 'colourmethod', 'padding'])
   $(id).addEventListener('input', () => { $('replace').classList.add('pending'); say('Press Re-place to apply.'); });

@@ -42,7 +42,7 @@ def _scene(height=80, width=160, join=60):
 
 def test_paired_colour_alignment_maps_new_art_and_preserves_geometry():
     source, accepted, locked, pending, join, expected = _scene()
-    source[20:30, join + 20 : join + 30, :3] = 0
+    source[0:10, join + 20 : join + 30, :3] = 0
     painted_pending = (pending > 0) & (source[..., :3].sum(axis=2) > 20)
     before_error = np.abs(
         source[painted_pending, :3].astype(np.int16) - expected[painted_pending].astype(np.int16)
@@ -63,7 +63,7 @@ def test_paired_colour_alignment_maps_new_art_and_preserves_geometry():
     # Under the padding the model's own pixels are recoloured too (the padding is pasted
     # over them later; a feather fades into them), so there they become padding colours.
     assert np.array_equal(result[:, :join, :3], accepted[:, :join])
-    assert np.all(result[20:30, join + 20 : join + 30, :3] == 0)
+    assert np.all(result[0:10, join + 20 : join + 30, :3] == 0)
     assert info["corrected_pixels"] == int(painted_pending.sum())
     assert info["strength"] == 1.0
     accepted_colours = {tuple(int(v) for v in colour) for colour in accepted[accepted.sum(2) > 20]}
@@ -75,7 +75,7 @@ def test_alignment_learns_from_raw_after_the_cut_erases_the_overlap():
     raw, accepted, locked, pending, join, expected = _scene()
     cut = raw.copy()
     cut[:, :join, :3] = 0
-    cut[20:30, join + 20 : join + 30, :3] = 0
+    cut[0:10, join + 20 : join + 30, :3] = 0
     painted_pending = (pending > 0) & (cut[..., :3].sum(axis=2) > 20)
     before_error = np.abs(
         cut[painted_pending, :3].astype(np.int16) - expected[painted_pending].astype(np.int16)
@@ -95,7 +95,7 @@ def test_alignment_learns_from_raw_after_the_cut_erases_the_overlap():
 
     assert after_error < before_error * 0.35
     assert np.all(result[:, :join, :3] == 0)
-    assert np.all(result[20:30, join + 20 : join + 30, :3] == 0)
+    assert np.all(result[0:10, join + 20 : join + 30, :3] == 0)
     assert info["corrected_pixels"] == int(painted_pending.sum())
     accepted_colours = {tuple(int(v) for v in colour) for colour in accepted[accepted.sum(2) > 20]}
     used = {tuple(int(v) for v in colour) for colour in result[painted_pending][:, :3]}
@@ -202,11 +202,21 @@ def test_match_restores_the_padding_contrast_the_swap_loses():
     assert abs(spreads["match"] - 1.0) < 0.1
 
 
-def test_match_leaves_the_black_gaps_alone():
+def test_match_leaves_the_background_black_alone():
+    """Black joined to the canvas edge is background: not recoloured."""
     raw, accepted, locked, pending, join = _flat_new_cell_scene()
-    raw[10:20, join + 30 : join + 40, :3] = 0
+    raw[0:10, join + 30 : join + 40, :3] = 0
     out, _ = align_to_paired_padding(*(Image.fromarray(a) for a in (raw, accepted, locked, pending)))
-    assert not np.asarray(out)[10:20, join + 30 : join + 40, :3].any()
+    assert not np.asarray(out)[0:10, join + 30 : join + 40, :3].any()
+
+
+def test_dark_art_enclosed_by_paint_is_recoloured():
+    """Black inside the art (a crevice) is art, not a gap: it is recoloured like the rest."""
+    raw, accepted, locked, pending, join = _flat_new_cell_scene()
+    raw[40:50, join + 30 : join + 40, :3] = 0
+    out, info = align_to_paired_padding(*(Image.fromarray(a) for a in (raw, accepted, locked, pending)))
+    assert np.asarray(out)[40:50, join + 30 : join + 40, :3].any()
+    assert info["corrected_total"] == int(raw[..., :3].size // 3)
 
 
 def test_both_sides_of_a_feathered_join_are_corrected():
@@ -268,3 +278,14 @@ def test_the_padding_palette_is_built_once_per_padding():
     other[mask] = 255 - other[mask]
     colour_align._padding_palette(other, mask)
     assert len(colour_align._PALETTE_CACHE) == 2
+
+
+def test_a_feathered_paste_keeps_opaque_pixels_opaque():
+    """The blend used to cut 254.99998 down to 254: alpha 254 along every feathered join."""
+    from tools.painted_map_pipeline.world_levels.result_ingest import _paste_padding_feathered
+
+    raw, accepted, locked, pending, join = _flat_new_cell_scene()
+    placed = Image.fromarray(raw).convert("RGBA")
+    padding = Image.fromarray(np.dstack((accepted[..., :3], np.full(locked.shape, 255, np.uint8))))
+    _paste_padding_feathered(placed, padding, Image.fromarray(locked), Image.fromarray(pending), 13)
+    assert (np.asarray(placed)[..., 3] == 255).all()

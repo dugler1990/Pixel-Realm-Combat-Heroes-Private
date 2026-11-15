@@ -11,6 +11,9 @@
   - Drag moves the padding. Ctrl + drag pans, the wheel zooms.
   - Arrows nudge 1 px, Shift + arrows 10 px.
   - T swaps which layer is on top; the slider sets the top layer's opacity.
+  - Drag: padding / picture (button or P). Picture = drag the generation into the level's shape. Same offset either way (picture moved by (x, y) = padding by (-x, -y)).
+  - Yellow line = the level's shape (what a cut keeps). Pink = holes a cut would leave at this offset (drawn 2 px thicker). "Holes after a cut" = count + cut IoU, refreshed 0.25 s after a move.
+  - Fit shape = jump to the offset with the fewest holes (shape only). At the 40 px limit the land is a different size: a shift will not fix it.
 - Align colours = re-place with `--align-colours --padding-offset=DX,DY`. The dropdown next to the tickbox picks the colour method: match (default) or swap (old). Methods: `PROCESS_world_levels.md`.
 - Offset (dx, dy) = how far the padding moved, right/down, to sit on the generation.
   - Warp off: ingest moves the generation by (-dx, -dy) (`frame.shift_image`, edges repeated) before cut, the colour pairs and the paste.

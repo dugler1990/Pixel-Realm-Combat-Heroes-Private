@@ -187,7 +187,7 @@ class FrameRenderer:
 
         # Recorded, not gated: with no silhouette to reproduce there is nothing for this to
         # reject, but it stays comparable against the warp path on the same level.
-        info["footprint_iou_raw"] = round(footprint_iou(normalized, ctx.generation_mask), 4)
+        info["footprint_iou_raw"] = round(footprint_iou(normalized, ctx.generation_mask, enclosed_is_art=True), 4)
         info["footprint_iou"] = info["footprint_iou_raw"]
         info["rescale_applied"] = False
         return normalized, info

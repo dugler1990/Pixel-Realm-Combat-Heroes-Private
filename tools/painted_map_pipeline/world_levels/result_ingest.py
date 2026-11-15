@@ -113,6 +113,9 @@ def _paste_padding_feathered(
     over = np.where(locked[..., None], over, spread)
 
     blended = base * (1.0 - alpha[..., None]) + over * alpha[..., None]
+    # Rounded, not cut off: 255 blended with 255 can come out 254.99998 in float32, and a plain
+    # cast made that 254 -- alpha 254 on every feathered pixel, passed on through the padding.
+    blended = np.clip(np.rint(blended), 0, 255)
     normalized.paste(Image.fromarray(blended.astype(np.uint8), "RGBA"), (0, 0))
 
 

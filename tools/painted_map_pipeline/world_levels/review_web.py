@@ -52,6 +52,17 @@ STATIC = {
 # Where `python -m tools...` resolves from.
 REPO = Path(__file__).resolve().parents[3]
 IMAGE_KINDS = ("raw", "padding", "result", "overlay")
+FIT_IMAGES = ("outline", "holes")  # drawn from the masks, not files: no version of their own
+
+
+def _parse_offset(text: str | None) -> tuple[int, int]:
+    """``"dx,dy"`` (missing: 0, 0)."""
+    if not text:
+        return (0, 0)
+    parts = [int(v) for v in str(text).split(",")]
+    if len(parts) != 2:
+        raise ValueError("the offset is dx,dy")
+    return parts[0], parts[1]
 
 
 class RunProgress:
@@ -145,6 +156,7 @@ class ReviewPage:
         self.settings: dict[str, dict[str, Any]] = {}
         self.reports: dict[tuple[str, int], str] = {}
         self._padding_cache: dict[tuple[str, int, int], bytes] = {}
+        self._fit_cache: dict[str, Any] = {}
 
     # -- files ----------------------------------------------------------------------------
 
@@ -199,9 +211,76 @@ class ReviewPage:
             self._padding_cache = {key: buffer.getvalue()}  # one level open at a time
         return self._padding_cache[key]
 
-    def image(self, level_id: str, kind: str, attempt: int) -> Path | bytes:
+    # -- shape fit (the Align view's outline, holes and best offset) ------------------------
+
+    def _fit(self, level_id: str, attempt: int):
+        """The attempt's ShapeFit, kept for the attempt on screen (rebuilt if its files change)."""
+        from .shape_fit import ShapeFit
+
+        job_dir = self._job_dir(level_id, attempt)
+        raw = self._image_path(level_id, attempt, "raw")
+        shape = canvas_asset(job_dir, "generation_mask")
+        cell = canvas_asset(job_dir, "pending_mask")
+        key = (str(job_dir), _version(raw), _version(shape), _version(cell))
+        if self._fit_cache.get("key") != key:
+            import numpy as np
+
+            with Image.open(raw) as r, Image.open(shape) as s, Image.open(cell) as c:
+                fit = ShapeFit(np.asarray(r.convert("RGB")), np.asarray(s.convert("L")) > 0,
+                               np.asarray(c.convert("L")) > 0)
+            self._fit_cache = {"key": key, "fit": fit, "outline": None}
+        return self._fit_cache
+
+    def fit(self, level_id: str, attempt: int, offset: str | None, best: bool) -> dict[str, Any]:
+        """Holes a cut leaves at ``offset`` (and, with ``best``, the offset with the fewest)."""
+        level_id = self._level(level_id)
+        renderer = self._job(level_id, attempt).get("renderer", "warp")
+        if renderer != "warp":
+            raise ValueError(f"a padding offset needs the warp renderer; this attempt used {renderer}")
+        fit = self._fit(level_id, attempt)["fit"]
+        out = {"current": fit.score(_parse_offset(offset))}
+        if best:
+            out["best"] = fit.best()
+        return out
+
+    def _png(self, rgba) -> bytes:
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, "RGBA").save(buffer, format="PNG", compress_level=1)
+        return buffer.getvalue()
+
+    def outline_png(self, level_id: str, attempt: int) -> bytes:
+        """The level's shape (what the cut keeps) as a yellow line, transparent elsewhere."""
+        import cv2
+        import numpy as np
+
+        cache = self._fit(level_id, attempt)
+        if cache["outline"] is None:
+            shape = cache["fit"].shape.astype(np.uint8)
+            edge = cv2.morphologyEx(shape, cv2.MORPH_GRADIENT, np.ones((5, 5), np.uint8)) > 0
+            rgba = np.zeros(shape.shape + (4,), dtype=np.uint8)
+            rgba[edge] = (255, 220, 0, 255)
+            cache["outline"] = self._png(rgba)
+        return cache["outline"]
+
+    def holes_png(self, level_id: str, attempt: int, offset: str | None) -> bytes:
+        """The holes a cut leaves at ``offset``, in pink, drawn 2 px thicker so they show
+        when zoomed out."""
+        import cv2
+        import numpy as np
+
+        holes = self._fit(level_id, attempt)["fit"].holes(_parse_offset(offset))
+        thick = cv2.dilate(holes.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+        rgba = np.zeros(holes.shape + (4,), dtype=np.uint8)
+        rgba[thick] = (255, 60, 255, 255)
+        return self._png(rgba)
+
+    def image(self, level_id: str, kind: str, attempt: int, offset: str | None = None) -> Path | bytes:
         if kind == "padding":
             return self.padding_png(level_id, attempt)
+        if kind == "outline":
+            return self.outline_png(level_id, attempt)
+        if kind == "holes":
+            return self.holes_png(level_id, attempt, offset)
         path = self._image_path(level_id, attempt, kind)
         if path is None or not path.is_file():
             raise KeyError(f"no {kind} image for level {level_id} attempt {attempt}")
@@ -425,10 +504,16 @@ def dispatch(
         if method == "GET":
             if action == "":
                 return page.level_info(level_id, attempt)
-            if action == "image" and len(parts) == 4 and parts[3] in IMAGE_KINDS:
+            if action == "image" and len(parts) == 4 and parts[3] in IMAGE_KINDS + FIT_IMAGES:
                 if attempt in (None, ""):
                     raise ValueError("an image needs ?attempt=")
-                return page.image(level_id, parts[3], int(attempt))
+                return page.image(level_id, parts[3], int(attempt),
+                                  (query.get("offset") or [None])[0])
+            if action == "fit":
+                if attempt in (None, ""):
+                    raise ValueError("the fit needs ?attempt=")
+                return page.fit(level_id, int(attempt), (query.get("offset") or [None])[0],
+                                (query.get("best") or [""])[0] == "1")
         if method == "POST":
             if action == "place":
                 return page.place(level_id, body)

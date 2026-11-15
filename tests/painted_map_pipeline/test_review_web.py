@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import shutil
 import threading
@@ -30,6 +31,7 @@ from tools.painted_map_pipeline.world_levels.review_web import (
     ReviewPage,
     _call_here,
     _OwnPortServer,
+    dispatch,
     make_handler,
 )
 from tools.painted_map_pipeline.world_levels.state_store import read_json
@@ -268,3 +270,26 @@ def test_generate_keeps_its_own_call_when_one_is_given(tmp_path):
     page.generate("02", {})
     _wait(page)
     assert generate_call.calls and not place_call.calls
+
+
+def test_the_fit_route_scores_an_offset_and_finds_the_best(tmp_path):
+    page = _page(tmp_path)
+    result = dispatch(page, "GET", ["level", "02", "fit"], {"attempt": ["1"], "offset": ["0,0"], "best": ["1"]}, {})
+    assert set(result) == {"current", "best"}
+    assert result["current"]["offset"] == [0, 0]
+    assert result["best"]["missing_px"] <= result["current"]["missing_px"]
+    holes = dispatch(page, "GET", ["level", "02", "image", "holes"], {"attempt": ["1"], "offset": ["5,0"]}, {})
+    outline = dispatch(page, "GET", ["level", "02", "image", "outline"], {"attempt": ["1"]}, {})
+    for png in (holes, outline):
+        with Image.open(io.BytesIO(png)) as opened:
+            assert opened.mode == "RGBA" and opened.size == tuple(page.level_info("02", 1)["raw_size"])
+
+
+def test_the_fit_is_refused_on_a_frame_attempt(tmp_path):
+    page = _page(tmp_path)
+    job_path = page.root / "levels" / "02" / "jobs" / "attempt_002" / "job.json"
+    job = read_json(job_path)
+    job["renderer"] = "frame"
+    job_path.write_text(json.dumps(job), encoding="utf-8")
+    with pytest.raises(ValueError, match="warp renderer"):
+        page.fit("02", 2, "0,0", False)

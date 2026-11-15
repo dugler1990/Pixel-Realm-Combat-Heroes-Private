@@ -1,6 +1,7 @@
 """Deterministic colour alignment against accepted padding.
 
-Steps, written to every pixel the model drew (black gaps stay black). The caller pastes the
+Steps, written to every pixel the model drew. Background black (joined to the canvas edge)
+stays black; dark art enclosed by paint is recoloured like the rest. The caller pastes the
 padding over the result afterwards, so a feathered paste always fades between two corrected
 sides:
 
@@ -40,19 +41,27 @@ LIGHTNESS_BINS = 4096  # brightness mix ranks lightness in 1/16-unit steps (L is
 COLOUR_METHODS = ("match", "swap")
 
 
+def _painted(rgb: np.ndarray, within: np.ndarray | None = None) -> np.ndarray:
+    """Pixels that are art, not background black (``footprint.background``, at this module's
+    threshold). Dark art enclosed by paint counts as art. ``within``: only that area is looked
+    at (the rest is treated as bright), so black elsewhere on the canvas cannot reach into it."""
+    from .footprint import background
+
+    summed = rgb[..., :3].astype(np.int32).sum(axis=2)
+    if within is not None:
+        summed = np.where(within, summed, 255 * 3)
+    return ~background(summed, threshold=CONTENT_MIN_RGB_SUM)
+
+
 def _paired_delta_lut(
     source_rgb: np.ndarray,
     accepted_rgb: np.ndarray,
-    locked: np.ndarray,
+    pairs: np.ndarray,
 ) -> tuple[np.ndarray, int]:
-    """One Lab shift per colour group, from raw model pixels and accepted padding at the same spots."""
-    source = source_rgb[locked]
-    target = accepted_rgb[locked]
-    valid = (
-        (source.sum(axis=1) > CONTENT_MIN_RGB_SUM)
-        & (target.sum(axis=1) > CONTENT_MIN_RGB_SUM)
-    )
-    source, target = source[valid], target[valid]
+    """One Lab shift per colour group, from raw model pixels and accepted padding at the same
+    spots. ``pairs``: where both are art (not background black)."""
+    source = source_rgb[pairs]
+    target = accepted_rgb[pairs]
     if len(source) < 1_000:
         raise ValueError(
             f"paired colour alignment needs at least 1000 painted padding pixels, got {len(source)}"
@@ -124,8 +133,8 @@ def _padding_palette(accepted_rgb: np.ndarray, locked: np.ndarray) -> np.ndarray
 
 
 def _build_padding_palette(accepted_rgb: np.ndarray, locked: np.ndarray) -> np.ndarray:
+    """``locked``: the padding pixels to take colours from (the caller leaves background out)."""
     pixels = accepted_rgb[locked]
-    pixels = pixels[pixels.sum(axis=1) > CONTENT_MIN_RGB_SUM]
     if len(pixels) > PALETTE_SAMPLE:
         pixels = pixels[np.linspace(0, len(pixels) - 1, PALETTE_SAMPLE, dtype=np.int64)]
     unique = np.unique(pixels, axis=0)
@@ -257,8 +266,8 @@ def align_to_paired_padding(
     ``accepted_padding`` is the neighbours' pixels. ``raw`` is the model output before cut or
     warp. The pairs are read from ``raw`` when it is passed, because a cut deletes the model's
     overlap. ``method`` is "match" (swap, brightness mix, join fix, snap) or "swap" (swap and
-    snap only, the earlier behaviour). Every drawn pixel of ``image`` is written, black gaps
-    are not; the caller pastes the padding over the result.
+    snap only, the earlier behaviour). Every drawn pixel of ``image`` is written, background
+    black is not; the caller pastes the padding over the result.
     """
     if strength < 0:
         raise ValueError("paired colour alignment strength must be non-negative")
@@ -278,20 +287,18 @@ def align_to_paired_padding(
 
     pair_rgb = np.asarray(pair_source.convert("RGB"))
     rgb = rgba[..., :3]
-    # Every pixel the model drew is recoloured; only black gaps are left. The masks below
-    # choose what the colours are learned from, never where they are written, so a later
+    # Every pixel the model drew is recoloured; only background black is left (black joined
+    # to the canvas edge; dark art enclosed by paint is recoloured like the rest). The masks
+    # below choose what the colours are learned from, never where they are written, so a later
     # step (padding paste, feather, padding strips left out) always sees a recoloured image.
-    write = rgb.sum(axis=2) > CONTENT_MIN_RGB_SUM
+    write = _painted(rgb)
     painted_pending = pending & write
     painted_under = locked & write
-    lookup, populated_bins = _paired_delta_lut(pair_rgb, accepted, locked)
+    accepted_art = locked & _painted(accepted, locked)
+    painted_locked = accepted_art & _painted(pair_rgb)
+    lookup, populated_bins = _paired_delta_lut(pair_rgb, accepted, painted_locked)
     corrected = _apply_lookup(rgb, lookup, strength)
     if method == "match":
-        painted_locked = (
-            locked
-            & (accepted.sum(axis=2) > CONTENT_MIN_RGB_SUM)
-            & (pair_rgb.sum(axis=2) > CONTENT_MIN_RGB_SUM)
-        )
         accepted_lab = _lab(accepted)
         corrected = _match_lightness(
             corrected, painted_pending, accepted_lab[..., 0][painted_locked], write
@@ -300,7 +307,7 @@ def align_to_paired_padding(
         corrected = corrected + _join_correction(accepted_lab - model_copy, painted_locked, locked) * float(strength)
     corrected_rgb = cv2.cvtColor(np.clip(corrected, 0, 255).astype(np.uint8), cv2.COLOR_LAB2RGB)
     rgb[write] = corrected_rgb[write]
-    palette = _padding_palette(accepted, locked)
+    palette = _padding_palette(accepted, accepted_art)
     _snap_to_palette(rgb, write, palette)
     return Image.fromarray(rgba), {
         "method": method,
