@@ -26,11 +26,12 @@ if [ ! -f "$D/.installed" ]; then
   uv pip install -q --python $PY numpy==1.26.4 pip psutil
   ABI=$($PY -c "import torch; print('TRUE' if torch._C._GLIBCXX_USE_CXX11_ABI else 'FALSE')")
   WHL="flash_attn-2.8.3+cu12torch2.7cxx11abi${ABI}-cp311-cp311-linux_x86_64.whl"
-  curl -sSL -o "/tmp/$WHL" "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/$WHL"
-  uv pip install -q --python $PY "/tmp/$WHL"
+  curl -sSL -o "$D/$WHL" "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/$WHL"   # not /tmp: TRELLIS globs /tmp/flash_attn-*.whl
+  uv pip install -q --python $PY "$D/$WHL"
   touch .installed
   echo "== installed"
 fi
+[ -n "${UNIRIG_INSTALL_ONLY:-}" ] && { echo UNIRIG_INSTALLED; exit 0; }
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export PATH="$D/.venv/bin:$PATH"
 cd "$D"

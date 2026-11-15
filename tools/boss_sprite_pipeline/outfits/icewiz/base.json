@@ -1,0 +1,11 @@
+{
+ "_about": "The ice wizard's base body: the user's front image (2026-11-16), back / sides / 3/4s drawn, the 4 TRELLIS models compared.",
+ "character": "icewiz",
+ "kind": "character",
+ "pack": "icewiz_base",
+ "images": {"front": "generated/bosses/icewiz/inputs/front.jpg"},
+ "view_prompts": "tools/boss_sprite_pipeline/view_prompts/character.json",
+ "view_config": "tools/painted_map_pipeline/openai.gpt-image-2.json",
+ "side_config": "tools/painted_map_pipeline/openai.gpt-image-2.json",
+ "trellis_models": ["front_only", "front_back", "front_back_sides", "eight_views"]
+}

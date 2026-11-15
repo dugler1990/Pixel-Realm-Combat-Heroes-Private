@@ -22,7 +22,7 @@ wait
 echo "== $(date +%T) retargeted: $(ls "$O"/chunk_*/animated.blend 2>/dev/null | wc -l) chunks"
 for d in "$O"/chunk_*; do
   c=$(basename "$d")
-  (ANIM_ENGINE=${ANIM_ENGINE:-BLENDER_WORKBENCH} $PY $T/rigfix/anim_video.py "$d/animated.blend" "$V/$c" 240 3 > /workspace/logs/av_${SET}_$c.log 2>&1) &
+  (ANIM_FAST=${ANIM_FAST:-1} ANIM_ENGINE=${ANIM_ENGINE:-BLENDER_WORKBENCH} $PY $T/rigfix/anim_video.py "$d/animated.blend" "$V/$c" 240 3 > /workspace/logs/av_${SET}_$c.log 2>&1) &
 done
 wait
 for d in "$V"/chunk_*; do $PY $T/rigfix/make_mp4.py "$d" 16 > /dev/null 2>&1; done
