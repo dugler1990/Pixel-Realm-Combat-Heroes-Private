@@ -30,6 +30,22 @@ polling. A pod session is one script launched once, plus a sync loop here; check
 | Kimodo hand constraints change nothing | they are stored as rotations, not positions | two-handed: off-hand IK after the retarget |
 | OpenAI refuses weapon back / side views ("illicit") | its safety filter | weapon prompts worded as a game prop; `back_from_front` for symmetric items; Leonardo for sides |
 
+## All tasks (2026-11-16), in the order they run
+Outputs come back as they finish: pod_go.sh pulls every 2 minutes into `<Boss>/generated/pod_sync/<date>/`.
+| # | Task | Where | Status |
+|---|---|---|---|
+| 1 | Kimodo batch 2 (87: spear, dagger, mace, staff, dual, shield, dodges, hits, deaths, spells, fighting) | pod GPU | this session |
+| 2 | Kimodo batch 3 (120: barb martial arts, jumps, rolls, evades, weapon strikes; wizard idle/walk/run, spells, hand gestures, staff/wand; hits and deaths for both) | pod GPU | this session |
+| 3 | Retarget + render: weapons, moves 1, batches 2 and 3 on the barb (wizard clips onto the wizard once he has a rig) | pod CPU | this session |
+| 4 | TRELLIS ice wizard (4 models), sword (front + back) | pod GPU | this session |
+| 5 | UniRig on the ice wizard's eight_views model | pod GPU | this session |
+| 6 | Swordsman warrior (new batch): front image -> back / sides / 3/4s (OpenAI here) -> TRELLIS | here, then pod | needs his front image + the OpenAI key |
+| 7 | Ice wizard: blue robes, dark cultist outfits (armour sets on his rig); staffs, wands, spell books (weapons) | here, then pod | after 5; fronts via OpenAI |
+| 8 | Paint every model with Leonardo (repaint/paint_outfit.py, a look file each) | here | needs the Leonardo key |
+| 9 | Barb clips into his game pack + game code for run / dash / slide / jump (pack has idle / move / attack only) | here | after 3 |
+| 10 | Off-hand IK for two-handed clips; bow string | here | after 3 |
+| 11 | Wizard clips retargeted onto his rig | pod CPU | after 5 |
+
 ## Queue for the next sessions
 - Barb clips in the game: the pack has only idle / move / attack (player_clips.py: settle_01, jokesillyrun,
   overheadchop). The new idle / walk / run / dash / slide / leap clips (moves batch 1) are generated, not
