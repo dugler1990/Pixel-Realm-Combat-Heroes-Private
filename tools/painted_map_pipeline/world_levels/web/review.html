@@ -124,7 +124,7 @@
       Align colours re-places this attempt with colour alignment on and the offset above: the
       generation is moved back by the offset, so the colours are paired with the padding where it
       really matches (with the warp on, the offset only corrects the pairing).<br>
-      Re-place applies the ticked settings. A refused re-place leaves them as they were.<br>
+      Re-place applies the ticked settings and the offset; it turns amber while they differ from the placed image. Run tests checks the placed image, not the dragged position. A refused re-place leaves them as they were.<br>
       Next skips a level. Use this page or review_run on a run, not both at once.
     </div>
   </div>
@@ -246,11 +246,20 @@ function stackLayers() {
   for (const name of ['outline', 'holes']) if (S.layers[name]) S.layers[name].bringToFront();
 }
 
+// Settings on the page that the placed image (and so the tests) does not have yet.
+function markPending() {
+  if ($('replace').classList.contains('pending')) return;
+  $('replace').classList.add('pending');
+  say('Press Re-place to apply.');
+}
+
 function setOffset(dx, dy) {
   S.offset = [Math.round(dx), Math.round(dy)];
   $('dx').value = S.offset[0]; $('dy').value = S.offset[1];
   placeLayers();
   scheduleFit(250);
+  const applied = info() && info().settings && info().settings.offset;
+  if (applied && warpJob() && (applied[0] !== S.offset[0] || applied[1] !== S.offset[1])) markPending();
 }
 
 // -- shape fit: how many new-cell pixels a cut would leave unpainted at this offset ------------
@@ -464,7 +473,7 @@ $('fitbest').onclick = () => run('finding the offset with the fewest holes...', 
 setDragWhat('padding');
 // Feather and the toggles only take effect on a re-place, and only show in the Result view.
 for (const id of ['feather', 'warp', 'cut', 'alignon', 'colourmethod', 'padding'])
-  $(id).addEventListener('input', () => { $('replace').classList.add('pending'); say('Press Re-place to apply.'); });
+  $(id).addEventListener('input', markPending);
 async function place(overrides) {
   const p = await command(`level/${level().id}/place`, placeBody(overrides));
   if (p && !p.error && info() && info().images.result) { S.view = 'result'; renderLevelName(); drawLayers(false); }
@@ -477,6 +486,9 @@ $('align').onclick = () => {
   place({ align: true, colour_method: 'match' });
 };
 $('checks').onclick = async () => {
+  if ($('replace').classList.contains('pending') &&
+      !confirm('The offset or settings on the page are not applied yet: the tests check the last placed image. ' +
+               'Run them on that anyway? (Cancel, then Re-place, to test this position.)')) return;
   await command(`level/${level().id}/checks`, { attempt: info().attempt });
   if (info() && info().images.overlay) { S.view = 'checks'; renderLevelName(); drawLayers(false); }
 };
