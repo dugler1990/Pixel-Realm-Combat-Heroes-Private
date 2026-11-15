@@ -472,7 +472,7 @@ class InteractionResolver:
             return False
         target.receive_interaction(ctx)
         if contact_debug.ENABLED and ctx.contact is not None:
-            contact_debug.record(ctx.contact, self._now_ms())
+            contact_debug.record(ctx.contact, self._now_ms(), contact_debug.kind_of(target, ctx.contact))
         # Neutral retaliation registration happens after a successful hostile damage interaction.
         if ctx.kind == "damage" and ctx.source_team is not None:
             self.faction_policy.register_retaliation(target, ctx.source_team, self._now_ms())

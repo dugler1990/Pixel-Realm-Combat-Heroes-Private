@@ -47,6 +47,8 @@ class ScenarioResult:
 
 @dataclass
 class RtsValidationRuntime:
+    TAG = "RTS_VAL"         # log prefix (combat_validation_runtime reuses this class)
+
     enabled: bool = False
     layout_dir: str = "../levels/tmx"
     scenario_filter: List[str] = field(default_factory=list)
@@ -100,7 +102,7 @@ class RtsValidationRuntime:
         label = {"pass": "PASS", "fail": "FAIL", "probe": "PROBE"}.get(
             status, status.upper()
         )
-        print(f"[RTS_VAL] {name}: {label} ({details})", flush=True)
+        print(f"[{self.TAG}] {name}: {label} ({details})", flush=True)
 
     @property
     def all_passed(self) -> bool:

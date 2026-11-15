@@ -358,7 +358,7 @@ class BasePlayer(Entity):
 
     def _drawn_skin(self):
         skin = self.mesh_skin
-        if skin is None or not getattr(self, "_mesh_drew", True):
+        if skin is None or not (getattr(self, "_mesh_drew", True) or MESH_HIT_WHEN_UNDRAWN):
             return None
         return skin
 

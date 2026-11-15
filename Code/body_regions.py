@@ -209,8 +209,8 @@ def hero_slot(hero, contact, toward=None):
     sprite)."""
     from Support import mesh_feet_world
 
-    skin = getattr(hero, "mesh_skin", None)
-    if skin is not None and getattr(hero, "_mesh_drew", True):
+    skin = hero._drawn_skin() if hasattr(hero, "_drawn_skin") else getattr(hero, "mesh_skin", None)
+    if skin is not None:
         found = hero.hit_outline() if hasattr(hero, "hit_outline") else None
         if found is not None:
             outline, feet = found

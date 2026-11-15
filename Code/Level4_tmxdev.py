@@ -60,6 +60,7 @@ from Entity import Entity
 from tmx_layout_manager import LayoutManager
 from benchmark_runtime import BENCHMARK_RUNTIME
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
+from combat_validation_runtime import COMBAT_VALIDATION_RUNTIME
 from Interaction import InteractionContext, InteractionResolver
 from damage_data import attack_of
 from dialogue.session import DialogueSession
@@ -472,6 +473,17 @@ class Level4:
 
             self._rts_validation_driver = RtsValidationDriver()
             self._apply_benchmark_player_survivability()
+        elif COMBAT_VALIDATION_RUNTIME.enabled:
+            from combat_validation_driver import CombatValidationDriver
+
+            # The benchmark arena (magenta walls), an unkillable hero, contact dots on; no map spawns.
+            self._apply_benchmark_player_survivability()
+            if not self._benchmark_walls_spawned:
+                self._spawn_benchmark_boundaries()
+                self._benchmark_walls_spawned = True
+            self.layout_manager.visible_sprites.runtime_debug_contacts = True
+            self.weather.weather_type = 'clear'
+            self._rts_validation_driver = CombatValidationDriver()
         elif self.benchmark_runtime.enabled:
             self._initialize_benchmark_mode()
 
@@ -654,9 +666,11 @@ class Level4:
         self.backend.blit(panel, (x, y))
 
     def _draw_rts_validation_overlay(self):
-        if not RTS_VALIDATION_RUNTIME.enabled or not RTS_VALIDATION_RUNTIME.overlay_enabled:
+        """The RTS or combat validation panel (whichever runs)."""
+        runtime = COMBAT_VALIDATION_RUNTIME if COMBAT_VALIDATION_RUNTIME.enabled else RTS_VALIDATION_RUNTIME
+        if not runtime.enabled or not runtime.overlay_enabled:
             return
-        state = RTS_VALIDATION_RUNTIME.overlay_state
+        state = runtime.overlay_state
         lines = state.get("lines") if state else None
         if not lines:
             return
@@ -676,7 +690,7 @@ class Level4:
 
         surfaces = []
         for i, line in enumerate(lines):
-            color = phase_color if i == 0 and line == "RTS VALIDATION" else (255, 255, 255)
+            color = phase_color if i == 0 and line in ("RTS VALIDATION", "COMBAT VALIDATION") else (255, 255, 255)
             surfaces.append(font.render(line, True, color))
         max_width = max(surface.get_width() for surface in surfaces)
         total_height = sum(surface.get_height() for surface in surfaces) + line_gap * (len(surfaces) - 1)
@@ -2413,9 +2427,9 @@ class Level4:
             self.rts_session.update(dt_real)
         if getattr(self, "_rts_validation_driver", None) is not None:
             if self._rts_validation_driver.tick(self, dt_real):
-                RTS_VALIDATION_RUNTIME.write_results()
-                code = 0 if RTS_VALIDATION_RUNTIME.all_passed else 1
-                RTS_VALIDATION_RUNTIME.request_shutdown(code)
+                runtime = COMBAT_VALIDATION_RUNTIME if COMBAT_VALIDATION_RUNTIME.enabled else RTS_VALIDATION_RUNTIME
+                runtime.write_results()
+                runtime.request_shutdown(0 if runtime.all_passed else 1)
                 pygame.event.post(pygame.event.Event(pygame.QUIT))
         camera_focus = (
             self.rts_session.camera_focus()
@@ -2551,7 +2565,7 @@ class Level4:
             # CS-fix: in multiplayer the SERVER owns enemy spawning (it runs the
             # map's spawn areas), so the client does NOT -- this also stops the
             # per-client (unsynced) neutral spawns. Singleplayer is unchanged.
-            if getattr(self, "mp_client", None) is None:
+            if getattr(self, "mp_client", None) is None and not COMBAT_VALIDATION_RUNTIME.enabled:
                 self.layout_manager.spawner.handle_spawn_areas(self._spawn_area_reference(), dt_real)
             # Check for and update enemy sprites specifically
             if not self.is_server:

@@ -397,16 +397,29 @@ def test_flag_on_records_landed_contacts_and_drops_old_ones(monkeypatch, debug_c
     monkeypatch.setattr(resolver, "_now_ms", lambda: 1000)
     _landed_hit(resolver, (5, 6))
     _landed_hit(resolver, None)                       # a blast: nothing to draw
-    assert contact_debug.recent(1000) == [(5, 6)]
-    assert contact_debug.recent(1600) == [(5, 6)]
+    assert contact_debug.recent(1000) == [(5, 6, None)]      # not a body that wears pieces: no kind
+    assert contact_debug.recent(1600) == [(5, 6, None)]
     assert contact_debug.recent(1601) == []
+    monkeypatch.setattr(contact_debug, "KEEP_MS", 2000)
+    assert contact_debug.recent(2900) == [(5, 6, None)]
 
 
 def test_only_the_last_64_are_kept(debug_contacts):
     for i in range(100):
         contact_debug.record((i, 0), 0)
     kept = contact_debug.recent(0)
-    assert len(kept) == 64 and kept[0] == (36, 0)
+    assert len(kept) == 64 and kept[0] == (36, 0, None)
+
+
+def test_kind_is_plate_or_skin_on_a_body_that_wears_pieces(monkeypatch):
+    import body_regions
+    hero = SimpleNamespace(body_def=object(), defence=object())
+    monkeypatch.setattr(body_regions, "hit_layers",
+                        lambda t, p: SimpleNamespace(point=7, piece="barb_fullplate/chest", layers=()))
+    assert contact_debug.kind_of(hero, (1, 2)) == "plate"
+    monkeypatch.setattr(body_regions, "hit_layers", lambda t, p: SimpleNamespace(point=7, piece=None, layers=()))
+    assert contact_debug.kind_of(hero, (1, 2)) == "skin"
+    assert contact_debug.kind_of(SimpleNamespace(team_id="enemy"), (1, 2)) is None
 
 
 def test_camera_starts_with_the_settings_flag():

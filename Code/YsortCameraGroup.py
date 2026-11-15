@@ -588,9 +588,11 @@ class YSortCameraGroup(pygame.sprite.Group):
 
         # Where recent hits landed (InteractionContext.contact).
         if self.runtime_debug_contacts:
-            for x, y in contact_debug.recent(pygame.time.get_ticks()):
+            # grey: a worn piece (plate), red: skin or any other body
+            for x, y, kind in contact_debug.recent(pygame.time.get_ticks()):
+                color = (190, 200, 220) if kind == "plate" else (255, 40, 40)
                 self.backend.draw_circle(
-                    (255, 0, 0), (int(x - self.offset.x), int(y - self.offset.y)), 3
+                    color, (int(x - self.offset.x), int(y - self.offset.y)), 3
                 )
 
     #@profile

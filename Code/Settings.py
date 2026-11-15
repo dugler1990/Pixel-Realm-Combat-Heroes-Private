@@ -104,6 +104,9 @@ DEBUG_DRAW_CONTACTS = False  # A red dot where each hit landed, for 0.6 s (conta
 # What a mesh hero is hit on: "points" = the mesh's own vertices (mesh_points.py, what is drawn),
 # "capsules" = body.json's tubes (cheaper, fatter than the body from the side).
 MESH_HERO_HIT_BODY = "points"
+# A mesh hero is hit on his mesh only while the backend draws it (the CPU backend shows the sprite).
+# Headless validation draws nothing: PRCH_MESH_HIT_WHEN_UNDRAWN=1 hits the mesh anyway.
+MESH_HIT_WHEN_UNDRAWN = os.environ.get("PRCH_MESH_HIT_WHEN_UNDRAWN", "0") == "1"
 # Temporary: lock weather wind so GPU fluid smoke drift is easy to verify (180° = left / -x).
 DEBUG_PIN_WIND = False
 DEBUG_PIN_WIND_DIRECTION = 180.0
