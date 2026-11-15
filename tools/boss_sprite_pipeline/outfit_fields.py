@@ -103,6 +103,10 @@ FIELDS = (
           "Pass rules for the views (view_checks/*.json; default.json when not set).", steps=("front", "back", "sides")),
     Field("side", "outfit", (), "text", "Side view prompt.", steps=('sides',)),
     Field("quarter", "outfit", (), "text", "3/4 view prompt.", steps=('sides',)),
+    Field("back_from_front", "outfit", (), "bool", "The back is the front flipped left to right, not drawn (a "
+          "symmetric weapon: sword, spear, round shield).", steps=("back",)),
+    Field("view_config", "outfit", (), "json", "Image model config for the front and back drawings (default: "
+          "view_gate's per view).", steps=("front", "back")),
     Field("side_config", "outfit", (), "json", "Image model config for the side views.", steps=('sides',)),
     Field("mirror_right", "outfit", (), "bool", "Right-hand views mirrored from the left (true).", steps=('sides',)),
     Field("front_check", "outfit", (), "choice", "cover: armour covers the outline; match: the body matches it.",

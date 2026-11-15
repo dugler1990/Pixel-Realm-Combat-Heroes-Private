@@ -30,6 +30,9 @@ def test_outfit_files_have_what_their_steps_read(path):
     ctx = of.Ctx(path.parent.name, path.stem)
     o = ctx.o
     assert outfit_fields.problems(o) == []
+    if o["kind"] not in outfit_fields.ALL:          # weapon / character: the field table says what each step needs
+        assert [f.name for f in outfit_fields.needed(o)] == []
+        return
     need = {"character", "kind", "roles", "rig_fit", "clips_blend", "pack"}
     need |= {"concept", "front", "back", "paint_look"} if o["kind"] in ("body", "armour") else {"source_mesh"}
     need |= {"greedy_dirs", "sam", "rig_game"} if o["kind"] in ("armour", "cut") else {"clips_from", "roster"}

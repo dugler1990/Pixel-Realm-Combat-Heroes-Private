@@ -1,0 +1,16 @@
+{
+ "_about": "Route A test (held_weapon.plan.md): a one-handed sword drawn alone, TRELLIS, grip in his right hand.",
+ "character": "barb",
+ "kind": "weapon",
+ "pack": "barb_sword_a",
+ "concept_prompt": "A sturdy iron arming sword for a fantasy barbarian: a straight double-edged steel blade, a simple dark iron crossguard, a grip wrapped in brown leather and a round iron pommel. Hand-painted game art style, clean shapes, readable at small size.",
+ "view_prompts": "tools/boss_sprite_pipeline/view_prompts/weapon.json",
+ "concept_config": "tools/painted_map_pipeline/openai.gpt-image-2.json",
+ "concept_count": 4,
+ "weapon_length": 0.45,
+ "trellis_models": [
+  "front_back"
+ ],
+ "view_config": "tools/painted_map_pipeline/openai.gpt-image-2.json",
+ "side_config": "tools/painted_map_pipeline/openai.gpt-image-2.json"
+}

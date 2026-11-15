@@ -199,18 +199,26 @@ def view_gate(ctx: Ctx, view: str, a) -> None:
     base = [sys.executable, "-m", "tools.boss_sprite_pipeline.view_gate", view, "--out", gate_dir,
             "--outfit", ctx.file]
     given = ctx.given(view)
+    mirrored = view == "back" and not given and o.get("back_from_front")
+    if mirrored:                                     # a symmetric item: its back is its front flipped (no drawing)
+        from PIL import Image, ImageOps
+        gate_dir.mkdir(parents=True, exist_ok=True)
+        given = gate_dir / "back_from_front.png"
+        ImageOps.mirror(Image.open(ctx.out("front", "draw"))).save(given)
     if view == "front":
         # The front check compares with the concept; a given front with no concept is its own (nothing to compare).
         base += ["--input", ctx.data(o["concept"]) if o.get("concept") else given]
     else:
         base += ["--front", ctx.out("front", "draw")]
+    if o.get("view_config"):                         # the image model for front / back (default: view_gate's)
+        base += ["--config", ctx.tool(o["view_config"])]
     gate = json.loads(gate_json.read_text(encoding="utf-8")) if gate_json.is_file() else {}
     if a.accept is not None:
         call(base + ["--accept", a.accept], ok="accepted attempt")
     elif a.use:                                      # an image you have as the next attempt (same checks)
         call(base + ["--use", ctx.data(a.use)], ok="PENDING")
     elif gate.get("status") != "accepted" and given and not a.retry:
-        use_given(base, gate_json, gate, given, always=view == "front" and not o.get("concept"))
+        use_given(base, gate_json, gate, given, always=(view == "front" and not o.get("concept")) or bool(mirrored))
     elif gate.get("status") != "accepted":
         call(base + ["--no-ask"] + (["--retry", a.retry] if a.retry else []), ok="PENDING")
     gate = json.loads(gate_json.read_text(encoding="utf-8"))

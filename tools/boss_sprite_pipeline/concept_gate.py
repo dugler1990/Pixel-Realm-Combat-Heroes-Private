@@ -98,6 +98,7 @@ def check(path: Path, pose: dict | None, limits: dict) -> dict:
         fail.append("figure touches the edge (cut off)")
     if s["background"] < limits["background_min"]:
         fail.append(f"background not white ({s['background']:.0f})")
+    s = {k: (bool(v) if isinstance(v, (bool, np.bool_)) else v) for k, v in s.items()}
     s["passed"], s["failing"] = not fail, fail
     return s
 
@@ -128,6 +129,7 @@ def check_object(path: Path, limits: dict) -> dict:
         fail.append("touches the edge (cut off)")
     if s["background"] < limits["background_min"]:
         fail.append(f"background not white ({s['background']:.0f})")
+    s = {k: (bool(v) if isinstance(v, (bool, np.bool_)) else v) for k, v in s.items()}
     s["passed"], s["failing"] = not fail, fail
     return s
 
