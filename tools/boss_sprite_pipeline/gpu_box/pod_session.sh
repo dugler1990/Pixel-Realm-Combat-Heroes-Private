@@ -5,12 +5,12 @@
 set -u
 W=/workspace; L=$W/logs; OUT=$W/out; mkdir -p $L $OUT
 export HF_HOME=$W/hf HF_HUB_ENABLE_HF_TRANSFER=0 CUDA_HOME=/usr/local/cuda PATH=/usr/local/cuda/bin:$PATH
-clean() { rm -rf /root/.cache/uv /root/.cache/pip; }
+clean() { :; }   # caches cleared once all installs end (a cleanup during another uv install broke it, 2026-11-16)
 command -v uv >/dev/null || pip install -q uv
 
 # --- installs, in parallel -------------------------------------------------------------------------------------
 ( $W/kimodo-venv/bin/python -c "import kimodo" 2>/dev/null || bash $W/kimodo_tools/install_kimodo.sh; clean
-  echo KIMODO_READY ) > $L/session_install_kimodo.log 2>&1 &
+  $W/kimodo-venv/bin/python -c "import kimodo" && echo KIMODO_READY ) > $L/session_install_kimodo.log 2>&1 &
 ( grep -q -a INSTALL_OK $W/setup.log 2>/dev/null || {
     CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d ' ')
     export CPATH=/usr/include/eigen3 CPLUS_INCLUDE_PATH=/usr/include/eigen3 TORCH_CUDA_ARCH_LIST=$CC MAX_JOBS=4 \
@@ -19,11 +19,12 @@ command -v uv >/dev/null || pip install -q uv
     bash $W/gpu_box/trellis2_setup.sh > $W/setup.log 2>&1; clean; }
   echo TRELLIS_READY ) > $L/session_install_trellis.log 2>&1 &
 ( [ -f $W/unirig/.installed ] || UNIRIG_INSTALL_ONLY=1 bash $W/gpu_box/unirig_pod.sh; clean
-  echo UNIRIG_READY ) > $L/session_install_unirig.log 2>&1 &
+  [ -f $W/unirig/.installed ] && echo UNIRIG_READY ) > $L/session_install_unirig.log 2>&1 &
 ( $W/bpy-venv/bin/python -c "import bpy, cv2" 2>/dev/null || {
     uv venv -q --python 3.11 $W/bpy-venv
     uv pip install -q --python $W/bpy-venv/bin/python "bpy==4.2.*" numpy scipy pillow opencv-python-headless; clean; }
-  echo BPY_READY ) > $L/session_install_bpy.log 2>&1 &
+  $W/bpy-venv/bin/python -c "import bpy" && echo BPY_READY ) > $L/session_install_bpy.log 2>&1 &
+( until grep -q READY $L/session_install_kimodo.log && grep -q READY $L/session_install_unirig.log && grep -q READY $L/session_install_bpy.log; do sleep 30; done; rm -rf /root/.cache/uv /root/.cache/pip ) &
 ready() { grep -q "$1" $L/session_install_$2.log 2>/dev/null; }
 waitfor() { until ready "$1" "$2"; do sleep 20; done; }
 
