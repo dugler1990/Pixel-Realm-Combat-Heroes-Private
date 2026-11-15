@@ -29,3 +29,11 @@ polling. A pod session is one script launched once, plus a sync loop here; check
 | a running bash script breaks after an upload | bash reads scripts as it runs | never overwrite a running script; jobs read copies |
 | Kimodo hand constraints change nothing | they are stored as rotations, not positions | two-handed: off-hand IK after the retarget |
 | OpenAI refuses weapon back / side views ("illicit") | its safety filter | weapon prompts worded as a game prop; `back_from_front` for symmetric items; Leonardo for sides |
+
+## Queue for the next sessions
+- Barb clips in the game: the pack has only idle / move / attack (player_clips.py: settle_01, jokesillyrun,
+  overheadchop). The new idle / walk / run / dash / slide / leap clips (moves batch 1) are generated, not
+  retargeted into his pack, not wired. Run, dash, slide and jump also need game code (more actions per pack).
+- Ice wizard: after his base model + rig (this session's TRELLIS + UniRig): blue robes, dark cultist ice-wizard
+  outfits (armour sets on his rig). Staffs, wands, spell books: weapons (route A), any session, about 3-4 min of
+  TRELLIS each once installed: add them to TRELLIS_JOBS when their front / back exist.
