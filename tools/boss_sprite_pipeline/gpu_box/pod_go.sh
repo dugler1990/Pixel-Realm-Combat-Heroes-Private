@@ -36,8 +36,8 @@ for s in ${CLIP_SETS:-weapons moves1}; do put $BG/barb/anim_test/bvh_$s root@$H:
 # TRELLIS jobs: <name> <outfit run folder> <models> [<model to rig with UniRig>]
 while read name run models rig; do
   [ -z "$name" ] && continue
-  sshp "mkdir -p /workspace/trellis_jobs/$name && echo '$models' | tr ',' ' ' > /workspace/trellis_jobs/$name/models.txt"
-  [ -n "${rig:-}" ] && sshp "echo $rig > /workspace/trellis_jobs/$name/unirig_model.txt"
+  sshp -n "mkdir -p /workspace/trellis_jobs/$name && echo '$models' | tr ',' ' ' > /workspace/trellis_jobs/$name/models.txt"
+  [ -n "${rig:-}" ] && sshp -n "echo $rig > /workspace/trellis_jobs/$name/unirig_model.txt"
   put $run/gate/front.png $run/gate/back.png root@$H:/workspace/trellis_jobs/$name/
   ls $run/gate/side_*.png >/dev/null 2>&1 && put $run/gate/side_*.png root@$H:/workspace/trellis_jobs/$name/
 done <<EOF
