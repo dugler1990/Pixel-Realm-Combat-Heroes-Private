@@ -1,10 +1,13 @@
 """Put a weapon mesh in a character's hand: find its grip from its shape, size it to the holder, show it held.
 
     .venv-bpy/Scripts/python.exe weapon_grip.py <weapon.glb> <body.glb> <roles.json> <out_dir>
-        [--length 0.45] [--offset 0.12] [--turn 0] [--hand r]
+        [--length 0.45] [--offset 0.12] [--turn 0] [--hand r] [--save-blend <slot.blend>] [--no-sheet]
 
 weapon.glb  the weapon on its own (the picked TRELLIS mesh), any size and placement
-body.glb    the holder's rigged body (its rig_fit), roles.json its bone roles (arm_l / arm_r: hand)
+body.glb    the holder's rigged body (its rig_fit), roles.json its bone roles (arm_l / arm_r: hand); or his clips
+            .blend (player_clips.py output: the armature with idle / move / attack and his body)
+--save-blend  write a pack-ready blend: the weapon joined into one mesh, skinned 100 % to the hand bone, on the
+            armature with its clips, the body removed (export_mesh_runtime.py --skin then makes the pack)
 --length    the weapon's length as a share of the holder's height (dagger 0.2, sword 0.45, staff 1.0)
 --offset    the grip point, as a share of the weapon's length from its handle end (0.12)
 --turn      degrees about the hand bone: 0 points the weapon forward, out of the fist
@@ -43,9 +46,15 @@ LENGTH, OFFSET, TURN, HAND = opt("--length", 0.45), opt("--offset", 0.12), opt("
 os.makedirs(OUT, exist_ok=True)
 roles = json.load(open(ROLES))
 
-bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.import_scene.gltf(filepath=BODY)
+SAVE = os.path.abspath(ARGS[ARGS.index("--save-blend") + 1]) if "--save-blend" in ARGS else None
+if BODY.lower().endswith(".blend"):
+    bpy.ops.wm.open_mainfile(filepath=BODY)
+else:
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.gltf(filepath=BODY)
 arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
+arm.data.pose_position = "REST"                     # placed on the rest pose, whatever frame the file was saved at
+bpy.context.view_layer.update()
 body = max((o for o in bpy.data.objects if o.type == "MESH"), key=lambda o: len(o.data.vertices))
 before = set(bpy.data.objects)
 bpy.ops.import_scene.gltf(filepath=WEAPON)
@@ -104,13 +113,36 @@ d = Matrix.Rotation(math.radians(TURN), 3, h) @ d
 R = Vector(axis.tolist()).rotation_difference(d).to_matrix().to_4x4()
 M = Matrix.Translation(palm) @ R @ Matrix.Diagonal((scale, scale, scale, 1)) @ Matrix.Translation(-Vector(grip.tolist()))
 for o in parts:
-    mw = M @ o.matrix_world
-    o.parent = arm
-    o.parent_type = "BONE"
-    o.parent_bone = hb.name
-    bpy.context.view_layer.update()
-    o.matrix_world = mw
+    o.matrix_world = M @ o.matrix_world
 bpy.context.view_layer.update()
+if SAVE:                                            # one mesh, skinned to the hand bone; the body out
+    for o in bpy.data.objects:
+        o.select_set(o in parts)
+    bpy.context.view_layer.objects.active = parts[0]
+    if len(parts) > 1:
+        bpy.ops.object.join()
+    weapon = bpy.context.view_layer.objects.active
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    g = weapon.vertex_groups.new(name=hb.name)
+    g.add(list(range(len(weapon.data.vertices))), 1.0, "REPLACE")
+    weapon.parent = arm
+    weapon.matrix_parent_inverse = arm.matrix_world.inverted()
+    mod = weapon.modifiers.new("Armature", "ARMATURE")
+    mod.object = arm
+    for o in [o for o in bpy.data.objects if o.type == "MESH" and o is not weapon]:
+        bpy.data.objects.remove(o, do_unlink=True)
+    bpy.context.view_layer.update()
+    parts = [weapon]
+else:
+    for o in parts:
+        mw = o.matrix_world.copy()
+        o.parent = arm
+        o.parent_type = "BONE"
+        o.parent_bone = hb.name
+        bpy.context.view_layer.update()
+        o.matrix_world = mw
+    bpy.context.view_layer.update()
+arm.data.pose_position = "POSE"
 
 info = {"weapon": WEAPON, "body": BODY, "hand_bone": hb.name, "hand": HAND, "length_share": LENGTH,
         "offset": OFFSET, "turn": TURN, "scale": scale, "weapon_length_model": float(L), "holder_height": height,
@@ -118,6 +150,12 @@ info = {"weapon": WEAPON, "body": BODY, "hand_bone": hb.name, "hand": HAND, "len
         "handle_end_radius": float(min(end_lo, end_hi)), "tip_end_radius": float(max(end_lo, end_hi)),
         "matrix_world_rest": [list(r) for r in M]}
 json.dump(info, open(os.path.join(OUT, "grip.json"), "w"), indent=1)
+if SAVE:
+    bpy.ops.wm.save_as_mainfile(filepath=SAVE)
+    print("SAVED", SAVE, flush=True)
+if "--no-sheet" in ARGS:
+    print("GRIP_OK", os.path.join(OUT, "grip.json"), flush=True)
+    sys.exit(0)
 
 sc = bpy.context.scene
 sc.render.engine = "BLENDER_WORKBENCH"

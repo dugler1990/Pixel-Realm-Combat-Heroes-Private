@@ -27,6 +27,12 @@ no export. Route B: written, nothing built. Branch `feat/new-character` (worktre
   (two-handed, bow) needs its own clips in either route.
 
 ## Step 1 (both routes need it): the game side
+Free check done 2026-11-15: the box test sword through `weapon_grip.py --save-blend` (his clips blend, skinned 100 %
+to his right hand bone, body removed) -> `export_mesh_runtime.py --skin` -> `bake_body_capsules` -> drawn by
+`draw_equipment.py` at 260 and 64 px: in his right hand in idle, move, attack, 4 facings; reads as a sword at 64 px.
+The attack (overhead chop) holds it sideways overhead: the grip turn needs a preset per clip style. The hit plan
+(`mask_hit_collision.plan.md` decision 1): a melee hit is the attacker's whole frame mask, weapon pixels included.
+
 Decide, with `mask_hit_collision.plan.md`:
 - the mesh weapon replaces the `Weapon.py` sprite for mesh heroes, or is drawn alongside it;
 - where the hit comes from (the mesh blade's screen projection, or the old mask);
