@@ -1,4 +1,5 @@
-"""The mesh hero is hit where he is drawn: his posed capsules (damage chunk 4b, visual_hits.plan.md (a))."""
+"""The mesh hero is hit where he is drawn (damage chunk 4b, visual_hits.plan.md (a)): on the mesh's own
+points (mesh_points) or on body.json's capsules, Settings.MESH_HERO_HIT_BODY. Every test runs for both."""
 import os
 import sys
 from pathlib import Path
@@ -21,6 +22,7 @@ pygame.init()
 pygame.display.set_mode((64, 64))
 
 import hit_core  # noqa: E402
+import Player as player_module  # noqa: E402
 from damage_data import attack  # noqa: E402
 from Level4_tmxdev import Level4  # noqa: E402
 from Player import BasePlayer, SpecificPlayer  # noqa: E402
@@ -28,6 +30,12 @@ from player_mesh import PlayerMesh  # noqa: E402
 from Support import mesh_feet_world  # noqa: E402
 
 SPRITE = ROOT / "Graphics" / "barb" / "down_idle" / "0.png"
+
+
+@pytest.fixture(autouse=True, params=["points", "capsules"])
+def hit_body(request, monkeypatch):
+    monkeypatch.setattr(player_module, "MESH_HERO_HIT_BODY", request.param)
+    return request.param
 
 
 def _hero(mesh=True, drew=True, action="move", step=8, facing=300.0):
@@ -118,12 +126,18 @@ def test_hit_rect_is_kept_until_the_pose_changes():
     assert hero.hit_rect.x != first.x
 
 
-def test_drawn_where_the_camera_puts_him():
+def test_drawn_where_the_camera_puts_him(hit_body):
     hero = _hero()
     shape = hit_core.shape_of(hero)
-    mask, dx, dy = hero.mesh_skin.skin.body_mask(round(hero.mesh_skin.yaw_deg()) % 360, hero.mesh_skin.height_px)
+    skin = hero.mesh_skin
     fx, fy = mesh_feet_world(hero)
-    assert shape.rect.topleft == (int(fx + dx), int(fy + dy))
+    if hit_body == "capsules":
+        mask, dx, dy = skin.skin.body_mask(round(skin.yaw_deg()) % 360, skin.height_px)
+        assert shape.rect.topleft == (int(fx + dx), int(fy + dy))
+    else:
+        outline, feet = hero.hit_outline()
+        assert feet == (fx, fy) and shape.mask is outline.mask
+        assert shape.rect.topleft == (int(fx) + outline.dx, int(fy) + outline.dy)
 
 
 @pytest.mark.parametrize("kwargs", [{"mesh": False}, {"drew": False}])

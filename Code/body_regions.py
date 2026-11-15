@@ -158,12 +158,32 @@ def sprite_slot(hitbox, figure_px, contact, status, toward=None):
     return defence_profile.region_slot(region, side)
 
 
+def points_slot(skin, outline, feet, contact, toward=None):
+    """The region slot under `contact` on a mesh hero hit on his points: the point in front at that
+    pixel (mesh_points.Outline) -> its bone -> region. None if no point is within 2 px."""
+    from mesh_points import cloud
+
+    body = skin.skin
+    point = outline.point_at(contact[0] - int(feet[0]), contact[1] - int(feet[1]))
+    if point is None:
+        return None
+    slot = _bone_slots(body.pack).get(int(cloud(body.pack).owner[point]), "torso")
+    return _torso(toward, skin.facing_deg) if slot == "torso" else slot
+
+
 def hero_slot(hero, contact, toward=None):
-    """The region slot a hit at world `contact` lands on, for a hero (mesh or sprite)."""
+    """The region slot a hit at world `contact` lands on, for a hero (mesh points, mesh capsules or
+    sprite)."""
     from Support import mesh_feet_world
 
     skin = getattr(hero, "mesh_skin", None)
     if skin is not None and getattr(hero, "_mesh_drew", True):
+        found = hero.hit_outline() if hasattr(hero, "hit_outline") else None
+        if found is not None:
+            outline, feet = found
+            slot = points_slot(skin, outline, feet, contact, toward)
+            if slot is not None:
+                return slot
         return mesh_slot(skin, mesh_feet_world(hero), contact, toward)
     figure = hero.image.get_bounding_rect().height if getattr(hero, "image", None) is not None else hero.hitbox.height
     return sprite_slot(hero.hitbox, figure, contact, getattr(hero, "status", "down"), toward)

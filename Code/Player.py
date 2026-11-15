@@ -14,6 +14,8 @@ from AttackSelection import AttackSelection
 from Settings import *
 from Support import frames_to_masks, mesh_feet_world
 import hit_core
+import math
+import mesh_points
 from Interaction import InteractionContext
 from damage_data import body
 import defence_profile
@@ -360,28 +362,52 @@ class BasePlayer(Entity):
             return None
         return skin
 
+    def hit_points(self):
+        """True: hit on the mesh's own points (mesh_points); False: on body.json's capsules."""
+        return MESH_HERO_HIT_BODY == "points"
+
+    def _mesh_scale(self, skin):
+        return skin.height_px / max(skin.skin.pack.height_units, 1e-6)
+
     @property
     def hit_rect(self):
-        """The box of his capsules this pose; None: hit_core uses rect. Worked out when an attack
-        asks, kept until his pose or place changes."""
+        """A box holding his hit shape this pose; None: hit_core uses rect. Worked out when an attack
+        asks, kept until his pose or place changes. Points: the frame's reach at any facing (cheap, a
+        little big); capsules: their box."""
         skin = self._drawn_skin()
         if skin is None:
             return None
         body = skin.skin
         yaw = round(skin.yaw_deg()) % 360
-        key = (self.rect.topleft, id(self.mask), body.frame_index, yaw, skin.height_px)
+        key = (self.rect.topleft, id(self.mask), body.frame_index, yaw, skin.height_px, self.hit_points())
         if key != self._hit_rect_key:
             fx, fy = mesh_feet_world(self)
-            dx, dy, w, h, _ = body.body_bounds(yaw, skin.height_px)
-            self._hit_rect_value = pygame.Rect(int(fx + dx), int(fy + dy), int(w), int(h))
+            if self.hit_points():
+                dx, dy, w, h = mesh_points.cloud(body.pack).reach_box(body.frame_index, self._mesh_scale(skin))
+            else:
+                dx, dy, w, h, _ = body.body_bounds(yaw, skin.height_px)
+            self._hit_rect_value = pygame.Rect(int(fx + dx), int(fy + dy), int(math.ceil(w)), int(math.ceil(h)))
             self._hit_rect_key = key
         return self._hit_rect_value
 
+    def hit_outline(self):
+        """(mesh_points.Outline, feet) of his pose now, for the points path; None otherwise."""
+        skin = self._drawn_skin()
+        if skin is None or not self.hit_points():
+            return None
+        body = skin.skin
+        outline = mesh_points.cloud(body.pack).outline(
+            body.frame_index, skin.yaw_deg(), self._mesh_scale(skin))
+        return outline, mesh_feet_world(self)
+
     def hit_shape(self):
-        """His posed capsules where they are drawn; None: hit on the sprite."""
+        """His mesh where it is drawn (its points, or its capsules); None: hit on the sprite."""
         skin = self._drawn_skin()
         if skin is None:
             return None
+        if self.hit_points():
+            outline, (fx, fy) = self.hit_outline()
+            return hit_core.Shape(outline.mask, int(fx) + outline.dx, int(fy) + outline.dy)
         mask, dx, dy = skin.skin.body_mask(round(skin.yaw_deg()) % 360, skin.height_px)
         fx, fy = mesh_feet_world(self)
         return hit_core.Shape(mask, int(fx + dx), int(fy + dy))
