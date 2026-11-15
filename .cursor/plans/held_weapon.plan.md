@@ -17,6 +17,15 @@ HoloPart on a gripped handle, the side check, the piece steps' inputs.
 Route A: concept, views, TRELLIS, grip built (kind `weapon`), checked on a box sword in the barb's hand; no paid run,
 no export. Route B: written, nothing built. Branch `feat/new-character` (worktree `Pixel-Realm-new-character`).
 
+## Next pod session (planned 2026-11-16)
+State: one-handed works on a box sword in the game draw (60 px check); two-handed and bow are blocked on clips: the
+barb's clips keep his hands 0.4-0.9 of his height apart (hand_gap above), and there is no bow clip.
+To test on the pod, with new Kimodo clips:
+- two-handed swing(s) with Kimodo's LeftHand / RightHand constraints pinning both hands to one grip; retarget to the
+  barb; `_checks/hand_gap.py` before and after the retarget; then the off-hand IK on the result;
+- a bow clip (draw, hold, release; carried idle / walk), retargeted; the hand positions at full draw measured;
+- same pod, if time: route A sword (TRELLIS), the new character's UniRig install (`unirig_pod.sh`, never run).
+
 ## Facts that bound both routes
 - Screen size: the hero is drawn about 60 px tall (`Graphics/barb/down_idle/0.png` 64x63; `PlayerMesh` sized to it);
   a sword is about 25 px long, 2-3 px wide. Judge every result at that size.
