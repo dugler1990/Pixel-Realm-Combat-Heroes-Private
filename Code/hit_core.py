@@ -4,9 +4,11 @@ An attack and a body are each a Shape: a pygame Mask plus the world position of 
 top-left pixel. A hit is the two rects overlapping and then the two masks overlapping,
 so the mask test only runs for pairs that are already close.
 
-- A sprite's shape is its own hit_shape() when it has one (mesh bosses), else its
-  current frame mask at rect.topleft, else its whole rect. A hit_shape() must lie
-  inside the sprite's rect.
+- A sprite's shape is its own hit_shape() when it has one (mesh bosses, the mesh hero),
+  else its current frame mask at rect.topleft, else its whole rect. A hit_shape() must
+  lie inside the sprite's rect, or the sprite is listed with reaches_past_rect and its
+  hit_rect holds it (the mesh hero: a foot stepping toward the camera is below his
+  sprite).
 - A ground blast (meteor, leap slam, ice clone) is a circle on the ground, tested against
   each body's footprint: the ellipse the walls stop (collision_core). ground_reach gives
   the blast's falloff distance on the same circle.
@@ -21,6 +23,7 @@ headless server.
 
 import logging
 import math
+import weakref
 
 import pygame
 
@@ -32,6 +35,15 @@ _log = logging.getLogger("game.collision.mask")
 
 _DISCS = {}
 _RECT_FALLBACK_LOGGED = set()
+# Bodies whose hit_shape reaches past their rect: checked by their hit_rect after the rect test,
+# so the rect test itself costs every other candidate nothing more.
+_REACHING = weakref.WeakSet()
+
+
+def reaches_past_rect(sprite):
+    """List a body whose hit_shape can lie outside its rect; its hit_rect (None: use rect) must
+    hold the shape."""
+    _REACHING.add(sprite)
 
 
 class Shape:
@@ -225,14 +237,21 @@ def bodies_near(tree, rect, query_id, margin=32):
 
 
 def _close(shape, candidates, body):
-    """With shape_of bodies, only the candidates whose rect overlaps `shape`."""
+    """With shape_of bodies, only the candidates whose rect overlaps `shape`, then any listed
+    body (reaches_past_rect) whose hit_rect does though its rect missed: that one comes last."""
     if body is not shape_of:
         return candidates
     overlaps = shape.rect.colliderect
-    return [
+    close = [
         sprite for sprite in candidates
         if (rect := getattr(sprite, "rect", None)) is not None and overlaps(rect)
     ]
+    for sprite in _REACHING:
+        hit_rect = sprite.hit_rect
+        if (hit_rect is not None and overlaps(hit_rect) and sprite not in close
+                and sprite in candidates):
+            close.append(sprite)
+    return close
 
 
 def find_hits(shape, candidates, exclude=(), body=shape_of):

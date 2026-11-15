@@ -163,7 +163,7 @@ def hero_slot(hero, contact, toward=None):
     from Support import mesh_feet_world
 
     skin = getattr(hero, "mesh_skin", None)
-    if skin is not None:
+    if skin is not None and getattr(hero, "_mesh_drew", True):
         return mesh_slot(skin, mesh_feet_world(hero), contact, toward)
     figure = hero.image.get_bounding_rect().height if getattr(hero, "image", None) is not None else hero.hitbox.height
     return sprite_slot(hero.hitbox, figure, contact, getattr(hero, "status", "down"), toward)

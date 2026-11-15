@@ -12,7 +12,8 @@ from PlayerConfiguration import PlayerConfiguration
 from inputManager import InputManager
 from AttackSelection import AttackSelection
 from Settings import *
-from Support import frames_to_masks
+from Support import frames_to_masks, mesh_feet_world
+import hit_core
 from Interaction import InteractionContext
 from damage_data import body
 import defence_profile
@@ -26,6 +27,8 @@ class BasePlayer(Entity):
     mesh_skin = None
     # Body def (bodies.json) of every hero for now; one per hero when a second hero has a mesh.
     BODY = "barb"
+    _hit_rect_key = None
+    _hit_rect_value = None
 
     def __init__(self,
                  pos,
@@ -343,6 +346,45 @@ class BasePlayer(Entity):
                 self.level.notify_gold_pickup(amt)
             return True
         return self.inventory.add_item(item)
+
+    # --- what attacks hit (hit_core) --------------------------------------------------------
+    # A mesh hero is hit where he is drawn: his posed body capsules, at the frame, yaw and size the
+    # camera draws him with, at the camera's feet (mesh_feet_world). The capsules can reach past the
+    # sprite's rect (a foot stepping toward the camera: 15 px below it), so hit_rect is their box,
+    # for hit_core's first test (listed there by _attach_mesh: hit_core.reaches_past_rect). A sprite hero, or a mesh hero the backend could not draw (CPU: the
+    # sprite is what you see), is hit on his sprite as before.
+
+    def _drawn_skin(self):
+        skin = self.mesh_skin
+        if skin is None or not getattr(self, "_mesh_drew", True):
+            return None
+        return skin
+
+    @property
+    def hit_rect(self):
+        """The box of his capsules this pose; None: hit_core uses rect. Worked out when an attack
+        asks, kept until his pose or place changes."""
+        skin = self._drawn_skin()
+        if skin is None:
+            return None
+        body = skin.skin
+        yaw = round(skin.yaw_deg()) % 360
+        key = (self.rect.topleft, id(self.mask), body.frame_index, yaw, skin.height_px)
+        if key != self._hit_rect_key:
+            fx, fy = mesh_feet_world(self)
+            dx, dy, w, h, _ = body.body_bounds(yaw, skin.height_px)
+            self._hit_rect_value = pygame.Rect(int(fx + dx), int(fy + dy), int(w), int(h))
+            self._hit_rect_key = key
+        return self._hit_rect_value
+
+    def hit_shape(self):
+        """His posed capsules where they are drawn; None: hit on the sprite."""
+        skin = self._drawn_skin()
+        if skin is None:
+            return None
+        mask, dx, dy = skin.skin.body_mask(round(skin.yaw_deg()) % 360, skin.height_px)
+        fx, fy = mesh_feet_world(self)
+        return hit_core.Shape(mask, int(fx + dx), int(fy + dy))
 
     def refresh_equipment(self):
         """What is worn changed. His defence profile and gear weight (knockback) follow every hero; a mesh
@@ -763,6 +805,7 @@ class SpecificPlayer(BasePlayer):
             from player_mesh import PlayerMesh
             figure_px = self.image.get_bounding_rect().height
             self.mesh_skin = PlayerMesh(mesh_pack, figure_px)
+            hit_core.reaches_past_rect(self)
         except (OSError, ValueError, KeyError) as exc:
             _combat_log.warning("mesh_pack %r not loaded, sprite player: %s", mesh_pack, exc)
             self.mesh_skin = None
