@@ -849,7 +849,7 @@ class CombatUnit(Entity):
             self.recent_attacker_until_ms = pygame.time.get_ticks() + retaliation_window_ms
             self._aggro_target_cache = None
         source = ctx.source
-        if source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
+        if ctx.amount is None and source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
             attack_type = "weapon" if ctx.attack_type == "weapon" else "magic"
             self.get_damage(source, attack_type)
             return

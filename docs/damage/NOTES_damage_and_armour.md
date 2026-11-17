@@ -405,10 +405,16 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 4b. **Visual hits.** Done: `.cursor/plans/visual_hits.plan.md`, branch `refactor/visual-hits`. Mesh
    hero hit on his mesh's points (capsules kept as the other choice); worn pieces in his outline;
    `hit_layers` says plate or skin as drawn (96% / 98% of arrows within 1 px, all within 2). → 5, 11
-5. **Physical resolve.** `damage_rules.physical`, `hit_resolve.py`, resolver calls it, receivers
-   simplified. First real behaviour: plate stops the dart. Layers at a hit come from
-   `body_regions.hit_layers` (mesh hero) or the profile's region (everyone else). → 10, 12
-6. **Conditions and buffs.** `conditions.py`, the level clock, server-owned. → 7, 8, 9
+5. **Physical resolve.** Built: `.cursor/plans/physical_resolve.plan.md`, branch
+   `refactor/physical-resolve`. `damage_rules.physical`, `hit_resolve.py`; `apply` sets `ctx.amount`
+   before the receiver. A pierce stops when it cannot beat `stopping_power` (an arrow on plate deals
+   0 and does not flinch); crush and blast are cushioned by `absorb`. Points stays the default hit
+   body, capsules stay the other switch. Magic, venom and wear are not in this. → 10, 12
+6. **Conditions and buffs.** Plan: `.cursor/plans/conditions.plan.md` (not built). One heap per
+   level, peeked next to `entity_id_map`; a buff adds to a stat until its end. The `haste` validation
+   scene puts that buff on the hero so it can be walked. Fire, venom and the network packet stay in
+   7 and 8. Build branch `refactor/conditions`, after chunk 5 is committed.
+   → 7, 8, 9
 7. **Elemental.** Fire, ice, lightning rules; wet; piece heat; hot shell; fold `HeatEffect`.
 8. **Venom.** Venoms, saves, antidote items, `venom_cloud` area, new `tribey_dart` enemy.
 9. **Magic categories and resistances.** Parents, negative = weakness, holy/unholy by kind.
@@ -418,24 +424,27 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
     function is `damage_rules.physical`, written there first if the card goes before chunk 5).
 13. **Boss with layers.** One key boss using 4, 5, 10 to prove NPC opt-in.
 
-## Status and next steps (2026-11-15)
+## Status and next steps (2026-11-17)
 
-**Built, on branches, not merged, not checked in play**, each on the one before:
+**Built, on branches, not merged**, each on the one before:
 `refactor/knockback-mass` (1) → `refactor/attack-defs` (2) → `refactor/contact-point` (3) →
-`refactor/defence-layers` (4, with `main` merged in) → `refactor/visual-hits` (4b). Tests: the targeted
-set, same 11 known failures throughout. Nothing plays differently yet except knockback (mass, worn
-weight) and the mesh hero's hit body (his mesh, not his sprite).
+`refactor/defence-layers` (4, with `main` merged in) → `refactor/visual-hits` (4b) →
+`refactor/physical-resolve` (5, built, not watched in the window). Tests: the targeted set, same 11
+known failures (495 passed after chunk 5). In play, knockback uses mass and worn weight, the mesh
+hero is hit on his points, and a pierce now stops on plate.
+
+**Hit body (Douglas, 2026-11-17).** Watched `points_vs_capsules`. Points stays the default
+(`MESH_HERO_HIT_BODY = "points"`). Capsules stay available. The run landed 12 arrows on each half
+(17.6 s).
 
 **Next, in order:**
-1. **Play-check 1-4b** (Douglas): leap slam the demon (barely moves) vs small enemies (fly); arrows
-   and stones stop on the barb; in full plate he is shoved less; `DEBUG_DRAW_CONTACTS = True`: dots
-   where arrows land, on his drawn body. Only then merge (Douglas's call).
-2. **Chunk 5 plan, then build**: the first visible armour: plate stops the dart (pings off), skin takes
-   it, crush still hurts through plate. Needs: the rules (`damage_rules.physical`), the resolver
-   computing `ctx.amount` (`hit_resolve.py`), receivers that only subtract, and how inner layers are
-   found under the front piece. A new plan in `.cursor/plans/`; this doc's chunk list stays the map.
-3. Then 6 (conditions) → 7 / 8 / 9 (elemental, venom, categories), 10 (wear), 11 (stuck arrows, now
-   simpler: pin to the hit point), 12 (item card verdicts), 13 (boss with layers).
+1. **Watch `plate_stops`** (Douglas), if you still want the window. Headless already passed.
+   `combat_validation.py --scenario plate_stops --hold-seconds 12` from `Pixel-Realm-physical\Code`.
+2. **Commit chunk 5, then build chunk 6** from `.cursor/plans/conditions.plan.md`. The clock, one
+   buff, and a `haste` scene: it puts the buff on the hero, you hold a direction, and at 8 s he
+   slows down. Headless checks the speed numbers.
+3. Then 7 / 8 / 9 (elemental, venom, categories), 10 (wear), 11 (stuck arrows), 12 (item card
+   verdicts), 13 (boss with layers). Merge of 1–5 is still Douglas's call. Chunk 5 is not committed.
 
 **Owed cleanups and loose ends** (none blocks 5):
 - `WornCloud.frames_of` repeats `PlayerMesh.piece_frames`'s rule: one place.
@@ -533,6 +542,18 @@ weight) and the mesh hero's hit body (his mesh, not his sprite).
   made the default (11% air, 91% same body part, ~same cost). Worn pieces in the outline; plate or skin
   as drawn on 96% (plate) / 98% (loincloth) of 506 / 512 arrows within 1 px. Capsule bake: ends pulled
   in (barb re-baked). Targeted set: same 11 failures. Not checked in play.
+- 2026-11-17: Douglas watched `points_vs_capsules` (12 arrows on points, 12 on capsules). Points stays
+  the default; capsules stay. Chunk 5 plan written (`.cursor/plans/physical_resolve.plan.md`, branch
+  `refactor/physical-resolve`). Not built.
+- 2026-11-17: chunk 5 (physical resolve) built on `refactor/physical-resolve`. `damage_rules.physical`
+  + `hit_resolve`; apply sets the landed int. Arrow on plate is 0 and does not flinch; skin takes the
+  arrow; demon claw 37 on plate, 44 naked (`BRUISE_SCALE` 0.05). New tests 19 passed. Targeted set:
+  11 failed (the same names) / 495 passed. `plate_stops` headless: plate 9 bad 0, skin 4 hurt 2.
+  Resolve itself 2.1-2.7 us unarmoured, 2.8-3.8 us for three layers (outline lookup not included).
+  Not watched in the window.
+- 2026-11-17: chunk 6 plan written (`.cursor/plans/conditions.plan.md`). The clock, a buff, and a
+  `haste` validation scene that grants it so the speed change can be walked. Not built. Fire, venom
+  and the packet stay in 7 and 8.
 
 ## Tried and dropped
 

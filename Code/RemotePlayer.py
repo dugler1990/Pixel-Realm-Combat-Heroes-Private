@@ -194,7 +194,7 @@ class RemotePlayer(BasePlayer):
                 amount = (src.get_full_weapon_damage()
                           if ctx.attack_type == "weapon"
                           else src.get_full_magic_damage())
-        if amount is None:
+        if amount is None or amount == 0:
             return
         self.incoming_hits.append((amount, ctx.attack_type))
 

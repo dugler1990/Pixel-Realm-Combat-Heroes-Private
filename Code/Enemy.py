@@ -528,7 +528,7 @@ class Enemy(Entity):
         if ctx.kind != "damage":
             return
         source = ctx.source
-        if source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
+        if ctx.amount is None and source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
             attack_type = "weapon" if ctx.attack_type == "weapon" else "magic"
             self.get_damage(source, attack_type)
             return

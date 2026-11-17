@@ -1613,6 +1613,7 @@ class Level4:
                 attack_type=attack_sprite.attack_type,
                 tags=set(attack_sprite.tags),
                 attack_def=attack_sprite.attack_def,
+                toward=(tuple(movement) if movement is not None and (movement[0] or movement[1]) else None),
             )
             hits, rehit_ms = attack_sprite.hits, attack_sprite.rehit_ms
             if attack_sprite.stops:

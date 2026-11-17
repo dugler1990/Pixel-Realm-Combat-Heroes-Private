@@ -25,11 +25,14 @@ class InteractionContext:
     impulse_x: Optional[float] = None
     impulse_y: Optional[float] = None
     tags: Set[str] = field(default_factory=set)
-    # The AttackDef (damage_data.py) this hit is; None for an old path. Not read yet (chunk 5).
+    # The AttackDef (damage_data.py) this hit is; None for an old path. A delivery is priced
+    # by hit_resolve before receive_interaction (chunk 5). No delivery stays today's amount.
     attack_def: Any = None
-    # World pixel where the hit landed (hit_core.find_contacts); None for blasts and old
-    # paths. Not read yet (chunks 4, 11).
+    # World pixel where the hit landed (hit_core.find_contacts); None for blasts and old paths.
     contact: Optional[Tuple[int, int]] = None
+    # The attack's travel on the ground (a shot's movement). None: source to target, and a
+    # torso hit counts as chest (body_regions).
+    toward: Optional[Tuple[float, float]] = None
 
 
 class FactionPolicy:
@@ -470,6 +473,12 @@ class InteractionResolver:
             self._record_rejected_target()
             self._record_rejected_reason("no_receive_interaction")
             return False
+        from damage_rules import landed
+        from hit_resolve import resolve
+
+        priced = resolve(ctx)
+        if priced is not None:
+            ctx.amount = landed(priced)
         target.receive_interaction(ctx)
         if contact_debug.ENABLED and ctx.contact is not None:
             contact_debug.record(ctx.contact, self._now_ms(), contact_debug.kind_of(target, ctx.contact))

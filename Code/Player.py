@@ -233,7 +233,7 @@ class BasePlayer(Entity):
                     amount = source.get_full_weapon_damage()
                 else:
                     amount = source.get_full_magic_damage()
-        if amount is None:
+        if amount is None or amount == 0:
             return
         health_before = self.health
         if ctx.source_kind == "environment":

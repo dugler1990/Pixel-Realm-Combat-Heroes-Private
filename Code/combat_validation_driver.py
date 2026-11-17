@@ -103,6 +103,7 @@ class HitLog:
         self.level = level
         self.hits = []
         self.regions = []
+        self.wounds = []          # (kind, health delta, vulnerable before, vulnerable after)
         self.stopped = []
         self._original = level.interaction_resolver.apply
         self._effect = ParticleEffect
@@ -111,6 +112,7 @@ class HitLog:
         log = self
 
         def apply(ctx):
+            health, vuln = hero.health, hero.vulnerable
             landed = log._original(ctx)
             if ctx.target is hero:
                 kind = region = None
@@ -124,6 +126,7 @@ class HitLog:
                     region = name + (f" {side}" if side else "")
                 log.hits.append((ctx, landed, kind))
                 log.regions.append((kind, region))
+                log.wounds.append((kind, hero.health - health, vuln, hero.vulnerable))
             return landed
 
         def stop(sprite):
@@ -292,7 +295,51 @@ class PointsVsCapsules(Scene):
         self.log.remove()
 
 
-SCENARIOS = (KnockbackMass, ArrowsStop, PlateShove, ArrowsWhereDrawn, PointsVsCapsules)
+class PlateStops(Scene):
+    NAME = "plate_stops"
+    WATCH = "plated barb: grey dots take no health and no flinch; red dots on the bare head do"
+    SECONDS, FAST_SECONDS = 14.0, 8.0
+
+    def setup(self, level):
+        wear(level, FULL_PLATE)
+        ring(level, ARCHER, 8, 185)
+        self.log = HitLog(level)
+        hero = level.player
+        hero.health = hero.max_stats["health"]
+        hero.vulnerable = True
+
+    def tick(self, level, dt):
+        plate = skin = hurt = 0
+        for kind, delta, _before, _after in self.log.wounds:
+            if kind == "plate":
+                plate += 1
+            elif kind == "skin":
+                skin += 1
+                if delta < 0:
+                    hurt += 1
+        self.lines = [f"plate {plate} (no wound)   skin {skin} (hurt {hurt})   health {level.player.health:g}"]
+
+    def decide(self, level):
+        plate_bad = 0
+        plate = skin = hurt = 0
+        for kind, delta, before, after in self.log.wounds:
+            if kind == "plate":
+                plate += 1
+                if delta != 0 or (before and not after):
+                    plate_bad += 1
+            elif kind == "skin":
+                skin += 1
+                if delta < 0:
+                    hurt += 1
+        details = f"plate {plate} (bad {plate_bad}), skin {skin} (hurt {hurt}), health {level.player.health:g}"
+        ok = plate > 0 and hurt > 0 and plate_bad == 0
+        return ("pass" if ok else "fail"), details
+
+    def teardown(self, level):
+        self.log.remove()
+
+
+SCENARIOS = (KnockbackMass, ArrowsStop, PlateShove, ArrowsWhereDrawn, PointsVsCapsules, PlateStops)
 
 
 # --- the driver ----------------------------------------------------------------------------------

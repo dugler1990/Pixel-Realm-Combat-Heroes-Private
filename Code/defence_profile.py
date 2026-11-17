@@ -3,7 +3,7 @@
 A DefenceProfile holds, for each region slot (head, chest, `upper_arm l`, ...), the layers a hit
 there meets, outer first, the body's natural layer last; and the weight of what is worn. A body
 that wears nothing shares one profile per body def (natural_profile). The hero's is rebuilt on
-every equip (Player.refresh_equipment), never per frame. Nothing reads it for damage yet: chunk 5.
+every equip (Player.refresh_equipment), never per frame. hit_resolve reads it when a blow lands.
 
 Regions are item_properties.REGIONS. Arms and legs come in a left and a right slot ("l" is the
 wearer's own left); a worn piece covers its own side, a piece with no side covers both. Where two
