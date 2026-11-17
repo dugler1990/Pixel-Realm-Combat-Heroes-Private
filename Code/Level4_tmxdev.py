@@ -11,6 +11,7 @@ from abilities.charge_hud import draw_charge_bar
 from ItemVisual import ItemVisual
 import pygame
 from Settings import *
+import conditions
 import logging
 from game_logging import get_debug_logger
 
@@ -335,6 +336,7 @@ class Level4:
         self.attack_selection_open = False 
         self.player_config_open = False
         self._frame_number = 0
+        self.condition_clock = conditions.ConditionClock()
         self.selected_player_info_dir = selected_player_info_dir
         self.layouts_dir = layouts_dir
         self.input_manager = input_manager
@@ -2580,6 +2582,9 @@ class Level4:
                 for s in self.layout_manager.visible_sprites.sprites()
                 if hasattr(s, "id")
             }
+            # A render client applies records when a later chunk sends them. Everyone else ends buffs here.
+            if getattr(self, "mp_client", None) is None:
+                self.condition_clock.tick(pygame.time.get_ticks(), entity_id_map)
             for sprite in self.layout_manager.visible_sprites.sprites():
                 # debug
                 # if hasattr(sprite, 'frozen'):

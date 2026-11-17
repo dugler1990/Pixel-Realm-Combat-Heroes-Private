@@ -410,11 +410,10 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
    before the receiver. A pierce stops when it cannot beat `stopping_power` (an arrow on plate deals
    0 and does not flinch); crush and blast are cushioned by `absorb`. Points stays the default hit
    body, capsules stay the other switch. Magic, venom and wear are not in this. → 10, 12
-6. **Conditions and buffs.** Plan: `.cursor/plans/conditions.plan.md` (not built). One heap per
-   level, peeked next to `entity_id_map`; a buff adds to a stat until its end. The `haste` validation
-   scene puts that buff on the hero so it can be walked. Fire, venom and the network packet stay in
-   7 and 8. Build branch `refactor/conditions`, after chunk 5 is committed.
-   → 7, 8, 9
+6. **Conditions and buffs.** Built: `.cursor/plans/conditions.plan.md`, branch `refactor/conditions`.
+   One heap per level, peeked next to `entity_id_map`; a buff adds to a stat until its end. The
+   `haste` validation scene puts that buff on the hero so it can be walked. Fire, venom and the
+   network packet stay in 7 and 8. → 7, 8, 9
 7. **Elemental.** Fire, ice, lightning rules; wet; piece heat; hot shell; fold `HeatEffect`.
 8. **Venom.** Venoms, saves, antidote items, `venom_cloud` area, new `tribey_dart` enemy.
 9. **Magic categories and resistances.** Parents, negative = weakness, holy/unholy by kind.
@@ -429,9 +428,10 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 **Built, on branches, not merged**, each on the one before:
 `refactor/knockback-mass` (1) → `refactor/attack-defs` (2) → `refactor/contact-point` (3) →
 `refactor/defence-layers` (4, with `main` merged in) → `refactor/visual-hits` (4b) →
-`refactor/physical-resolve` (5, built, not watched in the window). Tests: the targeted set, same 11
-known failures (495 passed after chunk 5). In play, knockback uses mass and worn weight, the mesh
-hero is hit on his points, and a pierce now stops on plate.
+`refactor/physical-resolve` (5, built, not watched in the window) → `refactor/conditions` (6, built).
+Tests: the targeted set, same 11 known failures (505 passed after chunk 6, 10 of them new). In play, knockback uses
+mass and worn weight, the mesh hero is hit on his points, a pierce stops on plate, and a haste buff
+adds to speed until its end (the `haste` scene is the only thing that grants it).
 
 **Hit body (Douglas, 2026-11-17).** Watched `points_vs_capsules`. Points stays the default
 (`MESH_HERO_HIT_BODY = "points"`). Capsules stay available. The run landed 12 arrows on each half
@@ -440,11 +440,11 @@ hero is hit on his points, and a pierce now stops on plate.
 **Next, in order:**
 1. **Watch `plate_stops`** (Douglas), if you still want the window. Headless already passed.
    `combat_validation.py --scenario plate_stops --hold-seconds 12` from `Pixel-Realm-physical\Code`.
-2. **Commit chunk 5, then build chunk 6** from `.cursor/plans/conditions.plan.md`. The clock, one
-   buff, and a `haste` scene: it puts the buff on the hero, you hold a direction, and at 8 s he
-   slows down. Headless checks the speed numbers.
+2. **Watch `haste`** (Douglas). Headless checks the speed. The window is the walk: hold a direction,
+   he is faster until the line says the buff ended.
+   `combat_validation.py --scenario haste --hold-seconds 6` from `Pixel-Realm-conditions\Code`.
 3. Then 7 / 8 / 9 (elemental, venom, categories), 10 (wear), 11 (stuck arrows), 12 (item card
-   verdicts), 13 (boss with layers). Merge of 1–5 is still Douglas's call. Chunk 5 is not committed.
+   verdicts), 13 (boss with layers). Merge of 1–6 is still Douglas's call. Nothing is pushed.
 
 **Owed cleanups and loose ends** (none blocks 5):
 - `WornCloud.frames_of` repeats `PlayerMesh.piece_frames`'s rule: one place.
@@ -554,6 +554,13 @@ hero is hit on his points, and a pierce now stops on plate.
 - 2026-11-17: chunk 6 plan written (`.cursor/plans/conditions.plan.md`). The clock, a buff, and a
   `haste` validation scene that grants it so the speed change can be walked. Not built. Fire, venom
   and the packet stay in 7 and 8.
+- 2026-11-17: chunk 6 (conditions) built on `refactor/conditions`. One heap per level, peeked next to
+  `entity_id_map` (a render client does not tick). `speed_of` is the stat plus live buffs; the player
+  move is the one read. Death bumps `condition_gen` (`Enemy` and `friendly` copy `check_death`, so the
+  call is in those copies too). `haste` is speed +4 for 8 s, granted only by the `haste` scene.
+  Empty `tick` 0.155 us, empty `bonus` 0.227 us (200k calls). New tests 10 passed. Targeted set:
+  11 failed (the same names) / 505 passed. `haste` headless: base 5, saw the +4, ended back at 5.
+  Not watched in the window. Fire, venom and the packet stay in 7 and 8.
 
 ## Tried and dropped
 

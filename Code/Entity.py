@@ -133,6 +133,9 @@ class Entity(pygame.sprite.Sprite):
         self.move_not_called_before = True
         # Active effects tracking: {effect_area_id: effect_instance}
         self.active_effects = {}
+        # Conditions (chunk 6): by cond id, and a generation bumped on death so old heap entries go stale.
+        self.conditions = {}
+        self.condition_gen = 0
         # Interaction-driven effect state keyed by effect name, e.g. {"slippery": {...}}
         self.effect_state = {}
         self.fire_resistance = 0  # Reduces heat (and future fire) damage; can be set from stats later

@@ -18,6 +18,7 @@ import math
 import mesh_points
 from Interaction import InteractionContext
 from damage_data import body
+from conditions import notify_death, speed_of
 import defence_profile
 from abilities.registry import build_action_controller, load_evasion_loadout
 
@@ -678,6 +679,8 @@ class BasePlayer(Entity):
 
     def player_death(self):
         if self.health <= 0:
+            if not self.is_dead:
+                notify_death(self)
             self.health = 0
             self.is_dead = True
 
@@ -713,7 +716,7 @@ class BasePlayer(Entity):
         self.animate()
         self.action_controller.tick(self, dt, QuadTree, entity_quad_tree)
         if not self.action_controller.suppresses_locomotion(self):
-            self.move(self.stats["speed"], QuadTree, entity_quad_tree)
+            self.move(speed_of(self), QuadTree, entity_quad_tree)
         if self.mesh_skin is not None:
             self.mesh_skin.update(self, dt)
         self.energy_recovery()

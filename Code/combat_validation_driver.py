@@ -17,6 +17,7 @@ import contact_debug
 import Player as player_module
 from abilities.leap_slam import ChargedLeapSlamAbility
 from combat_validation_runtime import COMBAT_VALIDATION_RUNTIME as RUNTIME
+from conditions import condition, speed_of
 from damage_data import attack
 from Entity import knockback_scale
 from hashRect import HashableRect
@@ -339,7 +340,44 @@ class PlateStops(Scene):
         self.log.remove()
 
 
-SCENARIOS = (KnockbackMass, ArrowsStop, PlateShove, ArrowsWhereDrawn, PointsVsCapsules, PlateStops)
+class Haste(Scene):
+    """The one thing that grants haste. Hold a direction: faster until 8 s, then today's speed."""
+
+    NAME = "haste"
+    WATCH = "Hold a direction. He is faster until the line says the buff ended, then he is back to normal."
+    SECONDS = 10.0
+    FAST_SECONDS = 9.0
+
+    def setup(self, level):
+        hero = level.player
+        self.base = hero.stats["speed"]
+        self.saw_fast = False
+        level.condition_clock.start(hero, "haste", pygame.time.get_ticks())
+
+    def tick(self, level, dt):
+        hero = level.player
+        now = pygame.time.get_ticks()
+        speed = speed_of(hero)
+        if speed == self.base + 4:
+            self.saw_fast = True
+        inst = next(iter(hero.conditions.values()), None)
+        if inst is None:
+            left = "buff ended"
+        else:
+            left = f"haste {max(0.0, (inst.end_ms - now) / 1000.0):.1f}s left"
+        self.lines = [f"speed {speed:g}   base {self.base:g}", left]
+
+    def decide(self, level):
+        hero = level.player
+        speed = speed_of(hero)
+        gone = condition("haste").id not in hero.conditions
+        ok = self.saw_fast and gone and speed == self.base
+        return ("pass" if ok else "fail"), (
+            f"speed {speed:g} base {self.base:g} saw_fast {self.saw_fast} ended {gone}"
+        )
+
+
+SCENARIOS = (KnockbackMass, ArrowsStop, PlateShove, ArrowsWhereDrawn, PointsVsCapsules, PlateStops, Haste)
 
 
 # --- the driver ----------------------------------------------------------------------------------

@@ -869,6 +869,8 @@ class CombatUnit(Entity):
     #@profile
     def check_death(self):
         if self.health <= 0:
+            from conditions import notify_death
+            notify_death(self)
             self.layout_callback_update_quad_tree( obstacle_sprite = HashableRect( self.rect, self.id ),
                                                    remove_existing= True,
                                                    alive = False )# confusing its a callback passed to all entities, this is child , it can use it right ? 
