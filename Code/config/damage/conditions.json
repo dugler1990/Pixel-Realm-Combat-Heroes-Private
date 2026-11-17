@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "conditions": {
+    "haste": {"kind": "buff", "stat": "speed", "amount": 4, "duration_ms": 8000, "stack": "refresh"}
+  }
+}
