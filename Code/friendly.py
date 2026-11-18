@@ -87,7 +87,9 @@ class Friendly(Entity):
         self.speed = monster_info["speed"]
         self.mass = monster_info["mass"]  # knockback_scale (Entity.py)
         # What is between a hit and the flesh (defence_profile.py): its hide, shared per body.
-        self.defence = natural_profile(body_of(monster_info))
+        self.body_def = body_of(monster_info)
+        self.defence = natural_profile(self.body_def)
+        self.detail = monster_info.get("detail", "simple")
         
         #### All in combat config now
         self.combat_config = monster_info["combat_config"]

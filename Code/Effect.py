@@ -110,21 +110,39 @@ class SlipperyEffect(Effect):
 
 
 class HeatEffect(Effect):
-    """
-    Heat effect: damages entity over time based on 'heat' property (damage per second)
-    and entity's fire_resistance. damage_this_frame = max(0, heat - fire_resistance) * dt.
-    """
+    """Heat while you stand in it: (heat − fire resist) × (1 − insulation) per second, from the
+    chest's outer layer. The entity's fire_resistance is not read. Leaving starts a hot shell
+    when one second of that heat is above COOK."""
+
     def __init__(self, properties):
         super().__init__(properties)
         self.heat = float(properties.get('heat', 0))
 
     def get_environmental_damage(self, entity, dt):
         _effect_env_log.debug("trying to get environmental damage")
-        resistance = getattr(entity, 'fire_resistance', 0)
-        amount = max(0.0, self.heat - resistance) * dt
+        from damage_rules import patch_rate
+        amount = patch_rate(entity, self.heat) * dt
         if amount <= 0:
             return None
         return (amount, 'heat')
+
+    def remove(self, entity):
+        from damage_rules import COOK, chest_layer, heat_seconds, heat_shade, patch_rate
+        held = patch_rate(entity, self.heat)
+        if held <= COOK:
+            return
+        from hit_resolve import _clock, remember_heat
+        remember_heat(entity, chest_layer(entity), heat_shade(held))
+        clock = _clock(entity)
+        if clock is None:
+            return
+        try:
+            import pygame
+            now = pygame.time.get_ticks()
+        except Exception:
+            import time
+            now = int(time.time() * 1000)
+        clock.start(entity, "hot_shell", now, duration_ms=int(round(heat_seconds(held) * 1000)))
 
 
 # Effect Registry: Maps property keys to Effect classes

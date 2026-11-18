@@ -172,3 +172,79 @@ def test_storm_bolt_jumps_by_charge_and_stops():
     assert len(bolt_chain(50, 180, 4, 12, three, full=False)) == 2
     bamboo, _, _ = bolt_body(50, 0, False, 30, 50, 180)
     assert bamboo == 20
+
+
+def test_apply_fire_spit_on_loincloth_burns_and_does_not_ask_magic():
+    from types import SimpleNamespace
+    from Interaction import InteractionContext, InteractionResolver
+    from conditions import ConditionClock, condition
+    from defence_profile import DefenceProfile, SLOTS
+    cloth = _layer(flammability=0.8, insulation=0.1)
+    profile = DefenceProfile(body("barb"), ((cloth, HIDE),) * len(SLOTS), 0.3, True)
+    clock = ConditionClock()
+
+    class Body:
+        def __init__(self):
+            self.body_def = body("barb")
+            self.defence = profile
+            self.team_id = "enemy_1"
+            self.health = 100
+            self.conditions = {}
+            self.condition_gen = 0
+            self.id = 7
+            self.detail = "full"
+            self.level = SimpleNamespace(condition_clock=clock)
+            self.piece_layers = {}
+
+        def can_receive_interaction(self, ctx):
+            return True
+
+        def receive_interaction(self, ctx):
+            self.health -= ctx.amount
+
+    class Source:
+        stats = {"magic": 99}
+        team_id = "player"
+
+        def get_full_magic_damage(self):
+            raise AssertionError("get_full_magic_damage")
+
+    target = Body()
+    ctx = InteractionContext(
+        kind="damage", source_kind="player_attack", source=Source(), source_team="player",
+        target=target, attack_type="magic", attack_def=attack("fire_spit"),
+    )
+    assert InteractionResolver().apply(ctx) is True
+    assert target.health == 85
+    assert condition("burning").id in target.conditions
+    assert target.heat_shade == "searing" and target.heat_on_skin is False
+
+
+def test_heat_patch_uses_insulation_and_not_fire_resistance():
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+    from types import SimpleNamespace
+    from conditions import ConditionClock, condition
+    from defence_profile import DefenceProfile, SLOTS
+    from Effect import HeatEffect
+    plate = _layer(insulation=0.2)
+    profile = DefenceProfile(body("barb"), ((plate, HIDE),) * len(SLOTS), 1.0, True)
+    clock = ConditionClock()
+    entity = SimpleNamespace(
+        body_def=body("barb"), defence=profile, fire_resistance=100,
+        conditions={}, condition_gen=0, id=3, piece_layers={},
+        level=SimpleNamespace(condition_clock=clock),
+    )
+    hot = HeatEffect({"heat": 10})
+    dealt = hot.get_environmental_damage(entity, 1.0)
+    assert dealt[0] == pytest.approx(8)
+    hot.remove(entity)
+    assert condition("hot_shell").id in entity.conditions
+    quiet = SimpleNamespace(
+        body_def=body("barb"), defence=profile, fire_resistance=0,
+        conditions={}, condition_gen=0, id=4, piece_layers={},
+        level=SimpleNamespace(condition_clock=ConditionClock()),
+    )
+    HeatEffect({"heat": 5}).remove(quiet)
+    assert quiet.conditions == {}

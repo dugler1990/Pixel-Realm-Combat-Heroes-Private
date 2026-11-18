@@ -479,7 +479,7 @@ class MeshBoss:
     # --- drawing ------------------------------------------------------------------------
     def draw(self, backend, screen_pos, facing_deg=0.0, height_px=650,
              elevation_deg=VIEW_ELEVATION_DEG,
-             light_dir=(-0.4, -0.5, 0.75), ambient=0.35):
+             light_dir=(-0.4, -0.5, 0.75), ambient=0.35, tint=(1.0, 1.0, 1.0, 1.0)):
         """Draw at `screen_pos` (the ground-contact pixel), `height_px` tall on screen.
 
         `facing_deg` spins the model about its up axis, so any angle works -- not just the 8
@@ -493,4 +493,4 @@ class MeshBoss:
         if amb != "":
             ambient = float(amb)
         return draw(self.pack, self.frame_index, screen_pos, facing_deg, scale,
-                    elevation_deg, light_dir, ambient)
+                    elevation_deg, light_dir, ambient, tint=tint)

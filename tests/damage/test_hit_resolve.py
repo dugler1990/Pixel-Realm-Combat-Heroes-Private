@@ -44,10 +44,12 @@ def _ctx(target, **fields):
     return InteractionContext(**base)
 
 
-def test_no_def_and_no_delivery_leave_the_amount():
+def test_no_attack_and_holy_leave_the_amount_and_fire_is_priced():
     target = _worn()
     assert resolve(_ctx(target, amount=9)) is None
-    assert resolve(_ctx(target, amount=9, attack_def=attack("flame"))) is None
+    assert resolve(_ctx(target, amount=9, attack_def=attack("curse_bolt"))) is None
+    flame = resolve(_ctx(target, amount=9, attack_def=attack("flame")))
+    assert flame is not None and landed(flame) == 0
 
 
 def test_unarmoured_uses_the_hide_and_does_not_look_up_a_region(monkeypatch):

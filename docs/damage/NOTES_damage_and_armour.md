@@ -414,13 +414,13 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
    One heap per level, peeked next to `entity_id_map`; a buff adds to a stat until its end. The
    `haste` validation scene puts that buff on the hero so it can be walked. Fire, venom and the
    network packet stay in 7 and 8. → 7, 8, 9
-7. **Elemental.** Plan: `.cursor/plans/elemental.plan.md` (not built). You and every monster
-   already have a body card (`bodies.json`). The hit reads that card, then armour, fire, cold and
-   lightning. An arrow or a tree has no card, so the hit stays the plain number. You get the cold
-   curve and every lightning jump. Other monsters get three shades and at most one jump, unless
-   marked `detail: full`. Lightning knobs are `damage`, `reach`, `arcs`, `spark`. Cold is separate
-   from the blow. Three blues on skin, three reds on the hot piece. Holy, unholy and venom stay
-   in 9 and 8. Build branch `refactor/elemental`.
+7. **Elemental.** Built: `.cursor/plans/elemental.plan.md`, branch `refactor/elemental`. You and
+   every monster already have a body card (`bodies.json`). The hit reads that card, then armour,
+   fire, cold and lightning. An arrow or a tree has no card, so the hit stays the plain number.
+   You get the cold curve and every lightning jump. Other monsters get three shades and at most
+   one jump, unless marked `detail: full`. Lightning knobs are `damage`, `reach`, `arcs`, `spark`.
+   Cold is separate from the blow. Three blues on skin, three reds on the hot piece. Holy, unholy
+   and venom stay in 9 and 8.
 8. **Venom.** Venoms, saves, antidote items, `venom_cloud` area, new `tribey_dart` enemy.
 9. **Magic categories and resistances.** Negative resist raises damage; holy/unholy by kind.
    Parents are already read in 7.
@@ -435,10 +435,12 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 **Built, on branches, not merged**, each on the one before:
 `refactor/knockback-mass` (1) → `refactor/attack-defs` (2) → `refactor/contact-point` (3) →
 `refactor/defence-layers` (4, with `main` merged in) → `refactor/visual-hits` (4b) →
-`refactor/physical-resolve` (5, built, not watched in the window) → `refactor/conditions` (6, built).
-Tests: the targeted set, same 11 known failures (505 passed after chunk 6, 10 of them new). In play, knockback uses
-mass and worn weight, the mesh hero is hit on his points, a pierce stops on plate, and a haste buff
-adds to speed until its end (the `haste` scene is the only thing that grants it).
+`refactor/physical-resolve` (5, built, not watched in the window) → `refactor/conditions` (6, built)
+→ `refactor/elemental` (7, built, not watched in the window).
+Tests: the targeted set, same 11 known failures (517 passed after chunk 7, 12 of them new). In play, knockback uses
+mass and worn weight, the mesh hero is hit on his points, a pierce stops on plate, a haste buff
+adds to speed until its end (the `haste` scene is the only thing that grants it), and a fire or ice
+hit on a body card uses the elemental rule.
 
 **Hit body (Douglas, 2026-11-17).** Watched `points_vs_capsules`. Points stays the default
 (`MESH_HERO_HIT_BODY = "points"`). Capsules stay available. The run landed 12 arrows on each half
@@ -450,11 +452,11 @@ adds to speed until its end (the `haste` scene is the only thing that grants it)
 2. **Watch `haste`** (Douglas). Headless checks the speed. The window is the walk: hold a direction,
    he is faster until the line says the buff ended.
    `combat_validation.py --scenario haste --hold-seconds 6` from `Pixel-Realm-conditions\Code`.
-3. **Build chunk 7** from `.cursor/plans/elemental.plan.md` when you want it. The `elemental` scene
-   is the watch: plate cooks and draws red, loincloth burns, then a wet chill that hurts, draws
-   blue, and can be walked. Not built.
+3. **Watch `elemental`** (Douglas). Headless already passed: plate −3 and hot red, cloth −15 and
+   searing red, then a chill −9, severe blue, slower, then back to speed 5.
+   `combat_validation.py --scenario elemental --hold-seconds 6` from `Pixel-Realm-elemental\Code`.
 4. Then 8 / 9 (venom, holy and the weakness), 10 (wear), 11 (stuck arrows), 12 (item card
-   verdicts), 13 (boss with layers). Merge of 1–6 is still Douglas's call. Nothing is pushed.
+   verdicts), 13 (boss with layers). Merge of 1–7 is still Douglas's call. Nothing is pushed.
 
 **Owed cleanups and loose ends** (none blocks 5):
 - `WornCloud.frames_of` repeats `PlayerMesh.piece_frames`'s rule: one place.
@@ -574,11 +576,19 @@ adds to speed until its end (the `haste` scene is the only thing that grants it)
 - 2026-11-17: chunk 7 plan written (`.cursor/plans/elemental.plan.md`). Fire catches or cooks, ice
   slows, lightning uses conductivity and wet. Not built. Holy, unholy, negative weakness and venom
   stay in 9 and 8.
-- 2026-11-18: chunk 7 plan revised after talk. One resolve: no def keeps the flat amount; a def runs
+- 2026-11-18: chunk 7 plan revised after talk. One resolve: no card keeps the flat amount; a card runs
   physical then fire, cold and lightning. Full detail is the curve and every arc; simple is three
   shades and at most one jump. Lightning knobs are damage, reach, arcs, spark. Cold is a
   temperature; constitution cuts how much sticks and how fast it fades. Three blues on skin, three
   reds on the hot layer. Not built.
+- 2026-11-18: chunk 7 (elemental) built on `refactor/elemental`. Fire catches or cooks, cold is a
+  temperature (wound 9 and 3.5 s slow at constitution 10; constitution 20 sticks half and does not
+  slow), lightning jumps by charge (plate 95, passes 45, reach 162). Monsters' hits use the body
+  card they already had. `elemental` headless: drops 3, 15, 9; plate red not skin; cloth searing;
+  skin severe blue; slow then back to 5. Full cold apply 7.5 µs, simple 4.4 µs, a 4-arc bolt
+  against 8 bodies 3.3 µs (20k calls). Not per frame. Targeted set: 11 failed (the same names) /
+  517 passed. Not watched in the window. Holy, unholy, a weakness that increases damage, and venom
+  stay in 9 and 8.
 
 ## Tried and dropped
 

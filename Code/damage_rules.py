@@ -274,3 +274,29 @@ def elemental(fire=0, cold=0, bolt=None, layer=None, resist=None, constitution=B
             passed_reach = nxt
 
     return Elemental(wound, tuple(starts), heat, cold_shade, passed_charge, passed_reach)
+
+
+def chest_layer(entity):
+    """The outer layer on the chest, or the hide when nothing is worn. None when there is no card."""
+    defence = getattr(entity, "defence", None)
+    card = getattr(entity, "body_def", None)
+    if card is None and defence is not None:
+        card = defence.body
+    if card is None:
+        return None
+    if defence is None or not defence.worn:
+        return card.natural
+    from defence_profile import region_slot
+    layers = defence.layers_at(region_slot("chest"))
+    return layers[0] if layers else card.natural
+
+
+def patch_rate(entity, heat):
+    """Health per second while standing in a heat patch. Does not read fire_resistance."""
+    layer = chest_layer(entity)
+    card = getattr(entity, "body_def", None)
+    if card is None and getattr(entity, "defence", None) is not None:
+        card = entity.defence.body
+    resist = resist_of(card.resist, "fire") if card is not None else 0.0
+    insulation = 0.0 if layer is None else layer.insulation
+    return max(0.0, heat - resist) * (1.0 - insulation)

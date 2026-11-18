@@ -742,7 +742,7 @@ class YSortCameraGroup(pygame.sprite.Group):
         while the mesh draws (the weapon sprite itself, and its hit mask, are untouched)."""
         skin = getattr(sprite, "mesh_skin", None)
         if skin is not None:
-            drew = skin.draw(self.backend, self._mesh_feet_screen(sprite))      # body + worn pieces
+            drew = skin.draw(self.backend, self._mesh_feet_screen(sprite), wearer=sprite)
             sprite._mesh_drew = bool(drew)
             if drew:
                 return

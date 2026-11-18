@@ -128,7 +128,7 @@ class _Backend:
         self.blits = []
         self.meshes = 0
 
-    def draw_mesh_boss(self, *a):
+    def draw_mesh_boss(self, *a, **k):
         self.meshes += 1
         return self.draws
 

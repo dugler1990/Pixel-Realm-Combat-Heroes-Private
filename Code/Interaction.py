@@ -26,7 +26,7 @@ class InteractionContext:
     impulse_y: Optional[float] = None
     tags: Set[str] = field(default_factory=set)
     # The AttackDef (damage_data.py) this hit is; None for an old path. A delivery is priced
-    # by hit_resolve before receive_interaction (chunk 5). No delivery stays today's amount.
+    # by hit_resolve before receive_interaction. No card, and holy or unholy alone, stay today's amount.
     attack_def: Any = None
     # World pixel where the hit landed (hit_core.find_contacts); None for blasts and old paths.
     contact: Optional[Tuple[int, int]] = None
@@ -474,11 +474,12 @@ class InteractionResolver:
             self._record_rejected_reason("no_receive_interaction")
             return False
         from damage_rules import landed
-        from hit_resolve import resolve
+        from hit_resolve import apply_element, resolve
 
         priced = resolve(ctx)
         if priced is not None:
             ctx.amount = landed(priced)
+            apply_element(ctx, priced, self._now_ms())
         target.receive_interaction(ctx)
         if contact_debug.ENABLED and ctx.contact is not None:
             contact_debug.record(ctx.contact, self._now_ms(), contact_debug.kind_of(target, ctx.contact))

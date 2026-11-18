@@ -137,21 +137,24 @@ class PlayerMesh:
             out.append((name, piece, min(lo + step, hi)))
         return out
 
-    def draw(self, backend, feet, light_dir=(-0.4, -0.5, 0.75), ambient=0.35):
-        """The body, then each worn piece in its depth. False when the backend has no mesh pass."""
+    def draw(self, backend, feet, light_dir=(-0.4, -0.5, 0.75), ambient=0.35, wearer=None):
+        """The body, then each worn piece. Skin tint on the body; each piece gets its own heat tint.
+        False when the backend has no mesh pass."""
         draw = getattr(backend, "draw_mesh_boss", None)
         if draw is None:
             return False
+        from hit_resolve import piece_tint, skin_tint
+        body_tint = skin_tint(wearer)
         body = self.skin.pack
         yaw = self.yaw_deg()
         scale = self.height_px / max(body.height_units, 1e-6)
         frame = self.skin.frame_index
         if not self.pieces:
-            return self.skin.draw(backend, feet, yaw, self.height_px)
+            return self.skin.draw(backend, feet, yaw, self.height_px, tint=body_tint)
         if not draw(body, frame, feet, yaw, scale, VIEW_ELEVATION_DEG, light_dir, ambient,
-                    clear_pad=self.PIECE_CLEAR_PAD):
+                    tint=body_tint, clear_pad=self.PIECE_CLEAR_PAD):
             return False
-        for _, piece, piece_frame in self.piece_frames():
+        for name, piece, piece_frame in self.piece_frames():
             draw(piece.pack, piece_frame, feet, yaw, scale, VIEW_ELEVATION_DEG, light_dir, ambient,
-                 pivot=body.pivot, clear_depth=False)
+                 tint=piece_tint(wearer, name), pivot=body.pivot, clear_depth=False)
         return True

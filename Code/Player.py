@@ -60,6 +60,7 @@ class BasePlayer(Entity):
         # What is between a hit and the flesh (defence_profile.py); rebuilt on equip.
         self.body_def = body(self.BODY)
         self.defence = defence_profile.natural_profile(self.body_def)
+        self.detail = "full"   # the cold curve and every lightning arc; monsters default to simple
         self.inventory = Inventory(self, input_manager)
         
         self.level = level
