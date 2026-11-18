@@ -414,9 +414,16 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
    One heap per level, peeked next to `entity_id_map`; a buff adds to a stat until its end. The
    `haste` validation scene puts that buff on the hero so it can be walked. Fire, venom and the
    network packet stay in 7 and 8. → 7, 8, 9
-7. **Elemental.** Fire, ice, lightning rules; wet; piece heat; hot shell; fold `HeatEffect`.
+7. **Elemental.** Plan: `.cursor/plans/elemental.plan.md` (not built). You and every monster
+   already have a body card (`bodies.json`). The hit reads that card, then armour, fire, cold and
+   lightning. An arrow or a tree has no card, so the hit stays the plain number. You get the cold
+   curve and every lightning jump. Other monsters get three shades and at most one jump, unless
+   marked `detail: full`. Lightning knobs are `damage`, `reach`, `arcs`, `spark`. Cold is separate
+   from the blow. Three blues on skin, three reds on the hot piece. Holy, unholy and venom stay
+   in 9 and 8. Build branch `refactor/elemental`.
 8. **Venom.** Venoms, saves, antidote items, `venom_cloud` area, new `tribey_dart` enemy.
-9. **Magic categories and resistances.** Parents, negative = weakness, holy/unholy by kind.
+9. **Magic categories and resistances.** Negative resist raises damage; holy/unholy by kind.
+   Parents are already read in 7.
 10. **Armour wear.**
 11. **Stuck arrows.**
 12. **Item card and character sheet.** `.cursor/plans/item_card.plan.md` (pulled forward; its rule
@@ -443,7 +450,10 @@ adds to speed until its end (the `haste` scene is the only thing that grants it)
 2. **Watch `haste`** (Douglas). Headless checks the speed. The window is the walk: hold a direction,
    he is faster until the line says the buff ended.
    `combat_validation.py --scenario haste --hold-seconds 6` from `Pixel-Realm-conditions\Code`.
-3. Then 7 / 8 / 9 (elemental, venom, categories), 10 (wear), 11 (stuck arrows), 12 (item card
+3. **Build chunk 7** from `.cursor/plans/elemental.plan.md` when you want it. The `elemental` scene
+   is the watch: plate cooks and draws red, loincloth burns, then a wet chill that hurts, draws
+   blue, and can be walked. Not built.
+4. Then 8 / 9 (venom, holy and the weakness), 10 (wear), 11 (stuck arrows), 12 (item card
    verdicts), 13 (boss with layers). Merge of 1–6 is still Douglas's call. Nothing is pushed.
 
 **Owed cleanups and loose ends** (none blocks 5):
@@ -561,6 +571,14 @@ adds to speed until its end (the `haste` scene is the only thing that grants it)
   Empty `tick` 0.155 us, empty `bonus` 0.227 us (200k calls). New tests 10 passed. Targeted set:
   11 failed (the same names) / 505 passed. `haste` headless: base 5, saw the +4, ended back at 5.
   Not watched in the window. Fire, venom and the packet stay in 7 and 8.
+- 2026-11-17: chunk 7 plan written (`.cursor/plans/elemental.plan.md`). Fire catches or cooks, ice
+  slows, lightning uses conductivity and wet. Not built. Holy, unholy, negative weakness and venom
+  stay in 9 and 8.
+- 2026-11-18: chunk 7 plan revised after talk. One resolve: no def keeps the flat amount; a def runs
+  physical then fire, cold and lightning. Full detail is the curve and every arc; simple is three
+  shades and at most one jump. Lightning knobs are damage, reach, arcs, spark. Cold is a
+  temperature; constitution cuts how much sticks and how fast it fades. Three blues on skin, three
+  reds on the hot layer. Not built.
 
 ## Tried and dropped
 
