@@ -16,7 +16,7 @@ CONDITIONS_PATH = os.path.join(CONFIG_DIR, "conditions.json")
 SCHEMA_VERSION = 1
 
 _ROW_FIELDS = frozenset(("kind", "stat", "amount", "duration_ms", "stack"))
-_KINDS = frozenset(("buff",))
+_KINDS = frozenset(("buff", "state"))
 _STACKS = frozenset(("refresh",))
 # Names a buff may add to. A row that names anything else fails the load.
 STATS = frozenset((
@@ -67,9 +67,10 @@ def _read(path):
     return data
 
 
-def _number(where, field, value, whole=False):
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-        raise DamageDataError(f"{where}: {field} must be a number >= 0, got {value!r}")
+def _number(where, field, value, whole=False, signed=False):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or (not signed and value < 0):
+        need = "a number" if signed else "a number >= 0"
+        raise DamageDataError(f"{where}: {field} must be {need}, got {value!r}")
     if whole and isinstance(value, float):
         raise DamageDataError(f"{where}: {field} must be a whole number of ms, got {value!r}")
     return value
@@ -85,16 +86,20 @@ def _condition_def(path, cond_id, name, row):
     kind = row.get("kind")
     if kind not in _KINDS:
         raise DamageDataError(f"{where}: unknown kind {kind!r}")
+    stack = row.get("stack")
+    if stack not in _STACKS:
+        raise DamageDataError(f"{where}: unknown stack {stack!r}")
+    duration_ms = _number(where, "duration_ms", row.get("duration_ms"), whole=True)
+    if kind == "state":
+        if row.get("stat") is not None:
+            raise DamageDataError(f"{where}: a state has no stat")
+        return ConditionDef(cond_id, name, kind, None, 0, duration_ms, stack)
     if "stat" not in row or row["stat"] is None:
         raise DamageDataError(f"{where}: a buff needs a stat")
     stat = row["stat"]
     if stat not in STATS:
         raise DamageDataError(f"{where}: unknown stat {stat!r}")
-    stack = row.get("stack")
-    if stack not in _STACKS:
-        raise DamageDataError(f"{where}: unknown stack {stack!r}")
-    amount = _number(where, "amount", row.get("amount"))
-    duration_ms = _number(where, "duration_ms", row.get("duration_ms"), whole=True)
+    amount = _number(where, "amount", row.get("amount"), signed=True)
     return ConditionDef(cond_id, name, kind, stat, amount, duration_ms, stack)
 
 
@@ -138,8 +143,8 @@ def bonus(entity, stat, defs=None):
 
 
 def speed_of(entity):
-    """The speed to move at: the stat, plus any live haste. With no buff this is the stat."""
-    return entity.stats["speed"] + bonus(entity, "speed")
+    """The speed to move at: the stat, plus live buffs. A slow cannot push it below 0."""
+    return max(0, entity.stats["speed"] + bonus(entity, "speed"))
 
 
 def save_succeeds(rng, stat, difficulty):
@@ -257,3 +262,15 @@ class ConditionClock:
             inst = Instance(cond_id, 1, start_ms, end_ms, strength)
             entity.conditions[cond_id] = inst
             self._push(entity, inst)
+
+
+def _check_body_starts():
+    """A body's `starts` names must be conditions. Runs after both modules have loaded."""
+    from damage_data import BODIES
+    for card in BODIES:
+        for name in card.starts:
+            if name not in _BY_NAME:
+                raise DamageDataError(f"body {card.name!r}: starts {name!r} is not a condition")
+
+
+_check_body_starts()

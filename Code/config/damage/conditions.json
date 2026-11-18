@@ -1,6 +1,10 @@
 {
   "schema_version": 1,
   "conditions": {
-    "haste": {"kind": "buff", "stat": "speed", "amount": 4, "duration_ms": 8000, "stack": "refresh"}
+    "haste": {"kind": "buff", "stat": "speed", "amount": 4, "duration_ms": 8000, "stack": "refresh"},
+    "chilled": {"kind": "buff", "stat": "speed", "amount": 0, "duration_ms": 0, "stack": "refresh"},
+    "burning": {"kind": "state", "duration_ms": 6000, "stack": "refresh"},
+    "hot_shell": {"kind": "state", "duration_ms": 0, "stack": "refresh"},
+    "wet": {"kind": "state", "duration_ms": 60000, "stack": "refresh"}
   }
 }

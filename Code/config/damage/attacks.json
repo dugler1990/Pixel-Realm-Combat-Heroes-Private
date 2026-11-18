@@ -39,7 +39,7 @@
 
     "crossbow_bolt":   {"delivery": "pierce", "damage": 30, "penetration": 55,  "force": 25,  "stops": true},
     "ballista":        {"delivery": "pierce", "damage": 80, "penetration": 120, "force": 400, "stops": true},
-    "storm_bolt":      {"magic": {"lightning": 50}},
+    "storm_bolt":      {"magic": {"lightning": {"damage": 50, "reach": 180, "arcs": 4, "spark": 12}}},
     "holy_smite":      {"delivery": "crush",  "damage": 25, "force": 50, "magic": {"holy": 20}},
     "blowgun_dart":    {"delivery": "pierce", "damage": 4,  "penetration": 12, "force": 2, "stops": true, "venom": {"id": "frog_venom", "dose": 1}}
   }

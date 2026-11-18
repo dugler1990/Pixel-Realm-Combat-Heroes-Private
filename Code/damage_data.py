@@ -18,8 +18,9 @@ ATTACKS_PATH = os.path.join(CONFIG_DIR, "attacks.json")
 SCHEMA_VERSION = 1
 
 _ROW_FIELDS = frozenset(
-    ("delivery", "damage", "penetration", "force", "magic", "venom", "stops", "scales_with")
+    ("delivery", "damage", "penetration", "force", "magic", "venom", "stops", "scales_with", "cold")
 )
+_BOLT_FIELDS = frozenset(("damage", "reach", "arcs", "spark"))
 _NUMBER_FIELDS = ("damage", "penetration", "force")
 _SCALES_WITH = frozenset(("attack", "magic"))
 
@@ -28,21 +29,37 @@ class DamageDataError(ValueError):
     """A damage config file is wrong; the message names the file and the row."""
 
 
+class Lightning:
+    """A bolt's four knobs. A bare number in the file is damage only: it hits and does not jump."""
+
+    __slots__ = ("damage", "reach", "arcs", "spark")
+
+    def __init__(self, damage, reach, arcs, spark):
+        self.damage = damage
+        self.reach = reach
+        self.arcs = arcs
+        self.spark = spark
+
+    def __repr__(self):
+        return (f"Lightning(damage={self.damage:g}, reach={self.reach:g}, "
+                f"arcs={self.arcs}, spark={self.spark:g})")
+
+
 class AttackDef:
     """One attack def. Shared: never change one after load.
 
-    magic is ((category_id, power), ...). magic_mask has a bit for each of those categories and
-    for every parent above them (fire also sets elemental), so a resistance to a whole family is
-    one AND.
+    magic is ((category_id, power), ...) for what is still a flat category (fire, holy, unholy).
+    Ice is `cold` (a temperature). Lightning is a Lightning. magic_mask still has a bit for ice
+    and lightning and for every parent (fire also sets elemental).
     """
 
     __slots__ = (
         "id", "name", "delivery", "damage", "penetration", "force",
-        "magic", "magic_mask", "venom", "stops", "scales_with",
+        "magic", "magic_mask", "venom", "stops", "scales_with", "cold", "lightning",
     )
 
     def __init__(self, id, name, delivery, damage, penetration, force,
-                 magic, magic_mask, venom, stops, scales_with):
+                 magic, magic_mask, venom, stops, scales_with, cold=0, lightning=None):
         self.id = id
         self.name = name
         self.delivery = delivery
@@ -54,6 +71,8 @@ class AttackDef:
         self.venom = venom
         self.stops = stops
         self.scales_with = scales_with
+        self.cold = cold
+        self.lightning = lightning
 
     def __repr__(self):
         return f"AttackDef({self.name!r})"
@@ -116,6 +135,29 @@ def _number(path, name, field, value):
     return value
 
 
+def _lightning(path, name, value):
+    """A bare number, or {damage, reach, arcs, spark}. Missing reach, arcs and spark are 0."""
+    where = f"{path}: attack {name!r}: lightning"
+    if isinstance(value, bool) or isinstance(value, (int, float)):
+        return Lightning(_number(path, name, "lightning", value), 0.0, 0, 0.0)
+    if not isinstance(value, dict):
+        raise DamageDataError(f"{where} must be a number or an object")
+    unknown = set(value) - _BOLT_FIELDS
+    if unknown:
+        raise DamageDataError(f"{where}: unknown field(s) {sorted(unknown)}")
+    if "damage" not in value:
+        raise DamageDataError(f"{where}: needs damage")
+    arcs = value.get("arcs", 0)
+    if isinstance(arcs, bool) or not isinstance(arcs, int) or arcs < 0:
+        raise DamageDataError(f"{where}: arcs must be a whole number >= 0, got {arcs!r}")
+    return Lightning(
+        _number(path, name, "lightning damage", value["damage"]),
+        _number(path, name, "lightning reach", value.get("reach", 0)),
+        arcs,
+        _number(path, name, "lightning spark", value.get("spark", 0)),
+    )
+
+
 def _attack_def(path, attack_id, name, row, categories):
     where = f"{path}: attack {name!r}"
     if not isinstance(row, dict):
@@ -134,11 +176,23 @@ def _attack_def(path, attack_id, name, row, categories):
         raise DamageDataError(f"{where}: magic must be a category -> power map")
     magic = []
     mask = 0
+    ice_power = None
+    lightning = None
     for category, power in magic_row.items():
         if category not in categories.ids:
             raise DamageDataError(f"{where}: unknown magic category {category!r}")
-        magic.append((categories.ids[category], _number(path, name, f"magic {category}", power)))
         mask |= categories.mask(category)
+        if category == "ice":
+            ice_power = _number(path, name, "magic ice", power)
+            continue
+        if category == "lightning":
+            lightning = _lightning(path, name, power)
+            continue
+        magic.append((categories.ids[category], _number(path, name, f"magic {category}", power)))
+    if "cold" in row:
+        cold = _number(path, name, "cold", row["cold"])
+    else:
+        cold = 0 if ice_power is None else ice_power
     venom = row.get("venom")
     if venom is not None:
         if (not isinstance(venom, dict) or set(venom) != {"id", "dose"}
@@ -153,7 +207,7 @@ def _attack_def(path, attack_id, name, row, categories):
         raise DamageDataError(f"{where}: scales_with must be one of {sorted(_SCALES_WITH)}")
     return AttackDef(
         attack_id, name, delivery, numbers["damage"], numbers["penetration"], numbers["force"],
-        tuple(magic), mask, venom, stops, scales_with,
+        tuple(magic), mask, venom, stops, scales_with, cold, lightning,
     )
 
 
@@ -199,7 +253,7 @@ LAYER_NUMBERS = ("stopping_power", "absorb", "flammability", "conductivity", "in
                  "weight", "durability")
 LAYER_SHARES = ("absorb", "flammability", "conductivity", "insulation")   # 0..1
 _LAYER_FIELDS = frozenset(LAYER_NUMBERS + ("sealed",))
-_BODY_FIELDS = frozenset(("kind", "natural"))
+_BODY_FIELDS = frozenset(("kind", "natural", "resist", "starts"))
 
 
 class LayerDef:
@@ -219,15 +273,18 @@ class LayerDef:
 
 
 class BodyDef:
-    """A creature's constants: its kind and its natural layer. Mass is in monster_data."""
+    """A creature's constants: its kind, its natural layer, its resists, what it starts as.
+    Mass is in monster_data. A resist may be negative; the rule clamps it until chunk 9."""
 
-    __slots__ = ("id", "name", "kind", "natural")
+    __slots__ = ("id", "name", "kind", "natural", "resist", "starts")
 
-    def __init__(self, id, name, kind, natural):
+    def __init__(self, id, name, kind, natural, resist, starts):
         self.id = id
         self.name = name
         self.kind = kind
         self.natural = natural
+        self.resist = resist
+        self.starts = starts
 
     def __repr__(self):
         return f"BodyDef({self.name!r})"
@@ -280,7 +337,23 @@ def load_bodies(path=BODIES_PATH, kinds=None):
         natural = row.get("natural", {})
         if not isinstance(natural, dict):
             raise DamageDataError(f"{where}: natural must be a property -> value map")
-        bodies.append(BodyDef(body_id, name, row["kind"], layer_def(name, natural, where)))
+        resist = row.get("resist", {})
+        if not isinstance(resist, dict):
+            raise DamageDataError(f"{where}: resist must be a category -> number map")
+        clean_resist = {}
+        for category, value in resist.items():
+            if category not in CATEGORIES.ids:
+                raise DamageDataError(f"{where}: unknown resist {category!r}")
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise DamageDataError(f"{where}: resist {category} must be a number, got {value!r}")
+            clean_resist[category] = value
+        starts = row.get("starts", [])
+        if not isinstance(starts, list) or not all(isinstance(name, str) and name for name in starts):
+            raise DamageDataError(f"{where}: starts must be a list of condition names")
+        bodies.append(BodyDef(
+            body_id, name, row["kind"], layer_def(name, natural, where),
+            clean_resist, tuple(starts),
+        ))
     return bodies
 
 
