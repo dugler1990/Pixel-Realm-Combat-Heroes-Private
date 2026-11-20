@@ -11,7 +11,6 @@ from CombatStrategy import MeleeCombatStrategy,RangedCombatStrategy,MixedCombatS
 import random
 import os
 import cv2
-from Interaction import InteractionContext
     
 # This is for file importing but is in Main.py anyways
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +18,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 class Enemy(Entity):
     # "move" is the walk cycle; "idle" and "attack" stay time-based.
     WALK_STATUSES = frozenset({"move"})
+    takes_impulse = False
 
     def __init__(self,
                  monster_name,
@@ -502,51 +502,6 @@ class Enemy(Entity):
         if not self.vulnerable:
             if current_time - self.hit_time >= self.invincibility_duration:
                 self.vulnerable = True
-    #@profile
-    def get_damage(self, player, attack_type):
-        if self.vulnerable:
-            self.hit_sound.play()
-            self.direction = self.get_player_distance_direction(player)[1] # Faces you when hit ? not sure about this
-            if attack_type == "weapon":
-                self.health -= player.get_full_weapon_damage()
-            else:
-                self.health -= player.get_full_magic_damage()
-            self.hit_time = pygame.time.get_ticks()
-            #self.vulnerable = False
-
-    def can_receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            return True
-        if ctx.kind != "damage":
-            return False
-        if ctx.source_team == self.team_id:
-            return False
-        return True
-
-    def receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            super().receive_interaction(ctx)
-            return
-        if ctx.kind != "damage":
-            return
-        source = ctx.source
-        if ctx.amount is None and source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
-            attack_type = "weapon" if ctx.attack_type == "weapon" else "magic"
-            self.get_damage(source, attack_type)
-            return
-        amount = ctx.amount
-        if amount is None:
-            return
-        if self.vulnerable:
-            self.health -= amount
-            self.hit_time = pygame.time.get_ticks()
-    #@profile
-    def take_environmental_damage(self, amount, damage_type):
-        """Apply environmental damage (e.g. heat); uses same vulnerability and invincibility as get_damage."""
-        if self.vulnerable:
-            self.health -= amount
-            self.hit_time = pygame.time.get_ticks()
-            self.check_death()
     #@profile
     def check_death(self):
         if self.health <= 0:

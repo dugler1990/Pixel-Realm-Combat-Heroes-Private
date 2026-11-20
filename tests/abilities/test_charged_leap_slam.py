@@ -66,6 +66,8 @@ class _StubHitbox:
 
 
 class _StubTarget:
+    takes_impulse = True  # Entity's class field; the stub borrows Entity's gate
+
     def __init__(self, x=0, y=0, team_id="enemy", target_id="target-1"):
         self.id = target_id
         self.team_id = team_id
@@ -103,6 +105,7 @@ class _StubTarget:
 
         if ctx.kind == "damage":
             self.damage_received += ctx.amount or 0
+            return
         Entity.receive_interaction(self, ctx)
 
 

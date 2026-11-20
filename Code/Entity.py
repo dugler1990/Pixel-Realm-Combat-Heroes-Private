@@ -93,6 +93,7 @@ def knockback_scale(body):
 
 class Entity(pygame.sprite.Sprite):
     casts_shadow = True  # entities (player/enemies/friendlies) drop directional shadows
+    takes_impulse = True  # False: shoves (knockback) do not move this body (can_receive_interaction)
     # Statuses whose animation is a walk cycle, and so phased on distance rather than time.
     # Declared per subclass because each has its own vocabulary: the player uses bare
     # direction names, enemies and friendlies "move", neutrals "walking". A status missing
@@ -1147,20 +1148,40 @@ class Entity(pygame.sprite.Sprite):
         elif self.can_receive_interaction(ctx):
             self.receive_interaction(ctx)
 
-    def take_environmental_damage(self, amount, damage_type):
-        """Override in subclasses that have health. Base Entity does nothing."""
-        pass
-
     def can_receive_interaction(self, ctx: InteractionContext):
+        """The body's own gate; the resolver asks it after the team rule. Effects always reach.
+        A shove needs `takes_impulse` and an enemy team (or the friendly-fire tag). Damage
+        needs another team and health left."""
         if ctx.kind == "effect_state":
             return True
         if ctx.kind == "impulse":
+            if not self.takes_impulse:
+                return False
             if "friendly_fire_impulse" in ctx.tags:
                 return True
+            return ctx.source_team is None or ctx.source_team != getattr(self, "team_id", None)
+        if ctx.kind == "damage":
             if ctx.source_team is not None and ctx.source_team == getattr(self, "team_id", None):
                 return False
-            return True
-        return True
+            return getattr(self, "health", 1) > 0
+        return False
+
+    def take_damage(self, ctx: InteractionContext):
+        """The one place health goes down. The resolver already decided that the hit lands and
+        set its amount; this subtracts it, stamps the hit and lets the body react (`on_hurt`)."""
+        amount = ctx.amount
+        if not amount:
+            return
+        self.health -= amount
+        self.hit_time = pygame.time.get_ticks()
+        self.on_hurt(ctx)
+
+    def on_hurt(self, ctx: InteractionContext):
+        """A body's reaction to damage it took. Default: its hit sound, except for the ground's own
+        damage (heat). Override for more."""
+        sound = getattr(self, "hit_sound", None)
+        if sound is not None and ctx.source_kind != "environment":
+            sound.play()
 
     def cancel_displacement_abilities(self) -> None:
         for attr in ("_dash_runtime", "_leap_runtime"):
@@ -1217,7 +1238,8 @@ class Entity(pygame.sprite.Sprite):
                 payload["friction_multiplier"] = ctx.source.get_friction_multiplier()
             self.effect_state[effect_key] = payload
             return
-        return
+        if ctx.kind == "damage":
+            self.take_damage(ctx)
 
     def line_rect_intersection(start_point, end_point, rect):
         x1, y1 = start_point

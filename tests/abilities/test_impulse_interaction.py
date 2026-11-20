@@ -66,6 +66,8 @@ class _StubHitbox:
 
 
 class _StubEntity:
+    takes_impulse = True  # Entity's class field; the stub borrows Entity's gate
+
     def __init__(self, team_id="enemy"):
         self.team_id = team_id
         self.rect = _StubRect()
@@ -100,6 +102,7 @@ class _StubEntity:
 
 
 class _StubPlayer:
+    takes_impulse = True  # Entity's class field; the stub borrows the player's gate
     team_id = "player"
 
     def __init__(self):

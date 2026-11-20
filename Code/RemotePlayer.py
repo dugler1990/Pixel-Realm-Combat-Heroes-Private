@@ -178,25 +178,15 @@ class RemotePlayer(BasePlayer):
         self.incoming_hits = []
         return hits
 
-    def receive_interaction(self, ctx):
-        # Server mode: RECORD the damage for relay; do NOT touch local health (the
-        # owning client is authoritative -- its own i-frames/death). Mirrors the
-        # amount-resolution in BasePlayer.receive_interaction. Client mode: defer
-        # to the inherited behavior (unused on a render-only puppet, but correct).
+    def take_damage(self, ctx):
+        # Server mode: RECORD the priced damage for relay; do NOT touch local health
+        # (the owning client is authoritative -- its own i-frames/death). Client
+        # mode: the inherited behavior (unused on a render-only puppet, but correct).
         if not self._server_mode:
-            return super().receive_interaction(ctx)
-        if getattr(ctx, "kind", None) != "damage":
+            return super().take_damage(ctx)
+        if not ctx.amount:
             return
-        amount = ctx.amount
-        if amount is None:
-            src = ctx.source
-            if src is not None and hasattr(src, "get_full_weapon_damage") and hasattr(src, "get_full_magic_damage"):
-                amount = (src.get_full_weapon_damage()
-                          if ctx.attack_type == "weapon"
-                          else src.get_full_magic_damage())
-        if amount is None or amount == 0:
-            return
-        self.incoming_hits.append((amount, ctx.attack_type))
+        self.incoming_hits.append((ctx.amount, ctx.attack_type))
 
     def _sync_position_from_snapshot(self):
         # v0 "snap" (no interpolation): teleport to each authoritative position.

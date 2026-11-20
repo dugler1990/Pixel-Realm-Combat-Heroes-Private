@@ -17,7 +17,7 @@ pygame.init()
 
 import body_regions  # noqa: E402
 import hit_resolve  # noqa: E402
-from Enemy import Enemy  # noqa: E402
+from Entity import Entity  # noqa: E402
 from Interaction import InteractionContext, InteractionResolver  # noqa: E402
 from damage_data import LayerDef, attack, body  # noqa: E402
 from damage_rules import Physical, landed  # noqa: E402
@@ -156,25 +156,15 @@ def test_no_contact_uses_the_chest_stack(monkeypatch):
     assert seen["layers"][0] is PLATE and HIDE in seen["layers"]
 
 
-def test_apply_sets_the_landed_int_and_the_shortcut_subtracts_it():
-    """A player-shaped source used to make Enemy ignore ctx.amount and call get_damage."""
+def test_apply_sets_the_landed_int_and_the_body_subtracts_it():
+    """A priced hit keeps its price: the attacker's flat weapon damage (999) is not used."""
     target = SimpleNamespace(
         body_def=body("raccoon"), defence=natural_profile(body("raccoon")),
         team_id="enemy_1", health=100, vulnerable=True, hit_time=0,
-        can_receive_interaction=lambda ctx: True,
+        can_receive_interaction=lambda ctx: True, on_hurt=lambda ctx: None,
     )
-
-    def receive(ctx):
-        Enemy.receive_interaction(target, ctx)
-
-    target.receive_interaction = receive
-    called = {"get_damage": 0}
-
-    def get_damage(source, attack_type):
-        called["get_damage"] += 1
-        target.health -= 999
-
-    target.get_damage = get_damage
+    target.take_damage = lambda ctx: Entity.take_damage(target, ctx)
+    target.receive_interaction = lambda ctx: Entity.receive_interaction(target, ctx)
     source = SimpleNamespace(
         stats={"attack": 10}, team_id="player", rect=pygame.Rect(0, 0, 8, 8),
         get_full_weapon_damage=lambda: 999, get_full_magic_damage=lambda: 999,
@@ -184,6 +174,5 @@ def test_apply_sets_the_landed_int_and_the_shortcut_subtracts_it():
         target=target, attack_type="weapon", attack_def=attack("sword"),
     )
     assert InteractionResolver().apply(ctx) is True
-    assert called["get_damage"] == 0
     lost = 100 - target.health
     assert ctx.amount == lost and lost != 999 and lost < 100

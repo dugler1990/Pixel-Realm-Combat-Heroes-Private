@@ -543,8 +543,6 @@ class Spawner:
             "level": level,
             "default_target": level.player,
         }
-        if 'damage_player' in combat_config.keys():# keys is not the best, its got True False atm for no reason , no biggy TODO:
-            context['damage_player'] = level.damage_player
         if 'fire_projectile' in combat_config.keys():
             context['fire_projectile'] = level.fire_projectile
         if 'redirect_projectile' in combat_config.keys():

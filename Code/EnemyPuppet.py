@@ -27,6 +27,8 @@ from combat_unit import CombatUnit
 
 
 class EnemyPuppet(CombatUnit):
+    takes_impulse = False  # the host moves the real enemy; the puppet only follows its snapshots
+
     def __init__(self, enemy_id, monster_name, center, groups, obstacle_sprites, level):
         # Reuse CombatUnit.__init__ for the full graphics/mask/stat setup. Pass a
         # minimal combat_context (no "update_quad_tree" key -> the unit registers
@@ -116,24 +118,16 @@ class EnemyPuppet(CombatUnit):
     def combat_update(self, *args, **kwargs):
         return None
 
-    def receive_interaction(self, ctx):
+    def take_damage(self, ctx):
         """Co-op (C2): the JOINER's attack hit this puppet. The enemy is
-        host-authoritative, so we DON'T change health here -- we resolve the
-        damage from OUR player's stats (the host lacks them) the same way
-        CombatUnit.receive_interaction would, and relay it to the host, which
-        applies it to the real enemy. Health/death come back via the C1 relay.
-        Relayed by the attack's repeat rule (InteractionResolver.strike): once per
-        attack by default, or again every rehit_ms.
+        host-authoritative, so we DON'T change health here. The resolver priced
+        the hit from OUR player's stats (the host lacks them); we relay that
+        amount to the host, which applies it to the real enemy. Health/death come
+        back via the C1 relay. Relayed by the attack's repeat rule
+        (InteractionResolver.strike): once per attack by default, or again every
+        rehit_ms.
         """
-        if getattr(ctx, "kind", None) != "damage":
-            return
         amount = ctx.amount
-        if amount is None:
-            source = ctx.source
-            if (source is not None and hasattr(source, "get_full_weapon_damage")
-                    and hasattr(source, "get_full_magic_damage")):
-                amount = (source.get_full_weapon_damage() if ctx.attack_type == "weapon"
-                          else source.get_full_magic_damage())
         if amount is None:
             return
         self.level._queue_enemy_hit(self.enemy_id, amount, ctx.attack_type)

@@ -33,6 +33,8 @@ class InteractionContext:
     # The attack's travel on the ground (a shot's movement). None: source to target, and a
     # torso hit counts as chest (body_regions).
     toward: Optional[Tuple[float, float]] = None
+    # Damage that keeps coming (heat, cold): it is not stopped by the invulnerable window a hit opens.
+    over_time: bool = False
 
 
 class FactionPolicy:
@@ -335,20 +337,22 @@ class FactionPolicy:
         return relation == "hostile"
 
     def register_retaliation(self, target: Any, attacker_team: Optional[str], now_ms: int):
-        if attacker_team is None:
-            return
+        """Who hit this body, until when. A body that keeps `recent_attacker_*` (its AI reads it)
+        gets it set; a `retaliate_only` faction also gets `retaliate_*`, which its aggro rule reads."""
         target_team = getattr(target, "team_id", None)
+        if attacker_team is None or attacker_team == target_team:
+            return
         target_faction = self.resolve_faction(target_team)
-        if target_faction is None:
-            return
-        if target_faction.get("aggro_mode") != "retaliate_only":
-            return
-        retaliation_window_ms = target_faction.get(
-            "retaliation_window_ms",
-            self.default_retaliation_window_ms,
-        )
-        setattr(target, "retaliate_team_id", attacker_team)
-        setattr(target, "retaliate_until_ms", now_ms + retaliation_window_ms)
+        window_ms = self.default_retaliation_window_ms
+        if target_faction is not None:
+            window_ms = target_faction.get("retaliation_window_ms", window_ms)
+        if hasattr(target, "recent_attacker_team_id"):
+            target.recent_attacker_team_id = attacker_team
+            target.recent_attacker_until_ms = now_ms + window_ms
+            target._aggro_target_cache = None
+        if target_faction is not None and target_faction.get("aggro_mode") == "retaliate_only":
+            target.retaliate_team_id = attacker_team
+            target.retaliate_until_ms = now_ms + window_ms
 
 
 class InteractionResolver:
@@ -447,6 +451,14 @@ class InteractionResolver:
             self._record_rejected_team()
             self._record_rejected_reason("team_policy")
             return False
+        return self.land(ctx)
+
+    def land(self, ctx: InteractionContext) -> bool:
+        """Everything after the team rule: the body's gate, the invulnerable window, the price,
+        the elements, then the body applies it. A hit the server already passed (the co-op
+        relay) starts here."""
+        target = ctx.target
+        target_team = getattr(target, "team_id", None)
         if hasattr(target, "can_receive_interaction") and not target.can_receive_interaction(ctx):
             _interaction_log.debug(
                 "interaction reject reason=target_gate source_kind=%r source_team=%r target_team=%r kind=%r attack_type=%r amount=%r",
@@ -473,13 +485,14 @@ class InteractionResolver:
             self._record_rejected_target()
             self._record_rejected_reason("no_receive_interaction")
             return False
-        from damage_rules import landed
-        from hit_resolve import apply_element, resolve
-
-        priced = resolve(ctx)
-        if priced is not None:
-            ctx.amount = landed(priced)
-            apply_element(ctx, priced, self._now_ms())
+        if ctx.kind == "damage":
+            # Checked before the price, so a blocked hit starts no fire, chill or retaliation.
+            # It is still spent: True, so the attack counts the target as hit and does not
+            # land when the window ends (what the receivers did before).
+            if not ctx.over_time and not getattr(target, "vulnerable", True):
+                self._record_rejected_reason("invulnerable")
+                return True
+            self._price(ctx)
         target.receive_interaction(ctx)
         if contact_debug.ENABLED and ctx.contact is not None:
             contact_debug.record(ctx.contact, self._now_ms(), contact_debug.kind_of(target, ctx.contact))
@@ -497,6 +510,25 @@ class InteractionResolver:
         )
         self._record_resolved(ctx)
         return True
+
+    def _price(self, ctx: InteractionContext) -> None:
+        """The one place a hit's amount is set. An attack def is priced by hit_resolve (and
+        starts its elements). Without one, a stated amount stays, and a hit with no amount
+        takes the attacker's weapon or magic damage."""
+        from damage_rules import landed
+        from hit_resolve import apply_element, resolve
+
+        priced = resolve(ctx)
+        if priced is not None:
+            ctx.amount = landed(priced)
+            apply_element(ctx, priced, self._now_ms())
+            return
+        source = ctx.source
+        if ctx.amount is None and hasattr(source, "get_full_weapon_damage"):
+            if ctx.attack_type == "weapon":
+                ctx.amount = source.get_full_weapon_damage()
+            elif hasattr(source, "get_full_magic_damage"):
+                ctx.amount = source.get_full_magic_damage()
 
     def strike(self, targets, hits=None, rehit_ms=None, contacts=None, **fields) -> list:
         """Apply one flat-damage attack to every target it touched: team prefilter, the

@@ -32,7 +32,13 @@ drawn, and armour is where each piece is drawn, not a whole body region.
 - New types, categories, properties and rules are **rows in data**, not new code paths.
 - Simple bodies stay simple: a body with no worn layers and no conditions takes the fast path.
   Layers, wear and stuck arrows are opt-in (player, key bosses).
-- **One place computes damage**: the resolver. Receivers subtract `ctx.amount` and nothing else.
+- **One damage path.** Every hit, lava tick and co-op relay goes through `InteractionResolver`
+  (`apply` = team rule, then `land`). `land` **decides**: the body's gate
+  (`Entity.can_receive_interaction`, one copy, `takes_impulse` per class), the invulnerable window
+  (`ctx.over_time` passes it), the price (`_price`: attack def, else the stated amount, else the
+  attacker's weapon or magic damage), the elements. `Entity.take_damage` is the one place health goes
+  down; a class reacts in `on_hurt` (sound, i-frames, particles, death). The resolver also records
+  the attacker (`register_retaliation`).
 - The rules are **pure functions** (no pygame, no entities): the card, the tests and the resolver
   all call the same ones.
 
@@ -324,14 +330,13 @@ a time and nothing breaks between them.
 Flags found while reading:
 - `attack_type` does three jobs: combat strategy (`Settings.py:382`), particle key (`Player.py:179`),
   weapon vs magic (`Player.py:220`).
-- Damage amount for player attacks is computed in two receivers (`Player.py:222`,
-  `combat_unit.py:841`), not in the resolver.
+- ~~Damage amount for player attacks is computed in receivers~~, ~~`PolarBear.py`, `Eskimo.py` keep
+  an older `get_damage`~~, ~~`Melee/Mixed/RangedCombatStrategy.py` not imported~~: fixed by the
+  damage path (`refactor/damage-path`, 2026-11-20). Pricing is in the resolver; every `get_damage`
+  and the three files are gone.
 - demon_dog, venom_plant and ice_mage share `demon_dog_projectile` with the same damage 15.
-- `PolarBear.py`, `Eskimo.py` keep an older `get_damage(player, attack_type)` path.
-- `MeleeCombatStrategy.py`, `MixedCombatStrategy.py`, `RangedCombatStrategy.py` are not imported
-  anywhere (the live strategies are classes in `CombatStrategy.py`). Left alone.
-- Enemies never set `vulnerable = False` (commented out in every `get_damage`), so they have no
-  i-frames; repeat hits are limited only by each attack's `rehit_ms`.
+- Enemies never set `vulnerable = False`, so they have no i-frames; repeat hits are limited only by
+  each attack's `rehit_ms`. Kept as it was.
 
 ## Tests
 
@@ -436,8 +441,10 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 `refactor/knockback-mass` (1) → `refactor/attack-defs` (2) → `refactor/contact-point` (3) →
 `refactor/defence-layers` (4, with `main` merged in) → `refactor/visual-hits` (4b) →
 `refactor/physical-resolve` (5, built, not watched in the window) → `refactor/conditions` (6, built)
-→ `refactor/elemental` (7, built, not watched in the window).
-Tests: the targeted set, same 11 known failures (517 passed after chunk 7, 12 of them new). In play, knockback uses
+→ `refactor/elemental` (7, built, not watched in the window) → `refactor/damage-path` (one damage
+path, worktree `..\Pixel-Realm-damage-path`, from 7's last commit; the temperature work still
+uncommitted in `..\Pixel-Realm-elemental` does not have it yet).
+Tests: the targeted set, same 11 known failures (528 passed after the damage path). In play, knockback uses
 mass and worn weight, the mesh hero is hit on his points, a pierce stops on plate, a haste buff
 adds to speed until its end (the `haste` scene is the only thing that grants it), and a fire or ice
 hit on a body card uses the elemental rule.
@@ -490,7 +497,8 @@ hit on a body card uses the elemental rule.
   tests/test_hit_core.py tests/test_server_enemy_authority.py tests/test_walk_animation_phasing.py
   tests/test_wall_collision.py tests/test_enemy_puppet.py tests/test_entity_gates.py
   tests/test_coop_player_damage.py tests/test_headless_level.py tests/test_mesh_contact.py
-  tests/test_mesh_player.py tests/test_equipment.py -q -p no:cacheprovider -rfE`.
+  tests/test_mesh_player.py tests/test_equipment.py tests/test_server_players.py
+  -q -p no:cacheprovider -rfE`.
   Known failures (11, before chunk 1): test_enemy_dash 1, test_player_charge_controller 1,
   rts/test_gather 1, test_enemy_puppet 2, test_entity_gates 2, test_coop_player_damage 2,
   test_mesh_contact 2.
@@ -515,6 +523,11 @@ hit on a body card uses the elemental rule.
 - `Path.read_text()` turns CRLF into LF, so a script that checks for `\r\n` after it finds none
   and writes the file back with LF (git shows no diff, autocrlf, but the working copy changes).
   Read and write bytes (`read_bytes`) and keep the file's own endings.
+- Outside the targeted set, `test_remote_player.py` (2: snapshot position and facing, camera kwargs)
+  and `test_multiplayer_level_inbox.py::test_state_update_applies_snapshot_to_existing_remote` fail
+  on `refactor/elemental` too. Not from the damage work. Not fixed.
+- A test stub that borrows `Entity.can_receive_interaction` needs `takes_impulse = True` (the class
+  field it reads); one that borrows `Entity.receive_interaction` for damage needs `take_damage`.
 
 ## Log
 
@@ -589,6 +602,18 @@ hit on a body card uses the elemental rule.
   against 8 bodies 3.3 µs (20k calls). Not per frame. Targeted set: 11 failed (the same names) /
   517 passed. Not watched in the window. Holy, unholy, a weakness that increases damage, and venom
   stay in 9 and 8.
+- 2026-11-20: one damage path (`refactor/damage-path`, from 7's last commit). Before: 8 receivers
+  each priced, gated and subtracted (`get_damage` in Player, Enemy, CombatUnit, Friendly, Eskimo,
+  PolarBear, Trap; `take_environmental_damage`; `receive_interaction` copies), plus dead
+  `Level4.damage_player` and three unimported strategy files. Now: resolver `land` decides,
+  `Entity.take_damage` applies, `on_hurt` reacts. Changes in behaviour: a hit in the invulnerable
+  window no longer starts elements or retaliation (still spent, as before); enemies, neutrals and
+  workers play their hit sound on every non-ground hit (only the old amount-less path did); enemies
+  no longer turn to face the player when hit (only that old path did); the attacker memory of
+  CombatUnit and Friendly moved into `register_retaliation`; the co-op relay goes through `land`;
+  Player `hurt_time` is `hit_time` like everyone else. Targeted set: 11 failed, the same names as
+  before; 528 passed (517 before, plus `test_server_players` 5 and the new
+  `tests/damage/test_damage_path.py` 6).
 
 ## Tried and dropped
 

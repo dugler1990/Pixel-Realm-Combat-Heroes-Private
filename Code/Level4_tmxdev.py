@@ -1680,23 +1680,6 @@ class Level4:
         resolved_damage = int(round(self._safe_number(base_damage, 0.0) * multiplier + bonus))
         return max(0, resolved_damage)
 
-    def damage_player(self, amount, attack_type=None):
-        
-        
-        #print(f"made it to damage player , vulerable: {self.player.vulnerable}")
-        #print(amount)
-        
-        if self.player.vulnerable:
-            self.player.health -= amount
-            self.player.vulnerable = False
-            self.player.hurt_time = pygame.time.get_ticks()
-            
-            if attack_type:
-                if attack_type != 'melee': ## TODO : a at the moment this is recieving attack type to do attack particles, 
-                                                    # we do not have any attack particles for this so screw it.
-                                                    
-                    self.animation_player.create_particles(attack_type, self.player.rect.center, [self.layout_manager.visible_sprites])
-
     def trigger_death_particles(self, pos, particle_type):
         # Server: the death FX ride the enemy_died event (each client plays them);
         # nothing is rendered here.
@@ -2009,8 +1992,8 @@ class Level4:
 
             elif mtype == MSG_HIT_PLAYER:
                 # CS4: a server-owned enemy hit a player. Apply to MY real player
-                # only (each client filters by target_player_id); the local player's
-                # own get_damage handles i-frames + death.
+                # only (each client filters by target_player_id); the resolver and the
+                # local player handle i-frames + death.
                 if message.get("target_player_id") == my_id:
                     self._apply_relayed_player_hit(message.get("amount"),
                                                    message.get("attack_type"))
@@ -2378,14 +2361,19 @@ class Level4:
     #  server-mode methods on this class (gather_enemy_relay / apply_enemy_hit).)
 
     def _apply_relayed_player_hit(self, amount, attack_type):
-        """CS4: a server-owned enemy hit MY player. Apply the relayed damage to
-        the real local player via the existing get_damage, so its i-frames,
-        hurt-flash, and death all behave exactly as in singleplayer. The server
-        resolved the amount and gates nothing -- the local player's own
-        `vulnerable` window is authoritative for its own health."""
+        """CS4: a server-owned enemy hit MY player. The server already priced it
+        and applied the team rule, so it enters the resolver after that rule
+        (`land`): the local player's own invulnerable window, hurt reaction and
+        death behave exactly as in singleplayer."""
         if amount is None:
             return
-        self.player.get_damage(amount, attack_type)
+        self.interaction_resolver.land(InteractionContext(
+            kind="damage",
+            source_kind="relay",
+            target=self.player,
+            amount=amount,
+            attack_type=attack_type,
+        ))
 
     #@profile
     def run(self,dt):

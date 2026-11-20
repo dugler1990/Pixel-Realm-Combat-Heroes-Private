@@ -95,23 +95,26 @@ def test_kill_removes_from_render_group():
 # -- C2: a hit on the puppet is RESOLVED locally + RELAYED, never applied to the
 #    puppet's own health (the enemy is host-authoritative) --
 
-def test_receive_interaction_relays_resolved_amount_and_does_not_change_health():
+def test_a_hit_relays_the_amount_the_resolver_priced_and_does_not_change_health():
+    from Interaction import InteractionContext, InteractionResolver
+
     p = _make_puppet(center=(0, 0))
     p.apply_snapshot(0, 0, "idle", "right", health=100)
     captured = []
     p.level = SimpleNamespace(_queue_enemy_hit=lambda eid, amt, at: captured.append((eid, amt, at)))
     source = SimpleNamespace(get_full_weapon_damage=lambda: 25, get_full_magic_damage=lambda: 40)
+    resolver = InteractionResolver()
 
-    weapon_ctx = SimpleNamespace(kind="damage", amount=None, source=source,
-                                 attack_type="weapon", source_team="player", target=p)
-    p.receive_interaction(weapon_ctx)
-    assert captured == [(p.enemy_id, 25, "weapon")]   # weapon damage resolved from OUR stats
+    weapon_ctx = InteractionContext(kind="damage", source_kind="player_attack", amount=None,
+                                    source=source, attack_type="weapon", source_team="player", target=p)
+    assert resolver.land(weapon_ctx) is True
+    assert captured == [(p.enemy_id, 25, "weapon")]   # weapon damage priced from OUR stats
     assert p.health == 100                            # host owns health; puppet untouched
 
     captured.clear()
-    magic_ctx = SimpleNamespace(kind="damage", amount=None, source=source,
-                                attack_type="magic", source_team="player", target=p)
-    p.receive_interaction(magic_ctx)
+    magic_ctx = InteractionContext(kind="damage", source_kind="player_attack", amount=None,
+                                   source=source, attack_type="magic", source_team="player", target=p)
+    assert resolver.land(magic_ctx) is True
     assert captured == [(p.enemy_id, 40, "magic")]
     assert p.health == 100
 

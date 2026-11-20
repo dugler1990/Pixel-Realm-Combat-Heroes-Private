@@ -11,7 +11,6 @@ from CombatStrategy import MeleeCombatStrategy,RangedCombatStrategy,MixedCombatS
 import random
 import os
 import cv2
-from Interaction import InteractionContext
     
 # This is for file importing but is in Main.py anyways
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +18,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 class Friendly(Entity):
     # "move" is the walk cycle; "idle" and "attack" stay time-based.
     WALK_STATUSES = frozenset({"move"})
+    takes_impulse = False
 
     def __init__(self,
                  monster_name,
@@ -452,61 +452,6 @@ class Friendly(Entity):
         if not self.vulnerable:
             if current_time - self.hit_time >= self.invincibility_duration:
                 self.vulnerable = True
-    #@profile
-    
-    # TODO: intervention 3
-    # Need to get damage from enemies like player
-    def get_damage(self, player, attack_type):
-        if self.vulnerable:
-            self.hit_sound.play()
-            self.direction = self.get_player_distance_direction(player)[1]
-            if attack_type == "weapon":
-                self.health -= player.get_full_weapon_damage()
-            else:
-                self.health -= player.get_full_magic_damage()
-            self.hit_time = pygame.time.get_ticks()
-            #self.vulnerable = False
-
-    def can_receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            return True
-        if ctx.kind != "damage":
-            return False
-        if ctx.source_team == self.team_id:
-            return False
-        return True
-
-    def receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            super().receive_interaction(ctx)
-            return
-        if ctx.kind != "damage":
-            return
-        source_team = ctx.source_team
-        if source_team and source_team != self.team_id:
-            self.recent_attacker_team_id = source_team
-            retaliation_window_ms = 12000
-            level = self.combat_context.get("level") if isinstance(self.combat_context, dict) else None
-            resolver = getattr(level, "interaction_resolver", None) if level is not None else None
-            policy = getattr(resolver, "faction_policy", None) if resolver is not None else None
-            if policy is not None and hasattr(policy, "resolve_faction"):
-                faction_def = policy.resolve_faction(getattr(self, "team_id", None))
-                if isinstance(faction_def, dict):
-                    configured_window = faction_def.get("retaliation_window_ms")
-                    if isinstance(configured_window, int) and configured_window >= 0:
-                        retaliation_window_ms = configured_window
-            self.recent_attacker_until_ms = pygame.time.get_ticks() + retaliation_window_ms
-        source = ctx.source
-        if ctx.amount is None and source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
-            attack_type = "weapon" if ctx.attack_type == "weapon" else "magic"
-            self.get_damage(source, attack_type)
-            return
-        amount = ctx.amount
-        if amount is None:
-            return
-        if self.vulnerable:
-            self.health -= amount
-            self.hit_time = pygame.time.get_ticks()
 
     def _is_valid_aggro_target(self, candidate):
         if candidate is self:

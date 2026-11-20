@@ -16,6 +16,8 @@ from ..tribe_monsters import monster_name_for_faction
 class RtsTribeMember(CombatUnit):
     """RTS worker/chief using CombatUnit locomotion and pluggable behavior drivers."""
 
+    takes_impulse = False
+
     def __init__(
         self,
         pos,
@@ -139,34 +141,9 @@ class RtsTribeMember(CombatUnit):
         self.cooldowns()
         self.check_death()
 
-    def can_receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            return True
-        if ctx.kind != "damage":
-            return False
-        if ctx.source_team == self.team_id:
-            return False
-        return self.health > 0
-
-    def receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            super().receive_interaction(ctx)
-            return
-        if ctx.kind != "damage":
-            return
-        amount = ctx.amount
-        if amount is None:
-            source = ctx.source
-            if source is not None and hasattr(source, "get_full_weapon_damage"):
-                if ctx.attack_type == "weapon":
-                    amount = source.get_full_weapon_damage()
-                elif hasattr(source, "get_full_magic_damage"):
-                    amount = source.get_full_magic_damage()
-        if amount is None:
-            return
-        if self.vulnerable:
-            self.health -= int(amount)
-            self.check_death()
+    def on_hurt(self, ctx: InteractionContext):
+        super().on_hurt(ctx)
+        self.check_death()
 
     def check_death(self):
         if self.health > 0:

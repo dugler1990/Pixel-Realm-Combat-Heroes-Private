@@ -159,7 +159,7 @@ class BasePlayer(Entity):
         
         # Damage Timer
         self.vulnerable = True
-        self.hurt_time = None
+        self.hit_time = None
         self.invulnerability_duration = 0
 
         # Import Sound
@@ -183,98 +183,25 @@ class BasePlayer(Entity):
         
     
 
-    def get_damage(self, amount, attack_type=None):
-        if self.vulnerable:
-            self.health -= amount
-            self.vulnerable = False
-            self.hurt_time = pygame.time.get_ticks()
-            
-            if attack_type:
-                if attack_type != 'melee': ## TODO : a at the moment this is recieving attack type to do attack particles, 
-                                                    # we do not have any attack particles for this so screw it.
-                    # LayoutManager is passed as obstacle_sprites; animation_player lives on level
-                    animation_player = getattr(self.level, "animation_player", None)
-                    if animation_player is not None and attack_type in getattr(animation_player, "frames", {}):
-                        animation_player.create_particles(
-                            attack_type, self.rect.center, [self.obstacle_sprites.visible_sprites]
-                        )
-
-    def can_receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            return True
-        if ctx.kind == "impulse":
-            if "friendly_fire_impulse" in ctx.tags:
-                return True
-            if ctx.source_team == self.team_id:
-                return False
-            return True
-        if ctx.kind != "damage":
-            return False
-        if ctx.source_team == self.team_id:
-            return False
-        return True
-
-    def receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "impulse":
-            force = pygame.math.Vector2(ctx.impulse_x or 0, ctx.impulse_y or 0)
-            follow_through = 0.5
-            if ctx.source is not None:
-                follow_through = float(getattr(ctx.source, "impulse_follow_through", 0.5))
-            self.apply_impulse(force, follow_through=follow_through)
-            return
-        if ctx.kind == "effect_state":
-            super().receive_interaction(ctx)
-            return
-        if ctx.kind != "damage":
-            return
-        amount = ctx.amount
-        if amount is None:
-            source = ctx.source
-            if source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
-                if ctx.attack_type == "weapon":
-                    amount = source.get_full_weapon_damage()
-                else:
-                    amount = source.get_full_magic_damage()
-        if amount is None or amount == 0:
-            return
-        health_before = self.health
-        if ctx.source_kind == "environment":
-            self.take_environmental_damage(amount, ctx.attack_type)
-            _combat_log.debug(
-                "player_damage_ingress source_kind=%r source_team=%r amount=%r attack_type=%r health_before=%r health_after=%r",
-                ctx.source_kind,
-                ctx.source_team,
-                amount,
-                ctx.attack_type,
-                health_before,
-                self.health,
-            )
-            return
-        self.get_damage(amount, ctx.attack_type)
+    def on_hurt(self, ctx: InteractionContext):
+        """Opens the invulnerable window and shows the attack's particles, if it has any."""
+        self.vulnerable = False
+        attack_type = ctx.attack_type
+        if attack_type and attack_type != "melee" and ctx.source_kind != "environment":
+            # LayoutManager is passed as obstacle_sprites; animation_player lives on level
+            animation_player = getattr(self.level, "animation_player", None)
+            if animation_player is not None and attack_type in getattr(animation_player, "frames", {}):
+                animation_player.create_particles(
+                    attack_type, self.rect.center, [self.obstacle_sprites.visible_sprites]
+                )
         _combat_log.debug(
-            "player_damage_ingress source_kind=%r source_team=%r amount=%r attack_type=%r health_before=%r health_after=%r",
+            "player_damage source_kind=%r source_team=%r amount=%r attack_type=%r health_after=%r",
             ctx.source_kind,
             ctx.source_team,
-            amount,
-            ctx.attack_type,
-            health_before,
+            ctx.amount,
+            attack_type,
             self.health,
         )
-
-    def take_environmental_damage(self, amount, damage_type):
-        """Apply environmental damage (e.g. heat); reuses vulnerability via get_damage. No attack_type so particle branch is skipped until environmental types are defined."""
-        self.get_damage(amount, None)
-
-    # def get_damage(self, player, attack_type):
-    #     if self.vulnerable:
-    #         self.hit_sound.play()
-    #         self.direction = self.get_player_distance_direction(player)[1]
-    #         if attack_type == "weapon":
-    #             self.health -= player.get_full_weapon_damage()
-    #         else:
-    #             self.health -= player.get_full_magic_damage()
-    #         self.hit_time = pygame.time.get_ticks()
-            
 
     def scale_animation(self):
         if hasattr(self, "TILESIZE"):
@@ -610,7 +537,7 @@ class BasePlayer(Entity):
                 self.can_switch_magic = True
 
         if not self.vulnerable:
-            if current_time - self.hurt_time >= self.invulnerability_duration:
+            if current_time - self.hit_time >= self.invulnerability_duration:
                 self.vulnerable = True
 
     def animate(self):
