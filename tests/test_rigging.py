@@ -198,3 +198,15 @@ def test_real_roles_files_and_a_real_walk():
     src = sources.label(sk.names, "soma")
     assert set(match(src, R.canonical(barb, "anun"), static=sources.soma.STATIC)["roles"]) == HUMAN_22
     assert set(match(src, R.canonical(demon, "demon_hand"), static=sources.soma.STATIC)["roles"]) == DEMON_20
+
+
+def test_pod_packages_carry_the_bake_code_and_the_job():
+    import io
+    import tarfile
+    from tools.boss_sprite_pipeline.rigging.pod import bake as PB
+    names = tarfile.open(fileobj=io.BytesIO(PB.pack_code())).getnames()
+    for need in ("tools/boss_sprite_pipeline/retarget_bvh.py", "tools/boss_sprite_pipeline/viewer/export_split.py",
+                 "tools/boss_sprite_pipeline/rigging/map/transfer.py", "tools/boss_sprite_pipeline/rigging/pod/pod_side.py",
+                 "tools/boss_sprite_pipeline/rigging/blender/pose_io.py"):
+        assert need in names, need
+    assert not any("__pycache__" in n for n in names)

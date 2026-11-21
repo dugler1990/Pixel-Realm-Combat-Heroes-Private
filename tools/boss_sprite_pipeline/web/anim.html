@@ -61,6 +61,7 @@
     <p id="meta"></p>
     <button id="map">map this clip</button>
     <button id="mapall" title="every clip in the list (as filtered), not yet baked on this character's current rig">map all shown</button>
+    <button id="mapallpod" title="the same clips, baked on the pod set below, many Blender processes in parallel (a CPU pod is enough)">on pod</button>
     <h2>match</h2>
     <p id="match">—</p>
     <h2>last bake</h2>
@@ -76,6 +77,7 @@
     <h2>prompt</h2>
     <label>host <input id="host" type="text" style="width:140px" placeholder="pod ip"></label>
     <label>port <input id="port" type="text" style="width:80px" placeholder="22"></label>
+    <label title="Blender processes at once on the pod; 0 = half its cores, capped by free memory (2 GB each)">parallel <input id="ppar" type="number" min="0" max="64" value="0" style="width:80px"></label>
     <label>name <input id="pname" type="text" style="width:140px"></label>
     <label>duration <input id="pdur" type="text" style="width:140px" value="1.0 2.5 1.0"></label>
     <textarea id="prompt" rows="4" style="width:100%; background:#101218; color:var(--text); border:1px solid var(--line)"></textarea>
@@ -522,6 +524,7 @@ async function refresh() {
     $("log").textContent = [head, ...(lines || [])].filter(Boolean).join("\n");
     $("map").disabled = !!run;
     $("mapall").disabled = !!run;
+    $("mapallpod").disabled = !!run;
     $("stop").style.display = run ? "" : "none";
     $("mapall").textContent = "map all shown (" + todo().length + ")";
     $("apply").disabled = !!run;
@@ -580,6 +583,18 @@ $("mapall").onclick = async () => {
   try {
     await post("/api/map_all", { character: ch.id, clips: ids });
     $("log").textContent = "baking " + ids.length + " clips in one Blender run; each shows as mapped when the run ends";
+  } catch (err) { $("log").textContent = String(err); }
+};
+$("mapallpod").onclick = async () => {
+  const ch = character();
+  const ids = todo();
+  const host = $("host").value.trim(), port = $("port").value.trim();
+  if (!host || !port) { $("log").textContent = "set the pod host and port (prompt section) first"; return; }
+  if (!ch || !ids.length) { $("log").textContent = "nothing to bake: every shown clip is already baked on this rig"; return; }
+  if (!confirm("Bake " + ids.length + " clips onto " + ch.id + " on the pod " + host + "?")) return;
+  try {
+    await post("/api/map_all_pod", { character: ch.id, clips: ids, host, port, parallel: Number($("ppar").value) || 0 });
+    $("log").textContent = "pod bake started; the first run on a pod installs Blender's Python (several minutes)";
   } catch (err) { $("log").textContent = String(err); }
 };
 $("stop").onclick = async () => {

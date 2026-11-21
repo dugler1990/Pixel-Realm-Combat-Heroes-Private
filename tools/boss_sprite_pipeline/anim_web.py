@@ -309,26 +309,74 @@ def run_map_many(clip_ids: list, character_id: str, lines: list) -> dict:
         if (view / "base.glb").is_file():
             split.append("--clips-only")
         _run(split, lines, cwd=str(PIPE))
-        run = read_json(out / "run.json", {})
-        for c in group:
-            cid = c["id"]
-            glb = view / "clips" / f"{cid}.glb"
-            if cid not in run.get("clips", {}) or not glb.is_file():
-                _log(lines, f"MISSING {cid}")
-                continue
-            one = dict(run, clips={cid: run["clips"][cid]})
-            write_json(bake_dir(character_id, cid) / "run.json", one)
-            entry = {"glb": paths.rel(glb), "rig": n, "bone_hash": rec["bone_hash"], "roles_hash": rec["roles_hash"],
-                     "bake": paths.rel(bake_dir(character_id, cid) / "run.json")}
-            record_map(cid, character_id, entry)
-            out_all[cid] = entry
-            pc = run["clips"][cid].get("pose_check") or {}
-            if pc.get("fail"):
-                fails.append(f"{cid}: {pc['worst']['bone']} {pc['worst']['deg']}")
+        record_batch(character_id, n, rec, read_json(out / "run.json", {}), view / "clips",
+                     [c["id"] for c in group], lines, fails, out_all)
         shutil.rmtree(out, ignore_errors=True)
     for f in fails:
         lines.append("pose check FAIL " + f)
     lines.append(f"MAP_ALL_DONE {len(out_all)} of {len(clip_ids)} baked, pose check FAIL on {len(fails)}")
+    return out_all
+
+
+def record_batch(character_id: str, n: int, rec: dict, run: dict, clips_dir: Path, ids: list, lines: list,
+                 fails: list, out_all: dict) -> None:
+    """One batch run.json -> each clip's own run.json + index entry. Clip glbs found elsewhere (a pod's
+    result) are copied into view/v<N>/clips. The rig block names this character's version."""
+    view_clips = paths.character_dir(character_id) / "view" / f"v{n}" / "clips"
+    view_clips.mkdir(parents=True, exist_ok=True)
+    rig = {"character": character_id, "version": n, "bone_hash": rec["bone_hash"], "roles_hash": rec["roles_hash"]}
+    got = (run.get("rig") or {})
+    if got.get("bone_hash") and got["bone_hash"] != rec["bone_hash"]:
+        _log(lines, f"WARNING bake rig hash {got['bone_hash']} is not v{n}'s {rec['bone_hash']}")
+    for cid in ids:
+        src = Path(clips_dir) / f"{cid}.glb"
+        if cid not in run.get("clips", {}) or not src.is_file():
+            _log(lines, f"MISSING {cid}")
+            continue
+        glb = view_clips / f"{cid}.glb"
+        if src.resolve() != glb.resolve():
+            shutil.copy(src, glb)
+        one = dict(run, rig=rig, clips={cid: run["clips"][cid]})
+        write_json(bake_dir(character_id, cid) / "run.json", one)
+        entry = {"glb": paths.rel(glb), "rig": n, "bone_hash": rec["bone_hash"], "roles_hash": rec["roles_hash"],
+                 "bake": paths.rel(bake_dir(character_id, cid) / "run.json")}
+        record_map(cid, character_id, entry)
+        out_all[cid] = entry
+        pc = run["clips"][cid].get("pose_check") or {}
+        if pc.get("fail"):
+            fails.append(f"{cid}: {pc['worst']['bone']} {pc['worst']['deg']}")
+
+
+def run_map_pod(clip_ids: list, character_id: str, host: str, port: str, parallel: int, lines: list) -> dict:
+    """map-all on a pod (rigging/pod/bake.py): many Blender processes in parallel there, results recorded here."""
+    from tools.boss_sprite_pipeline.gpu_box.pod import MAIN_KEY, Pod
+    from tools.boss_sprite_pipeline.rigging.pod import bake as PB
+    char = find_character(character_id)
+    n = int(char["rig"])
+    rec = V.load(character_id, n)
+    clips = [find_clip(c) for c in clip_ids]
+    sources_used = {clip_source(c) for c in clips}
+    if len(sources_used) != 1:
+        raise ValueError(f"one source per pod run, got {sorted(sources_used)}")
+    view = paths.character_dir(character_id) / "view" / f"v{n}"
+    need_base = not (view / "base.glb").is_file()
+    work = library() / "pod_bake" / character_id
+    if work.exists():
+        shutil.rmtree(work)
+    result = PB.run(Pod(host, port, MAIN_KEY), character_id, n, rec, [resolve_rel(c["bvh"]) for c in clips],
+                    sources_used.pop(), parallel, need_base, work, lines)
+    if need_base and (result / "part_0" / "view" / "base.glb").is_file():
+        view.mkdir(parents=True, exist_ok=True)
+        shutil.copy(result / "part_0" / "view" / "base.glb", view / "base.glb")
+    out_all, fails = {}, []
+    for part in sorted(result.glob("part_*")):
+        run = read_json(part / "run.json", {})
+        record_batch(character_id, n, rec, run, part / "view" / "clips", list(run.get("clips", {})), lines,
+                     fails, out_all)
+    for f in fails:
+        lines.append("pose check FAIL " + f)
+    lines.append(f"MAP_ALL_DONE {len(out_all)} of {len(clip_ids)} baked on the pod, pose check FAIL on {len(fails)}")
+    lines.append("pod work done: stop the pod if nothing else is queued")
     return out_all
 
 
@@ -501,6 +549,24 @@ class Handler(BaseHTTPRequestHandler):
 
                 JOBS.start("local", f"map {clip} → {cid}", work)
                 return self._json({"started": True})
+            if url.path == "/api/map_all_pod":
+                cid = str(body.get("character") or "")
+                find_character(cid)
+                ids = [str(c) for c in (body.get("clips") or [])]
+                host, port = str(body.get("host") or ""), str(body.get("port") or "")
+                if not host or not port:
+                    return self._json({"error": "set the pod host and port first"}, 400)
+                if not ids or not all(NAME.match(c) for c in ids):
+                    return self._json({"error": "no clips, or a bad clip name"}, 400)
+                for c in ids:
+                    find_clip(c)
+                par = int(body.get("parallel") or 0)
+
+                def work(lines, ids=ids, cid=cid, host=host, port=port, par=par):
+                    run_map_pod(ids, cid, host, port, par, lines)
+
+                JOBS.start("pod", f"map {len(ids)} clips → {cid} on pod", work)
+                return self._json({"started": True, "clips": len(ids)})
             if url.path == "/api/stop":
                 return self._json({"stopped": JOBS.stop(body.get("lane"))})
             if url.path == "/api/map_all":
