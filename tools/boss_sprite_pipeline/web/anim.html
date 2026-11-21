@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Animations</title>
+<style>
+  :root { --bg:#14141a; --panel:#1c1e26; --line:#2c3140; --text:#e6e8ee; --dim:#9aa1ad; --hi:#7ec8ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:13px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--text); height:100vh; display:grid;
+         grid-template-rows:auto 1fr auto; }
+  header, footer { display:flex; gap:10px; align-items:center; padding:8px 12px; background:var(--panel);
+                   border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  footer { border-bottom:0; border-top:1px solid var(--line); }
+  main { display:grid; grid-template-columns:200px minmax(0,1fr) 240px; min-height:0; }
+  #list { overflow:auto; border-right:1px solid var(--line); }
+  .clip { padding:6px 10px; cursor:pointer; border-bottom:1px solid #22262f; display:flex; justify-content:space-between; gap:8px; }
+  .clip.on { background:#243044; }
+  .clip small { color:var(--dim); }
+  #views { display:grid; grid-template-columns:1fr 1fr; min-height:0; }
+  .view { position:relative; min-height:0; min-width:0; overflow:hidden; }
+  .view + .view { border-left:1px solid var(--line); }
+  .view canvas { display:block; width:100%; height:100%; }
+  .tag { position:absolute; top:8px; left:10px; color:var(--dim); pointer-events:none; }
+  #side { overflow:auto; border-left:1px solid var(--line); padding:10px 12px; }
+  button, input, select { background:#2a3142; color:var(--text); border:1px solid #3c4458; border-radius:4px;
+                          padding:4px 8px; font:inherit; }
+  button { cursor:pointer; }
+  button:disabled { opacity:.45; cursor:default; }
+  label { display:flex; justify-content:space-between; gap:8px; align-items:center; margin:6px 0; color:var(--dim); }
+  label input { width:90px; }
+  pre { background:#101218; border:1px solid var(--line); border-radius:4px; padding:8px; max-height:180px;
+        overflow:auto; white-space:pre-wrap; color:var(--dim); }
+  h2 { margin:12px 0 4px; font-size:13px; color:var(--hi); }
+  #filter { width:100%; margin:0; border:0; border-bottom:1px solid var(--line); border-radius:0; padding:8px 10px; background:#181b22; }
+  #job { color:var(--hi); }
+</style>
+</head>
+<body>
+<header>
+  <b>Animations</b>
+  <label>character <select id="char"></select></label>
+  <span id="count" class="tag" style="position:static"></span>
+  <span id="job"></span>
+</header>
+<main>
+  <div id="list"><input id="filter" placeholder="filter"></div>
+  <div id="views">
+    <div class="view" id="stick"><div class="tag">stick</div></div>
+    <div class="view" id="mesh"><div class="tag">mapped</div></div>
+  </div>
+  <div id="side">
+    <h2 id="title">pick a clip</h2>
+    <p id="meta"></p>
+    <button id="map">map this clip</button>
+    <h2>match</h2>
+    <p id="match">—</p>
+    <h2>fit</h2>
+    <p style="color:var(--dim)">barrel 1 keeps the sculpted shoulders. That is clavicle damping 0 on the bake. Arm cap 90 is a human, 35 is the demon. Apply rebakes the open clip.</p>
+    <label>barrel chest <input id="barrel" type="number" min="0" max="1" step="0.05"></label>
+    <label>arm cap <input id="arm" type="number" min="0" max="120" step="1"></label>
+    <label>bind match <input id="bind" type="checkbox"></label>
+    <button id="apply">apply and rebake</button>
+    <p id="recipe" style="color:var(--dim);font-size:11px;white-space:pre-line"></p>
+    <h2>prompt</h2>
+    <label>host <input id="host" type="text" style="width:140px" placeholder="pod ip"></label>
+    <label>port <input id="port" type="text" style="width:80px" placeholder="22"></label>
+    <label>name <input id="pname" type="text" style="width:140px"></label>
+    <label>duration <input id="pdur" type="text" style="width:140px" value="1.0 2.5 1.0"></label>
+    <textarea id="prompt" rows="4" style="width:100%; background:#101218; color:var(--text); border:1px solid var(--line)"></textarea>
+    <button id="gen">generate</button>
+    <h2>log</h2>
+    <pre id="log"></pre>
+  </div>
+</main>
+<footer>
+  <button id="play">pause</button>
+  <input id="scrub" type="range" min="0" max="1000" value="0" style="flex:1">
+  <span id="stat"></span>
+</footer>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { BVHLoader } from "three/addons/loaders/BVHLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const $ = (id) => document.getElementById(id);
+const bvhLoader = new BVHLoader();
+const gltfLoader = new GLTFLoader();
+const Y = new THREE.Vector3(0, 1, 0);
+let state = { clips: [], characters: [], jobs: { running: [], done: [] } };
+let current = null;
+let playing = true;
+const clock = new THREE.Clock();
+
+function pane(el) {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x14141a);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x303038, 1.2));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+  sun.position.set(2, 4, 3);
+  scene.add(sun);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  el.appendChild(renderer.domElement);
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 200);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  return { el, scene, renderer, camera, controls, mixer: null, action: null, root: null, grid: null };
+}
+const stick = pane($("stick"));
+const mesh = pane($("mesh"));
+
+function resize(v) {
+  const w = v.el.clientWidth, h = v.el.clientHeight;
+  if (w < 2 || h < 2) return;
+  v.renderer.setSize(w, h, false);
+  v.camera.aspect = w / h;
+  v.camera.updateProjectionMatrix();
+}
+function resizeAll() { resize(stick); resize(mesh); }
+addEventListener("resize", resizeAll);
+
+function frame(v, obj, fill) {
+  obj.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(obj);
+  if (box.isEmpty()) return;
+  const size = box.getSize(new THREE.Vector3());
+  const mid = box.getCenter(new THREE.Vector3());
+  const span = Math.max(size.x, size.y, size.z, 0.2) / (fill || 1);
+  v.controls.target.copy(mid);
+  v.camera.position.set(mid.x + span * 0.8, mid.y + span * 0.35, mid.z + span * 3.2);
+  v.camera.near = 0.01;
+  v.camera.far = span * 80;
+  v.camera.updateProjectionMatrix();
+  v.controls.update();
+  if (v.grid) v.scene.remove(v.grid);
+  v.grid = new THREE.GridHelper(Math.max(span * 4, 2), 16, 0x3a3a48, 0x25252f);
+  v.grid.position.y = box.min.y;
+  v.scene.add(v.grid);
+}
+
+function clearRoot(v) {
+  if (v.root) v.scene.remove(v.root);
+  v.root = v.mixer = v.action = null;
+}
+
+function mannequin(rootBone) {
+  const mat = new THREE.MeshBasicMaterial({ color: 0xf0c14a });
+  rootBone.traverse((bone) => {
+    if (!bone.isBone || bone.name === "Root") return;
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(3.5, 8, 6), mat);
+    dot.frustumCulled = false;
+    bone.add(dot);
+    for (const child of bone.children) {
+      if (!child.isBone) continue;
+      const len = child.position.length();
+      if (len < 1e-3) continue;
+      const w = Math.max(Math.min(len * 0.22, 6), 1.2);
+      const box = new THREE.Mesh(new THREE.BoxGeometry(w, len, w), mat);
+      box.frustumCulled = false;
+      box.position.copy(child.position).multiplyScalar(0.5);
+      const dir = child.position.clone().normalize();
+      if (dir.lengthSq() > 0) box.quaternion.setFromUnitVectors(Y, dir);
+      bone.add(box);
+    }
+  });
+}
+
+async function showStick(id) {
+  clearRoot(stick);
+  const parsed = await bvhLoader.loadAsync("/bvh?id=" + encodeURIComponent(id) + "&t=" + Date.now());
+  const wrap = new THREE.Group();
+  wrap.scale.setScalar(0.01);
+  const rootBone = parsed.skeleton.bones[0];
+  mannequin(rootBone);
+  wrap.add(rootBone);
+  stick.scene.add(wrap);
+  stick.root = wrap;
+  stick.mixer = new THREE.AnimationMixer(wrap);
+  stick.action = stick.mixer.clipAction(parsed.clip);
+  stick.action.play();
+  pose();
+  frame(stick, wrap, 1);
+  $("stat").textContent = parsed.clip.duration.toFixed(2) + "s";
+}
+
+async function showMesh(character, glbPath) {
+  clearRoot(mesh);
+  const basePath = character.base || (character.view + "/base.glb");
+  const base = await gltfLoader.loadAsync("/glb?path=" + encodeURIComponent(basePath));
+  mesh.root = base.scene;
+  base.scene.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
+  mesh.scene.add(base.scene);
+  const clipFile = await gltfLoader.loadAsync("/glb?path=" + encodeURIComponent(glbPath));
+  const clip = clipFile.animations[0];
+  if (!clip) { $("stat").textContent = "mapped file has no animation"; frame(mesh, base.scene, 0.55); return; }
+  mesh.mixer = new THREE.AnimationMixer(base.scene);
+  mesh.action = mesh.mixer.clipAction(clip);
+  mesh.action.play();
+  pose();
+  frame(mesh, base.scene, 0.55);
+}
+
+function character() {
+  return state.characters.find((c) => c.id === $("char").value) || null;
+}
+
+function drawList() {
+  const q = $("filter").value.toLowerCase();
+  const have = $("list");
+  [...have.querySelectorAll(".clip")].forEach((n) => n.remove());
+  const rows = state.clips.filter((c) => !q || c.id.toLowerCase().includes(q));
+  $("count").textContent = rows.length + " / " + state.clips.length;
+  for (const c of rows) {
+    const el = document.createElement("div");
+    el.className = "clip" + (current && current.id === c.id ? " on" : "");
+    const mapped = character() && c.maps && c.maps[character().id];
+    el.innerHTML = "<span></span><small>" + (mapped ? "mapped" : "") + "</small>";
+    el.firstChild.textContent = c.id;
+    el.onclick = () => pick(c);
+    have.appendChild(el);
+  }
+}
+
+let showTime = 0;
+
+function pose() {
+  for (const v of [stick, mesh]) {
+    if (!v.mixer || !v.action) continue;
+    const d = v.action.getClip().duration || 1;
+    const t = ((showTime % d) + d) % d;
+    v.mixer.setTime(t);
+  }
+}
+
+async function pick(c) {
+  showTime = 0;
+  current = c;
+  drawList();
+  $("title").textContent = c.id;
+  const bits = [];
+  if (c.prompt) bits.push(c.prompt);
+  if (c.model) bits.push(c.model);
+  if (c.duration) bits.push(c.duration);
+  $("meta").textContent = bits.join(" · ");
+  const ch = character();
+  try {
+    await showStick(c.id);
+  } catch (err) {
+    $("stat").textContent = String(err);
+  }
+  if (ch && c.maps && c.maps[ch.id]) {
+    try { await showMesh(ch, c.maps[ch.id]); }
+    catch (err) { $("stat").textContent = String(err); }
+  } else {
+    clearRoot(mesh);
+  }
+  if (ch) {
+    try {
+      const r = await fetch("/api/match?clip=" + encodeURIComponent(c.id) + "&character=" + encodeURIComponent(ch.id));
+      const j = await r.json();
+      $("match").textContent = r.ok
+        ? j.paired + " paired · missing " + (j.missing || []).join(", ")
+        : (j.error || "no match");
+    } catch (err) {
+      $("match").textContent = String(err);
+    }
+  }
+}
+
+let wasRunning = false;
+
+async function refresh() {
+  try {
+    const j = await (await fetch("/api/state")).json();
+    const sameChars = state.characters.map((c) => c.id).join() === j.characters.map((c) => c.id).join();
+    state = j;
+    if (!sameChars || !$("char").options.length) {
+      const prev = $("char").value;
+      $("char").innerHTML = j.characters.map((c) => `<option value="${c.id}">${c.id}</option>`).join("");
+      if (prev) $("char").value = prev;
+    }
+    drawList();
+    if (!sameChars || !$("char").options.length) syncFit();
+    const rc = character();
+    $("recipe").textContent = rc && rc.bake
+      ? "next bake:\n" + Object.entries(rc.bake).map(([k, s]) =>
+          `${k} ${Array.isArray(s.value) ? s.value.join(",") || "-" : s.value}  (${s.from})`).join("\n")
+      : "";
+    const run = j.jobs.running[0];
+    const done = j.jobs.done[0];
+    if (run) {
+      $("job").textContent = run.label + " — running on this machine";
+      $("map").textContent = "mapping…";
+    } else if (done) {
+      $("job").textContent = (done.rc === 0 ? "done" : "failed") + " · " + done.label;
+      $("map").textContent = "map this clip";
+    }
+    const pose = done && (done.lines || []).find((l) => l.startsWith("pose check:"));
+    const head = !run && done ? ((done.rc === 0 ? "finished" : "FAILED") + " " + done.label
+      + (pose ? " · " + pose.replace(/ at frame.*/, "") : "")) : "";
+    const lines = run ? run.lines : done ? done.lines : [];
+    $("log").textContent = [head, ...(lines || [])].filter(Boolean).join("\n");
+    $("map").disabled = !!run;
+    $("apply").disabled = !!run;
+    $("gen").disabled = !!run;
+    if (wasRunning && !run && current && character()) {
+      const fresh = j.clips.find((c) => c.id === current.id);
+      if (fresh) pick(fresh);
+    }
+    wasRunning = !!run;
+  } catch (err) {
+    $("job").textContent = String(err);
+  }
+}
+
+async function post(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+$("filter").oninput = drawList;
+let fitFor = null;
+function syncFit() {
+  const c = character();
+  if (!c || fitFor === c.id) return;
+  fitFor = c.id;
+  $("bind").checked = "bind_match" in c ? !!c.bind_match : c.recipe === "human";
+}
+$("char").onchange = () => { fitFor = null; syncFit(); if (current) pick(current); else drawList(); };
+$("map").onclick = async () => {
+  if (!current || !character()) return;
+  $("job").textContent = "starting " + current.id + " → " + character().id;
+  $("log").textContent = "Starting on this machine. Blender takes a couple of minutes, and the figure shows up here when it finishes.";
+  try { await post("/api/map", { clip: current.id, character: character().id }); }
+  catch (err) { $("log").textContent = String(err); $("job").textContent = String(err); }
+};
+$("apply").onclick = async () => {
+  if (!current || !character()) return;
+  const patch = {};
+  if ($("barrel").value !== "") patch.barrel_chest = Number($("barrel").value);
+  if ($("arm").value !== "") patch.arm_cap = Number($("arm").value);
+  patch.bind_match = $("bind").checked;
+  try {
+    await post("/api/fit", { character: character().id, clip: current.id, patch });
+  } catch (err) { $("log").textContent = String(err); }
+};
+$("gen").onclick = async () => {
+  try {
+    await post("/api/prompt", {
+      name: $("pname").value.trim(), prompt: $("prompt").value.trim(),
+      duration: $("pdur").value.trim(), host: $("host").value.trim(), port: $("port").value.trim(),
+    });
+  } catch (err) { $("log").textContent = String(err); }
+};
+$("play").onclick = () => { playing = !playing; $("play").textContent = playing ? "pause" : "play"; };
+$("scrub").oninput = (e) => {
+  const d = stick.action ? stick.action.getClip().duration : 1;
+  showTime = (e.target.value / 1000) * d;
+  playing = false;
+  $("play").textContent = "play";
+  pose();
+};
+addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const q = $("filter").value.toLowerCase();
+  const rows = state.clips.filter((c) => !q || c.id.toLowerCase().includes(q));
+  const i = rows.findIndex((c) => current && c.id === current.id);
+  const n = e.key === "ArrowDown" ? i + 1 : i - 1;
+  if (rows[n]) { e.preventDefault(); pick(rows[n]); }
+});
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = clock.getDelta();
+  if (playing) showTime += dt;
+  pose();
+  if (stick.action) {
+    const d = stick.action.getClip().duration || 1;
+    const t = ((showTime % d) + d) % d;
+    if (document.activeElement !== $("scrub")) $("scrub").value = Math.round((t / d) * 1000);
+    $("stat").textContent = t.toFixed(2) + " / " + d.toFixed(2) + "s";
+  }
+  const pin = new THREE.Vector3();
+  const off = new THREE.Vector3();
+  for (const v of [stick, mesh]) {
+    if (v.root) {
+      let hips = null;
+      let first = null;
+      v.root.traverse((o) => {
+        if (!o.isBone) return;
+        if (!first) first = o;
+        if (!hips && /hip/i.test(o.name)) hips = o;
+      });
+      (hips || first || v.root).getWorldPosition(pin);
+      off.copy(v.camera.position).sub(v.controls.target);
+      if (off.lengthSq() > 1e-4) {
+        v.controls.target.copy(pin);
+        v.camera.position.copy(pin).add(off);
+      }
+    }
+    v.controls.update();
+    v.renderer.render(v.scene, v.camera);
+  }
+}
+refresh().then(resizeAll);
+setInterval(refresh, 1500);
+tick();
+</script>
+</body>
+</html>

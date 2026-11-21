@@ -361,7 +361,12 @@ if SOURCE not in SOURCES:
     raise SystemExit("unknown --source %r; have %s" % (SOURCE, sorted(SOURCES)))
 if TARGET and TARGET not in TARGETS:
     raise SystemExit("unknown --target %r; have %s" % (TARGET, sorted(TARGETS)))
-MAP = SOURCES[SOURCE]["map"]
+try:
+    from rigmap.legacy import as_legacy_map
+    MAP = as_legacy_map(SOURCE) or SOURCES[SOURCE]["map"]
+except Exception as _rigmap_exc:             # the tables above still bake if the package is missing
+    print("rigmap unavailable: %s" % (_rigmap_exc,), flush=True)
+    MAP = SOURCES[SOURCE]["map"]
 
 _PROFILE = {}
 _PROFILE.update(SOURCES[SOURCE])
@@ -486,6 +491,12 @@ def two_bone_ik(a, target, pole, l1, l2):
     return a + l1 * (math.cos(ang) * n + math.sin(ang) * u)
 
 
+# Pose check limit, degrees off the stick. barb_hit_heavy_01, 2026-11-21: the graded IK recipe
+# peaks at 29 (neck); bind match on the hips peaks at 149 (folded); bind off peaks at 153
+# (forearm, upright and not following).
+POSE_LIMIT_DEG = 40
+
+
 def main():
     roles = json.load(open(ROLES))
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -570,6 +581,7 @@ def main():
     rest_head = {t: (tw @ tgt.data.bones[t].matrix_local).translation.copy() for _, t in pairs}
 
     actions = {}
+    pose_check = {}     # clip -> "src>tgt": [max deg off the stick, frame], worst first
     for bvh_path in sorted(glob.glob(os.path.join(BVH_DIR, "*.bvh"))):
         clip = os.path.splitext(os.path.basename(bvh_path))[0]
         before = set(bpy.data.objects)
@@ -718,6 +730,27 @@ def main():
         root_src = next((s for s, t in use if t == root_name), None)
         ref_root = src_world(root_src).translation.copy() if root_src else Vector()
 
+        # Pose check. Each driven bone's segment, joint to its nearest driven child joint, on
+        # the mesh against the same segment on the stick, in world space. Bind match and IK
+        # both aim for these to agree, so a large angle is a pose the viewer shows wrong (the
+        # hips folded 149 deg on 2026-11-17 while arms and legs read 0). Positions, not bone
+        # axes, so roll and axis conventions do not enter.
+        def _paired_parent(bone, names):
+            p = bone.parent
+            while p is not None and p.name not in names:
+                p = p.parent
+            return p.name if p is not None else None
+        _tset = {t for _, t in use}
+        _sset = {s for s, _ in use}
+        segments = []
+        for s, t in use:
+            for s2, t2 in use:
+                if (_paired_parent(tgt.data.bones[t2], _tset) == t
+                        and _paired_parent(src.data.bones[s2], _sset) == s):
+                    segments.append((s, t, s2, t2))
+                    break
+        check = {}
+
         tgt.animation_data_clear()
         for frame in range(f0, f1 + 1):
             sc.frame_set(frame)
@@ -798,6 +831,16 @@ def main():
                 pb.keyframe_insert("rotation_quaternion", frame=frame)
                 if t == root_name:
                     pb.keyframe_insert("location", frame=frame)
+            if (frame - f0) % 5 == 0 or frame == f1:
+                for s, t, s2, t2 in segments:
+                    ds = src_world(s2).translation - src_world(s).translation
+                    dt_ = ((tw @ tgt.pose.bones[t2].matrix).translation
+                           - (tw @ tgt.pose.bones[t].matrix).translation)
+                    if ds.length < 1e-6 or dt_.length < 1e-6:
+                        continue
+                    deg = math.degrees(ds.angle(dt_))
+                    if deg > check.get(t, (0.0, 0))[0]:
+                        check[t] = (deg, frame)
             if jaw and jaw_closed > 0 and jaw in tgt.pose.bones:
                 jpb = tgt.pose.bones[jaw]
                 axis = ((tw @ tgt.data.bones[jaw].matrix_local).to_3x3().inverted()
@@ -817,6 +860,16 @@ def main():
         track.strips.new(clip, f0, action)
         track.mute = True
         actions[clip] = action
+        _src_of = {t: s for s, t in use}
+        pose_check[clip] = {_src_of[t] + ">" + t: [round(d, 1), f] for t, (d, f) in
+                            sorted(check.items(), key=lambda kv: -kv[1][0])}
+        worst = max(check.items(), key=lambda kv: kv[1][0]) if check else None
+        if worst:
+            bad = [k for k, (d, _) in pose_check[clip].items() if d > POSE_LIMIT_DEG]
+            log("POSE_CHECK %s %s worst %s>%s %.1f deg at frame %d (%d segments)%s"
+                % (clip, "FAIL" if bad else "ok", _src_of[worst[0]], worst[0], worst[1][0],
+                   worst[1][1], len(segments), (" over %d: %s" % (POSE_LIMIT_DEG, ", ".join(bad)))
+                   if bad else ""))
 
         for pb in tgt.pose.bones:                      # leave nothing behind for the next clip
             pb.rotation_quaternion = (1, 0, 0, 0)
@@ -881,23 +934,27 @@ def main():
         "ARM_ELEV_CAP": arm_cap,
         "bones_driven": len(pairs),
         "clips": {k: int(v.frame_end - v.frame_start + 1) for k, v in actions.items()},
+        "pose_check": pose_check,
     }, open(os.path.join(OUT, "run.json"), "w"), indent=1)
 
     blend = os.path.join(OUT, "animated.blend")
     bpy.ops.wm.save_as_mainfile(filepath=blend)
     log("saved", blend, "with", len(actions), "actions")
-    try:
-        for t in tgt.animation_data.nla_tracks:
-            t.mute = False
-        bpy.ops.object.select_all(action="DESELECT")
-        mesh.select_set(True)
-        tgt.select_set(True)
-        bpy.context.view_layer.objects.active = tgt
-        bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "animated.glb"), use_selection=True,
-                                  export_animations=True, export_animation_mode="NLA_TRACKS")
-        log("exported animated.glb")
-    except Exception as e:
-        log("glb export skipped:", e)
+    if os.environ.get("SKIP_GLB"):
+        log("skipped animated.glb")
+    else:
+        try:
+            for t in tgt.animation_data.nla_tracks:
+                t.mute = False
+            bpy.ops.object.select_all(action="DESELECT")
+            mesh.select_set(True)
+            tgt.select_set(True)
+            bpy.context.view_layer.objects.active = tgt
+            bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "animated.glb"), use_selection=True,
+                                      export_animations=True, export_animation_mode="NLA_TRACKS")
+            log("exported animated.glb")
+        except Exception as e:
+            log("glb export skipped:", e)
     log("DONE")
 
 
