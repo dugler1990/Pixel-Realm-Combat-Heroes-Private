@@ -1,6 +1,7 @@
 import pygame
 import sounds
-from damage_data import body_of
+from damage_data import attack_of, body_of
+import temperature
 from defence_profile import natural_profile
 import math
 from Settings import *
@@ -614,8 +615,8 @@ class CombatUnit(Entity):
         if self.status != "Summoning":
             self.combat_strategy.decide_action(self, player)
             self.combat_strategy.move(self, player)
-            if self.status == "attack":
-                self.combat_strategy.execute_attack(self, player)
+            if self.status == "attack" and getattr(self, "holding", None) is not player:
+                self.combat_strategy.execute_attack(self, player)   # a hold replaces the strike
             self.combat_strategy.parry(self, player, quadtree)
         else:
             self.combat_strategy.execute_attack(self, player)
@@ -859,16 +860,54 @@ class CombatUnit(Entity):
         self.direction = pygame.math.Vector2(0, 0)
 
     def combat_update(self, player=None, quadtree=None, frame_number=0, entity_id_map=None):
-        if not self.frozen:
-            target = self.select_hostile_target(
-                frame_number=frame_number,
-                entity_id_map=entity_id_map,
-                entity_quad_tree=quadtree,
-            )
-            if target is None:
-                self.resume_default()
-                return
-            self.actions(target, quadtree)
+        if self.frozen:
+            self._hold(None)
+            return
+        target = self.select_hostile_target(
+            frame_number=frame_number,
+            entity_id_map=entity_id_map,
+            entity_quad_tree=quadtree,
+        )
+        self._hold(target)
+        if target is None:
+            self.resume_default()
+            return
+        self.actions(target, quadtree)
+
+    def _hold_of(self):
+        """(T, k) of this unit's holding melee attack (the ice ghost's touch), or None. Once."""
+        cached = getattr(self, "_hold_cache", False)
+        if cached is False:
+            cached = None
+            for entry in self.melee_attacks or ():
+                defn = attack_of(entry)
+                if defn is not None and defn.hold is not None:
+                    cached = defn.hold
+                    break
+            self._hold_cache = cached
+        return cached
+
+    def _hold(self, target):
+        """In melee reach of a body with a temperature, a holding attack holds it (a source on its
+        outer layer) instead of striking. Out of reach, another target, frozen, none: it lets go.
+        Its death lets go too (temperature.forget)."""
+        hold = self._hold_of()
+        if hold is None:
+            return
+        want = None
+        if target is not None and getattr(target, "warmth", None) is not None:
+            distance, _ = self.get_target_distance_direction(target)
+            if distance <= self.combat_config.get("melee_attack_radius", 0):
+                want = target
+        held = getattr(self, "holding", None)
+        if want is held:
+            return
+        now = pygame.time.get_ticks()
+        if held is not None:
+            temperature.remove_source(held, ("hold", self.id), now, placed_by=self)
+        if want is not None:
+            temperature.add_source(want, ("hold", self.id), hold[0], hold[1], now, placed_by=self)
+        self.holding = want
 
     def enemy_update(self, player=None, quadtree=None, frame_number=0, entity_id_map=None):
         """Deprecated: use combat_update."""

@@ -44,6 +44,18 @@ price, untouched.
   | mild, standing, any wear | never hurts, no red (skin 0.2-1.0) |
   In full plate in the heat vitality does not cool you (sweat is trapped): only more health.
   Bench after: settle 80-128 µs, 0.053-0.085 ms per frame (machine noisier: frame off 3.3-4.1 ms).
+- Step 4 done: the player joins at start (`Player.__init__`), monsters with `"detail": "full"`
+  at spawn (none today); the level keeps `warm_bodies` for `set_air` / `set_sun` (default 0: no
+  map sets them yet; the scenes will). Fire and cold on a body with a temperature are a jump on
+  the layer hit (`hit_resolve._into_warmth`); the price keeps the shock, a caught cloth's burn and
+  the bolt. Lava: a `("lava", id)` source (`LAVA_K` 0.2) while you stand in it. Hold:
+  `ghost_chill` has `"hold": {"T": -13, "k": 0.22}` (one ghost settles the naked skin at −10.9,
+  mild blue, no wound; two at −11.9); `CombatUnit._hold` holds a body with a temperature in melee
+  reach instead of striking, lets go out of reach, on another target, frozen, or dead. Equip:
+  `refresh`; new stats: `settle`. `RemotePlayer` drops its temperature (the owning client runs
+  it). Tests 21. Headless in Level4: the ghost holds the player (no health lost in 1.5 s), its
+  death removes the hold, a fire spit warms the outer layer −0.3 → 14.7.
+  Deviation: the hold lives in `CombatUnit` (every melee strategy), not in one strategy class.
 
 ## The model, for reasoning (Douglas, 2026-11-21; revised the same day after the table)
 - **Layers hold warmth**: the skin, and the worn outer chest piece if there is one (naked: skin
@@ -130,7 +142,7 @@ Between two events every source is fixed, so the layers follow
 |---|---|---|
 | Air, sun | level / scene: `set_air`, `set_sun`; equip: `refresh` | default air 0, sun 0 |
 | Blow (fire, ice) on a full body | `hit_resolve` | `bump`; price = blow + shock; no `hot_shell` / `chilled` start |
-| Hold | melee strategy, attack def with `hold` | in reach of a full body: `add_source(("hold", id))`, no strike; out of reach, new target: `remove_source` |
+| Hold | `CombatUnit._hold`, attack def with `hold` | in reach of a body with a temperature: `add_source(("hold", id))`, no strike; out of reach, new target, frozen: `remove_source` |
 | Lava | `HeatEffect` apply / remove | full body: `("lava", id)` source, no tick; simple body: today's tick |
 | Stamina spent | stamina's `pay` (item 2) | `exert(body, paid, now)`: a jump of `paid × HEAT_PER_STAMINA` on the skin; no caller in this plan |
 | Death | `Entity.die` | `forget(self)`: a dead ghost lets go |

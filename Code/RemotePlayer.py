@@ -71,6 +71,11 @@ class RemotePlayer(BasePlayer):
             entity_quad_tree,
         )
 
+        # Its temperature runs on the client that owns this hero (it sends the damage); a second
+        # one here would hurt twice.
+        import temperature
+        temperature.forget(self, 0)
+
         self.player_id = player_id
         self.type = "remote_player"
 

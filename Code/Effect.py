@@ -110,8 +110,9 @@ class SlipperyEffect(Effect):
 
 
 class HeatEffect(Effect):
-    """Heat while you stand in it: (heat − fire resist) × (1 − insulation) per second, from the
-    chest's outer layer. The entity's fire_resistance is not read. Leaving starts a hot shell
+    """Heat while you stand in it. A body with a temperature: a source at `heat` on its outer layer
+    while it stands here (temperature.py; the skin wounds). Any other body: (heat − fire resist)
+    × (1 − insulation) per second, from the chest's outer layer, and leaving starts a hot shell
     when one second of that heat is above COOK."""
 
     def __init__(self, properties):
@@ -120,6 +121,15 @@ class HeatEffect(Effect):
 
     def get_environmental_damage(self, entity, dt):
         _effect_env_log.debug("trying to get environmental damage")
+        state = getattr(entity, "warmth", None)
+        if state is not None:
+            key = ("lava", id(self))
+            if key not in state.sources:
+                import pygame
+                import temperature
+                from damage_rules import LAVA_K
+                temperature.add_source(entity, key, self.heat, LAVA_K, pygame.time.get_ticks())
+            return None
         from damage_rules import patch_rate
         amount = patch_rate(entity, self.heat) * dt
         if amount <= 0:
@@ -127,6 +137,11 @@ class HeatEffect(Effect):
         return (amount, 'heat')
 
     def remove(self, entity):
+        if getattr(entity, "warmth", None) is not None:
+            import pygame
+            import temperature
+            temperature.remove_source(entity, ("lava", id(self)), pygame.time.get_ticks())
+            return
         from damage_rules import COOK, chest_layer, heat_seconds, heat_shade, patch_rate
         held = patch_rate(entity, self.heat)
         if held <= COOK:

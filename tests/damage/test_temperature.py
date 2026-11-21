@@ -23,7 +23,7 @@ from Entity import Entity  # noqa: E402
 from Interaction import InteractionResolver  # noqa: E402
 from conditions import ConditionClock, condition, has  # noqa: E402
 from damage_data import LayerDef, body as body_card  # noqa: E402
-from damage_rules import AIR_K, COLD_SCALE, FAINT, HURT_AT, REST_HEAT, SWEAT_K, WARM_K  # noqa: E402
+from damage_rules import AIR_K, COLD_SCALE, FAINT, HURT_AT, REST_HEAT, SLOW_AT as SLOW_AT_LINE, SWEAT_K, WARM_K  # noqa: E402
 from defence_profile import DefenceProfile, natural_profile, region_slot  # noqa: E402
 
 PLATE = LayerDef("plate_test", stopping_power=40, absorb=0.15, weight=12, insulation=0.2,
@@ -219,3 +219,97 @@ def test_crossing_zero_switches_the_thermostat_and_lands_on_its_steady_state():
     g = temperature.CONTACT_K / 0.2
     through = AIR_K * g / (AIR_K + g)
     assert skin == pytest.approx((-30.0 * through + REST_HEAT) / (through + WARM_K), abs=1e-3)
+
+
+# --- step 4: the sources in the game ----------------------------------------------------------
+
+def test_the_ghost_touch_is_a_hold_in_its_attack_def():
+    from damage_data import attack
+    assert attack("ghost_chill").hold == (-13.0, 0.22)
+    assert attack("spear_thrust").hold is None
+
+
+def _ghost(level, x=0, radius=50):
+    """A stub with CombatUnit's own hold logic and the ghost's melee attack."""
+    from combat_unit import CombatUnit
+    ghost = SimpleNamespace(id=id(object()), melee_attacks=[{"attack": "ghost_chill", "cooldown": 1000}],
+                            combat_config={"melee_attack_radius": radius}, x=x)
+    ghost.get_target_distance_direction = lambda target: (abs(ghost.x - target.x), None)
+    ghost._hold_of = lambda: CombatUnit._hold_of(ghost)
+    ghost.hold = lambda target: CombatUnit._hold(ghost, target)
+    return ghost
+
+
+def test_a_ghost_holds_in_reach_lets_go_out_of_reach_and_when_it_dies():
+    level = _level()
+    hero = _body(level)
+    hero.x = 0
+    ghost = _ghost(level, x=20)
+    ghost.hold(hero)
+    assert ("hold", ghost.id) in hero.warmth.sources and ghost.holding is hero
+    ghost.x = 500
+    ghost.hold(hero)
+    assert ("hold", ghost.id) not in hero.warmth.sources and ghost.holding is None
+    ghost.x = 10
+    ghost.hold(hero)
+    temperature.forget(ghost, 1000)   # Entity.die does this
+    assert ("hold", ghost.id) not in hero.warmth.sources
+
+
+def test_two_ghosts_one_leaves_the_other_still_holds():
+    level = _level()
+    hero = _body(level)
+    hero.x = 0
+    a, b = _ghost(level, x=10), _ghost(level, x=-10)
+    a.hold(hero)
+    b.hold(hero)
+    a.hold(None)
+    assert ("hold", b.id) in hero.warmth.sources and ("hold", a.id) not in hero.warmth.sources
+    assert _settled(level, hero) < -SLOW_AT_LINE
+
+
+def test_a_hot_plate_delays_the_ghosts_blue():
+    level = _level()
+    cold_skin, warm_plate = _body(level, plate=True), _body(level, plate=True)
+    for hero in (cold_skin, warm_plate):
+        hero.x = 0
+    temperature.bump(warm_plate, temperature.OUTER, 40.0, 0)
+    for hero in (cold_skin, warm_plate):
+        _ghost(level, x=5).hold(hero)
+    _run(level, 20_000)
+    assert temperature.skin(warm_plate, 20_000) > temperature.skin(cold_skin, 20_000)
+
+
+def test_lava_on_an_ice_field_lands_between():
+    from Effect import HeatEffect
+    level = _level()
+    hero = _body(level)
+    temperature.set_air(level, -30.0, 0, [hero])
+    ice_only = _settled(level, hero)
+    lava = HeatEffect({"heat": 100})
+    assert lava.get_environmental_damage(hero, 1 / 60) is None   # a source, not a tick
+    standing = temperature.skin(hero, 10 ** 9)
+    assert ice_only < standing < 100.0
+    lava.remove(hero)
+    assert all(key[0] != "lava" for key in hero.warmth.sources if isinstance(key, tuple))
+
+
+def test_lava_on_a_body_without_temperature_still_ticks():
+    from Effect import HeatEffect
+    body = SimpleNamespace(body_def=body_card("barb"), defence=natural_profile(body_card("barb")))
+    amount, kind = HeatEffect({"heat": 100}).get_environmental_damage(body, 1.0)
+    assert amount > 0 and kind == "heat"
+
+
+def test_a_fire_hit_on_a_body_with_temperature_warms_it_and_lands_no_instant_burn():
+    from Interaction import InteractionContext
+    from damage_data import attack
+    level = _level()
+    hero = _body(level)
+    level.interaction_resolver.apply(InteractionContext(
+        kind="damage", source_kind="test", source_team="enemy_1", target=hero,
+        attack_def=attack("fire_spit")))
+    assert 1e6 - hero.health <= 1.0   # no instant cook: the heat is in the skin now
+    assert temperature.skin(hero, 0) > 10.0
+    _run(level, 60_000)
+    assert 1e6 - hero.health > 1.0   # and it hurts over the next seconds

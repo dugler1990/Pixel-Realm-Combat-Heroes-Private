@@ -18,7 +18,8 @@ ATTACKS_PATH = os.path.join(CONFIG_DIR, "attacks.json")
 SCHEMA_VERSION = 1
 
 _ROW_FIELDS = frozenset(
-    ("delivery", "damage", "penetration", "force", "magic", "venom", "stops", "scales_with", "cold")
+    ("delivery", "damage", "penetration", "force", "magic", "venom", "stops", "scales_with", "cold",
+     "hold")
 )
 _BOLT_FIELDS = frozenset(("damage", "reach", "arcs", "spark"))
 _NUMBER_FIELDS = ("damage", "penetration", "force")
@@ -55,11 +56,11 @@ class AttackDef:
 
     __slots__ = (
         "id", "name", "delivery", "damage", "penetration", "force",
-        "magic", "magic_mask", "venom", "stops", "scales_with", "cold", "lightning",
+        "magic", "magic_mask", "venom", "stops", "scales_with", "cold", "lightning", "hold",
     )
 
     def __init__(self, id, name, delivery, damage, penetration, force,
-                 magic, magic_mask, venom, stops, scales_with, cold=0, lightning=None):
+                 magic, magic_mask, venom, stops, scales_with, cold=0, lightning=None, hold=None):
         self.id = id
         self.name = name
         self.delivery = delivery
@@ -73,6 +74,9 @@ class AttackDef:
         self.scales_with = scales_with
         self.cold = cold
         self.lightning = lightning
+        # (T, k): while in reach of a body with a temperature, this attack holds it (a source on
+        # its outer layer, temperature.py) instead of striking. None: it strikes.
+        self.hold = hold
 
     def __repr__(self):
         return f"AttackDef({self.name!r})"
@@ -205,9 +209,20 @@ def _attack_def(path, attack_id, name, row, categories):
     scales_with = row.get("scales_with")
     if scales_with is not None and scales_with not in _SCALES_WITH:
         raise DamageDataError(f"{where}: scales_with must be one of {sorted(_SCALES_WITH)}")
+    hold = row.get("hold")
+    if hold is not None:
+        if not isinstance(hold, dict) or set(hold) != {"T", "k"}:
+            raise DamageDataError(f"{where}: hold must be {{\"T\": warmth, \"k\": strength}}")
+        k = hold["k"]
+        if isinstance(k, bool) or not isinstance(k, (int, float)) or k <= 0:
+            raise DamageDataError(f"{where}: hold k must be > 0, got {k!r}")
+        T = hold["T"]
+        if isinstance(T, bool) or not isinstance(T, (int, float)):
+            raise DamageDataError(f"{where}: hold T must be a number, got {T!r}")
+        hold = (float(T), float(k))
     return AttackDef(
         attack_id, name, delivery, numbers["damage"], numbers["penetration"], numbers["force"],
-        tuple(magic), mask, venom, stops, scales_with, cold, lightning,
+        tuple(magic), mask, venom, stops, scales_with, cold, lightning, hold,
     )
 
 

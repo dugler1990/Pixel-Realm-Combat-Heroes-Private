@@ -26,6 +26,7 @@ from Trap import Trap
 from PolarBear import PolarBear
 from Settings import monster_data
 import SpecialAttacks
+import temperature
 from damage_data import attack_of
 from enemy_drop_defaults import get_default_item_drop_for_monster
 
@@ -681,6 +682,8 @@ class Spawner:
         )
         enemy._spawn_source_object_id = config.get('_spawn_source_object_id')
         enemy._spawn_type = str(config.get('type', ''))
+        if enemy.detail == "full":
+            temperature.join(enemy, self.level, pygame.time.get_ticks())
         self.enemies.append(enemy)
         _spawner_log.debug(
             "Spawned enemy type=%s tile_pos=(%.2f, %.2f) pixel_pos=(%.1f, %.1f) persistent=%s source_object_id=%r team_id=%r",

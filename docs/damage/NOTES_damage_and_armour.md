@@ -689,6 +689,13 @@ hit on a body card uses the elemental rule.
   dashing; naked desert dead 345 s; naked ice dead 308 s; vitality 60 safe in ice; mild never
   hurts. `HOT_SCALE` 2 added (temperature used `HEAT_SCALE` 0.25, 8× gentler than cold).
   Targeted set: 11 failed, same names; 567 passed. `test_item_card` 10 passed.
+- 2026-11-21: temperature step 4, wired: player joins, full-detail monsters join at spawn, air and
+  sun per level (`warm_bodies`), fire/cold on a warm body is a jump (no instant cook; shock, caught
+  cloth and bolt stay in the price), lava a source, the ghost's `hold` (attack def) replaces its
+  strike on a warm body, equip refreshes, `RemotePlayer` opts out (no double damage in co-op).
+  `_sticks` is public as `cold_sticks`. Targeted set: 11 failed, same names (the 12th,
+  `test_combat_resume_default`, was its stub missing `_hold`: fixed); 583 passed with
+  `test_item_card`. Headless Level4: hold on and off with the ghost's life, fire spit warms.
 
 ## Tried and dropped
 

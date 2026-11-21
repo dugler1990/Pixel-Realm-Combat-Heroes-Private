@@ -1,5 +1,6 @@
 import pygame
 import sounds
+import temperature
 from Support import import_folder, position_surface_mask_midbottom_at
 from Settings import *
 from game_logging import get_debug_logger
@@ -65,6 +66,8 @@ class BasePlayer(Entity):
         self.inventory = Inventory(self, input_manager)
         
         self.level = level
+        if level is not None:
+            temperature.join(self, level, pygame.time.get_ticks())
         self.input_manager = input_manager
         self.last_p_press_time = 0
         self.last_i_press_time = 0
@@ -357,6 +360,7 @@ class BasePlayer(Entity):
         worn = [s.item for s in self.inventory.body_slots() if not s.empty]
         self.defence = defence_profile.build_profile(self.body_def, defence_profile.worn_from_items(worn))
         self.gear_weight = self.defence.weight
+        temperature.refresh(self, pygame.time.get_ticks())
         # mesh piece (as drawn: Graphics/Meshes/<piece>) -> its item's layer, for hits on the points
         self.piece_layers = defence_profile.piece_layers(worn)
         skin = getattr(self, "mesh_skin", None)

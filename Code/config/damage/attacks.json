@@ -21,7 +21,7 @@
     "raccoon_claw":    {"delivery": "pierce", "damage": 80, "penetration": 15, "force": 20, "scales_with": "attack"},
     "spirit_touch":    {"magic": {"fire": 9}, "scales_with": "magic"},
     "bamboo_whip":     {"delivery": "crush",  "damage": 6,  "force": 8, "scales_with": "attack"},
-    "ghost_chill":     {"magic": {"ice": 20}, "scales_with": "magic"},
+    "ghost_chill":     {"magic": {"ice": 20}, "scales_with": "magic", "hold": {"T": -13, "k": 0.22}},
     "spear_thrust":    {"delivery": "pierce", "damage": 6,  "penetration": 25, "force": 10, "scales_with": "attack"},
     "fire_spit":       {"force": 10, "magic": {"fire": 15}, "scales_with": "magic"},
     "thorn":           {"delivery": "pierce", "damage": 5,  "penetration": 12, "force": 2, "venom": {"id": "plant_venom", "dose": 1}, "scales_with": "attack"},

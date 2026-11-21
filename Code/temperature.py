@@ -55,6 +55,9 @@ def join(body, level, now):
     and the sun are read when solving)."""
     state = Warmth(level, now)
     body.warmth = state
+    if getattr(level, "warm_bodies", None) is None:
+        level.warm_bodies = {}
+    level.warm_bodies[id(body)] = body
     state.piece = _worn_piece(body)
     state.sources["air"] = (OUTER, float(getattr(level, "air", 0.0) or 0.0), AIR_K)
     _solve_from(body, state, [0.0] * _layers(state), now)
@@ -67,6 +70,7 @@ def forget(body, now):
     if state is not None:
         state.gen += 1
         body.warmth = None
+        getattr(state.level, "warm_bodies", {}).pop(id(body), None)
     placed = getattr(body, "warming", None)
     if placed:
         body.warming = {}
@@ -135,17 +139,17 @@ def settle(body, now):
         _change(body, state, now, None)
 
 
-def set_sun(level, sun, now, bodies):
-    """The level's sun (0: night, a cave), on each of `bodies`."""
+def set_sun(level, sun, now, bodies=None):
+    """The level's sun (0: night, a cave), on each of `bodies` (default: every body it holds)."""
     level.sun = float(sun)
-    for body in bodies:
+    for body in _bodies(level, bodies):
         settle(body, now)
 
 
-def set_air(level, air, now, bodies):
-    """The level's air, on each of `bodies` (the full bodies it holds)."""
+def set_air(level, air, now, bodies=None):
+    """The level's air, on each of `bodies` (default: every body it holds)."""
     level.air = float(air)
-    for body in bodies:
+    for body in _bodies(level, bodies):
         add_source(body, "air", level.air, AIR_K, now)
 
 
@@ -186,6 +190,10 @@ def tick(level, now):
 
 
 # --- inside -----------------------------------------------------------------------------------
+
+def _bodies(level, bodies):
+    return list(bodies) if bodies is not None else list(getattr(level, "warm_bodies", {}).values())
+
 
 def _state(body):
     return getattr(body, "warmth", None)

@@ -1723,6 +1723,7 @@ class Level4:
                                    # so we call it from level as opposed to level.player....
         new_stats = self.player.player_config.final_stats 
         self.player.stats = new_stats
+        temperature.settle(self.player, pygame.time.get_ticks())   # vitality is the thermostat
         
         # Define a method to get the direction vector from an angle
     def get_direction_from_angle(self, angle):

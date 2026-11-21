@@ -90,6 +90,7 @@ SIMPLE_COLD = {"mild": (2000, 0), "medium": (4000, 4), "severe": (6000, 8)}
 # tuned from tools/temperature_table.py to the plan's feel targets (2026-11-21). Strengths are
 # per second; capacity 1 is the skin's. A desert is air +10, sun 1; an ice field air -30.
 AIR_K = 0.02          # the air on the outer layer
+LAVA_K = 0.2          # a lava patch on the outer layer while you stand in it (its heat is the T)
 WARM_K = 0.02         # the thermostat warming a cold skin, at vitality REF_VIT, armour or not
 SWEAT_K = 0.02        # the thermostat cooling a warm skin, at REF_VIT, times the bare share
 REST_HEAT = 0.02      # heat the body makes at rest, per second on the skin
@@ -236,7 +237,7 @@ def bolt_chain(damage, reach, arcs, spark, bodies, full):
     return wounds
 
 
-def _sticks(cold, resist, constitution, wet):
+def cold_sticks(cold, resist, constitution, wet):
     stuck = max(0.0, cold - resist_of(resist, "ice")) * BASE_CON / constitution
     if wet:
         stuck += WET_COLD
@@ -271,7 +272,7 @@ def elemental(fire=0, cold=0, bolt=None, layer=None, resist=None, constitution=B
             wound += heat_wound(H)
             starts.append(("hot_shell", None, int(round(heat_seconds(H) * 1000))))
 
-    sticks = _sticks(cold, resist, constitution, wet) if cold else 0.0
+    sticks = cold_sticks(cold, resist, constitution, wet) if cold else 0.0
     band = cold_band(sticks)
     cold_shade = None
     if band is not None:

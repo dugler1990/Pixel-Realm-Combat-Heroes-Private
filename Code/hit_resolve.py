@@ -8,8 +8,9 @@ and only as many times as the bolt's arcs allow.
 from __future__ import annotations
 
 import defence_profile
+import temperature
 from damage_data import CATEGORIES, Lightning
-from damage_rules import elemental, physical
+from damage_rules import CATCH, Elemental, cold_sticks, elemental, physical, resist_of
 
 
 class _Priced:
@@ -26,11 +27,12 @@ class _Priced:
         self.elemental_wound = 0.0 if elemental is None else elemental.wound
 
 
-def resolve(ctx):
+def resolve(ctx, now=None):
     """A priced hit, or None when the def is priced flat (`flat`).
 
     No body card: None. Holy or unholy alone: None. Fire, cold or lightning: a result, even
-    when the resist brings the wound to 0.
+    when the resist brings the wound to 0. A body with a temperature takes fire and cold as
+    warmth (`now` needed): the price keeps the shock, a caught cloth's burn and the bolt.
     """
     attack = getattr(ctx, "attack_def", None)
     if getattr(ctx, "kind", None) != "damage" or attack is None:
@@ -46,7 +48,7 @@ def resolve(ctx):
     phys = None
     if attack.delivery:
         phys = physical(attack.delivery, _damage(ctx, attack), attack.penetration, attack.force, layers)
-    element = _element_for(ctx, attack, card, layers[0]) if _has_element(attack) else None
+    element = _element_for(ctx, attack, card, layers[0], now) if _has_element(attack) else None
     if element is None:
         return phys
     if phys is None:
@@ -172,7 +174,7 @@ def _constitution(target):
     return BASE_CON
 
 
-def _element_for(ctx, attack, card, layer):
+def _element_for(ctx, attack, card, layer, now=None):
     extra = _stat(attack, ctx.source)
     share = ctx.scale
     fire = 0.0
@@ -184,11 +186,34 @@ def _element_for(ctx, attack, card, layer):
     bolt = attack.lightning
     if bolt is not None:
         bolt = Lightning((bolt.damage + extra) * share, bolt.reach, bolt.arcs, bolt.spark)
+    if getattr(ctx.target, "warmth", None) is not None:
+        return _into_warmth(ctx, card, layer, fire, cold, bolt, now)
     return elemental(
         fire=fire, cold=cold, bolt=bolt, layer=layer, resist=card.resist,
         constitution=_constitution(ctx.target), wet=_wet(ctx.target, card),
         full=getattr(ctx.target, "detail", "simple") == "full",
     )
+
+
+def _into_warmth(ctx, card, layer, fire, cold, bolt, now):
+    """A body with a temperature: fire and cold are a jump on the layer hit (the skin when it hit
+    bare hide); the heat wounds through the skin over the next seconds. A caught cloth still
+    burns at once, and the bolt is priced as on any body."""
+    if now is None:
+        raise ValueError("a hit on a body with a temperature needs now")
+    target = ctx.target
+    caught = fire > 0 and layer is not None and layer.flammability >= CATCH
+    rest = elemental(fire=fire if caught else 0.0, cold=0.0, bolt=bolt, layer=layer,
+                     resist=card.resist, constitution=_constitution(target), wet=_wet(target, card))
+    jump = 0.0
+    if fire > 0 and not caught:
+        jump += max(0.0, fire - resist_of(card.resist, "fire"))
+    if cold:
+        jump -= cold_sticks(cold, card.resist, _constitution(target), _wet(target, card))
+    where = temperature.SKIN if layer is None or layer is card.natural else temperature.OUTER
+    shock = temperature.bump(target, where, jump, now) if jump else 0.0
+    return Elemental(rest.wound + shock, rest.starts, rest.heat_shade if caught else None, None,
+                     rest.passed_charge, rest.passed_reach)
 
 
 def _level_of(entity):
@@ -267,7 +292,8 @@ def apply_element(ctx, priced, now):
     attack = ctx.attack_def
     if element.cold_shade:
         target.cold_shade = element.cold_shade
-    elif attack is not None and attack.cold and _clock(target) is not None:
+    elif (attack is not None and attack.cold and _clock(target) is not None
+          and getattr(target, "warmth", None) is None):   # temperature paints its own blue
         _clock(target).cure(target, "chilled")
         target.cold_shade = None
     defence = getattr(target, "defence", None)

@@ -18,6 +18,7 @@ class _ResumeStub:
         self.status = "attack"
         self.direction = pygame.math.Vector2(3, 4)
         self.frozen = False
+        self._hold = lambda target: None   # no holding attack
 
 
 def test_combat_unit_resume_default_sets_idle():

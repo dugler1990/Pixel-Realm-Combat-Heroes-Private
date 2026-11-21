@@ -522,7 +522,7 @@ class InteractionResolver:
             return
         if ctx.amount is not None:
             raise ValueError(f"damage from {ctx.source_kind!r} has both an attack def and an amount")
-        priced = resolve(ctx)
+        priced = resolve(ctx, self._now_ms())
         if priced is not None:
             ctx.amount = landed(priced)
             apply_element(ctx, priced, self._now_ms())
