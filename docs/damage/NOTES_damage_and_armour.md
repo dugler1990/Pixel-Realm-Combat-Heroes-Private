@@ -33,12 +33,18 @@ drawn, and armour is where each piece is drawn, not a whole body region.
 - Simple bodies stay simple: a body with no worn layers and no conditions takes the fast path.
   Layers, wear and stuck arrows are opt-in (player, key bosses).
 - **One damage path.** Every hit, lava tick and co-op relay goes through `InteractionResolver`
-  (`apply` = team rule, then `land`). `land` **decides**: the body's gate
-  (`Entity.can_receive_interaction`, one copy, `takes_impulse` per class), the invulnerable window
-  (`ctx.over_time` passes it), the price (`_price`: attack def, else the stated amount, else the
-  attacker's weapon or magic damage), the elements. `Entity.take_damage` is the one place health goes
-  down; a class reacts in `on_hurt` (sound, i-frames, particles, death). The resolver also records
-  the attacker (`register_retaliation`).
+  (`apply` = the one team rule `team_allows`, then `land`; `strike` checks the team once per target,
+  then `land`). `land` **decides**: the body's gate (`Entity.can_receive_interaction`: health left;
+  shoves need `takes_impulse`), the `invulnerable` condition (blocks all damage, heat and cold too;
+  nothing grants it by default), the price (`_price`: attack def, else the stated amount, else the
+  attacker's weapon or magic damage), the elements. Returns `LANDED`, `SPENT` (invulnerable) or
+  `REFUSED`. `Entity.take_damage` is the one place health goes down; a class reacts in `on_hurt`;
+  at 0 `die()` runs once (`is_dead`, condition notice) and calls `on_death` (leave the tree, kill;
+  classes add particles, sound, XP; the player stays on screen). The resolver records the attacker
+  (`remember_attacker` → `last_attacker_team` / `last_attacker_until_ms`), read by two rules:
+  permission (`FactionPolicy.should_aggro`, retaliate_only) and preference (`CombatUnit`).
+  Ground effects (slippery) are not hits: `Entity._set_effect_state`. Sounds: `sounds.get`.
+  Guarded by `tests/damage/test_one_path_guard.py`. Plan: `PLAN_damage_foundation.md`.
 - The rules are **pure functions** (no pygame, no entities): the card, the tests and the resolver
   all call the same ones.
 
@@ -444,7 +450,7 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 → `refactor/elemental` (7, built, not watched in the window) → `refactor/damage-path` (one damage
 path, worktree `..\Pixel-Realm-damage-path`, from 7's last commit; the temperature work still
 uncommitted in `..\Pixel-Realm-elemental` does not have it yet).
-Tests: the targeted set, same 11 known failures (528 passed after the damage path). In play, knockback uses
+Tests: the targeted set, same 11 known failures (540 passed after the foundation cleanup). In play, knockback uses
 mass and worn weight, the mesh hero is hit on his points, a pierce stops on plate, a haste buff
 adds to speed until its end (the `haste` scene is the only thing that grants it), and a fire or ice
 hit on a body card uses the elemental rule.
@@ -502,6 +508,11 @@ hit on a body card uses the elemental rule.
   Known failures (11, before chunk 1): test_enemy_dash 1, test_player_charge_controller 1,
   rts/test_gather 1, test_enemy_puppet 2, test_entity_gates 2, test_coop_player_damage 2,
   test_mesh_contact 2.
+- Crowd bench (damage path speed): `Code/sprite_venv/Scripts/python.exe tools/damage_crowd_bench.py
+  600 20` from the worktree root. Real Level4 headless, 40 units in two hostile crowds; mean/p95 ms
+  per frame, then one `strike` over the crowd (µs). Noisy (AI on the clock): 3 runs, compare means.
+- Deleted code is restored from git, not a legacy folder: `git show <commit>^:<path>`
+  (the commits are in the Log).
 - Item stats: `Graphics/Standard_Items/item_bases.json` (hand-written, by base id: `plate_chest`, `loincloth`).
   An item names its base in `base`; outfit items get it from `equip_install.py`
   (`equipment.piece_base`: the outfit json's `"material"` + the piece, left and right share one). Stats never
@@ -528,6 +539,13 @@ hit on a body card uses the elemental rule.
   on `refactor/elemental` too. Not from the damage work. Not fixed.
 - A test stub that borrows `Entity.can_receive_interaction` needs `takes_impulse = True` (the class
   field it reads); one that borrows `Entity.receive_interaction` for damage needs `take_damage`.
+- `Code/interaction_validation.py` FactionPolicyRoute fails (`npass_e1=True`): it expects a
+  `neutral_passive` hit on `enemy_1` refused, but the policy lets a neutral damage a hostile.
+  The script's expectation is stale (older than this work). Not fixed.
+- The impulse (shove) team rule still lives in the body gate (`can_receive_interaction`), not in
+  `team_allows` (which rules damage only). One place for shoves too: not done.
+- `sed -i` in Git Bash rewrites a CRLF working copy as LF (git shows no diff; autocrlf). Edit with
+  a script that keeps the file's endings.
 
 ## Log
 
@@ -614,6 +632,25 @@ hit on a body card uses the elemental rule.
   Player `hurt_time` is `hit_time` like everyone else. Targeted set: 11 failed, the same names as
   before; 528 passed (517 before, plus `test_server_players` 5 and the new
   `tests/damage/test_damage_path.py` 6).
+- 2026-11-21: foundation cleanup, steps 1-6 of `PLAN_damage_foundation.md` (`refactor/damage-path`).
+  1 `202fdcfd` deleted `Code/Enemy.py`, `Code/friendly.py`, `Code/tribey_geom_probe.py` (restore:
+  `git show 202fdcfd^:Code/Enemy.py`), 31 inert `damage_player` keys, the unused projectile
+  multiplier/bonus. 2 `d87dc708` no resolver fallbacks (Entity lava, IceClone, leap slam); slippery
+  set directly (the `effect_state` kind, its benchmark column and 2 validation scenarios gone); one
+  team rule `team_allows` (leap slam's, the meteor's and the body gate's checks gone). 3 `e429ea58`
+  `die()` / `on_death()`; dies at the killing hit (before: at the victim's next update); Eskimo,
+  PolarBear and workers now drop their conditions on death; every tribe member leaves the entity tree
+  (before: only workers given a callback); the level loop and camera group skip a body killed earlier
+  in the frame. 4 `31649c6f` `sounds.get`; Hit.wav was loaded per instance. 5 `faea0307` one
+  attacker record; a passive faction's leave to fight back now expires (before: never, `until > 0`);
+  the resolver no longer clears the AI's target cache (`_aggro_cache_valid` already does when the
+  preferred team changes). 6 `0849cecb` `invulnerable` condition, `over_time` gone; the player's
+  one-frame window after a hit is gone, so two hits in one frame both land; results LANDED / SPENT /
+  REFUSED. Targeted set after each step: 11 failed, the same names; 540 passed with the guard (528
+  before). Crowd bench, 3 runs each, 600 frames, 40 units: before mean 8.28 / 8.66 / 8.24 ms, p95
+  11.7 / 12.9 / 11.4, strike 278 / 223 / 248 µs over 36 / 33 / 33 targets (~7 µs each); after mean
+  7.47 / 7.73 / 7.78 ms, p95 10.9 / 11.8 / 11.2, strike 192 / 168 / 163 µs over 38 / 37 / 34 (~4.8
+  µs each). Step 7 (prices from defs only) not started: see the plan's open question.
 
 ## Tried and dropped
 
