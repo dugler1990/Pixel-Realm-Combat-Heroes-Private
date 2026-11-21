@@ -356,6 +356,10 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.grass_offset.y = fy - self.grass_half_height
         self._apply_screen_shake()
 
+        hole = getattr(self, "water_hole", None)
+        if hole is not None:
+            hole.draw(self)
+
         if self.ground_chunks:
             # Only the chunks the camera can see. cache_key stays id(surface) to match
             # backend.invalidate_texture, which looks the cache up that way.
@@ -389,9 +393,7 @@ class YSortCameraGroup(pygame.sprite.Group):
             rot_function = lambda x, y, angle=shared_angle: angle
         else:
             rot_function = lambda x, y: int(math.sin(self.t / 60 + x / 100) * 15)
-        
-        # if player on grass
-        
+
         player_center = player.rect.center
         if self._grass_disturbance_enabled():
             if self.last_player_grass_force_center is None:
@@ -405,12 +407,7 @@ class YSortCameraGroup(pygame.sprite.Group):
                     self.last_player_grass_force_center = player_center
         else:
             self.last_player_grass_force_center = player_center
-        
-        
-        #print( self.grass_offset )
-        #print( self.offset )
-        
-        # Draw grass relative to player
+
         if self._grass_clip_rect is not None:
             # GPU mode: blit each tile directly to the backend — no intermediate surface.
             if not getattr(self, "_grass_path_logged", False):

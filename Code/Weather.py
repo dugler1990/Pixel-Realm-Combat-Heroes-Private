@@ -64,6 +64,7 @@ class Weather:
         self.climate = climate_by_name(climate)
         self.day_length = 24
         self.current_time = random.uniform(0, 24)   # hours [0, 24)
+        self.pinned_hour = None                      # set by a scene; the clock stays there
         self.time_speed_multiplier = 1.0
 
         # public state consumed elsewhere — start clear
@@ -105,6 +106,9 @@ class Weather:
         self._update_precipitation(dt)
 
     def _advance_time(self, dt):
+        if self.pinned_hour is not None:
+            self.current_time = float(self.pinned_hour)
+            return
         hours_per_second = 24.0 / max(1e-6, DAY_LENGTH_SECONDS)
         self.current_time = (
             self.current_time + dt * hours_per_second * self.time_speed_multiplier

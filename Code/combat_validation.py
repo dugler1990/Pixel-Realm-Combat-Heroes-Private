@@ -34,8 +34,8 @@ def main():
     code_dir = os.path.dirname(os.path.abspath(__file__))
     if args.list:
         sys.path.insert(0, code_dir)
-        from combat_validation_driver import SCENARIOS
-        for scene in SCENARIOS:
+        from combat_validation_driver import EXTRA_SCENARIOS, SCENARIOS
+        for scene in SCENARIOS + EXTRA_SCENARIOS:
             print(f"{scene.NAME}: {scene.WATCH}")
         return 0
 
