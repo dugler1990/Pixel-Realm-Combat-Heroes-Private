@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 import threading
 import traceback
 import webbrowser
@@ -20,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from tools.boss_sprite_pipeline.rigging import paths, sources
+from tools.boss_sprite_pipeline.rigging import paths, proc, sources
 from tools.boss_sprite_pipeline.rigging.map import character as C
 from tools.boss_sprite_pipeline.rigging.map.match import match
 from tools.boss_sprite_pipeline.rigging.map.skeleton import load_bvh
@@ -34,6 +33,7 @@ REPO = PIPE.parents[1]
 WEB = PIPE / "web" / "anim.html"
 NAME = __import__("re").compile(r"^[A-Za-z0-9_\-]+$")
 LOG_KEEP = 400
+CHUNK = 20          # clips per Blender run in map-all: a stop keeps every finished chunk
 
 
 def data_root() -> Path:
@@ -182,6 +182,7 @@ class Jobs:
                 if j:
                     run.append({"label": j["label"], "lane": j["lane"], "lines": j["lines"][-60:]})
             return {"running": run, "done": [{"label": j["label"], "lane": j["lane"], "rc": j["rc"],
+                                               "stopped": j["rc"] == 2,
                                                "lines": j["lines"][-40:]} for j in self.done[-20:]][::-1]}
 
     def start(self, lane: str, label: str, work) -> None:
@@ -189,14 +190,18 @@ class Jobs:
             if self.lanes[lane]:
                 raise RuntimeError(f"the {lane} lane is busy: {self.lanes[lane]['label']}")
             self.n += 1
-            job = {"label": label, "lane": lane, "lines": [], "rc": None}
+            job = {"label": label, "lane": lane, "lines": [], "rc": None, "cancel": False, "proc": None}
             self.lanes[lane] = job
 
         def run():
             rc = 1
+            proc.current.job = job
             try:
                 work(job["lines"])
                 rc = 0
+            except proc.Stopped:
+                job["lines"].append("STOPPED by the stop button")
+                rc = 2
             except Exception as exc:
                 job["lines"].append(str(exc))
                 job["lines"].append(traceback.format_exc()[-1500:])
@@ -208,6 +213,13 @@ class Jobs:
 
         threading.Thread(target=run, daemon=True).start()
 
+    def stop(self, lane: str | None = None) -> list[str]:
+        with self.lock:
+            jobs = [j for name, j in self.lanes.items() if j and (lane is None or name == lane)]
+        for j in jobs:
+            proc.kill(j)
+        return [j["label"] for j in jobs]
+
 
 JOBS = Jobs()
 
@@ -218,18 +230,9 @@ def _log(lines, text: str) -> None:
         del lines[:-LOG_KEEP]
 
 
-def _run(cmd, lines, env=None, cwd=None) -> None:
-    _log(lines, "$ " + " ".join(str(c) for c in cmd))
-    merged = os.environ.copy()
-    if env:
-        merged.update(env)
-    proc = subprocess.run(cmd, cwd=cwd, env=merged, capture_output=True, text=True)
-    if proc.stdout:
-        _log(lines, proc.stdout[-8000:])
-    if proc.stderr:
-        _log(lines, proc.stderr[-4000:])
-    if proc.returncode != 0:
-        raise RuntimeError(f"exit {proc.returncode}")
+def _run(cmd, lines, env=None, cwd=None) -> str:
+    """Streams into the job log; the stop button kills it (rigging/proc.py)."""
+    return proc.run(cmd, lines, env=env, cwd=cwd, keep=LOG_KEEP)
 
 
 def run_map(clip_id: str, character_id: str, lines: list) -> dict:
@@ -283,7 +286,12 @@ def run_map_many(clip_ids: list, character_id: str, lines: list) -> dict:
     py = str(bpy_python())
     view = paths.character_dir(character_id) / "view" / f"v{n}"
     view.mkdir(parents=True, exist_ok=True)
+    chunks = []
     for src, group in by_source.items():
+        chunks += [(src, group[i:i + CHUNK]) for i in range(0, len(group), CHUNK)]
+    for k, (src, group) in enumerate(chunks, 1):
+        proc.check()
+        _log(lines, f"chunk {k}/{len(chunks)}")
         stage = library() / "stage" / f"{character_id}_batch"
         if stage.exists():
             shutil.rmtree(stage)
@@ -493,6 +501,8 @@ class Handler(BaseHTTPRequestHandler):
 
                 JOBS.start("local", f"map {clip} → {cid}", work)
                 return self._json({"started": True})
+            if url.path == "/api/stop":
+                return self._json({"stopped": JOBS.stop(body.get("lane"))})
             if url.path == "/api/map_all":
                 cid = str(body.get("character") or "")
                 find_character(cid)

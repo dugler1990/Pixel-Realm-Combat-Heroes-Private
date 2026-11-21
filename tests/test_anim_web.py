@@ -148,6 +148,30 @@ def test_prompt_needs_a_pod_and_a_finished_cell_joins_the_list(server, monkeypat
     assert row["model"] == "Kimodo-SOMA-RP-v1" and row["source"] == "soma"
 
 
+def test_stop_kills_the_running_process_and_marks_the_job_stopped(server, monkeypatch):
+    import sys
+    import time
+    base, _ = server
+
+    def slow(clip_id, character_id, lines):
+        aw._run([sys.executable, "-c", "import time\nfor i in range(60):\n print(i, flush=True); time.sleep(0.5)"], lines)
+
+    monkeypatch.setattr(aw, "run_map", slow)
+    assert post(base + "/api/map", {"clip": "walk_v1_00", "character": "barb"})[0] == 200
+    for _ in range(50):                               # wait until the child is running and printing
+        job = aw.JOBS.lanes["local"]
+        if job and job.get("proc") and job["lines"][-1:] != [] and job["lines"][-1].strip().isdigit():
+            break
+        time.sleep(0.1)
+    t0 = time.time()
+    code, r = post(base + "/api/stop", {})
+    assert code == 200 and r["stopped"]
+    wait_idle()
+    assert time.time() - t0 < 5
+    done = aw.JOBS.done[-1]
+    assert done["rc"] == 2 and "STOPPED" in done["lines"][-1]
+
+
 def test_match_reads_the_rig_version_roles(server):
     base, _ = server
     status, body = get(base + "/api/match?clip=walk_v1_00&character=barb")

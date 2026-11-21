@@ -48,6 +48,7 @@
   <label>character <select id="char"></select></label>
   <span id="count" class="tag" style="position:static"></span>
   <span id="job"></span>
+  <button id="stop" style="display:none; background:#5a2630; border-color:#8a3a48">stop</button>
 </header>
 <main>
   <div id="list"><input id="filter" placeholder="filter"></div>
@@ -511,7 +512,7 @@ async function refresh() {
       $("job").textContent = run.label + " — running on this machine";
       $("map").textContent = "mapping…";
     } else if (done) {
-      $("job").textContent = (done.rc === 0 ? "done" : "failed") + " · " + done.label;
+      $("job").textContent = (done.rc === 0 ? "done" : done.stopped ? "stopped" : "failed") + " · " + done.label;
       $("map").textContent = "map this clip";
     }
     const pose = done && (done.lines || []).find((l) => l.startsWith("pose check:"));
@@ -521,6 +522,7 @@ async function refresh() {
     $("log").textContent = [head, ...(lines || [])].filter(Boolean).join("\n");
     $("map").disabled = !!run;
     $("mapall").disabled = !!run;
+    $("stop").style.display = run ? "" : "none";
     $("mapall").textContent = "map all shown (" + todo().length + ")";
     $("apply").disabled = !!run;
     $("save").disabled = !!run;
@@ -579,6 +581,11 @@ $("mapall").onclick = async () => {
     await post("/api/map_all", { character: ch.id, clips: ids });
     $("log").textContent = "baking " + ids.length + " clips in one Blender run; each shows as mapped when the run ends";
   } catch (err) { $("log").textContent = String(err); }
+};
+$("stop").onclick = async () => {
+  if (!confirm("Stop the running job? Finished chunks of a map-all are kept; the current one is thrown away.")) return;
+  try { const r = await post("/api/stop", {}); $("log").textContent = "stopping: " + r.stopped.join(", "); }
+  catch (err) { $("log").textContent = String(err); }
 };
 $("save").onclick = () => saveMap(false);
 $("apply").onclick = () => saveMap(true);

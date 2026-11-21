@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import operator
 import shutil
-import subprocess
 from pathlib import Path
 
 from .. import paths
@@ -38,16 +37,12 @@ class Ctx:
         del self.lines[:-400]
 
     def blender(self, args, expect=None):
-        cmd = [str(paths.bpy_python())] + [str(a) for a in args]
-        self.log("$ " + " ".join(cmd))
-        proc = subprocess.run(cmd, cwd=str(self.pipe), capture_output=True, text=True,
-                              env={**__import__("os").environ, "ANIM_DATA_ROOT": str(paths.data_root())})
-        self.log(proc.stdout[-6000:])
-        if proc.stderr:
-            self.log(proc.stderr[-3000:])
-        if proc.returncode != 0 or (expect and expect not in proc.stdout):
-            raise RuntimeError(f"{Path(args[0]).name} failed (exit {proc.returncode})")
-        return proc.stdout
+        from .. import proc
+        out = proc.run([str(paths.bpy_python())] + [str(a) for a in args], self.lines,
+                       env={"ANIM_DATA_ROOT": str(paths.data_root())}, cwd=str(self.pipe))
+        if expect and expect not in out:
+            raise RuntimeError(f"{Path(args[0]).name}: no {expect} in its output")
+        return out
 
     def measure(self, check, glb):
         out = self.dir / f"check_{check}.json"
