@@ -361,7 +361,12 @@ if SOURCE not in SOURCES:
     raise SystemExit("unknown --source %r; have %s" % (SOURCE, sorted(SOURCES)))
 if TARGET and TARGET not in TARGETS:
     raise SystemExit("unknown --target %r; have %s" % (TARGET, sorted(TARGETS)))
-MAP = SOURCES[SOURCE]["map"]
+try:
+    from rigmap.legacy import as_legacy_map
+    MAP = as_legacy_map(SOURCE) or SOURCES[SOURCE]["map"]
+except Exception as _rigmap_exc:             # the tables above still bake if the package is missing
+    print("rigmap unavailable: %s" % (_rigmap_exc,), flush=True)
+    MAP = SOURCES[SOURCE]["map"]
 
 _PROFILE = {}
 _PROFILE.update(SOURCES[SOURCE])
@@ -886,18 +891,21 @@ def main():
     blend = os.path.join(OUT, "animated.blend")
     bpy.ops.wm.save_as_mainfile(filepath=blend)
     log("saved", blend, "with", len(actions), "actions")
-    try:
-        for t in tgt.animation_data.nla_tracks:
-            t.mute = False
-        bpy.ops.object.select_all(action="DESELECT")
-        mesh.select_set(True)
-        tgt.select_set(True)
-        bpy.context.view_layer.objects.active = tgt
-        bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "animated.glb"), use_selection=True,
-                                  export_animations=True, export_animation_mode="NLA_TRACKS")
-        log("exported animated.glb")
-    except Exception as e:
-        log("glb export skipped:", e)
+    if os.environ.get("SKIP_GLB"):
+        log("skipped animated.glb")
+    else:
+        try:
+            for t in tgt.animation_data.nla_tracks:
+                t.mute = False
+            bpy.ops.object.select_all(action="DESELECT")
+            mesh.select_set(True)
+            tgt.select_set(True)
+            bpy.context.view_layer.objects.active = tgt
+            bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "animated.glb"), use_selection=True,
+                                      export_animations=True, export_animation_mode="NLA_TRACKS")
+            log("exported animated.glb")
+        except Exception as e:
+            log("glb export skipped:", e)
     log("DONE")
 
 
