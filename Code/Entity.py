@@ -95,6 +95,10 @@ class Entity(pygame.sprite.Sprite):
     casts_shadow = True  # entities (player/enemies/friendlies) drop directional shadows
     takes_impulse = True  # False: shoves (knockback) do not move this body (can_receive_interaction)
     is_dead = False  # set once by die()
+    # Who hit this body last, until when (ms): one fact, written by the resolver. Read by
+    # FactionPolicy.should_aggro (may a passive faction fight back) and CombatUnit (whom to prefer).
+    last_attacker_team = None
+    last_attacker_until_ms = 0
     # Statuses whose animation is a walk cycle, and so phased on distance rather than time.
     # Declared per subclass because each has its own vocabulary: the player uses bare
     # direction names, enemies and friendlies "move", neutrals "walking". A status missing

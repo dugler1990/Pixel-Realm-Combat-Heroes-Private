@@ -45,7 +45,7 @@ def test_a_hit_in_the_invulnerable_window_is_spent_and_starts_nothing(monkeypatc
     ctx = _hit(body, amount=10, attack_def=attack("sword"))
     assert InteractionResolver().apply(ctx) is True   # spent: the attack does not try again
     assert body.health == 100 and body.hurt == [] and started == []
-    assert not hasattr(body, "recent_attacker_team_id") and not hasattr(body, "retaliate_team_id")
+    assert not hasattr(body, "last_attacker_team")
 
 
 def test_damage_over_time_is_not_stopped_by_the_window():
@@ -82,10 +82,20 @@ def test_the_gate_refuses_no_health_left_and_shoves_on_a_fixed_body():
     assert Entity.can_receive_interaction(body, shove) is False
 
 
-def test_the_resolver_remembers_the_attacker_for_a_body_that_keeps_it():
-    body = _body(recent_attacker_team_id=None, recent_attacker_until_ms=0)
-    InteractionResolver().apply(_hit(body, amount=1))
-    assert body.recent_attacker_team_id == "player" and body.recent_attacker_until_ms > 0
+def test_the_resolver_remembers_the_attacker_on_any_body():
+    body = _body(team_id="neutral_passive")
+    InteractionResolver().apply(_hit(body, amount=1, source_team="enemy_1"))
+    assert body.last_attacker_team == "enemy_1" and body.last_attacker_until_ms > 0
+
+
+def test_a_passive_faction_may_fight_back_only_while_the_memory_lasts():
+    """Permission expires: before, should_aggro checked `until > 0`, so it never did."""
+    resolver = InteractionResolver()
+    body = SimpleNamespace(team_id="neutral_passive")
+    attacker = SimpleNamespace(team_id="enemy_1")
+    resolver.faction_policy.remember_attacker(body, "enemy_1", 1000)
+    assert resolver.can_aggro(body, attacker, 1001) is True
+    assert resolver.can_aggro(body, attacker, body.last_attacker_until_ms) is False
 
 
 def test_the_one_team_rule_refuses_own_team_in_apply_and_in_strike():

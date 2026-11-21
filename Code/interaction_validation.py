@@ -271,11 +271,9 @@ def _run_aggro_policy_route():
 
     # Neutral retaliation behavior
     policy = resolver.faction_policy
-    policy.register_retaliation(neutral, "enemy_1", 1000)
-    faction_def = policy.resolve_faction("neutral_passive") or {}
-    retaliation_window = int(faction_def.get("retaliation_window_ms", 0))
-    setattr(neutral, "retaliate_until_ms", 1000 + retaliation_window)
-    neutral_to_enemy_after_hit = resolver.can_aggro(neutral, enemy1)
+    policy.remember_attacker(neutral, "enemy_1", 1000)
+    neutral_to_enemy_after_hit = resolver.can_aggro(neutral, enemy1, 1001)
+    neutral_to_enemy_after_window = resolver.can_aggro(neutral, enemy1, 1000 + 10 ** 6)
 
     passed = (
         enemy_to_player
@@ -287,6 +285,7 @@ def _run_aggro_policy_route():
         and chaotic_to_enemy1
         and chaotic_to_player
         and neutral_to_enemy_after_hit
+        and not neutral_to_enemy_after_window
     )
     return ScenarioResult(
         "AggroPolicyRoute",
@@ -294,7 +293,7 @@ def _run_aggro_policy_route():
         (
             f"e_p={enemy_to_player} e1_e2={enemy1_to_enemy2} e1_e3={enemy1_to_enemy3} "
             f"a4_e3={ally4_to_enemy3} a4_p={ally4_to_player} p_np={player_to_neutral_passive} "
-            f"nc_e1={chaotic_to_enemy1} nc_p={chaotic_to_player} nret_e1={neutral_to_enemy_after_hit}"
+            f"nc_e1={chaotic_to_enemy1} nc_p={chaotic_to_player} nret_e1={neutral_to_enemy_after_hit} nret_expired={neutral_to_enemy_after_window}"
         ),
     )
 

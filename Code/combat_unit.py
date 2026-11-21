@@ -68,8 +68,6 @@ class CombatUnit(Entity):
         self.groups = groups
         self.team_id = team_id
         self.sprite_type = sprite_type if sprite_type is not None else "enemy"
-        self.recent_attacker_team_id = None
-        self.recent_attacker_until_ms = 0
         # --- aggro target cache ---
         # None = never scanned; False = cached empty; else real target sprite
         self._aggro_target_cache = None
@@ -505,12 +503,10 @@ class CombatUnit(Entity):
         return float(self.combat_config.get("notice_radius", math.inf))
 
     def _current_prefer_team(self, now):
-        retaliate_until = getattr(self, "retaliate_until_ms", 0)
-        retaliate_team = getattr(self, "retaliate_team_id", None)
-        if retaliate_team and now < retaliate_until:
-            return retaliate_team
-        if now < self.recent_attacker_until_ms:
-            return self.recent_attacker_team_id
+        """Preference: target the team that hit me while the memory lasts (permission is
+        FactionPolicy.should_aggro's, from the same fact)."""
+        if now < self.last_attacker_until_ms:
+            return self.last_attacker_team
         return None
 
     def _aggro_cache_valid(self, now, frame_number):
@@ -529,7 +525,7 @@ class CombatUnit(Entity):
             return False
         return True
 
-    def _pick_best_hostile(self, resolver, candidates, prefer_team, notice_radius, restrict_prefer_team):
+    def _pick_best_hostile(self, resolver, candidates, prefer_team, notice_radius, restrict_prefer_team, now):
         best_target = None
         best_distance = math.inf
         for candidate in candidates:
@@ -538,7 +534,7 @@ class CombatUnit(Entity):
             if restrict_prefer_team and prefer_team is not None:
                 if getattr(candidate, "team_id", None) != prefer_team:
                     continue
-            if not resolver.can_aggro(self, candidate):
+            if not resolver.can_aggro(self, candidate, now):
                 continue
             distance, _ = self.get_target_distance_direction(candidate)
             if distance > notice_radius:
@@ -579,11 +575,11 @@ class CombatUnit(Entity):
             candidates = visible.sprites() if visible is not None else []
 
         best_target = self._pick_best_hostile(
-            resolver, candidates, prefer_team, notice_radius, restrict_prefer_team=True
+            resolver, candidates, prefer_team, notice_radius, restrict_prefer_team=True, now=now
         )
         if best_target is None and prefer_team is not None:
             best_target = self._pick_best_hostile(
-                resolver, candidates, prefer_team, notice_radius, restrict_prefer_team=False
+                resolver, candidates, prefer_team, notice_radius, restrict_prefer_team=False, now=now
             )
 
         self._aggro_target_cache = best_target if best_target is not None else False

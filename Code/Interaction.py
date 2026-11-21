@@ -315,7 +315,9 @@ class FactionPolicy:
             return relation != "ally"
         return relation == "hostile"
 
-    def should_aggro(self, source: Any, target: Any) -> bool:
+    def should_aggro(self, source: Any, target: Any, now_ms: int) -> bool:
+        """May `source` attack `target`. A `retaliate_only` faction may attack only the team that
+        hit it, while that memory lasts (permission; CombatUnit's preference reads the same fact)."""
         source_id = getattr(source, "team_id", None)
         target_id = getattr(target, "team_id", None)
         source_faction = self.resolve_faction(source_id)
@@ -331,14 +333,13 @@ class FactionPolicy:
         if aggro_mode == "hostile_only":
             return relation == "hostile"
         if aggro_mode == "retaliate_only":
-            retaliate_team = getattr(source, "retaliate_team_id", None)
-            retaliate_until = getattr(source, "retaliate_until_ms", 0)
-            return retaliate_team == target_id and retaliate_until > 0
+            return (getattr(source, "last_attacker_team", None) == target_id
+                    and now_ms < getattr(source, "last_attacker_until_ms", 0))
         return relation == "hostile"
 
-    def register_retaliation(self, target: Any, attacker_team: Optional[str], now_ms: int):
-        """Who hit this body, until when. A body that keeps `recent_attacker_*` (its AI reads it)
-        gets it set; a `retaliate_only` faction also gets `retaliate_*`, which its aggro rule reads."""
+    def remember_attacker(self, target: Any, attacker_team: Optional[str], now_ms: int):
+        """Who hit this body, until when (its faction's retaliation window). One fact on every body;
+        the readers are should_aggro (permission) and CombatUnit._current_prefer_team (preference)."""
         target_team = getattr(target, "team_id", None)
         if attacker_team is None or attacker_team == target_team:
             return
@@ -346,13 +347,8 @@ class FactionPolicy:
         window_ms = self.default_retaliation_window_ms
         if target_faction is not None:
             window_ms = target_faction.get("retaliation_window_ms", window_ms)
-        if hasattr(target, "recent_attacker_team_id"):
-            target.recent_attacker_team_id = attacker_team
-            target.recent_attacker_until_ms = now_ms + window_ms
-            target._aggro_target_cache = None
-        if target_faction is not None and target_faction.get("aggro_mode") == "retaliate_only":
-            target.retaliate_team_id = attacker_team
-            target.retaliate_until_ms = now_ms + window_ms
+        target.last_attacker_team = attacker_team
+        target.last_attacker_until_ms = now_ms + window_ms
 
 
 class InteractionResolver:
@@ -410,8 +406,8 @@ class InteractionResolver:
         """The one team rule (the faction policy). Only damage is ruled here; other kinds pass."""
         return self.faction_policy.can_apply_damage(source_team, target_team, kind)
 
-    def can_aggro(self, source: Any, target: Any) -> bool:
-        allowed = self.faction_policy.should_aggro(source, target)
+    def can_aggro(self, source: Any, target: Any, now_ms: Optional[int] = None) -> bool:
+        allowed = self.faction_policy.should_aggro(source, target, self._now_ms() if now_ms is None else now_ms)
         self._record_aggro_check(allowed)
         return allowed
 
@@ -489,9 +485,8 @@ class InteractionResolver:
         target.receive_interaction(ctx)
         if contact_debug.ENABLED and ctx.contact is not None:
             contact_debug.record(ctx.contact, self._now_ms(), contact_debug.kind_of(target, ctx.contact))
-        # Neutral retaliation registration happens after a successful hostile damage interaction.
         if ctx.kind == "damage" and ctx.source_team is not None:
-            self.faction_policy.register_retaliation(target, ctx.source_team, self._now_ms())
+            self.faction_policy.remember_attacker(target, ctx.source_team, self._now_ms())
         _interaction_log.debug(
             "interaction resolved source_kind=%r source_team=%r target_team=%r kind=%r attack_type=%r amount=%r",
             ctx.source_kind,
