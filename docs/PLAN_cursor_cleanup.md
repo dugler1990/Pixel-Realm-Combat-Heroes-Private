@@ -41,7 +41,7 @@ well contained, committed, then merged when Douglas says.
   `NOTES_stamina.md`, `test_stamina.py`; edits to Player, UI, Settings, dash.
 - Dash spends stamina; an empty dash costs health (must now go through the resolver).
   Leap and ice clone still spend energy.
-- Wires its `pay` to temperature's `bump()` (exertion).
+- Wires its `pay` to temperature: every stamina point spent is heat (`HEAT_PER_STAMINA`).
 
 ### 3. Water combat
 - `feat/water-combat` (`..\Pixel-Realm-water-combat`), on `visual-hits` (carries 30 damage commits);
