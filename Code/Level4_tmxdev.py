@@ -297,6 +297,26 @@ class Level4:
                        backend=backend)
 
 
+    def _player_spawn(self):
+        """Where the player appears. A `player_spawn` object in the map, or the old default.
+
+        Map pixels are scaled the same way the painted ground is. A level with no such
+        object still starts at tile (15, 25).
+        """
+        default = (15 * TILESIZE, 25 * TILESIZE)
+        tmx = getattr(self.layout_manager, "tmxdata", None)
+        if tmx is None or not tmx.tilewidth or not tmx.tileheight:
+            return default
+        for layer in tmx.layers:
+            if getattr(layer, "name", None) != "player_spawn":
+                continue
+            for obj in layer:
+                return (
+                    obj.x * TILESIZE / tmx.tilewidth,
+                    obj.y * TILESIZE / tmx.tileheight,
+                )
+        return default
+
     def start_map(self,
                   input_manager,
                   selected_player_info_dir,
@@ -425,7 +445,7 @@ class Level4:
             # Instantiate the player here
             self.player = SpecificPlayer(
                 self.selected_player_info_dir,
-                (15 * TILESIZE, 25 * TILESIZE),
+                self._player_spawn(),
                 [self.layout_manager.visible_sprites],  # Pass the visible_sprites from LayoutManager
                 self.layout_manager,  # Pass the obstacle_sprites from LayoutManager
                 self.create_attack,

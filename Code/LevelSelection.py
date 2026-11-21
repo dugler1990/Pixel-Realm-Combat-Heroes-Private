@@ -15,6 +15,7 @@ LEVEL_AT = {
     (0, 2): 9,
     (0, 3): 10,  # Frostreach Expanse (PNG bootstrap)
     (1, 0): 11,  # Frostreach Sunspine Dunes 01 (painted desert)
+             (2, 3): 13,  # bitter_floe_7x6_play
     (1, 1): 6,
     (1, 2): 12,  # sunspine_7x6_play
 }
@@ -91,11 +92,18 @@ class LevelSelection:
     def handle_events(self):
         row, col = self.selected_option
         moves = {pygame.K_UP: (-1, 0), pygame.K_DOWN: (1, 0), pygame.K_LEFT: (0, -1), pygame.K_RIGHT: (0, 1)}
+        cards = set(self.unlocked_levels_positions)
         for key, (dr, dc) in moves.items():
             if self.input_manager.is_key_just_pressed(key):
-                target = (row + dr, col + dc)
-                if target in self.unlocked_levels_positions:  # only onto a card
-                    self.selected_option = target
+                # Step over an empty cell. A hole used to swallow the key, so a card past it
+                # could not be reached.
+                r, c = row + dr, col + dc
+                while 0 <= r < self.grid_rows and 0 <= c < self.grid_columns:
+                    if (r, c) in cards:
+                        self.selected_option = (r, c)
+                        break
+                    r += dr
+                    c += dc
                 return
         if self.input_manager.is_key_just_pressed(pygame.K_RETURN):
             self.select_level(row, col)

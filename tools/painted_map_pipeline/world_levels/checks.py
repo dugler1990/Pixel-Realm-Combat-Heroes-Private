@@ -165,9 +165,21 @@ FOOTPRINT_OVERLAY_DIRECTIVE = (
 )
 
 
+def _missing(image: Image.Image, mask: np.ndarray, limit: int, enclosed_is_art: bool) -> np.ndarray:
+    """Shape pixels left unpainted. With ``enclosed_is_art`` only black joined to the black
+    outside the shape counts; dark art enclosed by paint does not (``footprint.background``)."""
+    from .footprint import background
+
+    summed = np.asarray(image.convert("RGB")).astype(np.int32).sum(axis=2)
+    if enclosed_is_art:
+        return mask & background(summed, ~mask, threshold=limit)
+    return mask & ~(summed > limit)
+
+
 def footprint_overlay(image: Image.Image, generation_mask: Image.Image,
                       *, content_luma_threshold: int | None = None,
-                      missing_luma_threshold: int | None = None) -> Image.Image:
+                      missing_luma_threshold: int | None = None,
+                      enclosed_is_art: bool = False) -> Image.Image:
     """The generation with its footprint error painted on.
 
     An IoU is a single number for an error that is always a rim, and where the rim sits is the
@@ -188,20 +200,21 @@ def footprint_overlay(image: Image.Image, generation_mask: Image.Image,
     summed = np.asarray(image.convert("RGB")).sum(axis=2)
     mask = np.asarray(generation_mask.convert("L")) > 0
     # Painted, asked inside the mask at the shortfall threshold and outside it at the spill one.
-    has = (mask & (summed > missing_limit)) | (~mask & (summed > limit))
+    has = (mask & ~_missing(image, mask, missing_limit, enclosed_is_art)) | (~mask & (summed > limit))
     return mark_shape_error(image, mask, has)
 
 
 def footprint(image: Image.Image, generation_mask: Image.Image, *, minimum: float,
-              content_luma_threshold: int | None = None) -> dict:
+              content_luma_threshold: int | None = None, enclosed_is_art: bool = False) -> dict:
     """Whether the paint landed inside the shape it was given."""
     from .footprint import CONTENT_LUMA_THRESHOLD, footprint_iou
 
     limit = CONTENT_LUMA_THRESHOLD if content_luma_threshold is None else content_luma_threshold
-    value = float(footprint_iou(image, generation_mask, content_luma_threshold=limit))
+    value = float(footprint_iou(image, generation_mask, content_luma_threshold=limit,
+                                enclosed_is_art=enclosed_is_art))
     drawn = np.asarray(image.convert("RGB")).sum(axis=2) > limit
     mask = np.asarray(generation_mask.convert("L")) > 0
-    missing = int((mask & ~drawn).sum())
+    missing = int(_missing(image, mask, limit, enclosed_is_art).sum())
     # What the IoU becomes if the spill is simply cut off at the polygon. A cut removes
     # overshoot for free and cannot fill shortfall, so this is exactly how much of the polygon
     # got painted -- and it separates the two failures the raw IoU blurs together. A return
@@ -230,7 +243,7 @@ MAX_MISSING_PX = 0
 
 
 def coverage(image: Image.Image, generation_mask: Image.Image, *, maximum: int = MAX_MISSING_PX,
-             content_luma_threshold: int | None = None) -> dict:
+             content_luma_threshold: int | None = None, enclosed_is_art: bool = False) -> dict:
     """Whether the paint reaches every pixel of the polygon.
 
     Deliberately separate from ``footprint``. That reports a single IoU, in which spill and
@@ -240,9 +253,8 @@ def coverage(image: Image.Image, generation_mask: Image.Image, *, maximum: int =
     from .footprint import CONTENT_LUMA_THRESHOLD
 
     limit = CONTENT_LUMA_THRESHOLD if content_luma_threshold is None else content_luma_threshold
-    drawn = np.asarray(image.convert("RGB")).sum(axis=2) > limit
     mask = np.asarray(generation_mask.convert("L")) > 0
-    missing = int((mask & ~drawn).sum())
+    missing = int(_missing(image, mask, limit, enclosed_is_art).sum())
     total = int(mask.sum())
     return {
         "name": "coverage",
@@ -305,12 +317,14 @@ def run_checks(root: str | Path, level_id: str, attempt: int | None = None) -> d
     # A rim error is far easier to act on as a picture than as a number, and this is also the
     # image the review loop can attach to a retry.
     overlay_path = attempt_dir / "footprint_overlay.png"
-    footprint_overlay(current, mask).save(overlay_path)
+    # A level sits on black: only black joined to the black outside the shape is unpainted;
+    # dark art enclosed by paint is not (footprint.background).
+    footprint_overlay(current, mask, enclosed_is_art=True).save(overlay_path)
 
     results = [
         full_bleed(current),
-        footprint(current, mask, minimum=minimum),
-        coverage(current, mask),
+        footprint(current, mask, minimum=minimum, enclosed_is_art=True),
+        coverage(current, mask, enclosed_is_art=True),
         join_line(
             current,
             Image.open(canvas_asset(job_dir, "locked_mask")),

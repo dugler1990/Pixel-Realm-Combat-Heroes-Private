@@ -311,3 +311,92 @@ def test_each_placement_is_kept_under_its_own_name(tmp_path):
     assert Path(second["placement_path"]).name == "placement_002.png"
     # current.png tracks the newest, and is the one name anything else passes around
     assert sha256_file(attempt_dir / "current.png") == sha256_file(attempt_dir / "placement_002.png")
+
+
+def _padded_job(tmp_path):
+    """01 accepted, and a job for 02, which therefore has padding."""
+    config = load_config(_write_fixture(tmp_path))
+    prepare_run(config)
+    root = config.output_root
+    refresh_level(root, "01")
+    first = create_job(root, "01")
+    ingest_result(root, "01", first.input_path, attempt=first.attempt, auto_accept=True)
+    return root, create_job(root, "02")
+
+
+def _canvas(job, name):
+    with Image.open(canvas_asset(job.directory, name)) as opened:
+        return np.asarray(opened.convert("RGBA" if name == "locked_pixels" else "L"))
+
+
+def test_padding_offset_moves_the_new_cell_and_keeps_the_padding(tmp_path):
+    from tools.painted_map_pipeline.world_levels.renderers.frame import shift_image
+
+    root, job = _padded_job(tmp_path)
+    with Image.open(job.input_path) as opened:
+        generated = opened.convert("RGBA")
+    result = ingest_result(root, "02", job.input_path, attempt=job.attempt, padding_offset=(1, -1))
+
+    with Image.open(result["placement_path"]) as opened:
+        placed = np.asarray(opened.convert("RGBA"))
+    locked = _canvas(job, "locked_mask") > 0
+    pending = _canvas(job, "pending_mask") > 0
+    # The padding is still byte-identical: that is what makes levels tile.
+    assert np.array_equal(placed[locked], _canvas(job, "locked_pixels")[locked])
+    # The new cell is the generation moved back by the offset.
+    moved_back = np.asarray(shift_image(generated, -1, 1))
+    assert np.array_equal(placed[pending], moved_back[pending])
+
+    assert result["padding_offset"] == [1, -1]
+    recorded = read_json(job.directory / "job.json")
+    assert recorded["placement_padding_offset"] == [1, -1]
+
+
+def test_padding_offset_is_refused_on_the_frame_renderer(tmp_path):
+    root, job = _padded_job(tmp_path)
+    recorded = read_json(job.directory / "job.json")
+    recorded["renderer"] = "frame"
+    (job.directory / "job.json").write_text(json.dumps(recorded), encoding="utf-8")
+    with pytest.raises(ValueError, match="needs the warp renderer"):
+        ingest_result(root, "02", job.input_path, attempt=job.attempt, padding_offset=(2, 0))
+
+
+def test_padding_offset_flag_reaches_ingest(tmp_path, capsys):
+    from tools.painted_map_pipeline.world_levels.orchestrate import main
+
+    root, job = _padded_job(tmp_path)
+    main(["ingest", str(root), "--level", "02", "--image", str(job.input_path),
+          "--attempt", str(job.attempt), "--padding-offset=-2,1"])
+    assert read_json(job.directory / "job.json")["placement_padding_offset"] == [-2, 1]
+
+
+def test_with_the_warp_on_the_offset_does_not_move_the_placement(tmp_path):
+    root, job = _padded_job(tmp_path)
+    plain = ingest_result(root, "02", job.input_path, attempt=job.attempt, fit_to_mask=True)
+    moved = ingest_result(root, "02", job.input_path, attempt=job.attempt, fit_to_mask=True,
+                          padding_offset=(1, -1))
+    assert sha256_file(Path(plain["placement_path"])) == sha256_file(Path(moved["placement_path"]))
+
+
+def _bump_revision(root, level_id, **hashes):
+    """A refresh as the refine does one: the revision moves; ``hashes`` overrides the rest."""
+    path = level_paths(root, level_id)["manifest"]
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["context_revision"] += 1
+    manifest["hashes"]["generation_input"] = "a different soft base"
+    manifest["hashes"].update(hashes)
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def test_an_older_attempt_with_the_same_padding_can_still_be_placed(tmp_path):
+    root, job = _padded_job(tmp_path)
+    _bump_revision(root, "02")
+    result = ingest_result(root, "02", job.input_path, attempt=job.attempt, feather=4)
+    assert Path(result["placement_path"]).is_file()
+
+
+def test_an_older_attempt_whose_padding_changed_is_refused(tmp_path):
+    root, job = _padded_job(tmp_path)
+    _bump_revision(root, "02", locked_pixels="a neighbour accepted since")
+    with pytest.raises(ValueError, match="stale"):
+        ingest_result(root, "02", job.input_path, attempt=job.attempt)

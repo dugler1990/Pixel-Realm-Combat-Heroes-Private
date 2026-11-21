@@ -113,18 +113,22 @@ def compose_level(
     player_px: int | None = None,
     player_sprite: Path | None = None,
     player_count: int = 6,
+    generation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Re-compose ``levels/<id>/accepted/image.png`` per the prompt file and write a new
     ``composed/attempt_NNN/{composed.png, prompt.txt, composed_with_player.png}``. Generates at
-    the accepted art's own size; the generation config comes from the run's ``config.json``
-    ``generation`` block. With ``player_px`` set, a scale-anchored copy of the input
-    (``input_stamped.png``) is what gets sent; the review overlay is always produced."""
+    the accepted art's own size. The call uses the run's ``config.json`` ``generation`` block,
+    with ``generation`` laid over it for this call only. The file is not rewritten. With
+    ``player_px`` set, a scale-anchored copy of the input (``input_stamped.png``) is what gets
+    sent; the review overlay is always produced."""
     root = Path(root)
     accepted = root / "levels" / level_id / "accepted" / "image.png"
     if not accepted.is_file():
         raise ValueError(f"level {level_id} has no accepted image to compose from ({accepted})")
     prompt = Path(prompt_path).read_text(encoding="utf-8").strip()
-    generation = read_json(root / "config.json").get("generation") or {}
+    config_path = root / "config.json"
+    stored = read_json(config_path).get("generation") or {} if config_path.is_file() else {}
+    merged = {**stored, **generation} if generation else stored
     sprite = Path(player_sprite) if player_sprite else _DEFAULT_PLAYER_SPRITE
 
     with Image.open(accepted) as img:
@@ -142,7 +146,7 @@ def compose_level(
             accepted, input_image, sprite, player_px, player_count,
             mark=True, label=f"{player_px}px player", bright=True, label_all=True,
         )
-        prompt = f"{prompt}\n\n{_SCALE_REFERENCE_NOTE}"
+        prompt = f"{prompt}\n\n{_SCALE_REFERENCE_NOTE.replace('8', str(player_px))}"
 
     output_path = attempt_dir / "composed.png"
     (attempt_dir / "prompt.txt").write_text(prompt + "\n", encoding="utf-8")
@@ -154,7 +158,7 @@ def compose_level(
         output_path=output_path,
         width=width,
         height=height,
-        config=generation,
+        config=merged,
     )
 
     review_path = write_player_overlay(output_path, sprite, player_px or _REVIEW_PLAYER_PX)

@@ -239,6 +239,9 @@ def build_plan(
                 "gen_bbox": (gl, gt, gr, gb),
             })
 
+    if not specs:
+        raise ValueError("the grid has no land in any cell")
+
     for index, spec in enumerate(specs, start=1):
         spec["id"] = f"{index:02d}"
         spec["name"] = f"{name_prefix} {index:02d}"
@@ -285,6 +288,59 @@ FIELDS = [
 ]
 
 
+def write_plan(
+    world_map: Path,
+    landmass_polygon: list,
+    out: Path,
+    *,
+    cols: int,
+    rows: int,
+    overlay: Path | None = None,
+    region: str = "",
+    name_prefix: str = "Level",
+    overlap_buffer: int = DEFAULT_OVERLAP_BUFFER,
+    crop_margin: int = DEFAULT_CROP_MARGIN,
+    min_area_frac: float = DEFAULT_MIN_AREA_FRAC,
+) -> dict:
+    """Write ``plan.csv`` and, when asked, the labelled overlay. Returns the canvas size."""
+    rows_out, canvas = build_plan(
+        Path(world_map),
+        landmass_polygon,
+        cols=cols,
+        rows=rows,
+        overlap_buffer=overlap_buffer,
+        crop_margin=crop_margin,
+        min_area_frac=min_area_frac,
+        region=region,
+        name_prefix=name_prefix,
+    )
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=FIELDS)
+        writer.writeheader()
+        writer.writerows(rows_out)
+
+    overlay_path = None
+    if overlay:
+        from tools.painted_map_pipeline.world_levels.package_builder import draw_plan_overlay
+        from tools.painted_map_pipeline.world_levels.plan_loader import load_level_plan
+
+        with Image.open(world_map) as opened:
+            world = opened.convert("RGBA")
+        overlay_path = Path(overlay)
+        overlay_path.parent.mkdir(parents=True, exist_ok=True)
+        draw_plan_overlay(world, load_level_plan(out, world.size)).convert("RGB").save(overlay_path)
+
+    return {
+        "levels": len(rows_out),
+        "empty": cols * rows - len(rows_out),
+        "canvas": [canvas[0], canvas[1]],
+        "plan": str(out),
+        "overlay": str(overlay_path) if overlay_path else None,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("world_map", help="Scaled world map PNG (output of bootstrap_from_png).")
@@ -307,41 +363,26 @@ def main() -> int:
                         help="Skip a cell whose land is under this fraction of a cell's area.")
     args = parser.parse_args()
 
-    rows, canvas = build_plan(
+    info = write_plan(
         Path(args.world_map),
         json.loads(Path(args.landmass_polygon).read_text())["polygon"],
+        Path(args.out),
         cols=args.cols,
         rows=args.rows,
+        overlay=Path(args.overlay) if args.overlay else None,
+        region=args.region,
+        name_prefix=args.name_prefix,
         overlap_buffer=args.overlap_buffer,
         crop_margin=args.crop_margin,
         min_area_frac=args.min_area_frac,
-        region=args.region,
-        name_prefix=args.name_prefix,
     )
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDS)
-        writer.writeheader()
-        writer.writerows(rows)
-
-    if args.overlay:
-        # Same overlay `prepare` writes, from the same function, so the two cannot disagree.
-        from tools.painted_map_pipeline.world_levels.package_builder import draw_plan_overlay
-        from tools.painted_map_pipeline.world_levels.plan_loader import load_level_plan
-
-        with Image.open(args.world_map) as opened:
-            world = opened.convert("RGBA")
-        overlay = Path(args.overlay)
-        overlay.parent.mkdir(parents=True, exist_ok=True)
-        draw_plan_overlay(world, load_level_plan(out, world.size)).convert("RGB").save(overlay)
-        print(f"  overlay: {overlay}")
-
+    canvas = info["canvas"]
     pixels = canvas[0] * canvas[1]
-    print(f"wrote {len(rows)} levels to {out}")
-    print(f"  grid {args.cols}x{args.rows} = {args.cols * args.rows} cells, "
-          f"{args.cols * args.rows - len(rows)} empty")
+    print(f"wrote {info['levels']} levels to {info['plan']}")
+    print(f"  grid {args.cols}x{args.rows} = {args.cols * args.rows} cells, {info['empty']} empty")
     print(f"  canvas for the run config: {canvas[0]}x{canvas[1]} = {pixels / 1e6:.2f} MP")
+    if info["overlay"]:
+        print(f"  overlay: {info['overlay']}")
     if pixels > MAX_PIXELS or max(canvas) > MAX_EDGE:
         print(f"  WARNING: exceeds gpt-image-2 limits "
               f"({MAX_PIXELS / 1e6:.1f} MP, {MAX_EDGE}px edge). Use more cells.")

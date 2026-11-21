@@ -107,30 +107,31 @@ def find_polygon(land: np.ndarray, max_vertices: int) -> tuple[list[tuple[float,
     return best[1], best[2]
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("world_map")
-    parser.add_argument("--out", required=True, help="Trimmed map PNG.")
-    parser.add_argument("--polygon-out", default=None, help="Write the polygon as JSON here.")
-    parser.add_argument("--overlay", default=None, help="Review image: the polygon on the map.")
-    parser.add_argument("--max-vertices", type=int, default=DEFAULT_MAX_VERTICES)
-    parser.add_argument("--land-threshold", type=int, default=DEFAULT_LAND_THRESHOLD)
-    args = parser.parse_args()
-
-    with Image.open(args.world_map) as opened:
+def snap_map(
+    world_map: Path,
+    out: Path,
+    *,
+    polygon_out: Path | None = None,
+    overlay: Path | None = None,
+    max_vertices: int = DEFAULT_MAX_VERTICES,
+    land_threshold: int = DEFAULT_LAND_THRESHOLD,
+) -> dict:
+    """Inscribe the landmass and write the trimmed map. Prints the same lines as the CLI."""
+    world_map, out = Path(world_map), Path(out)
+    with Image.open(world_map) as opened:
         full = opened.convert("RGB")
     width, height = full.size
     small = np.asarray(
-        full.resize((width // WORK_DIVISOR, height // WORK_DIVISOR), Image.LANCZOS)
-    ).sum(axis=2) > args.land_threshold
+        full.resize((max(1, width // WORK_DIVISOR), max(1, height // WORK_DIVISOR)), Image.LANCZOS)
+    ).sum(axis=2) > land_threshold
     land_small = _filled_land(small)
 
-    polygon_small, inset = find_polygon(land_small, args.max_vertices)
+    polygon_small, inset = find_polygon(land_small, max_vertices)
     polygon = [(x * WORK_DIVISOR, y * WORK_DIVISOR) for x, y in polygon_small]
 
     # Verify at full resolution and pull in further if the downscale flattered us.
     pixels = np.asarray(full)
-    land_full = _filled_land(pixels.sum(axis=2) > args.land_threshold)
+    land_full = _filled_land(pixels.sum(axis=2) > land_threshold)
     extra = 0
     while True:
         candidate = _offset(polygon, extra)
@@ -145,29 +146,59 @@ def main() -> int:
     before = int(land_full.sum())
     after = int((inside & land_full).sum())
     trimmed = np.where(inside[..., None], pixels, 0).astype(np.uint8)
-    Image.fromarray(trimmed).save(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(trimmed).save(out)
 
     print(f"landmass snapped to {len(polygon)} vertices")
     print(f"  inset {inset * WORK_DIVISOR}px (+{extra} at full res)")
-    print(f"  land {before:,} -> {after:,}  ({100 * (before - after) / before:.2f}% trimmed)")
-    print(f"  {args.out}")
+    print(f"  land {before:,} -> {after:,}  ({100 * (before - after) / max(before, 1):.2f}% trimmed)")
+    print(f"  {out}")
 
-    if args.polygon_out:
-        Path(args.polygon_out).write_text(json.dumps({"polygon": polygon}, indent=2) + "\n")
-        print(f"  {args.polygon_out}")
-    if args.overlay:
+    if polygon_out:
+        polygon_out = Path(polygon_out)
+        polygon_out.parent.mkdir(parents=True, exist_ok=True)
+        polygon_out.write_text(json.dumps({"polygon": polygon}, indent=2) + "\n")
+        print(f"  {polygon_out}")
+    if overlay:
         from PIL import ImageDraw
 
+        overlay = Path(overlay)
+        overlay.parent.mkdir(parents=True, exist_ok=True)
         scale = 1400 / width
-        view = Image.fromarray(trimmed).resize((1400, round(height * scale)), Image.LANCZOS)
+        view = Image.fromarray(trimmed).resize((1400, max(1, round(height * scale))), Image.LANCZOS)
         draw = ImageDraw.Draw(view, "RGBA")
         draw.polygon([(x * scale, y * scale) for x, y in polygon],
                      outline=(255, 60, 60, 255), width=3)
         for x, y in polygon:
             draw.ellipse([x * scale - 5, y * scale - 5, x * scale + 5, y * scale + 5],
                          fill=(255, 220, 60, 255))
-        view.save(args.overlay)
-        print(f"  {args.overlay}")
+        view.save(overlay)
+        print(f"  {overlay}")
+    return {
+        "vertices": len(polygon),
+        "out": str(out),
+        "polygon_out": str(polygon_out) if polygon_out else None,
+        "overlay": str(overlay) if overlay else None,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("world_map")
+    parser.add_argument("--out", required=True, help="Trimmed map PNG.")
+    parser.add_argument("--polygon-out", default=None, help="Write the polygon as JSON here.")
+    parser.add_argument("--overlay", default=None, help="Review image: the polygon on the map.")
+    parser.add_argument("--max-vertices", type=int, default=DEFAULT_MAX_VERTICES)
+    parser.add_argument("--land-threshold", type=int, default=DEFAULT_LAND_THRESHOLD)
+    args = parser.parse_args()
+    snap_map(
+        Path(args.world_map),
+        Path(args.out),
+        polygon_out=Path(args.polygon_out) if args.polygon_out else None,
+        overlay=Path(args.overlay) if args.overlay else None,
+        max_vertices=args.max_vertices,
+        land_threshold=args.land_threshold,
+    )
     return 0
 
 
