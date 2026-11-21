@@ -105,10 +105,11 @@ class EnemyPuppet(CombatUnit):
         # owns position/death. animate() rebuilds the frame and plants rect.
         self._sync_from_snapshot()
         self.animate()
-        # C2.5a: blink while recently hit so the joiner sees the hit land.
-        # animate() rebuilt self.image this frame, so set_alpha is safe.
-        if pygame.time.get_ticks() < self._hit_flash_until:
-            self.image.set_alpha(110 if (pygame.time.get_ticks() // 40) % 2 else 255)
+        # C2.5a: blink while recently hit so the joiner sees the hit land. The frame surface is
+        # shared, so its alpha is set every update (255 when not blinking).
+        now = pygame.time.get_ticks()
+        blink = now < self._hit_flash_until and (now // 40) % 2
+        self.image.set_alpha(110 if blink else 255)
 
     def enemy_update(self, *args, **kwargs):
         # Render-only: NO AI/target-selection/attacks (Level4's per-frame

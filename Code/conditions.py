@@ -128,6 +128,12 @@ def condition(name):
         raise KeyError(f"no condition {name!r}") from None
 
 
+def has(entity, name):
+    """Is condition `name` on `entity` now. No conditions: False, nothing allocated."""
+    conds = getattr(entity, "conditions", None)
+    return bool(conds) and condition(name).id in conds
+
+
 def bonus(entity, stat, defs=None):
     """Sum of the strength of live buffs on `stat`. No conditions: 0, and nothing is allocated."""
     conds = getattr(entity, "conditions", None)

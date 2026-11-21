@@ -238,10 +238,7 @@ class CombatUnit(Entity):
         self.frozen = False  
         self.freeze_time = 0
 
-        # Invincibility Timer
-        self.vulnerable = True
-        self.hit_time = None
-        self.invincibility_duration = 300
+        self.hit_time = None  # when the last hit landed (ms), stamped by take_damage
 
         # Sounds: the monster's data may name its own hit and death sounds.
         self.death_sound = sounds.get(monster_info.get("death_sound", "../Audio/Death.wav"), 0.6)
@@ -765,12 +762,7 @@ class CombatUnit(Entity):
             if self.mesh_boss is not None:
                 self._sync_mesh_layout()
             self.plant_sprite_on_hitbox()
-    
-            if not self.vulnerable:
-                alpha = self.wave_value()
-                self.image.set_alpha(alpha)
-            else:
-                self.image.set_alpha(255)
+
                 
                 
     #@profile
@@ -779,10 +771,6 @@ class CombatUnit(Entity):
         if not self.can_attack:
             if current_time - self.attack_time >= self.attack_cooldown:
                 self.can_attack = True
-
-        if not self.vulnerable:
-            if current_time - self.hit_time >= self.invincibility_duration:
-                self.vulnerable = True
     #@profile
     def on_death(self):
         super().on_death()

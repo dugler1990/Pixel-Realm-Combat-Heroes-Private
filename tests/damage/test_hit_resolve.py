@@ -18,7 +18,7 @@ pygame.init()
 import body_regions  # noqa: E402
 import hit_resolve  # noqa: E402
 from Entity import Entity  # noqa: E402
-from Interaction import InteractionContext, InteractionResolver  # noqa: E402
+from Interaction import LANDED, InteractionContext, InteractionResolver  # noqa: E402
 from damage_data import LayerDef, attack, body  # noqa: E402
 from damage_rules import Physical, landed  # noqa: E402
 from defence_profile import DefenceProfile, natural_profile, region_slot  # noqa: E402
@@ -160,7 +160,7 @@ def test_apply_sets_the_landed_int_and_the_body_subtracts_it():
     """A priced hit keeps its price: the attacker's flat weapon damage (999) is not used."""
     target = SimpleNamespace(
         body_def=body("raccoon"), defence=natural_profile(body("raccoon")),
-        team_id="enemy_1", health=100, vulnerable=True, hit_time=0,
+        team_id="enemy_1", health=100, hit_time=0,
         can_receive_interaction=lambda ctx: True, on_hurt=lambda ctx: None,
     )
     target.take_damage = lambda ctx: Entity.take_damage(target, ctx)
@@ -173,6 +173,6 @@ def test_apply_sets_the_landed_int_and_the_body_subtracts_it():
         kind="damage", source_kind="player_attack", source=source, source_team="player",
         target=target, attack_type="weapon", attack_def=attack("sword"),
     )
-    assert InteractionResolver().apply(ctx) is True
+    assert InteractionResolver().apply(ctx) is LANDED
     lost = 100 - target.health
     assert ctx.amount == lost and lost != 999 and lost < 100

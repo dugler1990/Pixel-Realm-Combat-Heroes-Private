@@ -2331,8 +2331,8 @@ class Level4:
     def _apply_relayed_player_hit(self, amount, attack_type):
         """CS4: a server-owned enemy hit MY player. The server already priced it
         and applied the team rule, so it enters the resolver after that rule
-        (`land`): the local player's own invulnerable window, hurt reaction and
-        death behave exactly as in singleplayer."""
+        (`land`): the local player's invulnerability, hurt reaction and death
+        behave exactly as in singleplayer."""
         if amount is None:
             return
         self.interaction_resolver.land(InteractionContext(

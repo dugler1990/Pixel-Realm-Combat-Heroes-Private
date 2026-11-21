@@ -1,4 +1,4 @@
-"""One damage path: the resolver decides (gate, invulnerable window, price), Entity.take_damage
+"""One damage path: the resolver decides (team rule, gate, invulnerable, price), Entity.take_damage
 applies, on_hurt reacts."""
 import os
 import sys
@@ -18,13 +18,14 @@ pygame.init()
 
 import hit_resolve  # noqa: E402
 from Entity import Entity  # noqa: E402
-from Interaction import InteractionContext, InteractionResolver  # noqa: E402
+from Interaction import LANDED, REFUSED, SPENT, InteractionContext, InteractionResolver  # noqa: E402
+from conditions import ConditionClock  # noqa: E402
 from damage_data import attack  # noqa: E402
 
 
 def _body(**fields):
     """A body that runs Entity's own gate, receiver and take_damage."""
-    body = SimpleNamespace(**{"team_id": "enemy_1", "health": 100, "vulnerable": True, "hit_time": 0,
+    body = SimpleNamespace(**{"team_id": "enemy_1", "health": 100, "hit_time": 0,
                               "takes_impulse": True, "hurt": [], **fields})
     body.can_receive_interaction = lambda ctx: Entity.can_receive_interaction(body, ctx)
     body.receive_interaction = lambda ctx: Entity.receive_interaction(body, ctx)
@@ -38,20 +39,36 @@ def _hit(target, **fields):
     return InteractionContext(kind="damage", source_kind="player_attack", target=target, **fields)
 
 
-def test_a_hit_in_the_invulnerable_window_is_spent_and_starts_nothing(monkeypatch):
+def _invulnerable(body, now=0):
+    body.id = "b"
+    ConditionClock().start(body, "invulnerable", now)
+    return body
+
+
+def test_an_invulnerable_body_spends_the_hit_and_starts_nothing(monkeypatch):
     started = []
     monkeypatch.setattr(hit_resolve, "apply_element", lambda *a: started.append(a))
-    body = _body(vulnerable=False)
+    body = _invulnerable(_body())
     ctx = _hit(body, amount=10, attack_def=attack("sword"))
-    assert InteractionResolver().apply(ctx) is True   # spent: the attack does not try again
+    assert InteractionResolver().apply(ctx) is SPENT   # the attack does not try again
     assert body.health == 100 and body.hurt == [] and started == []
     assert not hasattr(body, "last_attacker_team")
 
 
-def test_damage_over_time_is_not_stopped_by_the_window():
-    body = _body(vulnerable=False)
-    assert InteractionResolver().apply(_hit(body, amount=3, over_time=True)) is True
-    assert body.health == 97 and len(body.hurt) == 1
+def test_invulnerable_blocks_heat_too():
+    body = _invulnerable(_body())
+    heat = InteractionContext(kind="damage", source_kind="environment", source_team="environment",
+                              target=body, amount=3, attack_type="heat")
+    assert InteractionResolver().apply(heat) is SPENT
+    assert body.health == 100
+
+
+def test_no_grace_by_default_a_second_hit_lands_at_once():
+    body = _body()
+    resolver = InteractionResolver()
+    assert resolver.apply(_hit(body, amount=5)) is LANDED
+    assert resolver.apply(_hit(body, amount=5)) is LANDED
+    assert body.health == 90
 
 
 def test_a_hit_with_no_amount_and_no_attack_def_takes_the_attackers_damage():
@@ -101,7 +118,7 @@ def test_a_passive_faction_may_fight_back_only_while_the_memory_lasts():
 def test_the_one_team_rule_refuses_own_team_in_apply_and_in_strike():
     body = _body()
     resolver = InteractionResolver()
-    assert resolver.apply(_hit(body, amount=5, source_team="enemy_1")) is False
+    assert resolver.apply(_hit(body, amount=5, source_team="enemy_1")) is REFUSED
     assert resolver.strike([body], kind="damage", source_kind="t", source_team="enemy_1", amount=5) == []
     assert body.health == 100
     assert resolver.strike([body], kind="damage", source_kind="t", source_team="player", amount=5) == [body]

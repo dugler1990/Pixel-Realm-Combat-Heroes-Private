@@ -158,10 +158,7 @@ class BasePlayer(Entity):
         self.speed = self.stats["speed"]
         self.speed_multiplier = 1 
         
-        # Damage Timer
-        self.vulnerable = True
-        self.hit_time = None
-        self.invulnerability_duration = 0
+        self.hit_time = None  # when the last hit landed (ms), stamped by take_damage
 
         # Import Sound
         self.weapon_attack_sound = sounds.get("../Audio/Sword.wav", 0.2)
@@ -184,8 +181,7 @@ class BasePlayer(Entity):
     
 
     def on_hurt(self, ctx: InteractionContext):
-        """Opens the invulnerable window and shows the attack's particles, if it has any."""
-        self.vulnerable = False
+        """Shows the attack's particles, if it has any."""
         attack_type = ctx.attack_type
         if attack_type and attack_type != "melee" and ctx.source_kind != "environment":
             # LayoutManager is passed as obstacle_sprites; animation_player lives on level
@@ -536,9 +532,6 @@ class BasePlayer(Entity):
             if current_time - self.magic_switch_time >= self.switch_duration_cooldown:
                 self.can_switch_magic = True
 
-        if not self.vulnerable:
-            if current_time - self.hit_time >= self.invulnerability_duration:
-                self.vulnerable = True
 
     def animate(self):
        #print("\n\nANIMATIONS#print \n\n")
@@ -585,11 +578,6 @@ class BasePlayer(Entity):
             self._position_sprite_for_seat()
         else:
             self.plant_sprite_on_hitbox()
-        if not self.vulnerable:
-            alpha = self.wave_value()
-            self.image.set_alpha(alpha)
-        else:
-            self.image.set_alpha(255)
 
     def get_full_weapon_damage(self):
         base_damage = self.stats["attack"]

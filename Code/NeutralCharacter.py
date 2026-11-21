@@ -23,7 +23,6 @@ class NeutralCharacter(Entity):
         #print(f"name : {name}")
         self.hit_sound = sounds.get("../Audio/Hit.wav")
         self.death_sound = sounds.get("../Audio/Hit.wav")
-        self.vulnerable = True
         self.sprite_type = "neutral"
         self.pos = pos
         self.obstacle_sprites = obstacle_sprites

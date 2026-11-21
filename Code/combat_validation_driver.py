@@ -104,7 +104,7 @@ class HitLog:
         self.level = level
         self.hits = []
         self.regions = []
-        self.wounds = []          # (kind, health delta, vulnerable before, vulnerable after)
+        self.wounds = []          # (kind, health delta, flinched: the hit stamped hit_time)
         self.stopped = []
         self._original = level.interaction_resolver.apply
         self._effect = ParticleEffect
@@ -113,7 +113,7 @@ class HitLog:
         log = self
 
         def apply(ctx):
-            health, vuln = hero.health, hero.vulnerable
+            health, hit_time = hero.health, hero.hit_time
             landed = log._original(ctx)
             if ctx.target is hero:
                 kind = region = None
@@ -127,7 +127,7 @@ class HitLog:
                     region = name + (f" {side}" if side else "")
                 log.hits.append((ctx, landed, kind))
                 log.regions.append((kind, region))
-                log.wounds.append((kind, hero.health - health, vuln, hero.vulnerable))
+                log.wounds.append((kind, hero.health - health, hero.hit_time != hit_time))
             return landed
 
         def stop(sprite):
@@ -307,11 +307,10 @@ class PlateStops(Scene):
         self.log = HitLog(level)
         hero = level.player
         hero.health = hero.max_stats["health"]
-        hero.vulnerable = True
 
     def tick(self, level, dt):
         plate = skin = hurt = 0
-        for kind, delta, _before, _after in self.log.wounds:
+        for kind, delta, _flinched in self.log.wounds:
             if kind == "plate":
                 plate += 1
             elif kind == "skin":
@@ -323,10 +322,10 @@ class PlateStops(Scene):
     def decide(self, level):
         plate_bad = 0
         plate = skin = hurt = 0
-        for kind, delta, before, after in self.log.wounds:
+        for kind, delta, flinched in self.log.wounds:
             if kind == "plate":
                 plate += 1
-                if delta != 0 or (before and not after):
+                if delta != 0 or flinched:
                     plate_bad += 1
             elif kind == "skin":
                 skin += 1

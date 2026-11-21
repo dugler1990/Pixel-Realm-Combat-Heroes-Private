@@ -176,7 +176,7 @@ def test_storm_bolt_jumps_by_charge_and_stops():
 
 def test_apply_fire_spit_on_loincloth_burns_and_does_not_ask_magic():
     from types import SimpleNamespace
-    from Interaction import InteractionContext, InteractionResolver
+    from Interaction import LANDED, InteractionContext, InteractionResolver
     from conditions import ConditionClock, condition
     from defence_profile import DefenceProfile, SLOTS
     cloth = _layer(flammability=0.8, insulation=0.1)
@@ -214,7 +214,7 @@ def test_apply_fire_spit_on_loincloth_burns_and_does_not_ask_magic():
         kind="damage", source_kind="player_attack", source=Source(), source_team="player",
         target=target, attack_type="magic", attack_def=attack("fire_spit"),
     )
-    assert InteractionResolver().apply(ctx) is True
+    assert InteractionResolver().apply(ctx) is LANDED
     assert target.health == 85
     assert condition("burning").id in target.conditions
     assert target.heat_shade == "searing" and target.heat_on_skin is False

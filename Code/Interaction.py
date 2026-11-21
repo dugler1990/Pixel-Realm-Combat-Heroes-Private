@@ -4,6 +4,7 @@ import os
 from typing import Any, Dict, Optional, Set, Tuple
 
 import contact_debug
+from conditions import has as has_condition
 from game_logging import get_debug_logger
 
 _interaction_log = get_debug_logger("combat")
@@ -33,8 +34,12 @@ class InteractionContext:
     # The attack's travel on the ground (a shot's movement). None: source to target, and a
     # torso hit counts as chest (body_regions).
     toward: Optional[Tuple[float, float]] = None
-    # Damage that keeps coming (heat, cold): it is not stopped by the invulnerable window a hit opens.
-    over_time: bool = False
+
+
+# What apply / land / strike's per-target step did. Truthy: the attack is used up on that body.
+LANDED = "landed"    # the body took it
+SPENT = "spent"      # reached the body, which is invulnerable: no effect, and the attack does not try again
+REFUSED = None       # did not reach the body (team rule, its gate): the attack may try it again
 
 
 class FactionPolicy:
@@ -411,7 +416,8 @@ class InteractionResolver:
         self._record_aggro_check(allowed)
         return allowed
 
-    def apply(self, ctx: InteractionContext) -> bool:
+    def apply(self, ctx: InteractionContext):
+        """The team rule, then land. Returns LANDED, SPENT or REFUSED."""
         self._record_emitted()
         target = ctx.target
         if target is None:
@@ -425,7 +431,7 @@ class InteractionResolver:
             )
             self._record_rejected_target()
             self._record_rejected_reason("missing_target")
-            return False
+            return REFUSED
         target_team = getattr(target, "team_id", None)
         if not self.team_allows(ctx.source_team, target_team, ctx.kind):
             _interaction_log.debug(
@@ -439,13 +445,13 @@ class InteractionResolver:
             )
             self._record_rejected_team()
             self._record_rejected_reason("team_policy")
-            return False
+            return REFUSED
         return self.land(ctx)
 
-    def land(self, ctx: InteractionContext) -> bool:
-        """Everything after the team rule: the body's gate, the invulnerable window, the price,
-        the elements, then the body applies it. A hit the server already passed (the co-op
-        relay) starts here."""
+    def land(self, ctx: InteractionContext):
+        """Everything after the team rule: the body's gate, invulnerability, the price, the
+        elements, then the body applies it. A hit the server already passed (the co-op relay)
+        starts here. Returns LANDED, SPENT or REFUSED."""
         target = ctx.target
         target_team = getattr(target, "team_id", None)
         if hasattr(target, "can_receive_interaction") and not target.can_receive_interaction(ctx):
@@ -460,7 +466,7 @@ class InteractionResolver:
             )
             self._record_rejected_target()
             self._record_rejected_reason("target_gate")
-            return False
+            return REFUSED
         if not hasattr(target, "receive_interaction"):
             _interaction_log.debug(
                 "interaction reject reason=no_receive_interaction source_kind=%r source_team=%r target_team=%r kind=%r attack_type=%r amount=%r",
@@ -473,14 +479,14 @@ class InteractionResolver:
             )
             self._record_rejected_target()
             self._record_rejected_reason("no_receive_interaction")
-            return False
+            return REFUSED
         if ctx.kind == "damage":
-            # Checked before the price, so a blocked hit starts no fire, chill or retaliation.
-            # It is still spent: True, so the attack counts the target as hit and does not
-            # land when the window ends (what the receivers did before).
-            if not ctx.over_time and not getattr(target, "vulnerable", True):
+            # Before the price, so a blocked hit starts no fire, chill or retaliation. Spent: the
+            # attack counts the body as hit and does not land when the condition ends. All damage,
+            # heat and cold included.
+            if has_condition(target, "invulnerable"):
                 self._record_rejected_reason("invulnerable")
-                return True
+                return SPENT
             self._price(ctx)
         target.receive_interaction(ctx)
         if contact_debug.ENABLED and ctx.contact is not None:
@@ -497,7 +503,7 @@ class InteractionResolver:
             ctx.amount,
         )
         self._record_resolved(ctx)
-        return True
+        return LANDED
 
     def _price(self, ctx: InteractionContext) -> None:
         """The one place a hit's amount is set. An attack def is priced by hit_resolve (and
@@ -528,7 +534,7 @@ class InteractionResolver:
         many ms (0 = every frame). `contacts` maps target id -> the world pixel it was hit
         at (ctx.contact), through .get, asked only for targets past the repeat and team
         checks (hit_core.EntryPoints works this out then); None leaves contact None. `fields` are InteractionContext fields;
-        strike fills in `target` and `contact`. Returns the targets the attack landed on.
+        strike fills in `target` and `contact`. Returns the targets the attack is used up on (LANDED or SPENT).
         """
         landed = []
         kind = fields.get("kind", "damage")
