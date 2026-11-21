@@ -17,6 +17,7 @@ from dialogue.voice import VoiceChannel
 
 CONTENT_DIR = Path(__file__).resolve().parent / "content"
 _STUBS = ("offer_quest", "give_item")
+_WHISPER_LIFETIME_MS = 3000
 
 
 class DialogueSession:
@@ -42,10 +43,14 @@ class DialogueSession:
         self.voice = voice if voice is not None else VoiceChannel(root=str(CONTENT_DIR))
         self.graphs = {}
         self.speakers = {}
+        self.wind_whispers = {}
         self.focus = None
         self._settings = None
         self._anchors = {}
         self._voice_token = None
+        self._whisper_snapshot = None
+        self._whisper_until_ms = 0
+        self._whisper_last = {}
         if content_dir is not False:
             self.load_content(CONTENT_DIR if content_dir is None else content_dir)
 
@@ -55,6 +60,7 @@ class DialogueSession:
         speakers = {}
         barks = {}
         shops = {}
+        wind_whispers = {}
         if directory.is_dir():
             for path in sorted(directory.glob("*.json")):
                 payload = json.loads(path.read_text(encoding="utf-8"))
@@ -64,12 +70,15 @@ class DialogueSession:
                     speakers = payload
                 elif path.name == "shops.json":
                     shops = payload if isinstance(payload, dict) else {}
+                elif path.name == "wind_whispers.json":
+                    wind_whispers = payload if isinstance(payload, dict) else {}
                 else:
                     graph = load_graph(payload, source=path.name)
                     graphs[graph["id"]] = graph
         self.graphs = graphs
         self.speakers = speakers
         self.shops = shops
+        self.wind_whispers = wind_whispers
         self.barks = BarkDirector(barks)
         self._anchors = {}
 
@@ -90,12 +99,72 @@ class DialogueSession:
             self._bark_nearby(player, anchors, now_ms)
         self.runner.tick(dt)
         self.bubbles.tick(now_ms)
+        self._tick_whisper(now_ms)
         self._sync_voice()
+
+    def push_whisper(self, text, now_ms, speaker_name="Wind", line_id="", cooldown_ms=8000):
+        """Show a soft conversation-panel line without starting a talk graph.
+
+        Does not block gameplay. Auto-expires; Space dismisses while no runner is active.
+        """
+        if line_id:
+            last = self._whisper_last.get(line_id)
+            if last is not None and now_ms - last < cooldown_ms:
+                return False
+            self._whisper_last[line_id] = now_ms
+        self._whisper_snapshot = {
+            "kind": "whisper",
+            "speaker": speaker_name or "Wind",
+            "visible": text or "",
+            "revealed": True,
+            "choices": [],
+        }
+        self._whisper_until_ms = now_ms + _WHISPER_LIFETIME_MS
+        return True
+
+    def push_whisper_line(self, line_id, now_ms):
+        """Resolve a wind_whispers.json id and push it to the panel."""
+        from ice_fog.whisper import whisper_event, whisper_panel_snapshot
+
+        event = whisper_event(line_id, self.wind_whispers)
+        if event is None:
+            return False
+        spec = self.wind_whispers.get(line_id) or {}
+        cooldown = int(spec.get("cooldown_ms", 8000))
+        if not self.push_whisper(
+            event.text,
+            now_ms,
+            speaker_name=event.speaker_name,
+            line_id=line_id,
+            cooldown_ms=cooldown,
+        ):
+            return False
+        # Keep snapshot fields aligned with helper (kind already whisper).
+        self._whisper_snapshot = whisper_panel_snapshot(event)
+        return True
+
+    def whisper_active(self):
+        return self._whisper_snapshot is not None
+
+    def _tick_whisper(self, now_ms):
+        if self._whisper_snapshot is None:
+            return
+        if now_ms >= self._whisper_until_ms:
+            self._whisper_snapshot = None
+
+    def clear_whisper(self):
+        self._whisper_snapshot = None
 
     def handle_input(self, input_manager):
         if self.trade.visible:
             return self.trade.handle_input(input_manager)
         if not self.runner.active:
+            if self._whisper_snapshot is not None and (
+                input_manager.is_key_just_pressed(pygame.K_SPACE)
+                or input_manager.is_key_just_pressed(pygame.K_ESCAPE)
+            ):
+                self.clear_whisper()
+                return True
             return False
         if input_manager.is_key_just_pressed(pygame.K_ESCAPE):
             self.runner.end()
@@ -132,6 +201,8 @@ class DialogueSession:
             self.trade.draw(backend)
         elif self.runner.active:
             self.panel.draw(backend, self.runner.snapshot(), show_text=text_on)
+        elif self._whisper_snapshot is not None:
+            self.panel.draw(backend, self._whisper_snapshot, show_text=text_on)
 
     def _anchors_for(self, sprites):
         live = {}

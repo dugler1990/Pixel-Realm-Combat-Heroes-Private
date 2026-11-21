@@ -1,0 +1,7 @@
+{
+  "circle": {"cx": 200, "cy": 200, "r": 120},
+  "inset": 8,
+  "cooldown_ms": 250,
+  "whisper_on_enter": "fog_enter",
+  "track_sequence_on_wrap": false
+}
