@@ -33,6 +33,13 @@
   h2 { margin:12px 0 4px; font-size:13px; color:var(--hi); }
   #filter { width:100%; margin:0; border:0; border-bottom:1px solid var(--line); border-radius:0; padding:8px 10px; background:#181b22; }
   #job { color:var(--hi); }
+  .small { color:var(--dim); font-size:11px; }
+  #bindtab { width:100%; border-collapse:collapse; font-size:12px; }
+  #bindtab td { padding:1px 4px; border-bottom:1px solid #22262f; }
+  #bindtab tr.inherit td:first-child { color:var(--dim); }
+  .bad { color:#ff7b7b; }
+  .warn { color:#ffcf6b; }
+  .ver { padding:3px 0; border-bottom:1px solid #22262f; }
 </style>
 </head>
 <body>
@@ -54,13 +61,16 @@
     <button id="map">map this clip</button>
     <h2>match</h2>
     <p id="match">—</p>
-    <h2>fit</h2>
-    <p style="color:var(--dim)">barrel 1 keeps the sculpted shoulders. That is clavicle damping 0 on the bake. Arm cap 90 is a human, 35 is the demon. Apply rebakes the open clip.</p>
-    <label>barrel chest <input id="barrel" type="number" min="0" max="1" step="0.05"></label>
-    <label>arm cap <input id="arm" type="number" min="0" max="120" step="1"></label>
-    <label>bind match <input id="bind" type="checkbox"></label>
-    <button id="apply">apply and rebake</button>
-    <p id="recipe" style="color:var(--dim);font-size:11px;white-space:pre-line"></p>
+    <h2>last bake</h2>
+    <p id="bake" class="small">—</p>
+    <h2>map settings <span id="tmpl" class="small"></span></h2>
+    <div id="form"></div>
+    <h2>bind per bone</h2>
+    <p class="small">tick = bind match on. Grey row = the bone follows "bind default". Angle = how far the bone was off the stick in the last bake of this clip (worst frame); red over 40°.</p>
+    <table id="bindtab"></table>
+    <button id="save">save</button> <button id="apply">save and rebake</button>
+    <h2>rig</h2>
+    <div id="rig" class="small"></div>
     <h2>prompt</h2>
     <label>host <input id="host" type="text" style="width:140px" placeholder="pod ip"></label>
     <label>port <input id="port" type="text" style="width:80px" placeholder="22"></label>
@@ -188,9 +198,24 @@ async function showStick(id) {
   $("stat").textContent = parsed.clip.duration.toFixed(2) + "s";
 }
 
-async function showMesh(character, glbPath) {
+// index entries: {glb, rig, bone_hash, bake} since 2026-11-21; a bare string before (old folders)
+function entryGlb(e) { return typeof e === "string" ? e : e && e.glb; }
+function entryBase(e) {
+  const g = entryGlb(e);
+  return g ? g.replace(/\/clips\/[^/]+$/, "/base.glb") : null;
+}
+function entryFlag(e, ch) {
+  if (!e) return "";
+  if (typeof e === "string") return "old";
+  if (e.bone_hash !== ch.bone_hash) return "stale";
+  if (e.rig !== ch.rig) return "older rig";
+  return "mapped";
+}
+
+async function showMesh(character, entry) {
   clearRoot(mesh);
-  const basePath = character.base || (character.view + "/base.glb");
+  const glbPath = entryGlb(entry);
+  const basePath = entryBase(entry);
   const base = await gltfLoader.loadAsync("/glb?path=" + encodeURIComponent(basePath));
   mesh.root = base.scene;
   base.scene.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
@@ -218,8 +243,10 @@ function drawList() {
   for (const c of rows) {
     const el = document.createElement("div");
     el.className = "clip" + (current && current.id === c.id ? " on" : "");
-    const mapped = character() && c.maps && c.maps[character().id];
-    el.innerHTML = "<span></span><small>" + (mapped ? "mapped" : "") + "</small>";
+    const ch = character();
+    const flag = ch && c.maps ? entryFlag(c.maps[ch.id], ch) : "";
+    el.innerHTML = "<span></span><small class='" + (flag === "stale" ? "bad" : flag && flag !== "mapped" ? "warn" : "")
+      + "'>" + flag + "</small>";
     el.firstChild.textContent = c.id;
     el.onclick = () => pick(c);
     have.appendChild(el);
@@ -253,7 +280,7 @@ async function pick(c) {
   } catch (err) {
     $("stat").textContent = String(err);
   }
-  if (ch && c.maps && c.maps[ch.id]) {
+  if (ch && c.maps && entryGlb(c.maps[ch.id])) {
     try { await showMesh(ch, c.maps[ch.id]); }
     catch (err) { $("stat").textContent = String(err); }
   } else {
@@ -264,12 +291,122 @@ async function pick(c) {
       const r = await fetch("/api/match?clip=" + encodeURIComponent(c.id) + "&character=" + encodeURIComponent(ch.id));
       const j = await r.json();
       $("match").textContent = r.ok
-        ? j.paired + " paired · missing " + (j.missing || []).join(", ")
+        ? j.paired + " paired on rig v" + j.rig + " · missing " + (j.missing_required || []).join(", ")
+          + (j.static && j.static.length ? " · not driven (static in " + j.source + "): " + j.static.join(", ") : "")
         : (j.error || "no match");
+      lastMatch = r.ok ? j : null;
     } catch (err) {
       $("match").textContent = String(err);
     }
+    await loadBake();
   }
+  drawForm();
+}
+
+let lastMatch = null;
+let lastBake = null;
+let draft = null;          // the map block being edited, per character
+
+async function loadBake() {
+  lastBake = null;
+  const ch = character();
+  if (!current || !ch) { $("bake").textContent = "—"; return; }
+  try {
+    const r = await fetch("/api/bake?clip=" + encodeURIComponent(current.id) + "&character=" + encodeURIComponent(ch.id));
+    lastBake = await r.json();
+  } catch (err) { lastBake = null; }
+  const b = lastBake;
+  if (!b || !b.baked) { $("bake").textContent = "not baked on " + ch.id; return; }
+  const pc = b.pose_check || {};
+  const w = pc.worst;
+  const p = b.proportions || {};
+  $("bake").innerHTML = "";
+  const line = (t, cls) => { const d = document.createElement("div"); d.textContent = t; if (cls) d.className = cls; $("bake").appendChild(d); };
+  line("rig v" + b.rig + (b.stale ? " — STALE: the rig's bones changed since (now v" + b.current_rig + ")"
+    : b.older_rig ? " — older rig (now v" + b.current_rig + ", same bones)" : ""), b.stale ? "bad" : b.older_rig ? "warn" : "");
+  if (w) line("pose check " + (pc.fail && pc.fail.length ? "FAIL" : "ok") + ": worst " + w.bone + " " + w.deg + "° (frame " + w.frame + ")",
+    pc.fail && pc.fail.length ? "bad" : "");
+  if (p.arm_ratio != null) line("proportions: shoulders " + p.shoulder_ratio + " · arms " + p.arm_ratio + " · legs " + p.leg_ratio + " (target / source, over height)");
+  line(b.when || "");
+}
+
+function field(s, value) {
+  const wrap = document.createElement("label");
+  wrap.title = s.doc + (s.unit ? " (" + s.unit + ")" : "");
+  wrap.append(s.name);
+  let input;
+  if (s.type === "bool") { input = document.createElement("input"); input.type = "checkbox"; input.checked = !!value; }
+  else if (s.type === "choice") {
+    input = document.createElement("select");
+    for (const c of s.choices) { const o = document.createElement("option"); o.value = o.textContent = c; input.appendChild(o); }
+    input.value = value;
+  } else {
+    input = document.createElement("input");
+    input.type = (s.type === "float" || s.type === "int") ? "number" : "text";
+    if (s.min != null) input.min = s.min;
+    if (s.max != null) input.max = s.max;
+    if (input.type === "number") input.step = s.type === "int" ? 1 : 0.05;
+    input.value = value;
+  }
+  input.onchange = () => {
+    draft[s.name] = s.type === "bool" ? input.checked : (input.type === "number" ? Number(input.value) : input.value);
+    drawForm();
+  };
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function drawForm() {
+  const ch = character();
+  $("form").innerHTML = ""; $("bindtab").innerHTML = ""; $("rig").innerHTML = "";
+  if (!ch) return;
+  if (!draft || draft._for !== ch.id) draft = Object.assign(JSON.parse(JSON.stringify(ch.map)), { _for: ch.id });
+  $("tmpl").textContent = "(from template " + ch.template + ", now this character's own)";
+  for (const s of state.schema) {
+    if (s.type === "roles_bool") continue;
+    $("form").appendChild(field(s, draft[s.name]));
+  }
+  const angles = (lastBake && lastBake.baked && lastBake.pose_check && lastBake.pose_check.by_role) || {};
+  const roles = lastMatch ? lastMatch.roles : ch.roles;
+  for (const role of roles) {
+    const tr = document.createElement("tr");
+    const own = draft.bind && Object.prototype.hasOwnProperty.call(draft.bind, role);
+    if (!own) tr.className = "inherit";
+    const on = own ? draft.bind[role] : draft.bind_default;
+    const a = angles[role];
+    tr.innerHTML = "<td></td><td><input type=checkbox></td><td></td><td><button title='follow bind default'>×</button></td>";
+    tr.children[0].textContent = role;
+    const box = tr.querySelector("input");
+    box.checked = on;
+    box.onchange = () => { draft.bind = Object.assign({}, draft.bind, { [role]: box.checked }); drawForm(); };
+    tr.children[2].textContent = a == null ? "" : a + "°";
+    if (a != null && a > 40) tr.children[2].className = "bad";
+    const reset = tr.querySelector("button");
+    reset.disabled = !own;
+    reset.onclick = () => { const b = Object.assign({}, draft.bind); delete b[role]; draft.bind = b; drawForm(); };
+    $("bindtab").appendChild(tr);
+  }
+  for (const v of [...ch.versions].reverse()) {
+    const d = document.createElement("div");
+    d.className = "ver";
+    const gates = Object.entries(v.checks || {}).map(([k, c]) => k + (c.pass ? " ok" : " FAIL")).join(", ");
+    d.textContent = "v" + v.version + (v.version === ch.rig ? " (current)" : "") + " · " + v.step + " · " + v.kind
+      + (v.input ? " · from v" + v.input : "") + (v.accepted ? " · accepted" : " · not accepted")
+      + (gates ? " · " + gates : "") + (v.note ? " — " + v.note : "");
+    $("rig").appendChild(d);
+  }
+}
+
+function patchFromDraft() {
+  const p = {};
+  for (const s of state.schema) if (s.name in draft) p[s.name] = draft[s.name];
+  // bind is replaced whole: roles missing from the draft go back to following bind_default
+  const ch = character();
+  const bind = {};
+  for (const r of Object.keys(ch.map.bind || {})) bind[r] = null;
+  Object.assign(bind, draft.bind || {});
+  p.bind = bind;
+  return p;
 }
 
 let wasRunning = false;
@@ -285,12 +422,7 @@ async function refresh() {
       if (prev) $("char").value = prev;
     }
     drawList();
-    if (!sameChars || !$("char").options.length) syncFit();
-    const rc = character();
-    $("recipe").textContent = rc && rc.bake
-      ? "next bake:\n" + Object.entries(rc.bake).map(([k, s]) =>
-          `${k} ${Array.isArray(s.value) ? s.value.join(",") || "-" : s.value}  (${s.from})`).join("\n")
-      : "";
+    if (!sameChars) drawForm();
     const run = j.jobs.running[0];
     const done = j.jobs.done[0];
     if (run) {
@@ -307,6 +439,7 @@ async function refresh() {
     $("log").textContent = [head, ...(lines || [])].filter(Boolean).join("\n");
     $("map").disabled = !!run;
     $("apply").disabled = !!run;
+    $("save").disabled = !!run;
     $("gen").disabled = !!run;
     if (wasRunning && !run && current && character()) {
       const fresh = j.clips.find((c) => c.id === current.id);
@@ -326,14 +459,7 @@ async function post(path, body) {
 }
 
 $("filter").oninput = drawList;
-let fitFor = null;
-function syncFit() {
-  const c = character();
-  if (!c || fitFor === c.id) return;
-  fitFor = c.id;
-  $("bind").checked = "bind_match" in c ? !!c.bind_match : c.recipe === "human";
-}
-$("char").onchange = () => { fitFor = null; syncFit(); if (current) pick(current); else drawList(); };
+$("char").onchange = () => { draft = null; lastBake = null; lastMatch = null; if (current) pick(current); else { drawList(); drawForm(); } };
 $("map").onclick = async () => {
   if (!current || !character()) return;
   $("job").textContent = "starting " + current.id + " → " + character().id;
@@ -341,16 +467,18 @@ $("map").onclick = async () => {
   try { await post("/api/map", { clip: current.id, character: character().id }); }
   catch (err) { $("log").textContent = String(err); $("job").textContent = String(err); }
 };
-$("apply").onclick = async () => {
-  if (!current || !character()) return;
-  const patch = {};
-  if ($("barrel").value !== "") patch.barrel_chest = Number($("barrel").value);
-  if ($("arm").value !== "") patch.arm_cap = Number($("arm").value);
-  patch.bind_match = $("bind").checked;
+async function saveMap(rebake) {
+  const ch = character();
+  if (!ch || !draft) return;
   try {
-    await post("/api/fit", { character: character().id, clip: current.id, patch });
+    await post("/api/character", { character: ch.id, patch: patchFromDraft(), clip: rebake && current ? current.id : null });
+    draft = null;
+    await refresh();
+    drawForm();
   } catch (err) { $("log").textContent = String(err); }
-};
+}
+$("save").onclick = () => saveMap(false);
+$("apply").onclick = () => saveMap(true);
 $("gen").onclick = async () => {
   try {
     await post("/api/prompt", {

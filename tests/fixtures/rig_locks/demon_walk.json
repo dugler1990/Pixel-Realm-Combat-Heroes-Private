@@ -1,0 +1,96 @@
+{
+ "clip": "walk_v1_00",
+ "settings_old_env": {
+  "bind_match": false,
+  "mode": "rot",
+  "ik_body": 0.35,
+  "bind_ref": "frame1",
+  "jaw_closed": 14.0,
+  "arm_elev_cap": 35.0,
+  "root_loc": true,
+  "clav_damp": 1.0,
+  "bind_skip": []
+ },
+ "old_code": "",
+ "old_bones": {
+  "LeftForeArm>bone_16": [
+   60.9,
+   16
+  ],
+  "RightLeg>bone_7": [
+   46.7,
+   26
+  ],
+  "LeftArm>bone_15": [
+   43.1,
+   51
+  ],
+  "LeftFoot>bone_4": [
+   40.4,
+   66
+  ],
+  "RightFoot>bone_9": [
+   36.5,
+   31
+  ],
+  "LeftShin>bone_3": [
+   33.1,
+   90
+  ],
+  "LeftShoulder>bone_14": [
+   29.3,
+   16
+  ],
+  "RightShoulder>bone_24": [
+   25.4,
+   26
+  ],
+  "RightForeArm>bone_26": [
+   25.4,
+   21
+  ],
+  "RightShin>bone_8": [
+   23.8,
+   61
+  ],
+  "LeftLeg>bone_2": [
+   23.1,
+   81
+  ],
+  "RightArm>bone_25": [
+   17.9,
+   26
+  ],
+  "Chest>bone_12": [
+   11.1,
+   56
+  ],
+  "Spine1>bone_1": [
+   8.3,
+   51
+  ],
+  "Hips>bone_0": [
+   5.7,
+   1
+  ]
+ },
+ "by_role": {
+  "forearm.L": 60.9,
+  "thigh.R": 46.7,
+  "upper_arm.L": 43.1,
+  "ankle.L": 40.4,
+  "ankle.R": 36.5,
+  "shin.L": 33.1,
+  "clavicle.L": 29.3,
+  "clavicle.R": 25.4,
+  "forearm.R": 25.4,
+  "shin.R": 23.8,
+  "thigh.L": 23.1,
+  "upper_arm.R": 17.9,
+  "chest": 11.1,
+  "spine": 8.3,
+  "root": 5.7
+ },
+ "bones_driven": 20,
+ "note": "by_role is the lock (new segment rule: chest->neck/head). old_bones: pre-split code, same bake; differs only where the old check picked another child segment."
+}

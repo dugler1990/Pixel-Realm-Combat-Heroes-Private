@@ -14,31 +14,27 @@ C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Private\Code\sprite_venv\Scripts\pyth
 
 First launch writes `generated/bosses/anim_library/index.json` from `kimodo_new_blender/*.bvh` and `characters.json` (barb, demon, icewiz) when those roles files exist.
 
-Map one clip: the button copies the BVH, runs `retarget_bvh.py` with rig+roles, copies an existing `base.glb` when the row has one, then `export_split.py --clips-only`. The glb path is stored on the clip's `maps`.
+Map one clip: the button copies the BVH to `anim_library/stage/<id>`, runs `retarget_bvh.py --character <id> --version <rig> --source <clip source>` into `characters/<id>/bakes/<clip>/`, then `export_split.py` into `characters/<id>/view/v<rig>/` (base.glb once per rig version, then `--clips-only`). The index stores `maps.<id> = {glb, rig, bone_hash, bake}`; a bare string is a pre-2026-11-21 map.
 
-Bake settings: `rigmap/recipe.py` only. `resolve()` = `RECIPES[row.recipe]` < row keys in `KNOBS` < panel patch (`fits/<id>.json`: `arm_cap`, `bind_match`, `barrel_chest` 1 → `CLAVICLE_DAMP` 0). `bake_env()` sends all 9 knobs, `bind_skip` as roles resolved to bone names, so `retarget_bvh.py` uses none of its defaults. Each bake writes `recipe.json` (settings + where each came from + env) beside `run.json`. The panel prints "next bake" with the same. `limb_reach` is stored and not passed.
+Characters: `generated/characters/<id>/character.json` (decisions only: template, rig version, `map` block). Rig versions: `characters/<id>/rig/v<N>/` (record.json, canonical roles.json, rig.glb or a pointer for v1). Library: `tools/boss_sprite_pipeline/rigging/` (PLAN_rig_library.md). Migration once: `python -m tools.boss_sprite_pipeline.rigging.migrate` (barb, demon, icewiz, anun0-3 as v1).
 
-- human = barb graded-good 2026-11-15 (`barb/anim_test/retarget_ik2/run.json`): ik, IK_BODY 0.35, bind on, skip root+neck (bone_0, bone_4), arm 90, clavicle 1, root on, frame1, anunaki. Barb and icewiz.
-- creature = what the page sent the demon before: soma, rot, bind off, arm 35. Demon.
-- `tests/test_rigmap_recipe.py` locks human to the retarget_ik2 env and checks it against that run.json on disk.
+Map settings: declared in `rigging/map/character.py` `MAP_SETTINGS`; the panel form is built from them; `/api/character` patches the map block (unknown key or out of range = 400). Per-role bind table; a role not listed follows `bind_default`. Templates `rigging/map/templates.py`: human = barb retarget_ik2 (ik, IK body 0.35, bind on except root+neck, arm cap 90, clavicle 1, root on, frame1); demon = rot, bind off (head listed off), arm cap 35, jaw closed 14. Pair exceptions `rigging/map/pairs.py` (g1 x demon: feet unbound).
 
-Pose check (in `retarget_bvh.py`, every 5th frame + last): each driven bone's segment, joint → nearest driven child joint, mesh vs stick, world space. Worst per bone in `run.json` `pose_check`; log `POSE_CHECK <clip> ok|FAIL`. `POSE_LIMIT_DEG` 40. Page job header shows it.
+Bake = `rigging/map/transfer.py` (pure numpy port of the old loop) on matrices read by `rigging/blender/pose_io.py`. `run.json`: rig version + bone hash, resolved settings with sources, bind flags, pairs, per clip pose check (`by_role`) and proportions (shoulder / arm / leg ratio over height, target vs source, at frame 1). Page shows them for the open clip; a bake whose rig bone hash differs from the current rig is STALE, a different version with the same bones is "older rig".
 
-| barb_hit_heavy_01 | worst |
-|---|---|
-| human recipe | 29.4 neck (chest 25.8, shins 22, arms ≤15, hips 11.7) |
-| rot, bind on, skip neck only | 149.3 hips |
-| rot, bind off | 153.3 right forearm, left forearm 102 |
+Pose check (`rigging/map/pose_check.py`): segment = driven bone -> its driven child along the chain (chest -> neck/head, clavicle -> upper arm), positions, every 5th frame + last, limit 40.
 
-Prompt: host and port of a Kimodo pod (not the outfit pod). `kimodo/serve_one.py` on the pod, model `Kimodo-SOMA-RP-v1`, one cell, BVH copied back into the library. The page does not start or stop the pod.
+Locks (`tests/test_rigging_locks.py`, fixtures `tests/fixtures/rig_*.npz`, `rig_locks/*.json`), ±0.1°:
 
-Tests, from the worktree, no Blender:
+| barb_hit_heavy_01 | worst | note |
+|---|---|---|
+| human template | 29.4 neck | |
+| rot, bind on hips | 149.3 hips | known failure |
+| rot, bind off | 153.3 right forearm | known failure |
+| human, neck bound | neck 1.3 (worst 22.0 right shin) | proves flags reach the bake |
+| demon walk_v1_00, demon template | 60.9 left forearm | demon bakes already over 40 |
 
-```
-C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Private\Code\sprite_venv\Scripts\python.exe -m pytest tests/test_rigmap.py tests/test_anim_web.py tests/test_rigmap_recipe.py -q
-```
-
-`retarget_bvh.py` takes its soma and anunaki bone tables from `rigmap.legacy`. Gargoyle and G1 stay the tables in that file.
+Old (pre-split) code vs new on the same inputs: every bone equal within 0.1 on all four; only the chest row differs because the old check measured chest -> first child in its table (barb: clavicle 25.8, now neck 9.7).
 
 ## Known errors
 
@@ -51,6 +47,8 @@ C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Private\Code\sprite_venv\Scripts\pyth
 | stick is a point | BVH is centimetres | the page scales 0.01, same as the clip viewer |
 
 ## Log
+
+- 2026-11-21: rigging library phases 1-4: `rigmap` -> `rigging` (roles, sources, settings, rig/version, map/{match,bind,transfer,pose_check,proportions,templates,pairs,character}, blender/pose_io). `retarget_bvh.py` is a driver; TARGETS/PAIRS/profile/env knobs/legacy.py/recipe.py/fits/DEFAULT_CHARACTERS gone. 7 rigs imported as v1. Page bake of barb_hit_heavy_01 via `--character barb`: rc 0, 29.4. Proportions shoulder width moved from clavicle heads to upper-arm heads (clavicles read 4.4x on the barb; now 1.14; demon 1.81).
 
 - 2026-11-21: Kimodo jaw / eyes static. First 40 of 312 clips, rotation range: `Jaw` max 1.1° (median 0.4), eyes max 3.7° (0.5), `Head` max 46° (20). An added jaw is posed or procedural, not driven.
 

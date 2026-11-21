@@ -1,10 +1,11 @@
-"""Animation suite: the Kimodo library, one-clip retarget, and the fit knobs.
+"""Animation suite: the Kimodo clip library, mapping a clip onto a character, the map settings, rig versions.
 
     python -m tools.boss_sprite_pipeline.anim_web [--port 8768] [--no-browser]
 
-Listens on 127.0.0.1 only. Data root: ANIM_DATA_ROOT, else OUTFIT_DATA_ROOT, else the Boss
-worktree when this one has no generated/bosses. The page reads index.json and characters.json
-and writes them; a bake's run.json is written by retarget_bvh.py, not by this page.
+Listens on 127.0.0.1 only. Data root: ANIM_DATA_ROOT, else OUTFIT_DATA_ROOT, else the Boss worktree
+(rigging/paths.py). Characters are generated/bosses/characters/<id>/character.json (decisions) with rig
+versions under rig/v<N>/; bakes write characters/<id>/bakes/<clip>/run.json. The clip index stays
+generated/bosses/anim_library/index.json. See PLAN_rig_library.md.
 """
 from __future__ import annotations
 
@@ -12,7 +13,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import threading
 import traceback
 import webbrowser
@@ -20,48 +20,26 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from tools.boss_sprite_pipeline.rigging import paths, sources
+from tools.boss_sprite_pipeline.rigging.map import character as C
+from tools.boss_sprite_pipeline.rigging.map.match import match
+from tools.boss_sprite_pipeline.rigging.map.skeleton import load_bvh
+from tools.boss_sprite_pipeline.rigging.rig import version as V
+from tools.boss_sprite_pipeline.rigging.settings import SettingError, schema
+
 PIPE = Path(__file__).resolve().parent
 REPO = PIPE.parents[1]
 WEB = PIPE / "web" / "anim.html"
 NAME = __import__("re").compile(r"^[A-Za-z0-9_\-]+$")
 LOG_KEEP = 400
 
-DEFAULT_CHARACTERS = [
-    {"id": "barb", "recipe": "human", "target": "barb", "source": "anunaki",
-     "rig": "bosses/barb/rigfix/barb_final_nb.glb",
-     "roles": "bosses/barb/gear_test/barb_roles.json",
-     "base": "bosses/barb/viewer/ik_test2/base.glb",
-     "view": "bosses/barb/viewer/anim_suite",
-     "note": "UniRig human. Bake settings: rigmap/recipe.py human."},
-    {"id": "demon", "recipe": "creature", "target": "demon", "source": "soma",
-     "rig": "bosses/demon/rig/jaw/rigged_jaw_hinge.glb",
-     "roles": "bosses/demon/rig/jaw/bone_roles.json",
-     "base": "bosses/demon/viewer/_base.glb",
-     "view": "bosses/demon/viewer/anim_suite",
-     "note": "Fused armpit, arm cap 35, digitigrade. The key neck is the skull."},
-    {"id": "icewiz", "recipe": "human", "source": "anunaki",
-     "rig": "pod_sync/20261116/out/unirig_icewiz/rigged.glb",
-     "roles": "bosses/icewiz/rig/icewiz_roles.json",
-     "base": None,
-     "view": "bosses/icewiz/viewer/anim_suite",
-     "note": "Positional retarget. Roles from anun_roles.py."},
-]
-
 
 def data_root() -> Path:
-    for key in ("ANIM_DATA_ROOT", "OUTFIT_DATA_ROOT"):
-        if os.environ.get(key):
-            return Path(os.environ[key])
-    if (REPO / "generated" / "bosses").is_dir():
-        return REPO
-    boss = REPO.parent / "Pixel-Realm-Combat-Heroes-Boss"
-    if (boss / "generated" / "bosses").is_dir():
-        return boss
-    return REPO
+    return paths.data_root()
 
 
 def generated() -> Path:
-    return data_root() / "generated"
+    return paths.generated()
 
 
 def library() -> Path:
@@ -71,6 +49,7 @@ def library() -> Path:
 def allowed_roots() -> list[Path]:
     return [
         (generated() / "bosses").resolve(),
+        (generated() / "characters").resolve(),
         (generated() / "pod_sync").resolve(),
         (REPO / "Graphics" / "Meshes").resolve(),
     ]
@@ -95,15 +74,7 @@ def resolve_rel(rel: str) -> Path:
 
 
 def bpy_python() -> Path:
-    env = os.environ.get("ANIM_BPY")
-    if env:
-        return Path(env)
-    here = PIPE / ".venv-bpy" / "Scripts" / "python.exe"
-    boss = REPO.parent / "Pixel-Realm-Combat-Heroes-Boss" / "tools" / "boss_sprite_pipeline" / ".venv-bpy" / "Scripts" / "python.exe"
-    for c in (here, boss):
-        if c.is_file():
-            return c
-    raise FileNotFoundError("no .venv-bpy python (set ANIM_BPY)")
+    return paths.bpy_python()
 
 
 def read_json(path: Path, default):
@@ -120,29 +91,6 @@ def write_json(path: Path, obj) -> None:
 def ensure_library() -> None:
     lib = library()
     lib.mkdir(parents=True, exist_ok=True)
-    chars = lib / "characters.json"
-    if not chars.is_file():
-        rows = []
-        for row in DEFAULT_CHARACTERS:
-            need = row.get("roles")
-            if need and not (generated() / need).is_file():
-                continue
-            rows.append(row)
-        write_json(chars, rows)
-    else:
-        rows = read_json(chars, [])
-        defaults = {row["id"]: row for row in DEFAULT_CHARACTERS}
-        changed = False
-        for row in rows:
-            src = defaults.get(row.get("id"))
-            if not src:
-                continue
-            for key in ("rig", "source"):
-                if key in src and key not in row:
-                    row[key] = src[key]
-                    changed = True
-        if changed:
-            write_json(chars, rows)
     index = lib / "index.json"
     if index.is_file():
         return
@@ -151,7 +99,7 @@ def ensure_library() -> None:
     if folder.is_dir():
         for bvh in sorted(folder.glob("*.bvh")):
             rel = bvh.relative_to(generated()).as_posix()
-            rows.append({"id": bvh.stem, "bvh": rel, "prompt": None, "model": None,
+            rows.append({"id": bvh.stem, "bvh": rel, "source": "soma", "prompt": None, "model": None,
                          "duration": None, "maps": {}})
     write_json(index, rows)
 
@@ -160,20 +108,8 @@ def load_index() -> list:
     return read_json(library() / "index.json", [])
 
 
-def load_characters() -> list:
-    return read_json(library() / "characters.json", [])
-
-
-def characters_with_bake() -> list:
-    """Rows plus `bake`: the settings the next map will use, and where each came from."""
-    from tools.boss_sprite_pipeline.rigmap.recipe import resolve
-    rows = load_characters()
-    for row in rows:
-        try:
-            row["bake"] = resolve(row, read_json(fit_path(row["id"]), {}))
-        except ValueError as exc:
-            row["bake_error"] = str(exc)
-    return rows
+def save_index(rows: list) -> None:
+    write_json(library() / "index.json", rows)
 
 
 def find_clip(clip_id: str) -> dict:
@@ -184,18 +120,44 @@ def find_clip(clip_id: str) -> dict:
 
 
 def find_character(cid: str) -> dict:
-    for row in load_characters():
-        if row["id"] == cid:
-            return row
-    raise KeyError(cid)
+    if not NAME.match(cid) or not C.exists(cid):
+        raise KeyError(cid)
+    return C.load(cid)
 
 
-def save_index(rows: list) -> None:
-    write_json(library() / "index.json", rows)
+def clip_source(clip: dict) -> str:
+    return clip.get("source") or "soma"
 
 
-def fit_path(cid: str) -> Path:
-    return library() / "fits" / f"{cid}.json"
+def bake_dir(cid: str, clip_id: str) -> Path:
+    return paths.character_dir(cid) / "bakes" / clip_id
+
+
+def characters_state() -> list:
+    """Each character: its decisions, the resolved settings for a soma clip, its rig versions."""
+    out = []
+    for cid in C.all_ids():
+        char = C.load(cid)
+        row = {"id": cid, "template": char["template"], "rig": char["rig"], "map": char["map"],
+               "view": paths.rel(paths.character_dir(cid) / "view" / f"v{char['rig']}"),
+               "note": char.get("note", "")}
+        try:
+            row["settings"] = C.resolve(char, "soma")
+        except SettingError as exc:
+            row["settings_error"] = str(exc)
+        vers = []
+        for n in V.versions(cid):
+            rec = V.load(cid, n)
+            vers.append({"version": n, "step": rec["step"], "kind": rec["kind"], "input": rec["input"],
+                         "accepted": rec["accepted"], "bone_hash": rec["bone_hash"], "when": rec["when"],
+                         "note": rec.get("note", ""), "checks": rec.get("checks", {}),
+                         "roles": sorted(rec["roles"])})
+        row["versions"] = vers
+        cur = next((v for v in vers if v["version"] == char["rig"]), None)
+        row["bone_hash"] = cur["bone_hash"] if cur else None
+        row["roles"] = cur["roles"] if cur else []
+        out.append(row)
+    return out
 
 
 class Jobs:
@@ -262,10 +224,12 @@ def _run(cmd, lines, env=None, cwd=None) -> None:
         raise RuntimeError(f"exit {proc.returncode}")
 
 
-def run_map(clip_id: str, character_id: str, lines: list) -> str:
-    """Retarget one BVH. Returns the glb path relative to generated/."""
+def run_map(clip_id: str, character_id: str, lines: list) -> dict:
+    """Bake one clip onto the character's current rig version. Returns the index entry."""
     clip = find_clip(clip_id)
     char = find_character(character_id)
+    n = int(char["rig"])
+    rec = V.load(character_id, n)
     bvh = resolve_rel(clip["bvh"])
     if not bvh.is_file():
         raise FileNotFoundError(bvh)
@@ -274,74 +238,63 @@ def run_map(clip_id: str, character_id: str, lines: list) -> str:
         shutil.rmtree(stage)
     stage.mkdir(parents=True)
     shutil.copy(bvh, stage / f"{clip_id}.bvh")
-    out = generated() / "bosses" / character_id / "anim_suite" / clip_id
+    out = bake_dir(character_id, clip_id)
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
     py = str(bpy_python())
-    script = str(PIPE / "retarget_bvh.py")
-    # Every knob comes from the recipe (rigmap/recipe.py), then the character row, then the
-    # panel. All are sent, so retarget_bvh.py falls back to none of its own defaults.
-    from tools.boss_sprite_pipeline.rigmap.recipe import bake_env, resolve
-    settings = resolve(char, read_json(fit_path(character_id), {}))
-    # absolute paths: retarget's --target resolves the rig under its own repo, which is
-    # this worktree, and the meshes live in the data root
-    rig = resolve_rel(char["rig"])
-    roles = resolve_rel(char["roles"])
-    env = bake_env(settings, read_json(roles, {}))
-    write_json(out / "recipe.json", {"character": character_id, "settings": settings, "env": env})
-    _log(lines, "recipe " + " ".join(f"{k}={v}" for k, v in env.items()))
-    cmd = [py, script, str(rig), str(roles), str(stage), str(out)]
-    _run(cmd, lines, env=env, cwd=str(PIPE))
-    checks = ["pose check: " + line.split("POSE_CHECK", 1)[1].strip()
-              for line in lines if "POSE_CHECK" in line]
-    view = resolve_rel(char["view"])
+    cmd = [py, str(PIPE / "retarget_bvh.py"), "--character", character_id, "--version", str(n),
+           "--source", clip_source(clip), str(stage), str(out)]
+    _run(cmd, lines, env={"ANIM_DATA_ROOT": str(data_root())}, cwd=str(PIPE))
+    checks = ["pose check: " + line.split("POSE_CHECK", 1)[1].strip() for line in lines if "POSE_CHECK" in line]
+    view = paths.character_dir(character_id) / "view" / f"v{n}"
     view.mkdir(parents=True, exist_ok=True)
-    base = view / "base.glb"
-    if not base.is_file() and char.get("base"):
-        src_base = resolve_rel(char["base"])
-        if src_base.is_file():
-            shutil.copy(src_base, base)
-            _log(lines, f"copied base {src_base.name}")
-    blend = out / "animated.blend"
-    split = [py, str(PIPE / "viewer" / "export_split.py"), str(blend), str(view)]
-    if base.is_file():
+    split = [py, str(PIPE / "viewer" / "export_split.py"), str(out / "animated.blend"), str(view)]
+    if (view / "base.glb").is_file():
         split.append("--clips-only")
     _run(split, lines, cwd=str(PIPE))
     glb = view / "clips" / f"{clip_id}.glb"
     if not glb.is_file():
-        # the action name inside the blend is the bvh stem, which is the clip id
-        found = list((view / "clips").glob("*.glb"))
-        if len(found) == 1:
-            glb = found[0]
-        else:
-            raise FileNotFoundError(f"no clip glb in {view / 'clips'}")
+        raise FileNotFoundError(f"no {glb.name} in {view / 'clips'}")
     lines.extend(checks)      # last, so the page's job log ends on it
-    return glb.relative_to(generated()).as_posix()
+    return {"glb": paths.rel(glb), "rig": n, "bone_hash": rec["bone_hash"], "bake": paths.rel(out / "run.json")}
 
 
-def record_map(clip_id: str, character_id: str, glb_rel: str) -> None:
+def record_map(clip_id: str, character_id: str, entry) -> None:
     rows = load_index()
     for row in rows:
         if row["id"] == clip_id:
-            row.setdefault("maps", {})[character_id] = glb_rel
+            row.setdefault("maps", {})[character_id] = entry
             break
     save_index(rows)
 
 
-def match_report(clip_id: str, character_id: str) -> dict:
-    from tools.boss_sprite_pipeline.rigmap import label_bvh, label_roles, load_bvh, match
-    from tools.boss_sprite_pipeline.rigmap.label import bone_names
+def bake_report(clip_id: str, cid: str) -> dict:
+    """The last bake of this clip on this character: pose check, proportions, rig version, staleness."""
+    char = find_character(cid)
+    run = read_json(bake_dir(cid, clip_id) / "run.json", None)
+    if run is None:
+        return {"baked": False}
+    clip = next(iter(run.get("clips", {}).values()), {})
+    cur = V.load(cid, int(char["rig"]))
+    rig = run.get("rig") or {}
+    return {"baked": True, "rig": rig.get("version"), "current_rig": char["rig"],
+            "stale": rig.get("bone_hash") != cur["bone_hash"], "older_rig": rig.get("version") != char["rig"],
+            "pose_check": clip.get("pose_check"), "proportions": clip.get("proportions"),
+            "settings": run.get("settings"), "bind_flags": run.get("bind_flags"), "when": run.get("when")}
+
+
+def match_report(clip_id: str, cid: str) -> dict:
     clip = find_clip(clip_id)
-    char = find_character(character_id)
-    text = resolve_rel(clip["bvh"]).read_text(encoding="utf-8", errors="replace")
-    sk = load_bvh(text)
-    src = label_bvh(sk.names, "soma")
-    roles = json.loads(resolve_rel(char["roles"]).read_text(encoding="utf-8"))
-    dst = label_roles(roles, char["recipe"])
-    got = match(src, dst, bone_names(roles))
+    char = find_character(cid)
+    rec = V.load(cid, int(char["rig"]))
+    sk = load_bvh(resolve_rel(clip["bvh"]).read_text(encoding="utf-8", errors="replace"))
+    src = clip_source(clip)
+    got = match(sources.label(sk.names, src), rec["roles"], [b["name"] for b in rec["bones"]],
+                static=sources.get(src).STATIC)
     return {"paired": len(got["roles"]), "roles": got["roles"], "missing": got["missing"],
-            "unmapped": got["unmapped"][:24], "recipe": char["recipe"]}
+            "missing_required": got["missing_required"], "static": got["static"],
+            "unmapped": got["unmapped"][:24], "rig": char["rig"], "source": src}
 
 
 def execute_prompt(cell_path: Path, dest_dir: Path, host: str, port: str) -> None:
@@ -369,8 +322,6 @@ def run_prompt(body: dict, lines: list, host: str, port: str) -> str:
         raise ValueError("name must be letters, digits, underscore")
     if not prompt:
         raise ValueError("prompt is empty")
-    if any(c in name for c in "."):
-        raise ValueError("no dots in the name")
     cell = {"name": name, "prompt": prompt, "duration": duration, "seed": int(body.get("seed") or 12345),
             "samples": 1, "model": "Kimodo-SOMA-RP-v1"}
     cell_path = library() / "cells" / f"{name}.json"
@@ -388,7 +339,7 @@ def run_prompt(body: dict, lines: list, host: str, port: str) -> str:
     shutil.copy(found[0], kept)
     rel = kept.relative_to(generated()).as_posix()
     rows = [r for r in load_index() if r["id"] != name]
-    rows.append({"id": name, "bvh": rel, "prompt": prompt, "model": cell["model"],
+    rows.append({"id": name, "bvh": rel, "source": "soma", "prompt": prompt, "model": cell["model"],
                  "duration": duration, "maps": {}})
     rows.sort(key=lambda r: r["id"])
     save_index(rows)
@@ -431,6 +382,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlparse(self.path)
         q = parse_qs(url.query)
+        arg = lambda k: q.get(k, [""])[0]
         try:
             if url.path in ("/", "/index.html"):
                 data = WEB.read_bytes()
@@ -442,18 +394,18 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(data)
                 return
             if url.path == "/api/state":
-                return self._json({"clips": load_index(), "characters": characters_with_bake(),
-                                   "jobs": JOBS.snapshot(), "root": str(data_root())})
+                return self._json({"clips": load_index(), "characters": characters_state(),
+                                   "schema": schema(C.MAP_SETTINGS), "jobs": JOBS.snapshot(),
+                                   "root": str(data_root())})
             if url.path == "/api/match":
-                return self._json(match_report(q.get("clip", [""])[0], q.get("character", [""])[0]))
-            if url.path == "/api/fit":
-                cid = q.get("character", [""])[0]
-                return self._json(read_json(fit_path(cid), {}))
+                return self._json(match_report(arg("clip"), arg("character")))
+            if url.path == "/api/bake":
+                return self._json(bake_report(arg("clip"), arg("character")))
             if url.path == "/bvh":
-                clip = find_clip(q.get("id", [""])[0])
+                clip = find_clip(arg("id"))
                 return self._file(resolve_rel(clip["bvh"]), "application/octet-stream")
             if url.path == "/glb":
-                return self._file(resolve_rel(q.get("path", [""])[0]), "model/gltf-binary")
+                return self._file(resolve_rel(arg("path")), "model/gltf-binary")
         except (KeyError, ValueError, FileNotFoundError, OSError) as exc:
             return self._json({"error": str(exc)}, 404)
         self.send_error(404)
@@ -463,40 +415,35 @@ class Handler(BaseHTTPRequestHandler):
         body = self._body()
         try:
             if url.path == "/api/map":
-                clip, cid = body.get("clip", ""), body.get("character", "")
-                if not NAME.match(str(clip)) or not NAME.match(str(cid)):
+                clip, cid = str(body.get("clip", "")), str(body.get("character", ""))
+                if not NAME.match(clip) or not NAME.match(cid):
                     return self._json({"error": "bad clip or character"}, 400)
                 find_clip(clip)
                 find_character(cid)
 
                 def work(lines, clip=clip, cid=cid):
-                    rel = run_map(clip, cid, lines)
-                    record_map(clip, cid, rel)
-                    lines.append("MAP_DONE " + rel)
+                    entry = run_map(clip, cid, lines)
+                    record_map(clip, cid, entry)
+                    lines.append("MAP_DONE " + entry["glb"])
 
                 JOBS.start("local", f"map {clip} → {cid}", work)
                 return self._json({"started": True})
-            if url.path == "/api/fit":
+            if url.path == "/api/character":
                 cid = str(body.get("character") or "")
-                if not NAME.match(cid):
-                    return self._json({"error": "bad character"}, 400)
                 find_character(cid)
-                patch = body.get("patch") or {}
-                allowed = {"barrel_chest", "arm_cap", "bind_match", "limb_reach"}
-                clean = {k: patch[k] for k in allowed if k in patch and patch[k] is not None}
-                write_json(fit_path(cid), clean)
+                char = C.set_map(cid, body.get("patch") or {})
                 clip = body.get("clip")
                 if clip:
                     if not NAME.match(str(clip)):
                         return self._json({"error": "bad clip"}, 400)
 
                     def work(lines, clip=clip, cid=cid):
-                        rel = run_map(clip, cid, lines)
-                        record_map(clip, cid, rel)
-                        lines.append("FIT_DONE " + rel)
+                        entry = run_map(clip, cid, lines)
+                        record_map(clip, cid, entry)
+                        lines.append("MAP_DONE " + entry["glb"])
 
-                    JOBS.start("local", f"fit {cid} {clip}", work)
-                return self._json({"saved": clean, "rebake": bool(clip)})
+                    JOBS.start("local", f"rebake {clip} → {cid}", work)
+                return self._json({"map": char["map"], "rebake": bool(clip)})
             if url.path == "/api/prompt":
                 host = str(body.get("host") or "")
                 port = str(body.get("port") or "")
@@ -517,8 +464,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def make_server(port: int) -> ThreadingHTTPServer:
     ensure_library()
-    srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    return srv
+    return ThreadingHTTPServer(("127.0.0.1", port), Handler)
 
 
 def main(argv=None):
