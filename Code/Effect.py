@@ -120,6 +120,11 @@ class HeatEffect(Effect):
 
     def get_environmental_damage(self, entity, dt):
         _effect_env_log.debug("trying to get environmental damage")
+        if getattr(entity, "detail", "simple") == "full":
+            # The store owns the rate. Stepping off stops the feed; nothing is subtracted here.
+            from hit_resolve import set_lava
+            set_lava(entity, self.heat)
+            return None
         from damage_rules import patch_rate
         amount = patch_rate(entity, self.heat) * dt
         if amount <= 0:
@@ -127,6 +132,10 @@ class HeatEffect(Effect):
         return (amount, 'heat')
 
     def remove(self, entity):
+        if getattr(entity, "detail", "simple") == "full":
+            from hit_resolve import set_lava
+            set_lava(entity, None)
+            return
         from damage_rules import COOK, chest_layer, heat_seconds, heat_shade, patch_rate
         held = patch_rate(entity, self.heat)
         if held <= COOK:

@@ -173,6 +173,8 @@ class ConditionClock:
         self.rng = random.Random(seed)
         self._heap = []
         self._seq = 0
+        self._warmth = []
+        self._wseq = 0
 
     def _defn(self, name):
         try:
@@ -209,6 +211,28 @@ class ConditionClock:
         entity.conditions[defn.id] = inst
         self._push(entity, inst)
         return inst
+
+    def schedule_warmth(self, entity, when_ms):
+        """One wake for this body's warmth. The previous wake for this life goes stale."""
+        self._ensure(entity)
+        self._wseq += 1
+        entity._warmth_gen = self._wseq
+        heapq.heappush(self._warmth, (int(when_ms), self._wseq, entity.id, entity.condition_gen))
+
+    def warmth_due(self, now, entity_id_map):
+        """Pop warmth wakes that are due and let that one body sample itself. Not a crowd walk."""
+        heap = self._warmth
+        if not heap:
+            return
+        from hit_resolve import temper
+        while heap and heap[0][0] <= now:
+            _due, gen, entity_id, body_gen = heapq.heappop(heap)
+            entity = entity_id_map.get(entity_id)
+            if entity is None or getattr(entity, "condition_gen", None) != body_gen:
+                continue
+            if getattr(entity, "_warmth_gen", None) != gen:
+                continue
+            temper(entity, now)
 
     def tick(self, now, entity_id_map):
         """Pop ends that are due. Empty heap: return. A match deletes that one instance."""

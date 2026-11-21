@@ -32,9 +32,12 @@ FULL_PLATE = ("barb_fullplate_belt", "barb_fullplate_boot_l", "barb_fullplate_bo
 
 # --- helpers -------------------------------------------------------------------------------------
 
-def spawn_at(level, monster, dx, dy):
+def spawn_at(level, monster, dx, dy, team=None):
     """A monster with its feet `dx, dy` px from the hero's feet."""
-    enemy = level.spawner.spawn_enemy({"type": monster, "pos": (0, 0)})
+    cfg = {"type": monster, "pos": (0, 0)}
+    if team:
+        cfg["spawn_team_id"] = team
+    enemy = level.spawner.spawn_enemy(cfg)
     cx, cy = level.player.hitbox.midbottom
     enemy.hitbox.midbottom = (int(cx + dx), int(cy + dy))
     enemy.plant_sprite_on_hitbox()
@@ -478,8 +481,309 @@ def condition_name(cond_id):
     return CONDITIONS[cond_id].name
 
 
+def _hp(value):
+    return f"{value:.0f}"
+
+
+def _seen(hero):
+    """Health, the warmth, and the colours that are on him right now."""
+    now = pygame.time.get_ticks()
+    rows = [f"health {_hp(hero.health)}"]
+    from damage_rules import warmth_at
+    skin = getattr(hero, "_skin", None)
+    piece = getattr(hero, "_piece", None)
+    if skin is not None and piece is not None:
+        rows.append(f"warmth skin {warmth_at(skin, now):+.1f}  piece {warmth_at(piece, now):+.1f}")
+    heat = getattr(hero, "heat_shade", None)
+    piece_name = getattr(hero, "heat_piece", None)
+    rows.append(f"heat {heat or '-'}  piece {piece_name or '-'}  skin {bool(getattr(hero, 'heat_on_skin', False))}")
+    rows.append(f"cold {getattr(hero, 'cold_shade', None) or '-'}  speed {speed_of(hero):g}")
+    live = []
+    for inst in hero.conditions.values():
+        left = max(0.0, (inst.end_ms - now) / 1000.0)
+        live.append(f"{condition_name(inst.cond_id)} {left:.1f}s")
+    rows.append(", ".join(live) if live else "no condition")
+    return rows
+
+
+class _PlateHit(Scene):
+    """Full plate, one attacker. Records the deepest health dip and whatever colour appeared."""
+
+    def setup(self, level):
+        hero = level.player
+        self.start = self.low = hero.health
+        self.heat = self.piece = self.cold = None
+        self.on_skin = False
+        wear(level, FULL_PLATE)
+
+    def tick(self, level, dt):
+        hero = level.player
+        self.low = min(self.low, hero.health)
+        shade = getattr(hero, "heat_shade", None)
+        if shade:
+            self.heat = shade
+            self.piece = getattr(hero, "heat_piece", None)
+            self.on_skin = bool(getattr(hero, "heat_on_skin", False))
+        cold = getattr(hero, "cold_shade", None)
+        if cold:
+            self.cold = cold
+        self.lines = [f"dropped {_hp(self.start - self.low)}"] + _seen(hero)
+
+
+class Fire(_PlateHit):
+    """A demon dog shoots his fire spit. No forced hit."""
+
+    NAME = "fire"
+    WATCH = "Full plate. The spit flashes the piece, the cook lands, then the red fades."
+    SECONDS = 12.0
+    FAST_SECONDS = 10.0
+
+    def setup(self, level):
+        super().setup(level)
+        spawn_at(level, "demon_dog", -220, 40)
+
+    def decide(self, level):
+        return "probe", (
+            f"dropped {_hp(self.start - self.low)} heat {self.heat or '-'} "
+            f"piece {self.piece or '-'} skin {self.on_skin}"
+        )
+
+
+class Ice(_PlateHit):
+    """An ice ghost walks in and chills. No forced hit."""
+
+    NAME = "ice"
+    WATCH = "Full plate, a little warm. The ghost holds you mild blue. Then he steps off and it fades."
+    SECONDS = 16.0
+    FAST_SECONDS = 12.0
+
+    def setup(self, level):
+        super().setup(level)
+        from hit_resolve import temper
+        # A flame's worth of heat on the plate, so the blue waits while that heat is spent.
+        temper(level.player, pygame.time.get_ticks(), blow_heat=4.0)
+        self.ghost = spawn_at(level, "ice_ghost", 200, 0)
+
+    def tick(self, level, dt):
+        super().tick(level, dt)
+        if self.t > 8.0 and getattr(self, "ghost", None) is not None:
+            feet = level.player.hitbox.midbottom
+            self.ghost.hitbox.midbottom = (int(feet[0] + 4000), int(feet[1]))
+            self.ghost.plant_sprite_on_hitbox()
+            self.ghost.direction.update(0, 0)
+
+    def decide(self, level):
+        return "probe", f"dropped {_hp(self.start - self.low)} cold {self.cold or '-'}"
+
+
+class LightningJump(Scene):
+    """One dog's shot is the storm bolt. Three archers on the other enemy team. You stay as you are."""
+
+    NAME = "lightning_jump"
+    WATCH = "One dog shoots the storm bolt. Three archers. The lines say who lost health."
+    SECONDS = 16.0
+    FAST_SECONDS = 14.0
+
+    def setup(self, level):
+        dog = spawn_at(level, "demon_dog", -220, 0, team="enemy_3")
+        dog.health = 500
+        shot = copy.deepcopy(dog.ranged_attacks[0])
+        shot["attack"] = "storm_bolt"
+        dog.ranged_attacks = [shot]
+        if hasattr(dog.combat_strategy, "ranged_attacks"):
+            dog.combat_strategy.ranged_attacks = dog.ranged_attacks
+        self.archers = [spawn_at(level, ARCHER, 160, dy, team="enemy_1") for dy in (-90, 0, 90)]
+        self.who = [(dog, "dog")] + [(archer, "archer") for archer in self.archers]
+        self.start = {id(one): one.health for one, _ in self.who}
+        self.start[id(level.player)] = level.player.health
+        self.low = dict(self.start)
+
+    def tick(self, level, dt):
+        for one, _name in self.who:
+            self.low[id(one)] = min(self.low[id(one)], one.health)
+        hero = level.player
+        self.low[id(hero)] = min(self.low[id(hero)], hero.health)
+        self.lines = self._lost(level)
+
+    def _lost(self, level):
+        rows = []
+        for one, name in self.who:
+            rows.append(f"{name} {one.team_id}  -{_hp(self.start[id(one)] - self.low[id(one)])}  now {_hp(one.health)}")
+        hero = level.player
+        rows.append(f"you  -{_hp(self.start[id(hero)] - self.low[id(hero)])}  now {_hp(hero.health)}")
+        return rows
+
+    def decide(self, level):
+        return "probe", " | ".join(self._lost(level))
+
+
+def _heat_patch(level, dx, dy, w, h):
+    """One heat area, the same heat the maps already use, plus the existing red outline."""
+    from EffectArea import EffectArea
+    from QuadTree import QuadTree, QuadTreeManager
+
+    feet = level.player.hitbox.midbottom
+    rect = pygame.Rect(int(feet[0] + dx), int(feet[1] + dy - h), w, h)
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    surf.fill((255, 255, 255, 255))
+    area = EffectArea(rect, pygame.mask.from_surface(surf), {"heat": 100.0}, _id="validation_heat")
+    layout = level.layout_manager
+    if layout.effect_quad_trees is None:
+        layout.effect_quad_trees = {}
+    layout.effect_quad_trees["validation_heat"] = QuadTree(
+        [area], depth=4, bounding_rect=rect.inflate(800, 800), manager=QuadTreeManager())
+    from effect_cell_grid import EffectCellGrid
+    areas = list(getattr(layout, "all_effect_areas", None) or [])
+    areas.append(area)
+    layout.all_effect_areas = areas
+    layout.effect_cell_grid = EffectCellGrid.build(
+        areas, layout.TILESIZE, layout.csv_layout_width, layout.csv_layout_height)
+    sprites = layout.visible_sprites
+    sprites.debug_effect_areas = list(getattr(sprites, "debug_effect_areas", None) or [])
+    sprites.debug_effect_areas.append(area)
+    return rect
+
+
+class Lava(Scene):
+    """A heat patch. Stand in the box, then step off. Today's heat rule, nothing added."""
+
+    NAME = "lava"
+    WATCH = "Full plate. Stand in the red box, then step off."
+    SECONDS = 20.0
+    FAST_SECONDS = 4.0
+
+    def setup(self, level):
+        hero = level.player
+        self.start = hero.health
+        self.low = hero.health
+        self.heat = None
+        wear(level, FULL_PLATE)
+        sprites = level.layout_manager.visible_sprites
+        self.debug_was = sprites.runtime_debug_effect_rects
+        self.box = _heat_patch(level, 80, 20, 160, 120)
+        self.home = (hero.hitbox.midbottom[0], hero.hitbox.midbottom[1])
+        sprites.runtime_debug_effect_rects = True
+
+    def tick(self, level, dt):
+        hero = level.player
+        if RUNTIME.fast_mode:
+            # Headless only. The window leaves him where he is so he can walk in himself.
+            feet = self.box.center if self.t < 1.6 else self.home
+            hero.hitbox.midbottom = (int(feet[0]), int(feet[1]))
+            hero.plant_sprite_on_hitbox()
+            hero.velocity.update(0, 0)
+        self.low = min(self.low, hero.health)
+        shade = getattr(hero, "heat_shade", None)
+        if shade:
+            self.heat = shade
+        self.lines = [f"dropped {_hp(self.start - self.low)}", "red box is to your right"] + _seen(hero)
+
+    def decide(self, level):
+        return "probe", f"dropped {_hp(self.start - self.low)} heat {self.heat or '-'}"
+
+    def teardown(self, level):
+        layout = level.layout_manager
+        if layout.effect_quad_trees:
+            layout.effect_quad_trees.pop("validation_heat", None)
+        from effect_cell_grid import EffectCellGrid
+        layout.all_effect_areas = [
+            area for area in layout.all_effect_areas if getattr(area, "_id", None) != "validation_heat"]
+        layout.effect_cell_grid = EffectCellGrid.build(
+            layout.all_effect_areas, layout.TILESIZE, layout.csv_layout_width, layout.csv_layout_height)
+        sprites = layout.visible_sprites
+        sprites.runtime_debug_effect_rects = self.debug_was
+        sprites.debug_effect_areas = [
+            area for area in sprites.debug_effect_areas if getattr(area, "_id", None) != "validation_heat"]
+
+
+class _AirWatch(Scene):
+    """One air, no recovery, a health bar small enough that the fall shows. Not the whole death."""
+
+    def setup(self, level):
+        hero = level.player
+        self.saved_max = hero.stats.get("health", hero.health)
+        self.saved_recovery = hero.health_recovery
+        hero.stats["health"] = 500
+        hero.health = 500
+        hero.health_recovery = lambda: None
+        self.start = self.low = hero.health
+
+    def tick(self, level, dt):
+        hero = level.player
+        self.low = min(self.low, hero.health)
+        self.lines = [f"dropped {_hp(self.start - self.low)}"] + _seen(hero)
+
+    def teardown(self, level):
+        hero = level.player
+        hero.stats["health"] = self.saved_max
+        hero.health = self.saved_max
+        hero.health_recovery = self.saved_recovery
+        level.air = 0
+
+
+class IceNaked(_AirWatch):
+    """Air -30, nothing worn, no exertion. The test, not this window, is the vitality and resist table."""
+
+    NAME = "ice_naked"
+    WATCH = "Naked, ice air. You go blue and health falls. It does not run to the death."
+    SECONDS = 80.0
+    FAST_SECONDS = 4.0
+
+    def setup(self, level):
+        super().setup(level)
+        level.air = -30
+        from hit_resolve import temper
+        temper(level.player, pygame.time.get_ticks())
+
+    def decide(self, level):
+        from damage_rules import air_on_skin
+        naked = air_on_skin(-30, {}, 0.0, 20)
+        hardy = air_on_skin(-30, {}, 0.0, 60)
+        immune = air_on_skin(-30, {"ice": 30}, 0.0, 20)
+        plate = air_on_skin(-30, {}, 0.2, 20)
+        return "probe", (
+            f"dropped {_hp(self.start - self.low)}  "
+            f"settle vit20 {naked:+.0f} vit60 {hardy:+.0f} ice30 {immune:+.0f} plate {plate:+.0f}"
+        )
+
+
+class Desert(_AirWatch):
+    """Air +20, full plate, three slides. Fire resist 30 is in the line, from the same sum."""
+
+    NAME = "desert"
+    WATCH = "Full plate, desert air. Slides make it worse. Health falls; it does not run to the death."
+    SECONDS = 75.0
+    FAST_SECONDS = 8.0
+
+    def setup(self, level):
+        super().setup(level)
+        wear(level, FULL_PLATE)
+        level.air = 20
+        from hit_resolve import temper
+        temper(level.player, pygame.time.get_ticks())
+        self.slides = 0
+
+    def tick(self, level, dt):
+        if self.slides < 3 and self.t >= 2.0 * (self.slides + 1):
+            from hit_resolve import exert
+            exert(level.player, 20, pygame.time.get_ticks())
+            self.slides += 1
+        super().tick(level, dt)
+        self.lines.insert(0, f"slides {self.slides}")
+
+    def decide(self, level):
+        from damage_rules import air_on_skin
+        bare = air_on_skin(20, {}, 0.0, 20)
+        plate = air_on_skin(20, {}, 0.2, 20)
+        immune = air_on_skin(20, {"fire": 30}, 0.0, 20)
+        return "probe", (
+            f"dropped {_hp(self.start - self.low)} slides {self.slides}  "
+            f"settle bare {bare:+.0f} plate {plate:+.0f} fire30 {immune:+.0f}"
+        )
+
+
 SCENARIOS = (KnockbackMass, ArrowsStop, PlateShove, ArrowsWhereDrawn, PointsVsCapsules, PlateStops,
-             Haste, Elemental)
+             Haste, Elemental, Fire, Ice, LightningJump, Lava, IceNaked, Desert)
 
 
 # --- the driver ----------------------------------------------------------------------------------
@@ -516,6 +820,19 @@ class CombatValidationDriver:
         hero.velocity.update(0, 0)
         hero.direction.update(0, 0)
         wear(level, ())
+        level.air = 0
+        hero._skin = None
+        hero._piece = None
+        hero._ghost_hold = False
+        hero._lava_heat = None
+        hero.cold_shade = None
+        hero.heat_shade = None
+        hero.heat_on_skin = False
+        hero.heat_piece = None
+        clock = getattr(level, "condition_clock", None)
+        if clock is not None:
+            for name in ("chilled", "hot_shell", "burning"):
+                clock.cure(hero, name)
 
     def tick(self, level, dt):
         dt = max(0.0, float(dt or 0.0))

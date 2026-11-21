@@ -232,3 +232,5 @@ quadtree asks.
   copy stays the old flat number.
 - Which bosses are `"detail": "full"` is a list we fill when one of them should show the curve.
   Until then only the player is full.
+- For a full body, the one-shot cold and the heat patch's own shell are superseded by
+  `.cursor/plans/temperature.plan.md` (built). Simple bodies keep this chunk's one-shot.

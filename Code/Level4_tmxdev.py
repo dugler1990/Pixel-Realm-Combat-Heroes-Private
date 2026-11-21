@@ -2584,7 +2584,9 @@ class Level4:
             }
             # A render client applies records when a later chunk sends them. Everyone else ends buffs here.
             if getattr(self, "mp_client", None) is None:
-                self.condition_clock.tick(pygame.time.get_ticks(), entity_id_map)
+                now_ms = pygame.time.get_ticks()
+                self.condition_clock.tick(now_ms, entity_id_map)
+                self.condition_clock.warmth_due(now_ms, entity_id_map)
             for sprite in self.layout_manager.visible_sprites.sprites():
                 # debug
                 # if hasattr(sprite, 'frozen'):

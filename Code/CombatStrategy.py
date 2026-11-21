@@ -176,12 +176,39 @@ class MeleeCombatStrategy(CombatStrategy):
         self.melee_attacks = melee_attacks
         
 
+    def _cold_touch(self):
+        """True when this melee body is a cold one (the ice ghost). Cached: the attacks do not change."""
+        cached = getattr(self, "_cold_touch_cache", None)
+        if cached is not None:
+            return cached
+        from damage_data import attack_of
+        cold = False
+        for entry in self.melee_attacks or []:
+            defn = attack_of(entry) if isinstance(entry, dict) else None
+            if defn is not None and defn.cold:
+                cold = True
+                break
+        self._cold_touch_cache = cold
+        return cold
+
+    def _note_cold_hold(self, enemy, target, distance):
+        """A full body inside this reach is held at a mild cold. A simple body is struck as before.
+        The flag changes only when he steps on or off, so this is not a per-frame sample."""
+        if not self._cold_touch() or getattr(target, "detail", "simple") != "full":
+            return False
+        from hit_resolve import set_ghost_hold
+        radius = enemy.combat_config.get("melee_attack_radius", 50)
+        holding = distance <= radius
+        set_ghost_hold(target, holding)
+        return holding
+
     def decide_action(self, enemy, target):
         # assumes offensive stance initially
         # this guy has no other stance atm anyway
         if not hasattr(enemy,"movement_state") :
             enemy.movement_state = 'offensive'
         distance, _ = enemy.get_target_distance_direction(target)
+        self._note_cold_hold(enemy, target, distance)
         if distance <= enemy.combat_config['melee_attack_radius'] and enemy.can_attack:
             enemy.current_attack_type = "melee"
             enemy.movement_state = 'offensive'
@@ -197,8 +224,11 @@ class MeleeCombatStrategy(CombatStrategy):
 
     def execute_attack(self, enemy, target):
         if self.handle_special_attacks(enemy, target):
-            return 
-        
+            return
+        # The hold replaces the ice strike. A simple body, and any melee that is not cold, still swing.
+        if self._cold_touch() and getattr(target, "_ghost_hold", False) and getattr(target, "detail", "simple") == "full":
+            return
+
         current_time = pygame.time.get_ticks()
         if current_time - enemy.last_attack_action_time >= enemy.attack_cooldown:
             enemy.last_attack_action_time = current_time

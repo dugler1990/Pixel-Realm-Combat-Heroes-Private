@@ -300,3 +300,200 @@ def patch_rate(entity, heat):
     resist = resist_of(card.resist, "fire") if card is not None else 0.0
     insulation = 0.0 if layer is None else layer.insulation
     return max(0.0, heat - resist) * (1.0 - insulation)
+
+
+# --- one warmth (temperature plan) --------------------------------------------------------------
+# The air, a blow, a hold and exertion write the same number. These functions do not see an entity.
+
+AIR_K = 0.01
+FAINT = 2.0
+EXERT = 0.15
+REF_VIT = 20.0
+SAFE_LO = -HURT_AT
+SAFE_HI = COOK
+
+
+class Warmth:
+    """One sample. `value` at `at_ms`, falling toward `target` with rate `k`. `quiet_ms` is the
+    instant a prepaid spike has finished falling back inside the safe band; the integral skips
+    that fall so the blow's cook is not paid twice."""
+
+    __slots__ = ("value", "at_ms", "target", "k", "quiet_ms")
+
+    def __init__(self, value=0.0, at_ms=0, target=0.0, k=AIR_K, quiet_ms=0):
+        self.value = float(value)
+        self.at_ms = int(at_ms)
+        self.target = float(target)
+        self.k = float(k)
+        self.quiet_ms = int(quiet_ms)
+
+
+def air_on_skin(air, resist, insulation, vitality):
+    """The warmth the skin is pulled toward. Resist, then clothes, then vitality. Nowhere else."""
+    air = float(air or 0.0)
+    vitality = float(vitality) if isinstance(vitality, (int, float)) and not isinstance(vitality, bool) and vitality > 0 else REF_VIT
+    cover = min(1.0, max(0.0, float(insulation or 0.0)))
+    if air >= 0.0:
+        power = max(0.0, air - resist_of(resist, "fire"))
+    else:
+        power = -max(0.0, -air - resist_of(resist, "ice"))
+    return power * (1.0 - cover) * (REF_VIT / vitality)
+
+
+def warmth_shade(value):
+    """Faint red under COOK, the three reds above it, the three blues below -SLOW_AT."""
+    value = float(value)
+    if value > 0.0:
+        if value > 18.0:
+            return "searing"
+        if value > 10.0:
+            return "hot"
+        if value > COOK:
+            return "warm"
+        if value > FAINT:
+            return "faint"
+        return None
+    return cold_band(-value)
+
+
+def shock_wound(before, after):
+    """A jump that crosses 0 by at least HURT_AT. The cook curve of that distance.
+    Landing on 0 counts. Starting at 0 does not: there was no other side to leave."""
+    before = float(before)
+    after = float(after)
+    crossed = (before < 0.0 and after >= 0.0) or (after < 0.0 and before > 0.0)
+    if not crossed:
+        return 0.0
+    distance = abs(after - before)
+    if distance >= HURT_AT:
+        return heat_wound(distance)
+    return 0.0
+
+
+def warmth_at(sample, now_ms):
+    """The sample's value at `now_ms`. The exponential toward its target."""
+    if sample is None:
+        return 0.0
+    elapsed = max(0.0, (int(now_ms) - int(sample.at_ms)) / 1000.0)
+    if sample.k <= 0.0 or elapsed == 0.0:
+        return sample.value
+    return sample.target + (sample.value - sample.target) * math.exp(-sample.k * elapsed)
+
+
+def _cross_s(value, target, k, line):
+    """Seconds until the curve hits `line`, or None when it never does."""
+    if k <= 0.0:
+        return None
+    gap = value - target
+    if abs(gap) < 1e-12:
+        return None
+    ratio = (line - target) / gap
+    if ratio <= 0.0 or ratio >= 1.0:
+        return None
+    return -math.log(ratio) / k
+
+
+def _segment_heat(value, target, k, a, b):
+    """HEAT_SCALE times the area of (warmth - COOK) on [a, b] seconds, where it is positive."""
+    return _segment_over(value, target, k, a, b, COOK) * HEAT_SCALE
+
+
+def _segment_cold(value, target, k, a, b):
+    """Area of (-warmth - HURT_AT) on [a, b] seconds, where it is positive."""
+    return _segment_over(-value, -target, k, a, b, HURT_AT)
+
+
+def _segment_over(value, target, k, a, b, line):
+    """Area of (curve - line) while the curve of `value` toward `target` stays above `line`."""
+    if b <= a:
+        return 0.0
+    start = target + (value - target) * math.exp(-k * a)
+    end = target + (value - target) * math.exp(-k * b)
+    above = start > line or end > line
+    if not above and not (start > line and end < line):
+        if max(start, end) <= line:
+            return 0.0
+    cross = _cross_s(value, target, k, line)
+    if cross is not None and a < cross < b:
+        if start > line:
+            return _area(value, target, k, a, cross, line)
+        return _area(value, target, k, cross, b, line)
+    if start <= line and end <= line:
+        return 0.0
+    return _area(value, target, k, a, b, line)
+
+
+def _area(value, target, k, a, b, line):
+    """Integral of (target + (value-target) e^{-kt} - line) from a to b. Caller clipped the span."""
+    if k <= 0.0:
+        return max(0.0, value - line) * (b - a)
+    gap = value - target
+    return (target - line) * (b - a) - (gap / k) * (math.exp(-k * b) - math.exp(-k * a))
+
+
+def wound_between(sample, t0_ms, t1_ms):
+    """Health from sitting past COOK or HURT_AT between two instants. Solved, not stepped.
+    A prepaid spike's fall back into the safe band is skipped."""
+    if sample is None or t1_ms <= t0_ms:
+        return 0.0
+    start = max(int(t0_ms), int(sample.quiet_ms))
+    if t1_ms <= start:
+        return 0.0
+    origin = int(sample.at_ms)
+    a = max(0.0, (start - origin) / 1000.0)
+    b = max(a, (int(t1_ms) - origin) / 1000.0)
+    return _segment_heat(sample.value, sample.target, sample.k, a, b) + _segment_cold(
+        sample.value, sample.target, sample.k, a, b)
+
+
+def spike_quiet_ms(value, target, k, now_ms):
+    """When a spike that started at `value` falls back inside the safe band. 0 if it never does."""
+    if SAFE_LO < target < SAFE_HI and (value >= SAFE_HI or value <= SAFE_LO):
+        line = COOK if value > 0.0 else -HURT_AT
+        seconds = _cross_s(value, target, k, line)
+        if seconds is not None and seconds > 0.0:
+            return int(now_ms) + int(round(seconds * 1000.0))
+    return 0
+
+
+# Lines the clock cares about. The one just inside the blue is how a hold at -SLOW_AT is seen to leave.
+_WAKE_LINES = (FAINT, COOK, -SLOW_AT, -(SLOW_AT - 0.5), -HURT_AT)
+
+
+def wake_ms(sample, now_ms, min_gap_ms=50, horizon_ms=120_000):
+    """The next time this sample crosses a line or owes a point of health. None when it is quiet.
+    `value` is the value at `now_ms` (the caller sampled first). Not a per-frame step."""
+    if sample is None:
+        return None
+    now_ms = int(now_ms)
+    best = None
+    for line in _WAKE_LINES:
+        seconds = _cross_s(sample.value, sample.target, sample.k, line)
+        if seconds is None or seconds <= 0.0:
+            continue
+        at = now_ms + int(round(seconds * 1000.0))
+        if best is None or at < best:
+            best = at
+    if sample.quiet_ms > now_ms and (best is None or sample.quiet_ms < best):
+        best = int(sample.quiet_ms)
+    owed = _wound_at(sample, now_ms, horizon_ms)
+    if owed is not None and (best is None or owed < best):
+        best = owed
+    if best is None:
+        return None
+    return max(best, now_ms + int(min_gap_ms))
+
+
+def _wound_at(sample, now_ms, horizon_ms):
+    """When the solved integral from now first reaches 1 health. None inside the horizon if it never does."""
+    end = int(now_ms) + int(horizon_ms)
+    if wound_between(sample, now_ms, end) < 1.0:
+        return None
+    lo, hi = int(now_ms), end
+    while hi - lo > 20:
+        mid = (lo + hi) // 2
+        if wound_between(sample, now_ms, mid) >= 1.0:
+            hi = mid
+        else:
+            lo = mid
+    return hi

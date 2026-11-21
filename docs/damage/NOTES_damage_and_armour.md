@@ -420,7 +420,8 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
    You get the cold curve and every lightning jump. Other monsters get three shades and at most
    one jump, unless marked `detail: full`. Lightning knobs are `damage`, `reach`, `arcs`, `spark`.
    Cold is separate from the blow. Three blues on skin, three reds on the hot piece. Holy, unholy
-   and venom stay in 9 and 8.
+   and venom stay in 9 and 8. Temperature is built on this branch: `.cursor/plans/temperature.plan.md`.
+   One warmth on a full body. Simple bodies keep this chunk's one-shot. Stamina's `pay` is not wired.
 8. **Venom.** Venoms, saves, antidote items, `venom_cloud` area, new `tribey_dart` enemy.
 9. **Magic categories and resistances.** Negative resist raises damage; holy/unholy by kind.
    Parents are already read in 7.
@@ -455,7 +456,17 @@ hit on a body card uses the elemental rule.
 3. **Watch `elemental`** (Douglas). Headless already passed: plate −3 and hot red, cloth −15 and
    searing red, then a chill −9, severe blue, slower, then back to speed 5.
    `combat_validation.py --scenario elemental --hold-seconds 6` from `Pixel-Realm-elemental\Code`.
-4. Then 8 / 9 (venom, holy and the weakness), 10 (wear), 11 (stuck arrows), 12 (item card
+4. **Watch `fire`, `ice`, `ice_naked`, `desert`, `lightning_jump`, `lava`** (Douglas). Temperature is
+   built. `fire`: full plate, the spit, cook then fade. `ice`: full plate, a little warmth, the ghost
+   holds a mild blue, then steps off. `ice_naked`: air −30, nothing worn; blue and health falling, not
+   the whole death. `desert`: air +20, full plate, three slides. `lightning_jump` is unchanged.
+   `lava` still the red box; its health now comes from the store, so the number moved.
+   `C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Private\Code\sprite_venv\Scripts\python.exe C:\Users\Douglas\Pixel-Realm-elemental\Code\combat_validation.py --scenario fire --hold-seconds 6`
+   Same command with `ice`, `ice_naked`, `desert`, `lightning_jump`, or `lava`.
+5. **Temperature** (built). `.cursor/plans/temperature.plan.md`. One warmth on a full body. The level
+   air is a mild pull and can sit past the wound line. A blow, a ghost hold, lava and exertion write
+   the same store. Stamina's `pay` is the exertion hook and is not on this branch.
+6. Then 8 / 9 (venom, holy and the weakness), 10 (wear), 11 (stuck arrows), 12 (item card
    verdicts), 13 (boss with layers). Merge of 1–7 is still Douglas's call. Nothing is pushed.
 
 **Owed cleanups and loose ends** (none blocks 5):
@@ -589,6 +600,21 @@ hit on a body card uses the elemental rule.
   against 8 bodies 3.3 µs (20k calls). Not per frame. Targeted set: 11 failed (the same names) /
   517 passed. Not watched in the window. Holy, unholy, a weakness that increases damage, and venom
   stay in 9 and 8.
+- 2026-11-18: watch scenes on `refactor/elemental`, no new damage or heat rules. Fire and ice are
+  separate. `fire` headless: dropped 3, heat hot on a plate piece, skin not hot. `ice` headless:
+  dropped 9, cold severe. `lightning_jump`:
+  dog (500, `enemy_3`) lost 0; one archer lost 100, the other two lost 0; you lost 123 and the
+  arena filled it back. `lava` (heat 100): headless stands in the box then steps off, dropped 221,
+  heat searing. The window does not move him. A miss, no jump, or one red is the current rule.
+- 2026-11-18: temperature plan written (`.cursor/plans/temperature.plan.md`), not built. One warmth on a
+  full body. The air that reaches the skin is one product: resist (fire or ice), then the chest's
+  insulation, then vitality (20 is the ordinary barb; past 50, naked, the ice field stops wounding).
+  Ice resist is the same `resist_of` a blow already uses. `barb` has none. Ghost hold is mild and
+  constant. A blow still pays its cook, plus a shock when it crosses. `exert` is the stamina hook;
+  `feat/stamina` is not edited.
+- 2026-11-18: temperature plan revised. Clothes are the chest outer insulation already on the item
+  (plate 0.2, loincloth 0.1), applied to both weathers. Build order is `air_on_skin`, then the
+  sample, then one writer, then the four sources. No second path.
 
 ## Tried and dropped
 

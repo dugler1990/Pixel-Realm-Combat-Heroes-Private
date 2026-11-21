@@ -10,9 +10,13 @@ CODE_DIR = Path(__file__).resolve().parents[2] / "Code"
 if str(CODE_DIR) not in sys.path:
     sys.path.insert(0, str(CODE_DIR))
 
-from damage_data import CATEGORIES, DamageDataError, LayerDef, attack, body, load_attacks  # noqa: E402
+from damage_data import (  # noqa: E402
+    CATEGORIES, BodyDef, DamageDataError, LayerDef, attack, body, load_attacks,
+)
 from damage_rules import (  # noqa: E402
-    CATCH, COOK, bolt_body, bolt_chain, cold_band, cold_wound, elemental, heat_wound, resist_of,
+    AIR_K, CATCH, COLD_K, COOK, HEAT_K, HURT_AT, Warmth, air_on_skin, bolt_body, bolt_chain,
+    cold_band, cold_wound, elemental, heat_wound, resist_of, shock_wound, wake_ms, warmth_at,
+    warmth_shade, wound_between,
 )
 
 HIDE = body("barb").natural
@@ -218,6 +222,302 @@ def test_apply_fire_spit_on_loincloth_burns_and_does_not_ask_magic():
     assert target.health == 85
     assert condition("burning").id in target.conditions
     assert target.heat_shade == "searing" and target.heat_on_skin is False
+
+
+def test_air_on_skin_is_resist_then_clothes_then_vitality():
+    naked = dict(resist={}, insulation=0.0, vitality=20)
+    assert air_on_skin(0, **naked) == 0
+    assert air_on_skin(-30, **naked) == pytest.approx(-30)
+    assert air_on_skin(-30, resist={}, insulation=0.0, vitality=60) == pytest.approx(-10)
+    assert air_on_skin(-30, resist={"ice": 30}, insulation=0.0, vitality=20) == pytest.approx(0)
+    assert air_on_skin(-30, resist={}, insulation=0.2, vitality=20) == pytest.approx(-24)
+    assert air_on_skin(20, **naked) == pytest.approx(20)
+    assert air_on_skin(20, resist={"fire": 30}, insulation=0.0, vitality=20) == pytest.approx(0)
+    assert air_on_skin(20, resist={}, insulation=0.2, vitality=20) == pytest.approx(16)
+    # A missing vitality is the ordinary barb, not a divide by zero.
+    assert air_on_skin(-30, {}, 0.0, None) == pytest.approx(-30)
+
+
+def test_a_spike_toward_comfort_pays_the_cook_once():
+    # Heat 12 falling to 0 at HEAT_K is the chunk 7 cook, and the fall is not paid again.
+    sample = Warmth(12, 0, 0.0, HEAT_K, quiet_ms=int(round(math.log(12 / COOK) / HEAT_K * 1000)))
+    assert warmth_at(sample, 0) == pytest.approx(12)
+    assert warmth_shade(12) == "hot"
+    assert warmth_shade(4) == "faint"
+    assert warmth_shade(1) is None
+    assert wound_between(sample, 0, 10_000) == pytest.approx(0)
+    paid = heat_wound(12)
+    assert paid == pytest.approx(heat_wound(12))
+    # Past the quiet instant the shell is under COOK.
+    assert warmth_at(sample, sample.quiet_ms) == pytest.approx(COOK, abs=0.05)
+    assert shock_wound(-10, 5) == pytest.approx(heat_wound(15))
+    assert shock_wound(-15, 0) == pytest.approx(heat_wound(15))
+    assert shock_wound(0, 12) == 0
+    assert shock_wound(-4, -1) == 0
+    # The solved fall, with no quiet window, is the chunk 7 cook. A handful of multiplies.
+    assert wound_between(Warmth(12, 0, 0.0, HEAT_K), 0, 100_000) == pytest.approx(heat_wound(12), abs=0.05)
+    assert wound_between(Warmth(-20, 0, 0.0, COLD_K * 10), 0, 100_000) == pytest.approx(
+        cold_wound(20, 10), abs=0.05)
+    # The ice field's next wake is the hurt line, not the next frame.
+    assert wake_ms(Warmth(0.0, 0, -30.0, AIR_K), 0) > 10_000
+
+
+def test_held_past_the_line_wounds_and_a_safe_settle_does_not():
+    # Ice field, naked, vitality 20: target -30. A long stay wounds.
+    ice = Warmth(0.0, 0, -30.0, AIR_K, quiet_ms=0)
+    long = 20_000_000
+    assert warmth_at(ice, long) == pytest.approx(-30, abs=0.01)
+    assert wound_between(ice, 0, long) > 100
+    # Vitality 60 settles at -10, under the hurt line.
+    mild = Warmth(0.0, 0, -10.0, AIR_K, quiet_ms=0)
+    assert warmth_at(mild, long) == pytest.approx(-10, abs=0.01)
+    assert wound_between(mild, 0, long) == pytest.approx(0)
+    # Plate reaches -12 later than naked.
+    plate = Warmth(0.0, 0, -24.0, AIR_K, quiet_ms=0)
+
+    def _hit(sample, line):
+        lo, hi = 0, long
+        while hi - lo > 1:
+            mid = (lo + hi) // 2
+            if warmth_at(sample, mid) <= line:
+                hi = mid
+            else:
+                lo = mid
+        return hi
+
+    assert _hit(plate, -12) > _hit(ice, -12)
+    desert = Warmth(0.0, 0, 20.0, AIR_K, quiet_ms=0)
+    still = wound_between(desert, 0, 200_000)
+    hotter = wound_between(Warmth(9.0, 0, 16.0, AIR_K, quiet_ms=0), 0, 200_000)
+    assert hotter > still > 0
+
+
+def _body(air=0.0, vitality=None, resist=None, insulation=0.0, health=100.0):
+    """A full body with no pygame. Insulation 0 wears nothing."""
+    from types import SimpleNamespace
+    from conditions import ConditionClock
+    from defence_profile import DefenceProfile, SLOTS
+
+    card = body("barb")
+    if resist:
+        card = BodyDef(card.id, card.name, card.kind, card.natural, dict(resist), card.starts)
+    defence = None
+    if insulation:
+        plate = _layer(insulation=insulation)
+        defence = DefenceProfile(card, ((plate, card.natural),) * len(SLOTS), 1.0, True)
+    clock = ConditionClock()
+    return SimpleNamespace(
+        body_def=card, defence=defence, detail="full", health=health, stats={} if vitality is None else {"vitality": vitality},
+        conditions={}, condition_gen=0, id=id(card) ^ int(air * 10) ^ int((vitality or 0) * 10),
+        piece_layers={}, level=SimpleNamespace(air=air, condition_clock=clock),
+        cold_shade=None, heat_shade=None, heat_on_skin=False, heat_piece=None,
+        team_id="enemy_1",
+    )
+
+
+def _let_it_take(body):
+    """The resolver will not touch a body that cannot receive."""
+    body.can_receive_interaction = lambda ctx: True
+
+    def _take(ctx, who=body):
+        who.health -= ctx.amount
+
+    body.receive_interaction = _take
+
+
+def test_flame_on_plate_is_faint_and_delays_the_ghost():
+    from hit_resolve import set_ghost_hold, temper
+    plate = _body(insulation=0.2)
+    paid = temper(plate, 0, blow_heat=4.0)
+    assert paid == 0
+    assert warmth_shade(plate._piece.value) == "faint"
+    assert plate.cold_shade is None
+    set_ghost_hold(plate, True, 0)
+    # The plate is still warmer than the hold, so the skin is not blue yet.
+    assert plate._skin.value > -10
+    assert plate.cold_shade is None
+    temper(plate, 500)
+    assert plate.cold_shade is None
+    temper(plate, 8_000)
+    assert plate._skin.value == pytest.approx(-10)
+    assert plate.cold_shade == "mild"
+
+
+def test_a_spit_pays_its_cook_once_then_fades():
+    from hit_resolve import temper
+    plate = _body(insulation=0.2)
+    paid = temper(plate, 0, blow_heat=12.0)
+    assert paid == pytest.approx(heat_wound(12))
+    assert warmth_shade(plate._piece.value) == "hot"
+    # Naked would be under COOK by now. The plate still holds it, and the cook is not paid again.
+    assert warmth_at(plate._piece, 3_600) > COOK
+    later = temper(plate, 8_000)
+    assert later == pytest.approx(0, abs=0.05)
+    assert plate._piece.value < COOK
+
+
+def test_a_spit_onto_cold_skin_pays_cook_and_shock_and_finishes_hot():
+    from hit_resolve import temper
+    bare = _body()
+    temper(bare, 0)
+    bare._skin.value = -10.0
+    bare._skin.at_ms = 0
+    paid = temper(bare, 0, blow_heat=15.0, on_skin=True)
+    assert paid == pytest.approx(heat_wound(15) + heat_wound(15))
+    assert bare._skin.value == pytest.approx(5)
+    assert bare.cold_shade is None
+
+
+def test_equal_hot_and_cold_finish_at_comfort_and_the_shock_is_paid():
+    from hit_resolve import temper
+    bare = _body()
+    temper(bare, 0, blow_heat=-15.0, on_skin=True)
+    before = bare.health
+    paid = temper(bare, 0, blow_heat=15.0, on_skin=True)
+    assert bare._skin.value == pytest.approx(0)
+    assert paid == pytest.approx(heat_wound(15) + shock_wound(-15, 0))
+    assert before - bare.health == pytest.approx(paid)
+
+
+def test_ghost_hold_settles_mild_and_does_not_wound():
+    from conditions import condition
+    from hit_resolve import set_ghost_hold
+    bare = _body(health=100)
+    paid = set_ghost_hold(bare, True, 0)
+    assert paid == 0
+    assert bare._skin.value == pytest.approx(-10)
+    assert bare.cold_shade == "mild"
+    assert condition("chilled").id in bare.conditions
+    assert bare.health == 100
+    # Still there a long time: still mild, still no wound.
+    from hit_resolve import temper
+    assert temper(bare, 60_000) == pytest.approx(0)
+    assert bare._skin.value == pytest.approx(-10)
+
+
+def test_ice_and_desert_settle_where_the_table_says():
+    from hit_resolve import exert, temper
+    ice = _body(air=-30)
+    temper(ice, 0)
+    temper(ice, 20_000_000)
+    assert ice._skin.value == pytest.approx(-30, abs=0.05)
+    assert ice.health < 0  # an ordinary body does not survive the stay
+
+    hardy = _body(air=-30, vitality=60)
+    temper(hardy, 0)
+    assert temper(hardy, 20_000_000) == pytest.approx(0)
+    assert hardy._skin.value == pytest.approx(-10, abs=0.05)
+
+    immune = _body(air=-30, resist={"ice": 30})
+    temper(immune, 0)
+    assert temper(immune, 20_000_000) == pytest.approx(0)
+    assert immune._skin.value == pytest.approx(0, abs=0.05)
+
+    plated = _body(air=-30, insulation=0.2)
+    temper(plated, 0)
+    bare = _body(air=-30)
+    temper(bare, 0)
+    assert wake_ms(plated._skin, 0) > wake_ms(bare._skin, 0)
+    temper(plated, 20_000_000)
+    assert plated._skin.value == pytest.approx(-24, abs=0.05)
+    assert plated.health < 0
+
+    sun = _body(air=20)
+    temper(sun, 0)
+    temper(sun, 20_000_000)
+    assert sun._skin.value == pytest.approx(20, abs=0.05)
+    assert sun.health < 0
+
+    shaded = _body(air=20, resist={"fire": 30})
+    temper(shaded, 0)
+    assert temper(shaded, 20_000_000) == pytest.approx(0)
+    assert shaded._skin.value == pytest.approx(0, abs=0.05)
+
+    clothed = _body(air=20, insulation=0.2)
+    temper(clothed, 0)
+    temper(clothed, 20_000_000)
+    assert clothed._skin.value == pytest.approx(16, abs=0.05)
+    assert clothed.health < 0
+
+
+def test_three_slides_in_the_desert_wound_more_than_standing_still():
+    from hit_resolve import exert, temper
+
+    def _stay(slides):
+        body = _body(air=20, insulation=0.2, health=10_000)
+        temper(body, 0)
+        if slides:
+            exert(body, 20, 0)
+            exert(body, 20, 1_000)
+            exert(body, 20, 2_000)
+        temper(body, 200_000)
+        return 10_000 - body.health
+
+    assert _stay(True) > _stay(False) > 0
+
+
+def test_one_slide_pulls_a_mild_cold_toward_comfort():
+    from hit_resolve import exert, temper
+    cool = _body(air=-4)
+    temper(cool, 0)
+    cool._skin.value = -4.0
+    cool._skin.at_ms = 0
+    exert(cool, 20, 0)
+    assert cool._skin.value == pytest.approx(-1)
+    assert abs(cool._skin.value) < 4
+
+
+def test_caught_cloth_burns_and_a_ghost_does_not_put_it_out():
+    from conditions import condition
+    from hit_resolve import set_ghost_hold
+    from Interaction import InteractionContext, InteractionResolver
+    cloth = _layer(flammability=0.8, insulation=0.1)
+    from defence_profile import DefenceProfile, SLOTS
+    wearer = _body()
+    wearer.defence = DefenceProfile(wearer.body_def, ((cloth, HIDE),) * len(SLOTS), 0.3, True)
+    wearer.health = 100
+    _let_it_take(wearer)
+    from types import SimpleNamespace
+    ctx = InteractionContext(
+        kind="damage", source_kind="player_attack", source=SimpleNamespace(stats={}), source_team="player",
+        target=wearer, attack_type="magic", attack_def=attack("fire_spit"),
+    )
+    assert InteractionResolver().apply(ctx) is True
+    assert wearer.health == 85
+    assert condition("burning").id in wearer.conditions
+    set_ghost_hold(wearer, True, 0)
+    assert condition("burning").id in wearer.conditions
+    assert wearer.heat_shade == "searing"
+    assert wearer.health == 85
+
+
+def test_a_plate_spit_is_not_cooked_twice():
+    from defence_profile import DefenceProfile, SLOTS
+    from Interaction import InteractionContext, InteractionResolver
+    from types import SimpleNamespace
+    plate = _layer(insulation=0.2)
+    wearer = _body(health=100)
+    wearer.defence = DefenceProfile(wearer.body_def, ((plate, HIDE),) * len(SLOTS), 1.0, True)
+    _let_it_take(wearer)
+    ctx = InteractionContext(
+        kind="damage", source_kind="player_attack", source=SimpleNamespace(stats={}), source_team="player",
+        target=wearer, attack_type="magic", attack_def=attack("fire_spit"),
+    )
+    assert InteractionResolver().apply(ctx) is True
+    assert wearer.health == pytest.approx(100 - round(heat_wound(12)))
+
+
+def test_lava_on_a_full_body_feeds_the_store_and_a_simple_body_keeps_the_tick():
+    from Effect import HeatEffect
+    from conditions import condition
+    full = _body(health=100)
+    hot = HeatEffect({"heat": 100})
+    assert hot.get_environmental_damage(full, 1.0) is None
+    assert full._lava_heat == 100
+    assert full.health == 100  # nothing per frame; the clock owes the stay
+    hot.remove(full)
+    assert full._lava_heat is None
+    assert condition("hot_shell").id not in full.conditions
 
 
 def test_heat_patch_uses_insulation_and_not_fire_resistance():
