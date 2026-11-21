@@ -225,7 +225,10 @@ async function showMesh(character, entry) {
   base.scene.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
   mesh.scene.add(base.scene);
   const clipFile = await gltfLoader.loadAsync("/glb?path=" + encodeURIComponent(glbPath));
-  const clip = clipFile.animations[0];
+  // the clip's own animation by name: files written by a batch before 2026-11-21 23:00 hold every
+  // action of their batch, and [0] was the same clip for all of them
+  const want = glbPath.split("/").pop().replace(/\.glb$/, "");
+  const clip = clipFile.animations.find((a) => a.name === want) || clipFile.animations[0];
   if (!clip) { $("stat").textContent = "mapped file has no animation"; frame(mesh, base.scene, 0.55); return; }
   mesh.mixer = new THREE.AnimationMixer(base.scene);
   mesh.action = mesh.mixer.clipAction(clip);
