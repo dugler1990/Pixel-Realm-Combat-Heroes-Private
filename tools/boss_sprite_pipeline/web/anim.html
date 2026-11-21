@@ -206,7 +206,7 @@ function entryBase(e) {
 }
 function entryFlag(e, ch) {
   if (!e) return "";
-  if (typeof e === "string") return "old";
+  if (typeof e === "string") return "mapped";      // baked before 2026-11-21, old folder
   if (e.bone_hash !== ch.bone_hash || (e.roles_hash && e.roles_hash !== ch.roles_hash)) return "stale";
   if (e.rig !== ch.rig) return "older rig";
   return "mapped";
@@ -495,8 +495,12 @@ async function refresh() {
     state = j;
     if (!sameChars || !$("char").options.length) {
       const prev = $("char").value;
-      $("char").innerHTML = j.characters.map((c) => `<option value="${c.id}">${c.id}</option>`).join("");
-      if (prev) $("char").value = prev;
+      // characters with bakes first (most first), so the page opens on one that has something to show
+      const baked = (id) => j.clips.filter((c) => c.maps && c.maps[id]).length;
+      const order = [...j.characters].sort((a, b) => baked(b.id) - baked(a.id) || a.id.localeCompare(b.id));
+      $("char").innerHTML = order.map((c) => `<option value="${c.id}">${c.id} (${baked(c.id)} baked)</option>`).join("");
+      const want = prev || localStorage.getItem("animChar");
+      if (want && order.some((c) => c.id === want)) $("char").value = want;
     }
     drawList();
     if (!sameChars) drawForm();
@@ -537,7 +541,7 @@ async function post(path, body) {
 }
 
 $("filter").oninput = drawList;
-$("char").onchange = () => { draft = null; stepDraft = {}; lastBake = null; lastMatch = null; if (current) pick(current); else { drawList(); drawForm(); } };
+$("char").onchange = () => { localStorage.setItem("animChar", $("char").value); draft = null; stepDraft = {}; lastBake = null; lastMatch = null; if (current) pick(current); else { drawList(); drawForm(); } };
 $("map").onclick = async () => {
   if (!current || !character()) return;
   $("job").textContent = "starting " + current.id + " → " + character().id;
