@@ -2958,6 +2958,42 @@ WL: TODO
        
 22. -> celular automata creature.
 
+### Biome "getting lost" split (gameplay / inspiration log — 12 Nov 2026)
+Dont put the same Lost Woods gag in all 3 biomes. Each place lies differently.
+
+ICE (Howling Waste / near ice wall) — signature mystical lost zone
+- windier, gloomier, worse visibility; fog that slowly moves across the region
+- shallow fog = warning (harder cold/fights); deep fog = threshold into the real ordeal
+- inside: looping / non-euclidean exits, ghostly creatures, elements get meaner
+- escape is a crazy mystical task / rite, not just walking the right cardinals
+- feel: the ice itself is enchanted and hostile (Zelda woods energy, ice-flavored)
+- impl sketch: pocket zone + exit state machine OR fog depth bands; party-shared in MP
+- ship note: fixed cursed basin first is easier; truly migrating weather-fog is cooler later
+
+DESERT (Deep Dunes) — subtle instruments-lie
+- still looks like a normal expansive map; wrong travel doesnt hard-teleport loop
+- trippy bias: you drift a bit left (or sunward) more than input suggests
+- map/compass/camera can creep; footprints curve; distant dunes remix; pin lags
+- stay lost long enough -> mirages, thirst pressure; one true landmark cancels the bias
+- classic "walking in circles" stories + Secret of Mana desert vibe, but sneakier than ice
+
+FOREST (Greenholt) — honest space, dishonest traps
+- classic labyrinths you can map if careful
+- Tomb Raider / Indy: plates, bridges, darts, idol swaps, timed gates, patrol routes
+- mystical stuff lives in objects/rituals/shrines elsewhere — NOT in space warping
+- contrast after ice fog + desert drift: forest feels fair and architectural
+
+Egyptian / Anunnaki area (related, separate)
+- hallucination / untrustworthy perception (fake exits, shifting landmarks, lying minimap)
+- not the same cardinal-sequence maze as ice
+
+Classic refs worth stealing from: Zelda Lost Woods, Secret of Mana Kakkara, BoF3 desert,
+Mario Forest of Illusion (false exits), Paper Mario Forever Forest, Atari Adventure
+non-euclidean screens, Silent Hill fog that changes when you arent looking.
+
+MP: pocket/fog state should be party-shared + server-authored so everyone stays in same cell.
+Minimap in lost zones can blank, spin, or soft-fail on purpose.
+
 
 ##### Try spawner thread ? drawing is the main thing anyway...
       
