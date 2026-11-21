@@ -51,16 +51,4 @@ class IceClone(Trap):
                 tags=set(getattr(self, "tags", {"special"})),
                 attack_def=getattr(self, "attack_def", None),
             )
-            resolver = None
-            if hasattr(self, "owner") and self.owner is not None:
-                owner_level = getattr(self.owner, "level", None)
-                if owner_level is not None and hasattr(owner_level, "interaction_resolver"):
-                    resolver = owner_level.interaction_resolver
-            if resolver is not None:
-                resolver.apply(ctx)
-            elif hasattr(sprite, "receive_interaction"):
-                if hasattr(sprite, "can_receive_interaction"):
-                    if sprite.can_receive_interaction(ctx):
-                        sprite.receive_interaction(ctx)
-                else:
-                    sprite.receive_interaction(ctx)
+            self.resolver.apply(ctx)

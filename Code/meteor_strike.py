@@ -603,13 +603,6 @@ class MeteorStrike(pygame.sprite.Sprite):
         if resolver is None or amount <= 0:
             return
         for target in self._hosts_in_radius():
-            target_team = getattr(target, "team_id", None)
-            if not resolver.can_potentially_affect(
-                source_team=self.source_team,
-                target_team=target_team,
-                kind="damage",
-            ):
-                continue
             ctx = InteractionContext(
                 kind="damage",
                 source_kind="enemy_special",

@@ -321,7 +321,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
         blast = hit_core.ground_disc(ground, radius, VIEW_ELEVATION_DEG)
         nearby = hit_core.find_hits(blast, attackable, exclude=(entity,), body=hit_core.foot_shape)
 
-        resolver = getattr(level, "interaction_resolver", None)
+        resolver = level.interaction_resolver
 
         presentation = self.config.get("presentation") or {}
         particle_template = presentation.get("particle_template")
@@ -367,15 +367,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
                     attack_type=attack_type,
                     attack_def=attack_def,
                 )
-                if resolver is not None:
-                    if resolver.can_potentially_affect(
-                        getattr(entity, "team_id", None),
-                        getattr(target, "team_id", None),
-                        "damage",
-                    ):
-                        resolver.apply(dmg_ctx)
-                elif hasattr(target, "can_receive_interaction") and target.can_receive_interaction(dmg_ctx):
-                    target.receive_interaction(dmg_ctx)
+                resolver.apply(dmg_ctx)
 
             if knockback_mag > 0:
                 imp_ctx = InteractionContext(
@@ -389,10 +381,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
                     impulse_y=ny * knockback_mag,
                     attack_def=attack_def,
                 )
-                if resolver is not None:
-                    resolver.apply(imp_ctx)
-                elif hasattr(target, "can_receive_interaction") and target.can_receive_interaction(imp_ctx):
-                    target.receive_interaction(imp_ctx)
+                resolver.apply(imp_ctx)
 
     def _end(self, entity, runtime) -> None:
         entity._leap_runtime = None

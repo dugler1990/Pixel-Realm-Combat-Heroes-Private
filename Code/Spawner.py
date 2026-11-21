@@ -92,6 +92,7 @@ class Spawner:
                 exp_value=trap_config.get('exp_value', 0)
             )
             trap.owner = trap_config.get('owner')
+            trap.resolver = self.level.interaction_resolver
             trap.source_team = self._resolve_source_team(
                 owner=trap.owner,
                 explicit_team=trap_config.get('source_team'),
@@ -120,6 +121,7 @@ class Spawner:
                 exp_value=trap_config.get('exp_value', 50)
             )
             trap.owner = trap_config.get('owner')
+            trap.resolver = self.level.interaction_resolver
             trap.source_team = self._resolve_source_team(
                 owner=trap.owner,
                 explicit_team=trap_config.get('source_team'),

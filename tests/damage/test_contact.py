@@ -202,7 +202,8 @@ from Settings import ability_data  # noqa: E402
 
 
 def _resolver_stub():
-    return SimpleNamespace(apply=Mock(return_value=True), can_potentially_affect=lambda *a: True,
+    return SimpleNamespace(land=Mock(return_value=True), team_allows=lambda *a: True,
+                           _record_prefilter=lambda skipped: None, _record_emitted=lambda: None,
                            _now_ms=lambda: 0)
 
 
@@ -225,7 +226,7 @@ def test_strike_gives_each_context_its_targets_contact():
     a, b = SimpleNamespace(team_id="enemy"), SimpleNamespace(team_id="enemy")
     InteractionResolver.strike(resolver, [a, b], contacts={id(a): (1, 2), id(b): (3, 4)},
                                kind="damage", source_kind="x", amount=3)
-    got = {id(c.args[0].target): c.args[0].contact for c in resolver.apply.call_args_list}
+    got = {id(c.args[0].target): c.args[0].contact for c in resolver.land.call_args_list}
     assert got == {id(a): (1, 2), id(b): (3, 4)}
 
 
@@ -236,14 +237,14 @@ def test_strike_asks_for_no_contact_when_the_repeat_rule_skips_the_target():
     InteractionResolver.strike(resolver, [target], hits={id(target): 0}, contacts=contacts,
                                kind="damage", source_kind="x", amount=3)
     contacts.get.assert_not_called()
-    resolver.apply.assert_not_called()
+    resolver.land.assert_not_called()
 
 
 def test_strike_without_contacts_leaves_contact_none():
     resolver = _resolver_stub()
     InteractionResolver.strike(resolver, [SimpleNamespace(team_id="enemy")], kind="damage",
                                source_kind="x", amount=3)
-    assert resolver.apply.call_args.args[0].contact is None
+    assert resolver.land.call_args.args[0].contact is None
     assert InteractionContext(kind="damage", source_kind="x").contact is None
 
 
@@ -340,7 +341,6 @@ def test_dash_passes_the_contact():
 def test_leap_slam_blast_has_no_contact():
     target = SimpleNamespace(team_id="enemy")
     resolver = Mock()
-    resolver.can_potentially_affect.return_value = True
     entity = SimpleNamespace(level=SimpleNamespace(attackable_sprites=[target], interaction_resolver=resolver),
                              team_id="player", hitbox=pygame.Rect(0, 0, 20, 10))
     ability = ChargedLeapSlamAbility("leap_slam", ability_data["leap_slam"])
@@ -356,7 +356,6 @@ def test_leap_slam_blast_has_no_contact():
 
 def test_meteor_blast_has_no_contact():
     resolver = Mock()
-    resolver.can_potentially_affect.return_value = True
     target = SimpleNamespace(team_id="player")
     strike = SimpleNamespace(level=SimpleNamespace(interaction_resolver=resolver), source_team="enemy",
                              owner=None, attack_def=attack("meteor_impact"),

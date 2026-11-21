@@ -65,17 +65,17 @@ class _Dasher:
 
 
 class _RecordingResolver(InteractionResolver):
-    """The real resolver and its strike, with apply recorded and the team check fixed."""
+    """The real resolver and its strike, with land recorded and the team rule fixed."""
 
     def __init__(self, allowed=True):
         super().__init__()
         self.applied = []
         self.allowed = allowed
 
-    def can_potentially_affect(self, source_team, target_team, kind="damage"):
+    def team_allows(self, source_team, target_team, kind="damage"):
         return self.allowed
 
-    def apply(self, ctx):
+    def land(self, ctx):
         self.applied.append(ctx)
         return True
 

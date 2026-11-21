@@ -70,9 +70,10 @@ def test_take_damage_subtracts_stamps_and_reacts_and_zero_does_nothing():
     assert body.health == 93 and body.hit_time >= 0 and len(body.hurt) == 1
 
 
-def test_the_gate_refuses_own_team_no_health_left_and_shoves_on_a_fixed_body():
+def test_the_gate_refuses_no_health_left_and_shoves_on_a_fixed_body():
+    """The body's gate does not rule on teams for damage: that is the resolver's one team rule."""
     body = _body()
-    assert Entity.can_receive_interaction(body, _hit(body, amount=1, source_team="enemy_1")) is False
+    assert Entity.can_receive_interaction(body, _hit(body, amount=1, source_team="enemy_1")) is True
     body.health = 0
     assert Entity.can_receive_interaction(body, _hit(body, amount=1)) is False
     shove = InteractionContext(kind="impulse", source_kind="test", source_team="player", target=body)
@@ -85,3 +86,13 @@ def test_the_resolver_remembers_the_attacker_for_a_body_that_keeps_it():
     body = _body(recent_attacker_team_id=None, recent_attacker_until_ms=0)
     InteractionResolver().apply(_hit(body, amount=1))
     assert body.recent_attacker_team_id == "player" and body.recent_attacker_until_ms > 0
+
+
+def test_the_one_team_rule_refuses_own_team_in_apply_and_in_strike():
+    body = _body()
+    resolver = InteractionResolver()
+    assert resolver.apply(_hit(body, amount=5, source_team="enemy_1")) is False
+    assert resolver.strike([body], kind="damage", source_kind="t", source_team="enemy_1", amount=5) == []
+    assert body.health == 100
+    assert resolver.strike([body], kind="damage", source_kind="t", source_team="player", amount=5) == [body]
+    assert body.health == 95

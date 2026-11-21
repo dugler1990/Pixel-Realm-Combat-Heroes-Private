@@ -2567,7 +2567,7 @@ class Level4:
                         self.layout_manager.effect_quad_trees,
                         self.layout_manager.effect_cell_grid,
                     )
-                    sprite.apply_environmental_damage(dt)
+                    sprite.apply_environmental_damage(dt, self.interaction_resolver)
                        
              
             spawned_items = self.item_spawner.update()

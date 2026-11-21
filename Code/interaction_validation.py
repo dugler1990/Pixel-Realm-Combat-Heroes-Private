@@ -18,7 +18,6 @@ class StubTarget:
         self.allow = allow
         self.received = []
         self.health = 100
-        self.effect_state = {}
 
     def can_receive_interaction(self, ctx):
         return bool(self.allow)
@@ -27,13 +26,6 @@ class StubTarget:
         self.received.append(ctx)
         if ctx.kind == "damage" and ctx.amount is not None:
             self.health -= float(ctx.amount)
-        if ctx.kind == "effect_state":
-            key = ctx.effect_key
-            if key:
-                if ctx.phase == "end":
-                    self.effect_state.pop(key, None)
-                else:
-                    self.effect_state[key] = {"phase": ctx.phase}
 
 
 def _run_player_attack_route():
@@ -158,85 +150,6 @@ def _run_environment_route():
         (
             f"env_allowed={allowed} env_received={len(target.received)} "
             f"same_team_allowed={blocked} same_team_received={len(blocked_target.received)}"
-        ),
-    )
-
-
-def _run_slippery_lifecycle_route():
-    resolver = InteractionResolver()
-    target = StubTarget(team_id="player", allow=True)
-    begin_ctx = InteractionContext(
-        kind="effect_state",
-        source_kind="environment",
-        source_team="environment",
-        target=target,
-        effect_key="slippery",
-        phase="begin",
-        tags={"environment", "effect_state", "slippery"},
-    )
-    tick_ctx = InteractionContext(
-        kind="effect_state",
-        source_kind="environment",
-        source_team="environment",
-        target=target,
-        effect_key="slippery",
-        phase="tick",
-        tags={"environment", "effect_state", "slippery"},
-    )
-    end_ctx = InteractionContext(
-        kind="effect_state",
-        source_kind="environment",
-        source_team="environment",
-        target=target,
-        effect_key="slippery",
-        phase="end",
-        tags={"environment", "effect_state", "slippery"},
-    )
-    ok_begin = resolver.apply(begin_ctx)
-    ok_tick = resolver.apply(tick_ctx)
-    ok_end = resolver.apply(end_ctx)
-    passed = ok_begin and ok_tick and ok_end and "slippery" not in target.effect_state
-    return ScenarioResult(
-        "SlipperyLifecycleRoute",
-        passed,
-        (
-            f"begin={ok_begin} tick={ok_tick} end={ok_end} "
-            f"effect_present={'slippery' in target.effect_state}"
-        ),
-    )
-
-
-def _run_mixed_effect_route():
-    resolver = InteractionResolver()
-    target = StubTarget(team_id="player", allow=True)
-    heat_ctx = InteractionContext(
-        kind="damage",
-        source_kind="environment",
-        source_team="environment",
-        target=target,
-        amount=2,
-        attack_type="heat",
-        effect_key="heat",
-        tags={"environment", "heat"},
-    )
-    slippery_ctx = InteractionContext(
-        kind="effect_state",
-        source_kind="environment",
-        source_team="environment",
-        target=target,
-        effect_key="slippery",
-        phase="begin",
-        tags={"environment", "effect_state", "slippery"},
-    )
-    ok_heat = resolver.apply(heat_ctx)
-    ok_slip = resolver.apply(slippery_ctx)
-    passed = ok_heat and ok_slip and target.health == 98 and "slippery" in target.effect_state
-    return ScenarioResult(
-        "MixedEffectRoute",
-        passed,
-        (
-            f"heat={ok_heat} slippery={ok_slip} "
-            f"health={target.health} effect_present={'slippery' in target.effect_state}"
         ),
     )
 
@@ -434,10 +347,10 @@ def _run_multifaction_spawner_route():
 
 def _run_prefilter_route():
     resolver = InteractionResolver()
-    can_enemy1_hit_enemy2 = resolver.can_potentially_affect("enemy_1", "enemy_2", "damage")
-    can_enemy3_hit_enemy1 = resolver.can_potentially_affect("enemy_3", "enemy_1", "damage")
-    can_ally4_hit_player = resolver.can_potentially_affect("ally_4", "player", "damage")
-    can_env_hit_enemy1 = resolver.can_potentially_affect("environment", "enemy_1", "damage")
+    can_enemy1_hit_enemy2 = resolver.team_allows("enemy_1", "enemy_2", "damage")
+    can_enemy3_hit_enemy1 = resolver.team_allows("enemy_3", "enemy_1", "damage")
+    can_ally4_hit_player = resolver.team_allows("ally_4", "player", "damage")
+    can_env_hit_enemy1 = resolver.team_allows("environment", "enemy_1", "damage")
     passed = (
         not can_enemy1_hit_enemy2
         and can_enemy3_hit_enemy1
@@ -497,8 +410,6 @@ def run_validation_suite():
         _run_enemy_melee_route(),
         _run_special_route(),
         _run_environment_route(),
-        _run_slippery_lifecycle_route(),
-        _run_mixed_effect_route(),
         _run_faction_policy_route(),
         _run_aggro_policy_route(),
         _run_multifaction_spawner_route(),

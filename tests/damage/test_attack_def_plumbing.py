@@ -135,7 +135,6 @@ def test_meteor_shower_hands_both_defs_to_the_strike():
 @pytest.mark.parametrize("phase, def_name", [("impact", "meteor_impact"), ("residual", "meteor_embers")])
 def test_meteor_damage_names_the_def_of_its_phase(phase, def_name):
     resolver = Mock()
-    resolver.can_potentially_affect.return_value = True
     target = SimpleNamespace(team_id="player")
     strike = SimpleNamespace(level=SimpleNamespace(interaction_resolver=resolver), source_team="enemy",
                              owner=None, attack_def=attack("meteor_impact"),
@@ -171,12 +170,13 @@ def test_attack_sprite_strike_copies_the_def_into_the_context():
 
 
 def test_resolver_strike_builds_contexts_with_the_def():
-    resolver = SimpleNamespace(apply=Mock(return_value=True), can_potentially_affect=lambda *a: True,
+    resolver = SimpleNamespace(land=Mock(return_value=True), team_allows=lambda *a: True,
+                               _record_prefilter=lambda skipped: None, _record_emitted=lambda: None,
                                _now_ms=lambda: 0)
     target = SimpleNamespace(team_id="enemy")
     InteractionResolver.strike(resolver, [target], kind="damage", source_kind="x", amount=3,
                                attack_def=attack("scimitar"))
-    ctx = resolver.apply.call_args.args[0]
+    ctx = resolver.land.call_args.args[0]
     assert ctx.target is target and ctx.attack_def is attack("scimitar")
 
 

@@ -298,8 +298,8 @@ class FactionPolicy:
             return self.relations_defaults["same_archetype"]
         return self.relations_defaults["fallback"]
 
-    def can_apply_damage(self, source_id: Optional[str], target_id: Optional[str], ctx: InteractionContext) -> bool:
-        if ctx.kind != "damage":
+    def can_apply_damage(self, source_id: Optional[str], target_id: Optional[str], kind: str = "damage") -> bool:
+        if kind != "damage":
             return True
         source = self.resolve_faction(source_id)
         target = self.resolve_faction(target_id)
@@ -406,16 +406,9 @@ class InteractionResolver:
         if sink is not None and hasattr(sink, "record_interaction_prefilter"):
             sink.record_interaction_prefilter(skipped)
 
-    def can_potentially_affect(self, source_team: Optional[str], target_team: Optional[str], kind: str = "damage") -> bool:
-        if kind != "damage":
-            return True
-        probe_ctx = InteractionContext(kind="damage", source_kind="prefilter")
-        allowed = self.faction_policy.can_apply_damage(source_team, target_team, probe_ctx)
-        self._record_prefilter(skipped=not allowed)
-        return allowed
-
-    def can_team_interact(self, source_team: Optional[str], target_team: Optional[str], ctx: InteractionContext) -> bool:
-        return self.faction_policy.can_apply_damage(source_team, target_team, ctx)
+    def team_allows(self, source_team: Optional[str], target_team: Optional[str], kind: str = "damage") -> bool:
+        """The one team rule (the faction policy). Only damage is ruled here; other kinds pass."""
+        return self.faction_policy.can_apply_damage(source_team, target_team, kind)
 
     def can_aggro(self, source: Any, target: Any) -> bool:
         allowed = self.faction_policy.should_aggro(source, target)
@@ -438,7 +431,7 @@ class InteractionResolver:
             self._record_rejected_reason("missing_target")
             return False
         target_team = getattr(target, "team_id", None)
-        if not self.can_team_interact(ctx.source_team, target_team, ctx):
+        if not self.team_allows(ctx.source_team, target_team, ctx.kind):
             _interaction_log.debug(
                 "interaction reject reason=team_policy source_kind=%r source_team=%r target_team=%r kind=%r attack_type=%r amount=%r",
                 ctx.source_kind,
@@ -531,8 +524,8 @@ class InteractionResolver:
                 ctx.amount = source.get_full_magic_damage()
 
     def strike(self, targets, hits=None, rehit_ms=None, contacts=None, **fields) -> list:
-        """Apply one flat-damage attack to every target it touched: team prefilter, the
-        attack's repeat rule, then apply.
+        """Apply one attack to every target it touched: the attack's repeat rule, the team rule
+        (checked here, before any context is built, so a crowd of allies costs little), then land.
 
         `hits` is the attack's own record, target id -> time of its last hit (ms); None
         keeps no record, so every call applies. With a record, `rehit_ms` None hits each
@@ -551,10 +544,13 @@ class InteractionResolver:
             if hits is not None and key in hits:
                 if rehit_ms is None or now - hits[key] < rehit_ms:
                     continue
-            if not self.can_potentially_affect(source_team, getattr(target, "team_id", None), kind):
+            allowed = self.team_allows(source_team, getattr(target, "team_id", None), kind)
+            self._record_prefilter(skipped=not allowed)
+            if not allowed:
                 continue
+            self._record_emitted()
             contact = contacts.get(key) if contacts else None
-            if self.apply(InteractionContext(target=target, contact=contact, **fields)):
+            if self.land(InteractionContext(target=target, contact=contact, **fields)):
                 landed.append(target)
                 if hits is not None:
                     hits[key] = now

@@ -1036,12 +1036,7 @@ class Entity(pygame.sprite.Sprite):
                             effect_instance = effect_class(effect_area.properties)
                             self.active_effects[effect_instance_id] = effect_instance
                             effect_instance.apply(self)
-                            self._emit_effect_state_interaction(
-                                effect_key=prop_key,
-                                phase="begin",
-                                effect_instance=effect_instance,
-                                effect_area_id=effect_area_id,
-                            )
+                            self._set_effect_state(prop_key, "begin", effect_instance)
                             if _mask_log.isEnabledFor(logging.DEBUG):
                                 _mask_log.debug(
                                     "  Effect APPLIED: %s, velocity: %s",
@@ -1049,13 +1044,7 @@ class Entity(pygame.sprite.Sprite):
                                     self.velocity,
                                 )
                         else:
-                            effect_instance = self.active_effects[effect_instance_id]
-                            self._emit_effect_state_interaction(
-                                effect_key=prop_key,
-                                phase="tick",
-                                effect_instance=effect_instance,
-                                effect_area_id=effect_area_id,
-                            )
+                            self._set_effect_state(prop_key, "tick", self.active_effects[effect_instance_id])
         
         # Remove effects that are no longer colliding
         effects_to_remove = []
@@ -1064,13 +1053,7 @@ class Entity(pygame.sprite.Sprite):
                 # Check if effect should persist after exit
                 if not effect_instance.should_persist_after_exit():
                     effect_instance.remove(self)
-                    effect_area_id, effect_key = effect_instance_id
-                    self._emit_effect_state_interaction(
-                        effect_key=effect_key,
-                        phase="end",
-                        effect_instance=effect_instance,
-                        effect_area_id=effect_area_id,
-                    )
+                    self._set_effect_state(effect_instance_id[1], "end", effect_instance)
                     effects_to_remove.append(effect_instance_id)
                     if _mask_log.isEnabledFor(logging.DEBUG):
                         _mask_log.debug(
@@ -1095,65 +1078,43 @@ class Entity(pygame.sprite.Sprite):
                     "  All effects removed, velocity: %s", self.velocity
                 )
 
-    def apply_environmental_damage(self, dt):
-        """Apply damage from active effects that provide environmental damage (e.g. heat)."""
-        #print(f"applying environmental damage")
-        #print(self.active_effects)
-        resolver = self._get_interaction_resolver()
+    def apply_environmental_damage(self, dt, resolver):
+        """Damage from the ground under the body (heat, lava), through the resolver like any hit."""
         for (effect_area_id, effect_key), effect in self.active_effects.items():
-            if hasattr(effect, 'get_environmental_damage'):
-                result = effect.get_environmental_damage(self, dt)
-                if result:
-                    amount, damage_type = result
-                    if amount > 0:
-                        ctx = InteractionContext(
-                            kind="damage",
-                            source_kind="environment",
-                            source=effect,
-                            owner=None,
-                            source_team="environment",
-                            target=self,
-                            amount=amount,
-                            attack_type=damage_type,
-                            effect_key=effect_key,
-                            effect_area_id=effect_area_id,
-                            tags={"environment", effect_key},
-                        )
-                        if resolver is not None:
-                            resolver.apply(ctx)
-                        elif self.can_receive_interaction(ctx):
-                            self.receive_interaction(ctx)
+            if not hasattr(effect, "get_environmental_damage"):
+                continue
+            result = effect.get_environmental_damage(self, dt)
+            if not result or result[0] <= 0:
+                continue
+            amount, damage_type = result
+            resolver.apply(InteractionContext(
+                kind="damage",
+                source_kind="environment",
+                source=effect,
+                source_team="environment",
+                target=self,
+                amount=amount,
+                attack_type=damage_type,
+                effect_key=effect_key,
+                effect_area_id=effect_area_id,
+                tags={"environment", effect_key},
+            ))
 
-    def _get_interaction_resolver(self):
-        if hasattr(self, "level") and hasattr(self.level, "interaction_resolver"):
-            return self.level.interaction_resolver
-        return None
-
-    def _emit_effect_state_interaction(self, effect_key, phase, effect_instance, effect_area_id):
-        ctx = InteractionContext(
-            kind="effect_state",
-            source_kind="environment",
-            source=effect_instance,
-            owner=None,
-            source_team="environment",
-            target=self,
-            phase=phase,
-            effect_key=effect_key,
-            effect_area_id=effect_area_id,
-            tags={"environment", "effect_state", effect_key, phase},
-        )
-        resolver = self._get_interaction_resolver()
-        if resolver is not None:
-            resolver.apply(ctx)
-        elif self.can_receive_interaction(ctx):
-            self.receive_interaction(ctx)
+    def _set_effect_state(self, effect_key, phase, effect):
+        """What a ground effect (slippery) is doing to the body now; not a hit, so no resolver."""
+        if phase == "end":
+            self.effect_state.pop(effect_key, None)
+            return
+        payload = {"phase": phase, "source": effect}
+        if isinstance(effect, SlipperyEffect):
+            payload["acceleration_multiplier"] = effect.get_acceleration_multiplier()
+            payload["friction_multiplier"] = effect.get_friction_multiplier()
+        self.effect_state[effect_key] = payload
 
     def can_receive_interaction(self, ctx: InteractionContext):
-        """The body's own gate; the resolver asks it after the team rule. Effects always reach.
-        A shove needs `takes_impulse` and an enemy team (or the friendly-fire tag). Damage
-        needs another team and health left."""
-        if ctx.kind == "effect_state":
-            return True
+        """The body's own gate; the resolver asks it after the team rule. A shove needs
+        `takes_impulse` and an enemy team (or the friendly-fire tag). Damage needs health left
+        (the team rule for damage is the resolver's)."""
         if ctx.kind == "impulse":
             if not self.takes_impulse:
                 return False
@@ -1161,8 +1122,6 @@ class Entity(pygame.sprite.Sprite):
                 return True
             return ctx.source_team is None or ctx.source_team != getattr(self, "team_id", None)
         if ctx.kind == "damage":
-            if ctx.source_team is not None and ctx.source_team == getattr(self, "team_id", None):
-                return False
             return getattr(self, "health", 1) > 0
         return False
 
@@ -1223,20 +1182,6 @@ class Entity(pygame.sprite.Sprite):
             if ctx.source is not None:
                 follow_through = float(getattr(ctx.source, "impulse_follow_through", 0.5))
             self.apply_impulse(force, follow_through=follow_through)
-            return
-        if ctx.kind == "effect_state":
-            effect_key = ctx.effect_key
-            if not effect_key:
-                return
-            phase = ctx.phase or "tick"
-            if phase == "end":
-                self.effect_state.pop(effect_key, None)
-                return
-            payload = {"phase": phase, "source": ctx.source}
-            if effect_key == "slippery" and isinstance(ctx.source, SlipperyEffect):
-                payload["acceleration_multiplier"] = ctx.source.get_acceleration_multiplier()
-                payload["friction_multiplier"] = ctx.source.get_friction_multiplier()
-            self.effect_state[effect_key] = payload
             return
         if ctx.kind == "damage":
             self.take_damage(ctx)
