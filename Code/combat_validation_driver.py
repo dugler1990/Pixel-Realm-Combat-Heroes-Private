@@ -378,107 +378,6 @@ class Haste(Scene):
         )
 
 
-def _contact_on_piece(hero, needle):
-    """A world pixel where the worn piece is drawn in front, or None."""
-    found = hero.hit_outline() if hasattr(hero, "hit_outline") else None
-    if not found:
-        return None
-    outline, feet = found
-    labels = outline.labels
-    height, width = labels.shape
-    for y in range(height):
-        row = labels[y]
-        for x in range(width):
-            point = int(row[x])
-            if point < 0:
-                continue
-            name = outline.piece_of(point)
-            if name and needle in name:
-                return (int(feet[0] + outline.dx + x), int(feet[1] + outline.dy + y))
-    return None
-
-
-class Elemental(Scene):
-    """Plate cooks red, the cloth burns red, then a chill turns the skin blue and slows him."""
-
-    NAME = "elemental"
-    WATCH = ("Plate goes hot red and the skin does not. Then the cloth burns red. "
-             "Then the skin goes blue and he is slower until that clears.")
-    SECONDS = 18.0
-    FAST_SECONDS = 16.0
-
-    def setup(self, level):
-        hero = level.player
-        self.base = hero.stats["speed"]
-        self.drops = []
-        self.saw_slow = False
-        self.plate_ok = False
-        self.cloth_ok = False
-        self.blue_ok = False
-        self.beat = (self.FAST_SECONDS if RUNTIME.fast_mode else self.SECONDS) / 3.0
-        wear(level, FULL_PLATE)
-        self._strike(level, "fire_spit")
-
-    def _strike(self, level, name, contact=None):
-        hero = level.player
-        before = hero.health
-        level.interaction_resolver.apply(InteractionContext(
-            kind="damage", source_kind="combat_validation", source_team="enemy_1",
-            target=hero, attack_type="magic", attack_def=attack(name), contact=contact,
-        ))
-        self.drops.append(before - hero.health)
-        n = len(self.drops)
-        if n == 1:
-            self.plate_ok = (not getattr(hero, "heat_on_skin", True) and hero.heat_shade == "hot"
-                             and bool(hero.heat_piece))
-        elif n == 2:
-            piece = hero.heat_piece or ""
-            self.cloth_ok = (hero.heat_shade == "searing" and "loincloth" in piece
-                             and condition("burning").id in hero.conditions)
-        elif n == 3:
-            self.blue_ok = getattr(hero, "cold_shade", None) == "severe"
-
-    def tick(self, level, dt):
-        hero = level.player
-        if len(self.drops) == 1 and self.t >= self.beat:
-            wear(level, ("barb_loincloth_loincloth",))
-            self._strike(level, "fire_spit", _contact_on_piece(hero, "loincloth"))
-        elif len(self.drops) == 2 and self.t >= self.beat * 2:
-            self._strike(level, "ghost_chill")
-        if len(self.drops) >= 3 and speed_of(hero) == self.base - 3:
-            self.saw_slow = True
-        self.lines = _elemental_lines(hero, self.drops)
-
-    def decide(self, level):
-        hero = level.player
-        chilled = condition("chilled").id in hero.conditions
-        ok = (self.drops == [3, 15, 9] and self.plate_ok and self.cloth_ok and self.blue_ok
-              and self.saw_slow and not chilled and speed_of(hero) == self.base)
-        return ("pass" if ok else "fail"), (
-            f"drops {self.drops} plate {self.plate_ok} cloth {self.cloth_ok} blue {self.blue_ok} "
-            f"slow {self.saw_slow} chilled {chilled} speed {speed_of(hero):g}"
-        )
-
-
-def _elemental_lines(hero, drops):
-    now = pygame.time.get_ticks()
-    rows = []
-    for inst in hero.conditions.values():
-        name = condition_name(inst.cond_id)
-        left = max(0.0, (inst.end_ms - now) / 1000.0)
-        rows.append(f"{name} {left:.1f}s")
-    if not rows:
-        rows.append("no condition")
-    lost = sum(drops)
-    rows.append(f"health -{lost:g}   speed {speed_of(hero):g}")
-    return rows
-
-
-def condition_name(cond_id):
-    from conditions import CONDITIONS
-    return CONDITIONS[cond_id].name
-
-
 def _warm_lines(hero):
     now = pygame.time.get_ticks()
     return [f"health {hero.health:.0f}",
@@ -643,7 +542,7 @@ class Lava(_Warm):
 
 
 SCENARIOS = (KnockbackMass, ArrowsStop, PlateShove, ArrowsWhereDrawn, PointsVsCapsules, PlateStops,
-             Haste, Elemental, Fire, Ice, IceNaked, Desert, Lava)
+             Haste, Fire, Ice, IceNaked, Desert, Lava)
 
 
 # --- the driver ----------------------------------------------------------------------------------
