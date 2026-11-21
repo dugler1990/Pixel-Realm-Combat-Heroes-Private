@@ -86,6 +86,20 @@ WET_COLD = 8.0
 COLD_SPEED = {"mild": -1, "medium": -2, "severe": -3}
 SIMPLE_COLD = {"mild": (2000, 0), "medium": (4000, 4), "severe": (6000, 8)}
 
+# Temperature on a full body (temperature.py, docs/damage/PLAN_temperature.md). First numbers,
+# tuned from tools/temperature_table.py. Strengths are per second; capacity 1 is the skin's.
+AIR_K = 0.02          # the air on the outer layer
+BODY_K = 0.02         # the body's own heat on the skin, at vitality REF_VIT
+REF_VIT = 20.0
+CONTACT_K = 0.05      # piece to skin, times (1 - insulation)
+PIECE_CAP = 0.25      # a piece's capacity per weight (plate chest 12: 3)
+PIECE_CAP_MIN = 0.1
+FAINT = 2.0           # faint red from here to COOK
+COLD_SCALE = 1.0      # health per second per point of skin below -HURT_AT (heat: HEAT_SCALE above COOK)
+TICK_MS = 500         # while the skin is past a line, the wound arrives this often
+HELD_MS = 86_400_000  # hot_shell / chilled while temperature holds them: until it clears them
+EXERT = 0.15          # warmth per point of stamina paid (stamina wires it)
+
 WET_MULT = 1.5
 WET_CARRY = 0.4
 
@@ -128,6 +142,14 @@ def heat_shade(H):
     if H > COOK:
         return "warm"
     return None
+
+
+def shock_wound(before, after):
+    """A jump that crosses 0 by at least HURT_AT: the cook of that distance. Landing on 0 counts;
+    starting at 0 does not (there was no other side to leave)."""
+    crossed = (before < 0.0 <= after) or (after < 0.0 < before)
+    distance = abs(after - before)
+    return heat_wound(distance) if crossed and distance >= HURT_AT else 0.0
 
 
 def heat_wound(H):

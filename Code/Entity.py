@@ -1149,6 +1149,8 @@ class Entity(pygame.sprite.Sprite):
         self.is_dead = True
         from conditions import notify_death
         notify_death(self)
+        import temperature
+        temperature.forget(self, pygame.time.get_ticks())
         self.on_death()
 
     def on_death(self):
@@ -1159,9 +1161,9 @@ class Entity(pygame.sprite.Sprite):
 
     def on_hurt(self, ctx: InteractionContext):
         """A body's reaction to damage it took. Default: its hit sound, except for the ground's own
-        damage (heat). Override for more."""
+        damage (heat) and temperature's. Override for more."""
         sound = getattr(self, "hit_sound", None)
-        if sound is not None and ctx.source_kind != "environment":
+        if sound is not None and ctx.source_kind not in ("environment", "temperature"):
             sound.play()
 
     def cancel_displacement_abilities(self) -> None:

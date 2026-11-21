@@ -85,3 +85,21 @@ def test_bad_input_is_an_error():
         solve([0.0], [1.0], [(-1.0, 0.0)])
     with pytest.raises(ValueError):
         solve([0.0, 0.0], [1.0], [(1.0, 0.0)])
+
+
+def test_two_layers_by_hand_match_the_general_solve():
+    from heat_network import _many
+    args = ([-20.0, 60.0], [1.0, 3.0], [(0.05, 0.0), (0.02, -0.6)])
+    by_hand = solve(*args, links=[(0, 1, 0.04)])
+    general = _many(*args, [(0, 1, 0.04)])
+    for t in (0.0, 3.0, 40.0, 400.0):
+        assert by_hand.at(t) == pytest.approx(general.at(t))
+
+
+def test_first_crossing_is_the_earliest_of_its_lines():
+    curve = _plate_on_skin()
+    lines = (5.0, 2.0, -10.0)
+    first = curve.first_crossing(0, lines, 0.0, 600.0)
+    every = sorted(t for line in lines for t in curve.crossings(0, line, 0.0, 600.0))
+    assert first == pytest.approx(every[0], abs=1e-4)
+    assert curve.first_crossing(0, (500.0,), 0.0, 600.0) is None   # out of reach: no search

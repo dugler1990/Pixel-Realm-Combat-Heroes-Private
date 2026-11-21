@@ -509,6 +509,9 @@ hit on a body card uses the elemental rule.
   Known failures (11, before chunk 1): test_enemy_dash 1, test_player_charge_controller 1,
   rts/test_gather 1, test_enemy_puppet 2, test_entity_gates 2, test_coop_player_damage 2,
   test_mesh_contact 2.
+- Temperature bench: `Code/sprite_venv/Scripts/python.exe tools/temperature_bench.py off 600 100 -60`
+  then `... on 600 100 -60` (one level per process). 100 frozen squids; compare frame means and
+  `settle_ms_per_frame`.
 - Crowd bench (damage path speed): `Code/sprite_venv/Scripts/python.exe tools/damage_crowd_bench.py
   600 20` from the worktree root. Real Level4 headless, 40 units in two hostile crowds; mean/p95 ms
   per frame, then one `strike` over the crowd (µs). Noisy (AI on the clock): 3 runs, compare means.
@@ -672,6 +675,12 @@ hit on a body card uses the elemental rule.
   past a line in closed form. 7 tests, against the plain exponential, the weighted pull, heat
   conservation and a 200k-step numeric sum (rel 1e-4). Timing, 2 layers: solve 79 µs, reading
   1.2 µs, crossings 89 µs (244 µs with 60 bisection steps; bounded to 0.1 ms), area 110 µs.
+- 2026-11-21: temperature step 2: `Code/temperature.py` (join, add/remove_source, bump, settle,
+  set_air, refresh, forget, tick), the level's wake queue, paint (`hot_shell` / `chilled` /
+  `faint`). Solver fast paths: 1 and 2 layers by hand (solve 79 → 9 µs), first crossing of 6 lines
+  244 → 29 µs. `tools/temperature_bench.py`, 100 squids frozen in air −60, all wounding, 3 runs:
+  frame mean off 2.85-3.02 / on 2.92-3.10 ms, settle 52-66 µs, 0.026-0.033 ms per frame.
+  Targeted set: 11 failed, same names; 564 passed.
 
 ## Tried and dropped
 

@@ -14,9 +14,19 @@ cook you in the sun, from the same rule. A simple body keeps today's one-shot `e
 price, untouched.
 
 ## Status
-- Step 1 done: `Code/heat_network.py` (`solve` → `Curve`: `at`, `layer_at`, `crossings`,
-  `area_past`), `tests/damage/test_heat_network.py` (7). Cost, 2 layers: solve 79 µs, a reading
-  1.2 µs, crossings of one line 89 µs, area past one line 110 µs (crossings to 0.1 ms).
+- Step 1 done (`5daf89a2`): `Code/heat_network.py`, `tests/damage/test_heat_network.py`.
+- Step 2 done: `Code/temperature.py` (store, settle, wake queue, paint), constants in
+  `damage_rules`, `Entity.die` → `temperature.forget`, Level4 frame → `temperature.tick`;
+  `tests/damage/test_temperature.py` (11); `tools/temperature_bench.py`.
+  - Solver by hand for 1 and 2 layers (numpy for more), a reach bound that skips lines a curve
+    cannot meet, turning points found once per layer, false position for the crossing.
+    Per call, 2 layers: solve 9 µs, first crossing of 6 lines 29 µs, heat+cold area 31 µs.
+  - Bench, real Level4, 100 squids frozen at −30 in air −60, all wounding, 3 runs: frame mean off
+    2.85-3.02 ms / on 2.92-3.10 ms (noise), p95 4.81-4.95 / 4.84-4.99; settle 52-66 µs each,
+    0.026-0.033 ms per frame. Every monster can have temperature.
+  - Deviation: temperature keeps its own wake queue on the level (`level.warmth_wakes`), not a
+    second heap in `ConditionClock`: `conditions.py` stays unaware of it.
+  - `hot_shell` / `chilled` start only when the shade changes (a settle is not a new clock entry).
 
 ## The model, for reasoning (Douglas, 2026-11-21)
 - **Layers hold warmth**: the skin, and the worn outer chest piece if there is one (naked: skin
@@ -105,6 +115,8 @@ so tuning is read off a table.
   the `−(SLOW_AT − 0.5)` wake line and the 5 s hold re-arm.
 
 ## Steps
+(Performance, 2026-11-21: Douglas asked whether 100 bodies could carry it. Step 2 adds the
+fast paths and the bench; the numbers decide who gets temperature.)
 1. **Solver**, pure. Tests, timestamps only: one layer matches the plain exponential; steady
    state is the weighted average; two layers conserve heat with no sources but the link;
    the wound integral matches a fine numeric sum; crossing times are right.

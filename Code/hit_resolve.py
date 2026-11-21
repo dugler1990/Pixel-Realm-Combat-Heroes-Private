@@ -118,6 +118,7 @@ def _layers(target, defence, ctx, card):
 
 WHITE = (1.0, 1.0, 1.0, 1.0)
 HEAT_TINT = {
+    "faint": (1.0, 0.88, 0.82, 1.0),
     "warm": (1.0, 0.72, 0.62, 1.0),
     "hot": (1.0, 0.32, 0.22, 1.0),
     "searing": (1.0, 0.08, 0.04, 1.0),

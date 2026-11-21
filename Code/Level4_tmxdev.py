@@ -1,6 +1,7 @@
 ### Plan here is to make a Level class that uses Layout classes to 
 #   re-render the level when a <trigger> (door) is stepped on.
 from Eskimo import Eskimo
+import temperature
 import json
 from Spawner import Spawner
 from ItemSpawner import ItemSpawner
@@ -2511,7 +2512,9 @@ class Level4:
             }
             # A render client applies records when a later chunk sends them. Everyone else ends buffs here.
             if getattr(self, "mp_client", None) is None:
-                self.condition_clock.tick(pygame.time.get_ticks(), entity_id_map)
+                now_ms = pygame.time.get_ticks()
+                self.condition_clock.tick(now_ms, entity_id_map)
+                temperature.tick(self, now_ms)
             for sprite in self.layout_manager.visible_sprites.sprites():
                 if not sprite.alive():
                     continue  # died earlier this frame (a hit lands and kills at once)
