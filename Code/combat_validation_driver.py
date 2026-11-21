@@ -536,22 +536,19 @@ class Fire(_Warm):
 
 class Ice(_Warm):
     NAME = "ice"
-    WATCH = "Warm plate. The ghost holds you: the blue waits for the plate to cool. At 8 s he goes; it fades."
-    SECONDS = 16.0
-    FAST_SECONDS = 12.0
+    WATCH = "Naked. The ghost holds you (no hits): mild blue, no health lost. At 12 s he dies: it fades."
+    PLATE = False
+    SECONDS = 20.0
+    FAST_SECONDS = 14.0
 
     def setup(self, level):
         super().setup(level)
-        temperature.bump(level.player, temperature.OUTER, 10.0, pygame.time.get_ticks())
-        self.ghost = spawn_at(level, "ice_ghost", 200, 0)
+        self.ghost = spawn_at(level, "ice_ghost", 120, 0)
 
     def tick(self, level, dt):
         super().tick(level, dt)
-        if self.t > 8.0 and self.ghost.alive():
-            feet = level.player.hitbox.midbottom
-            self.ghost.hitbox.midbottom = (int(feet[0] + 4000), int(feet[1]))
-            self.ghost.plant_sprite_on_hitbox()
-            self.ghost.direction.update(0, 0)
+        if self.t > 12.0 and self.ghost.alive():
+            self.ghost.die()
 
 
 class IceNaked(_Warm):
@@ -592,6 +589,7 @@ def _heat_patch(level, dx, dy, w, h):
     surf = pygame.Surface((w, h), pygame.SRCALPHA)
     surf.fill((255, 255, 255, 255))
     area = EffectArea(rect, pygame.mask.from_surface(surf), {"heat": 100.0}, _id="validation_heat")
+    area.debug_color, area.debug_width = (255, 110, 0), 6     # lava orange
     layout = level.layout_manager
     if layout.effect_quad_trees is None:
         layout.effect_quad_trees = {}
@@ -607,7 +605,7 @@ def _heat_patch(level, dx, dy, w, h):
 
 class Lava(_Warm):
     NAME = "lava"
-    WATCH = "Full plate. Stand in the red box, then step off: the plate heats while in it, then cools."
+    WATCH = "Full plate. He stands in the orange box for 6 s, then steps off: the plate heats, then cools."
     SECONDS = 20.0
     FAST_SECONDS = 4.0
 
@@ -622,11 +620,11 @@ class Lava(_Warm):
 
     def tick(self, level, dt):
         hero = level.player
-        if RUNTIME.fast_mode:      # headless walks him in and out; the window leaves it to you
-            feet = self.box.center if self.t < 1.6 else self.home
-            hero.hitbox.midbottom = (int(feet[0]), int(feet[1]))
-            hero.plant_sprite_on_hitbox()
-            hero.velocity.update(0, 0)
+        # placed in, then out, so the scene shows it either way
+        feet = self.box.center if self.t < (1.6 if RUNTIME.fast_mode else 6.0) else self.home
+        hero.hitbox.midbottom = (int(feet[0]), int(feet[1]))
+        hero.plant_sprite_on_hitbox()
+        hero.velocity.update(0, 0)
         super().tick(level, dt)
 
     def teardown(self, level):

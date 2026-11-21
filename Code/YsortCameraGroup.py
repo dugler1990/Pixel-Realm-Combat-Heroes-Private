@@ -561,7 +561,8 @@ class YSortCameraGroup(pygame.sprite.Group):
                         effect_area.rect.width,
                         effect_area.rect.height
                     )
-                    self.backend.draw_rect((255, 0, 0), rect_screen, 2)  # Red outline, 2px thick
+                    color = getattr(effect_area, "debug_color", (255, 0, 0))
+                    self.backend.draw_rect(color, rect_screen, getattr(effect_area, "debug_width", 2))
         
         # Runtime debug mode: highlight player with a clear outline.
         if self.runtime_debug_player_highlight:

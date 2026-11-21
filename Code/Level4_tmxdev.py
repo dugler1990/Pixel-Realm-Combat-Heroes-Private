@@ -707,7 +707,8 @@ class Level4:
             panel.blit(surface, (padding, y))
             y += surface.get_height() + line_gap
 
-        self.backend.blit(panel, (12, 12))
+        width = pygame.display.get_surface().get_width()
+        self.backend.blit(panel, (width - panel_width - 12, 12))   # top right: the HUD is top left
 
     def _start_next_benchmark_case(self):
         case = self.benchmark_runtime.start_next_matrix_case()
