@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import textwrap
@@ -47,15 +48,19 @@ class CommandFailed(RuntimeError):
     """An orchestrate subcommand exited non-zero. Carries its last line of stderr."""
 
 
-def _call(*args: str, fatal: bool = True) -> dict:
+def _call(*args: str, fatal: bool = True, cwd: str | Path | None = None) -> dict:
     """Run an orchestrate subcommand and return its JSON payload (it prints JSON then links).
 
     ``fatal=False`` raises CommandFailed instead of exiting, for the re-place commands. A
     re-place can be refused for good reason -- warping a level whose polygon fills the canvas
     has no outline to work from -- and losing the whole session to that means regenerating to
     get back, which costs a call. The refusal is information, not a crash.
+
+    ``cwd`` is where ``python -m tools...`` is resolved from: the repo root. The console runs
+    from there already; the review page passes it, since a server thread must not depend on
+    where it was started.
     """
-    proc = subprocess.run([*CLI, *args], capture_output=True, text=True)
+    proc = subprocess.run([*CLI, *args], capture_output=True, text=True, cwd=cwd)
     sys.stdout.write(proc.stdout[-2000:] if proc.returncode else "")
     if proc.returncode:
         if not fatal:
@@ -63,7 +68,11 @@ def _call(*args: str, fatal: bool = True) -> dict:
             raise CommandFailed(last[-1] if last else f"{' '.join(args)} failed")
         sys.stderr.write(proc.stderr[-2000:])
         raise SystemExit(f"{' '.join(args)} failed")
-    text = proc.stdout
+    return _payload(proc.stdout)
+
+
+def _payload(text: str) -> dict:
+    """The JSON an orchestrate command printed (it prints JSON, then links)."""
     start = text.find("{")
     end = text.rfind("}")
     try:
@@ -88,6 +97,55 @@ def newest_attempt(root: Path, level_id: str) -> str | None:
     """
     attempts = sorted((root / "levels" / level_id / "attempts").glob("attempt_*/current.png"))
     return str(attempts[-1]) if attempts else None
+
+
+def attempt_of(image: str | Path) -> int | None:
+    """The attempt number an image under review belongs to, from its folder name.
+
+    Placements live in ``attempts/attempt_NNN/`` and raw returns in ``jobs/attempt_NNN/``.
+    None for anything else, such as ``accepted/image.png``.
+    """
+    match = re.fullmatch(r"attempt_(\d+)", Path(image).parent.name)
+    return int(match.group(1)) if match else None
+
+
+def reingest_args(
+    root: Path,
+    level_id: str,
+    *,
+    image: str | Path,
+    attempt: int,
+    feather: int = 0,
+    fit: bool = False,
+    cut: bool = False,
+    align: bool = False,
+    padding: bool = True,
+    offset: tuple[int, int] = (0, 0),
+    colour_method: str = "match",
+) -> list[str]:
+    """The ingest command that re-places one attempt's generation. Costs no API call.
+
+    The image and the attempt always go together. Without ``--attempt`` ingest takes the
+    manifest's ``latest_job``, which need not be the attempt whose ``generated.png`` was
+    passed -- so the placement would be cut with another job's masks.
+    """
+    args = ["ingest", str(root), "--level", level_id, "--image", str(image),
+            "--attempt", str(int(attempt)), "--feather", str(int(feather))]
+    if fit:
+        args.append("--fit-to-mask")
+    if cut:
+        args.append("--cut-to-mask")
+    if align:
+        args.append("--align-colours")
+        if colour_method != "match":
+            args += ["--colour-method", colour_method]
+    if not padding:
+        args += ["--padding", "none"]
+    dx, dy = (int(value) for value in offset)
+    if dx or dy:
+        # One token: argparse reads a separate "-3,2" as an unknown option.
+        args.append(f"--padding-offset={dx},{dy}")
+    return args
 
 
 def _candidate(root: Path, level_id: str, entry: dict) -> str | None:
@@ -284,20 +342,20 @@ def main(argv=None) -> int:
                             print("    no padding on this level (no accepted neighbour yet) - "
                                   "nothing to feather")
                             continue
-                raw = sorted((root / "levels" / level_id / "jobs").glob("attempt_*/generated.png"))
-                if not raw:
+                # The attempt on screen, not merely the newest job on disk.
+                jobs = root / "levels" / level_id / "jobs"
+                attempt = attempt_of(image)
+                if attempt is None:
+                    newest = sorted(jobs.glob("attempt_*/generated.png"))
+                    attempt = attempt_of(newest[-1]) if newest else None
+                raw = jobs / f"attempt_{attempt:03d}" / "generated.png" if attempt else None
+                if raw is None or not raw.is_file():
                     print("    no generated image to re-place")
                     continue
-                reingest = ["ingest", str(root), "--level", level_id,
-                            "--image", str(raw[-1]), "--feather", str(feather)]
-                if fit:
-                    reingest.append("--fit-to-mask")
-                if cut:
-                    reingest.append("--cut-to-mask")
-                if align_colours:
-                    reingest.append("--align-colours")
-                if not padding:
-                    reingest += ["--padding", "none"]
+                reingest = reingest_args(
+                    root, level_id, image=raw, attempt=attempt, feather=feather,
+                    fit=fit, cut=cut, align=align_colours, padding=padding,
+                )
                 try:
                     payload = _call(*reingest, fatal=False)
                 except CommandFailed as refused:

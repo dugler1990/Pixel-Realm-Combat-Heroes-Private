@@ -493,3 +493,40 @@ def test_parse_gate_retry_r1_attaches_the_overlay_with_the_gates_own_texts(tmp_p
     assert criticism == "the note. the directive the left arm"
     criticism, attach = parse_gate_retry("r too dark", overlay, "the note", "the directive")
     assert (criticism, attach) == ("too dark", [])
+
+
+def _level_on_black(enclosed_dark: bool, fringe: bool):
+    """A rectangle of land on black; optionally a dark crevice inside it, and a black strip
+    along its top edge that joins the black outside (the model's shape a little too small)."""
+    mask = Image.new("L", SIZE, 0)
+    ImageDraw.Draw(mask).rectangle((40, 30, 199, 129), fill=255)
+    art = np.zeros((SIZE[1], SIZE[0], 3), dtype=np.uint8)
+    art[30:130, 40:200] = (120, 150, 180)
+    if enclosed_dark:
+        art[70:80, 100:120] = (5, 5, 8)
+    if fringe:
+        art[30:34, 40:200] = 0
+    return Image.fromarray(art), mask
+
+
+def test_dark_art_inside_the_land_is_not_counted_missing():
+    from tools.painted_map_pipeline.world_levels.checks import coverage
+    from tools.painted_map_pipeline.world_levels.footprint import footprint_iou
+
+    image, mask = _level_on_black(enclosed_dark=True, fringe=False)
+    assert coverage(image, mask, enclosed_is_art=True)["missing_px"] == 0
+    assert footprint(image, mask, minimum=0.9, enclosed_is_art=True)["cut_iou"] == 1.0
+    assert footprint_iou(image, mask, enclosed_is_art=True) == 1.0
+    # The old rule (still the default, for interiors) counted the crevice as missing.
+    assert coverage(image, mask)["missing_px"] == 200
+
+
+def test_black_joined_to_the_outside_is_still_missing():
+    from tools.painted_map_pipeline.world_levels.checks import coverage, footprint_overlay
+
+    image, mask = _level_on_black(enclosed_dark=True, fringe=True)
+    assert coverage(image, mask, enclosed_is_art=True)["missing_px"] == 4 * 160
+    marked = np.asarray(footprint_overlay(image, mask, enclosed_is_art=True))
+    plain = np.asarray(image)
+    assert (marked[31, 100] != plain[31, 100]).any()       # the fringe is marked
+    assert (marked[75, 110] == plain[75, 110]).all()       # the crevice is not

@@ -145,7 +145,7 @@ def describe_padding(locked_mask) -> str | None:
     if bottom >= height - 1 - near_y and down < _MAX_STRIP:
         sides.append(f"the bottom {round(down * 100)}%")
     if not sides:
-        return f"about {round(100 * float(array.mean()))}% of this image"
+        return f"about {round(100 * float(array.mean()))}%"
     return " and ".join(sides)
 
 
