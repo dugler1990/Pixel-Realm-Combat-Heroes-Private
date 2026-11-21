@@ -52,6 +52,8 @@ C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Private\Code\sprite_venv\Scripts\pyth
 
 ## Log
 
+- 2026-11-21: Kimodo jaw / eyes static. First 40 of 312 clips, rotation range: `Jaw` max 1.1° (median 0.4), eyes max 3.7° (0.5), `Head` max 46° (20). An added jaw is posed or procedural, not driven.
+
 - 2026-11-21: `barb_hit_heavy_01` → barb with the human recipe from the page, rc 0, 60 frames, 22 bones, `recipe.json` env identical to retarget_ik2, pose check ok (29.4). Not yet graded by eye. Knob keys removed from `characters.json` rows and `DEFAULT_CHARACTERS`. Icewiz moves from rot/no hip skip to the human recipe; not rebaked.
 
 - 2026-11-17: page, `rigmap` (label, match, fit, legacy soma/anunaki paths), `serve_one.py`. No rebake of the 312. Jaw weights stay `face_parts.py`.
