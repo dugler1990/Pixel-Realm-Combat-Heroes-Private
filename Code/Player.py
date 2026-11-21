@@ -23,6 +23,7 @@ from damage_data import body
 from conditions import speed_of
 import defence_profile
 from abilities.registry import build_action_controller, load_evasion_loadout
+from stamina import max_stamina, recover
 
 class BasePlayer(Entity):
     # Bare direction names are the walk cycles; every other status ("_idle", "_attack",
@@ -154,6 +155,8 @@ class BasePlayer(Entity):
         self.upgrade_stat_order = tuple(self.max_stats.keys())
         self.health = self.stats["health"]
         self.energy = self.stats["energy"]
+        self.stamina = max_stamina(self.stats)
+        self._stamina_recover_at = 0
         self.exp = 0
         self.gold = 0
         self.has_belt = False
@@ -242,6 +245,7 @@ class BasePlayer(Entity):
     def update_derived_attributes(self):
         self.health = self.stats["health"]
         self.energy = self.stats["energy"]
+        self.stamina = max_stamina(self.stats)
         self.speed = self.stats["speed"]
         self.magic_power = self.stats["magic"]
 
@@ -261,6 +265,9 @@ class BasePlayer(Entity):
         if "mana" in effect:
             cap = self.stats.get("energy", self.energy)
             self.energy = min(self.energy + effect["mana"], cap)
+        if "stamina" in effect:
+            cap = max_stamina(self.stats)
+            self.stamina = min(float(self.stamina) + float(effect["stamina"]), cap)
 
     def pickup_item(self, item):
         _player_item_log.debug("item.effect_type:%s", item.effect_type)
@@ -603,6 +610,9 @@ class BasePlayer(Entity):
         else:
             self.energy = self.stats["energy"]
 
+    def stamina_recovery(self):
+        recover(self, self.stats, pygame.time.get_ticks())
+
 
     def health_recovery(self):
         if self.is_dead or self.health <= 0:
@@ -627,6 +637,7 @@ class BasePlayer(Entity):
         if self.mesh_skin is not None:
             self.mesh_skin.update(self, dt)
         self.energy_recovery()
+        self.stamina_recovery()
         self.health_recovery()
 
     def _resolve_post_seat_status(self):

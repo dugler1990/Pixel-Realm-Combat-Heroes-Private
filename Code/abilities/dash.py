@@ -8,6 +8,7 @@ from abilities.base import PlayerAbility
 from abilities.protocol import CombatAbilityContext, PlayerAbilityContext
 import hit_core
 from damage_data import attack_of
+from stamina import pay
 
 STUB_COLLISION_MODES = frozenset()
 IMPLEMENTED_COLLISION_MODES = frozenset({"pass_through", "resolve", "damage_on_hit"})
@@ -48,20 +49,18 @@ class DashAbility(PlayerAbility):
     def try_start(self, entity, context, direction="right", **kwargs) -> bool:
         if self.is_active(entity):
             return False
-        cost = int(self.config.get("cost", 0))
-        energy = getattr(entity, "energy", 0)
-        if energy < cost:
-            return False
-
-        if cost:
-            entity.energy = energy - cost
+        # Dash cost is stamina. Shortfall comes off health and the dash still starts.
+        # One clock read: pay and the dash timer share it, so a mocked clock stays in step.
+        now = pygame.time.get_ticks()
+        cost = self.config.get("cost", 0)
+        pay(entity, cost, now)
 
         presentation = self.config.get("presentation") or {}
         end_status_template = presentation.get("end_status", "{dir}_idle")
 
         entity._dash_runtime = {
             "direction": direction,
-            "end_time": pygame.time.get_ticks() + int(self.config.get("duration_ms", 300)),
+            "end_time": now + int(self.config.get("duration_ms", 300)),
             "speed_mult": float(self.config.get("speed_mult", 3)),
             "collision_mode": self.collision_mode,
             "stop_on_wall": bool(self.config.get("stop_on_wall", False)),
