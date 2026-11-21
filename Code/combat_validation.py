@@ -49,6 +49,7 @@ def main():
         "PRCH_COMBAT_VALIDATION_HOLD_SECONDS": str(hold),
         "PRCH_COMBAT_VALIDATION_MESH_PACK": args.mesh_pack,
         "PRCH_COMBAT_VALIDATION_SCENARIOS": ",".join(args.scenarios) if args.scenarios else "all",
+        "PRCH_BENCHMARK_GRASS_ENABLED": "0",     # a bare arena floor: no grass over the scenes
     })
     if args.headless:
         env.update({"PRCH_COMBAT_VALIDATION_FAST": "1", "PRCH_COMBAT_VALIDATION_VISIBLE": "0",

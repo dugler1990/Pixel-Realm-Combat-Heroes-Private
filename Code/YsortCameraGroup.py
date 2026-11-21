@@ -107,6 +107,7 @@ class YSortCameraGroup(pygame.sprite.Group):
         # Door frames as (rect, surface, building), held by reference like buildings.
         self.door_covers = door_covers if door_covers is not None else []
         self.debug_effect_areas = []  # For debug visualization of effect collision rects
+        self.floor_patches = []       # (world rect, colour): filled on the ground, under the sprites
         self.runtime_debug_effect_rects = DEBUG_DRAW_EFFECT_RECTS
         self.runtime_debug_player_highlight = DEBUG_DRAW_MASKS
         self.runtime_debug_faction_outlines = DEBUG_DRAW_FACTION_OUTLINES
@@ -472,6 +473,8 @@ class YSortCameraGroup(pygame.sprite.Group):
 
         self._update_buildings(focus, dt)
         self._draw_building_interiors()
+        for rect, colour in self.floor_patches:
+            self.backend.draw_rect(colour, rect.move(-self.offset.x, -self.offset.y), 0)
         # Buildings the subject is inside: bodies standing on floor not yet explored are not
         # drawn, shadows included.
         fogged = self._fogged_buildings()
@@ -561,8 +564,7 @@ class YSortCameraGroup(pygame.sprite.Group):
                         effect_area.rect.width,
                         effect_area.rect.height
                     )
-                    color = getattr(effect_area, "debug_color", (255, 0, 0))
-                    self.backend.draw_rect(color, rect_screen, getattr(effect_area, "debug_width", 2))
+                    self.backend.draw_rect((255, 0, 0), rect_screen, 2)  # Red outline, 2px thick
         
         # Runtime debug mode: highlight player with a clear outline.
         if self.runtime_debug_player_highlight:

@@ -435,7 +435,7 @@ class Fire(_Warm):
 
 class Ice(_Warm):
     NAME = "ice"
-    WATCH = "Naked. The ghost holds you (no hits): mild blue, no health lost. At 12 s he dies: it fades."
+    WATCH = "Naked. The ghost holds you (no hits): mild blue, no health lost."
     PLATE = False
     SECONDS = 20.0
     FAST_SECONDS = 14.0
@@ -443,11 +443,6 @@ class Ice(_Warm):
     def setup(self, level):
         super().setup(level)
         self.ghost = spawn_at(level, "ice_ghost", 120, 0)
-
-    def tick(self, level, dt):
-        super().tick(level, dt)
-        if self.t > 12.0 and self.ghost.alive():
-            self.ghost.die()
 
 
 class IceNaked(_Warm):
@@ -488,7 +483,6 @@ def _heat_patch(level, dx, dy, w, h):
     surf = pygame.Surface((w, h), pygame.SRCALPHA)
     surf.fill((255, 255, 255, 255))
     area = EffectArea(rect, pygame.mask.from_surface(surf), {"heat": 100.0}, _id="validation_heat")
-    area.debug_color, area.debug_width = (255, 110, 0), 6     # lava orange
     layout = level.layout_manager
     if layout.effect_quad_trees is None:
         layout.effect_quad_trees = {}
@@ -497,33 +491,30 @@ def _heat_patch(level, dx, dy, w, h):
     layout.all_effect_areas = list(getattr(layout, "all_effect_areas", None) or []) + [area]
     layout.effect_cell_grid = EffectCellGrid.build(
         layout.all_effect_areas, layout.TILESIZE, layout.csv_layout_width, layout.csv_layout_height)
-    sprites = layout.visible_sprites
-    sprites.debug_effect_areas = list(getattr(sprites, "debug_effect_areas", None) or []) + [area]
+    layout.visible_sprites.floor_patches.append((rect, (230, 70, 10)))     # lava, on the floor
     return rect
 
 
 class Lava(_Warm):
     NAME = "lava"
-    WATCH = "Full plate. He stands in the orange box for 6 s, then steps off: the plate heats, then cools."
+    WATCH = "Full plate. You start in the lava (orange). Walk out: the plate heats, then cools."
     SECONDS = 20.0
     FAST_SECONDS = 4.0
 
     def setup(self, level):
         super().setup(level)
         hero = level.player
-        sprites = level.layout_manager.visible_sprites
-        self.debug_was = sprites.runtime_debug_effect_rects
-        sprites.runtime_debug_effect_rects = True
         self.box = _heat_patch(level, 80, 20, 160, 120)
         self.home = hero.hitbox.midbottom
+        hero.hitbox.midbottom = self.box.center     # start in it; then he is free to walk
+        hero.plant_sprite_on_hitbox()
 
     def tick(self, level, dt):
-        hero = level.player
-        # placed in, then out, so the scene shows it either way
-        feet = self.box.center if self.t < (1.6 if RUNTIME.fast_mode else 6.0) else self.home
-        hero.hitbox.midbottom = (int(feet[0]), int(feet[1]))
-        hero.plant_sprite_on_hitbox()
-        hero.velocity.update(0, 0)
+        if RUNTIME.fast_mode and self.t >= 1.6:     # headless only: walk him out
+            hero = level.player
+            hero.hitbox.midbottom = self.home
+            hero.plant_sprite_on_hitbox()
+            hero.velocity.update(0, 0)
         super().tick(level, dt)
 
     def teardown(self, level):
@@ -535,10 +526,7 @@ class Lava(_Warm):
         layout.all_effect_areas = [a for a in layout.all_effect_areas if getattr(a, "_id", None) != "validation_heat"]
         layout.effect_cell_grid = EffectCellGrid.build(
             layout.all_effect_areas, layout.TILESIZE, layout.csv_layout_width, layout.csv_layout_height)
-        sprites = layout.visible_sprites
-        sprites.runtime_debug_effect_rects = self.debug_was
-        sprites.debug_effect_areas = [a for a in sprites.debug_effect_areas
-                                      if getattr(a, "_id", None) != "validation_heat"]
+        layout.visible_sprites.floor_patches.clear()
 
 
 SCENARIOS = (KnockbackMass, ArrowsStop, PlateShove, ArrowsWhereDrawn, PointsVsCapsules, PlateStops,
