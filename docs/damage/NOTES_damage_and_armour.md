@@ -666,6 +666,12 @@ hit on a body card uses the elemental rule.
   stale); headless smoke in the real level: warrior_01 spear on a bare body 8 (was 8), arrows from
   warrior_06 land on the hero, meteor impact and embers land, hero's unarmed hit lands on a squid.
   Crowd bench after: mean 7.73 / 7.83 / 8.37 ms, p95 10.6 / 10.7 / 12.7, strike 181 / 161 / 176 µs.
+- 2026-11-21: temperature step 1 (`PLAN_temperature.md`): `Code/heat_network.py`, the exact
+  solver for a few layers pulled by fixed sources and joined by links (numpy `eigh` once per event,
+  plain floats to read). Crossings by recursion on the derivative plus bisection to 0.1 ms; area
+  past a line in closed form. 7 tests, against the plain exponential, the weighted pull, heat
+  conservation and a 200k-step numeric sum (rel 1e-4). Timing, 2 layers: solve 79 µs, reading
+  1.2 µs, crossings 89 µs (244 µs with 60 bisection steps; bounded to 0.1 ms), area 110 µs.
 
 ## Tried and dropped
 

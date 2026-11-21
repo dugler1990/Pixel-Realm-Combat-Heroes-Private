@@ -13,6 +13,11 @@ an ordinary body left in an ice field or a desert dies. Clothes keep you warm in
 cook you in the sun, from the same rule. A simple body keeps today's one-shot `elemental`
 price, untouched.
 
+## Status
+- Step 1 done: `Code/heat_network.py` (`solve` → `Curve`: `at`, `layer_at`, `crossings`,
+  `area_past`), `tests/damage/test_heat_network.py` (7). Cost, 2 layers: solve 79 µs, a reading
+  1.2 µs, crossings of one line 89 µs, area past one line 110 µs (crossings to 0.1 ms).
+
 ## The model, for reasoning (Douglas, 2026-11-21)
 - **Layers hold warmth**: the skin, and the worn outer chest piece if there is one (naked: skin
   only). 0 is comfortable, heat positive, cold negative. Each layer has a capacity: skin 1; a
