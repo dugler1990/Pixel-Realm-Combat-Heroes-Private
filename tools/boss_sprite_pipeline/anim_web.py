@@ -32,14 +32,12 @@ DEFAULT_CHARACTERS = [
      "roles": "bosses/barb/gear_test/barb_roles.json",
      "base": "bosses/barb/viewer/ik_test2/base.glb",
      "view": "bosses/barb/viewer/anim_suite",
-     "arm_cap": 90, "bind_match": True,
-     "note": "UniRig human. Arm cap 90."},
+     "note": "UniRig human. Bake settings: rigmap/recipe.py human."},
     {"id": "demon", "recipe": "creature", "target": "demon", "source": "soma",
      "rig": "bosses/demon/rig/jaw/rigged_jaw_hinge.glb",
      "roles": "bosses/demon/rig/jaw/bone_roles.json",
      "base": "bosses/demon/viewer/_base.glb",
      "view": "bosses/demon/viewer/anim_suite",
-     "arm_cap": 35, "bind_match": False,
      "note": "Fused armpit, arm cap 35, digitigrade. The key neck is the skull."},
     {"id": "icewiz", "recipe": "human", "source": "anunaki",
      "rig": "pod_sync/20261116/out/unirig_icewiz/rigged.glb",
@@ -139,7 +137,7 @@ def ensure_library() -> None:
             src = defaults.get(row.get("id"))
             if not src:
                 continue
-            for key in ("rig", "arm_cap", "bind_match", "source"):
+            for key in ("rig", "source"):
                 if key in src and key not in row:
                     row[key] = src[key]
                     changed = True
@@ -164,6 +162,18 @@ def load_index() -> list:
 
 def load_characters() -> list:
     return read_json(library() / "characters.json", [])
+
+
+def characters_with_bake() -> list:
+    """Rows plus `bake`: the settings the next map will use, and where each came from."""
+    from tools.boss_sprite_pipeline.rigmap.recipe import resolve
+    rows = load_characters()
+    for row in rows:
+        try:
+            row["bake"] = resolve(row, read_json(fit_path(row["id"]), {}))
+        except ValueError as exc:
+            row["bake_error"] = str(exc)
+    return rows
 
 
 def find_clip(clip_id: str) -> dict:
@@ -270,31 +280,21 @@ def run_map(clip_id: str, character_id: str, lines: list) -> str:
     out.mkdir(parents=True)
     py = str(bpy_python())
     script = str(PIPE / "retarget_bvh.py")
-    env = {"SOURCE": char.get("source") or "soma"}
-    human = char.get("recipe") == "human"
-    env["ARM_ELEV_CAP"] = str(char.get("arm_cap", 90 if human else 35))
-    # These clips do not start from a stand. Bind match off keeps the character in his
-    # rest pose and only plays the change from frame 1, so the stick and the mesh are
-    # different poses. On, his limbs point the way the source limbs point.
-    bind = char["bind_match"] if "bind_match" in char else human
-    env["BIND_MATCH"] = "1" if bind else "0"
-    patch = read_json(fit_path(character_id), {})
-    from tools.boss_sprite_pipeline.rigmap.fit import knob_env
-    env.update(knob_env(patch))
-    # The barb bake graded good (2026-11-15, anim_test/retarget_ik2) was IK with hips and neck
-    # left out of bind match. Without these the page can only do plain rotation copy.
-    if char.get("mode"):
-        env["RETARGET_MODE"] = str(char["mode"])
-    if char.get("ik_body") is not None:
-        env["IK_BODY"] = str(float(char["ik_body"]))
-    if char.get("bind_skip"):
-        env["BIND_SKIP"] = ",".join(char["bind_skip"])
+    # Every knob comes from the recipe (rigmap/recipe.py), then the character row, then the
+    # panel. All are sent, so retarget_bvh.py falls back to none of its own defaults.
+    from tools.boss_sprite_pipeline.rigmap.recipe import bake_env, resolve
+    settings = resolve(char, read_json(fit_path(character_id), {}))
     # absolute paths: retarget's --target resolves the rig under its own repo, which is
     # this worktree, and the meshes live in the data root
     rig = resolve_rel(char["rig"])
     roles = resolve_rel(char["roles"])
+    env = bake_env(settings, read_json(roles, {}))
+    write_json(out / "recipe.json", {"character": character_id, "settings": settings, "env": env})
+    _log(lines, "recipe " + " ".join(f"{k}={v}" for k, v in env.items()))
     cmd = [py, script, str(rig), str(roles), str(stage), str(out)]
     _run(cmd, lines, env=env, cwd=str(PIPE))
+    checks = ["pose check: " + line.split("POSE_CHECK", 1)[1].strip()
+              for line in lines if "POSE_CHECK" in line]
     view = resolve_rel(char["view"])
     view.mkdir(parents=True, exist_ok=True)
     base = view / "base.glb"
@@ -316,6 +316,7 @@ def run_map(clip_id: str, character_id: str, lines: list) -> str:
             glb = found[0]
         else:
             raise FileNotFoundError(f"no clip glb in {view / 'clips'}")
+    lines.extend(checks)      # last, so the page's job log ends on it
     return glb.relative_to(generated()).as_posix()
 
 
@@ -441,7 +442,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(data)
                 return
             if url.path == "/api/state":
-                return self._json({"clips": load_index(), "characters": load_characters(),
+                return self._json({"clips": load_index(), "characters": characters_with_bake(),
                                    "jobs": JOBS.snapshot(), "root": str(data_root())})
             if url.path == "/api/match":
                 return self._json(match_report(q.get("clip", [""])[0], q.get("character", [""])[0]))

@@ -14,17 +14,29 @@ C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Private\Code\sprite_venv\Scripts\pyth
 
 First launch writes `generated/bosses/anim_library/index.json` from `kimodo_new_blender/*.bvh` and `characters.json` (barb, demon, icewiz) when those roles files exist.
 
-Map one clip: the button copies the BVH, runs `retarget_bvh.py` with that character's `--target` or rig+roles, copies an existing `base.glb` when the row has one, then `export_split.py --clips-only`. The glb path is stored on the clip's `maps`. A fit file at `anim_library/fits/<character>.json` is turned into env by `rigmap.fit.knob_env` (`barrel_chest` 1 → `CLAVICLE_DAMP` 0). `limb_reach` is stored and not passed. `IK_BODY` is a different dial.
+Map one clip: the button copies the BVH, runs `retarget_bvh.py` with rig+roles, copies an existing `base.glb` when the row has one, then `export_split.py --clips-only`. The glb path is stored on the clip's `maps`.
+
+Bake settings: `rigmap/recipe.py` only. `resolve()` = `RECIPES[row.recipe]` < row keys in `KNOBS` < panel patch (`fits/<id>.json`: `arm_cap`, `bind_match`, `barrel_chest` 1 → `CLAVICLE_DAMP` 0). `bake_env()` sends all 9 knobs, `bind_skip` as roles resolved to bone names, so `retarget_bvh.py` uses none of its defaults. Each bake writes `recipe.json` (settings + where each came from + env) beside `run.json`. The panel prints "next bake" with the same. `limb_reach` is stored and not passed.
+
+- human = barb graded-good 2026-11-15 (`barb/anim_test/retarget_ik2/run.json`): ik, IK_BODY 0.35, bind on, skip root+neck (bone_0, bone_4), arm 90, clavicle 1, root on, frame1, anunaki. Barb and icewiz.
+- creature = what the page sent the demon before: soma, rot, bind off, arm 35. Demon.
+- `tests/test_rigmap_recipe.py` locks human to the retarget_ik2 env and checks it against that run.json on disk.
+
+Pose check (in `retarget_bvh.py`, every 5th frame + last): each driven bone's segment, joint → nearest driven child joint, mesh vs stick, world space. Worst per bone in `run.json` `pose_check`; log `POSE_CHECK <clip> ok|FAIL`. `POSE_LIMIT_DEG` 40. Page job header shows it.
+
+| barb_hit_heavy_01 | worst |
+|---|---|
+| human recipe | 29.4 neck (chest 25.8, shins 22, arms ≤15, hips 11.7) |
+| rot, bind on, skip neck only | 149.3 hips |
+| rot, bind off | 153.3 right forearm, left forearm 102 |
 
 Prompt: host and port of a Kimodo pod (not the outfit pod). `kimodo/serve_one.py` on the pod, model `Kimodo-SOMA-RP-v1`, one cell, BVH copied back into the library. The page does not start or stop the pod.
 
 Tests, from the worktree, no Blender:
 
 ```
-C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Private\Code\sprite_venv\Scripts\python.exe -m pytest tests/test_rigmap.py tests/test_anim_web.py -q
+C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Private\Code\sprite_venv\Scripts\python.exe -m pytest tests/test_rigmap.py tests/test_anim_web.py tests/test_rigmap_recipe.py -q
 ```
-
-Barb recipe = the graded-good 2026-11-15 bake (`barb/anim_test/retarget_ik2/run.json`): `RETARGET_MODE` ik, `IK_BODY` 0.35, `BIND_MATCH` on, `BIND_SKIP` bone_0,bone_4 (hips, neck), arm cap 90, clavicle 1, root on, anunaki, rig `barb_final_nb.glb`. Set per character in `characters.json` (`mode`, `ik_body`, `bind_skip`); `run_map` passes them. Bind on without skipping bone_0 folds the hips (149° off); bind off leaves him upright. The panel's three fields cannot reach these.
 
 `retarget_bvh.py` takes its soma and anunaki bone tables from `rigmap.legacy`. Gargoyle and G1 stay the tables in that file.
 
@@ -40,7 +52,7 @@ Barb recipe = the graded-good 2026-11-15 bake (`barb/anim_test/retarget_ik2/run.
 
 ## Log
 
-- 2026-11-21 19:53: `barb_hit_heavy_01` → barb with the IK recipe, rc 0, 60 frames, `bones_driven` 22; run.json settings identical to retarget_ik2. Not yet graded by eye.
+- 2026-11-21: `barb_hit_heavy_01` → barb with the human recipe from the page, rc 0, 60 frames, 22 bones, `recipe.json` env identical to retarget_ik2, pose check ok (29.4). Not yet graded by eye. Knob keys removed from `characters.json` rows and `DEFAULT_CHARACTERS`. Icewiz moves from rot/no hip skip to the human recipe; not rebaked.
 
 - 2026-11-17: page, `rigmap` (label, match, fit, legacy soma/anunaki paths), `serve_one.py`. No rebake of the 312. Jaw weights stay `face_parts.py`.
 - 2026-11-17: `--target` resolved the rig under this worktree, so the bake looked for `generated/` here and missed the Boss files. Map now passes absolute rig and roles, and sets `SOURCE`, `ARM_ELEV_CAP`, `BIND_MATCH` from the character row. `rigmap` uses relative imports so Blender's `from rigmap.legacy` loads.
@@ -55,4 +67,5 @@ Barb recipe = the graded-good 2026-11-15 bake (`barb/anim_test/retarget_ik2/run.
 
 ## Tried and dropped
 
+- `rigmap.fit()` `bind_skip` (axis_error > 45°) as the bake's skip list, 2026-11-21: not wired. It compares rest poses; the Kimodo BVH rest has every bone along +X (hips→spine, arms, legs all (1,0,0)), so every bone reads ~90°. And the hip fold is a bone-axis mismatch, which joint-position directions do not see. The pose check catches it instead.
 - Putting the panels on the outfit page (8767). That page is one `outfit.py` step per button, and its pod is TRELLIS / SAM3 / HoloPart.

@@ -60,6 +60,7 @@
     <label>arm cap <input id="arm" type="number" min="0" max="120" step="1"></label>
     <label>bind match <input id="bind" type="checkbox"></label>
     <button id="apply">apply and rebake</button>
+    <p id="recipe" style="color:var(--dim);font-size:11px;white-space:pre-line"></p>
     <h2>prompt</h2>
     <label>host <input id="host" type="text" style="width:140px" placeholder="pod ip"></label>
     <label>port <input id="port" type="text" style="width:80px" placeholder="22"></label>
@@ -285,6 +286,11 @@ async function refresh() {
     }
     drawList();
     if (!sameChars || !$("char").options.length) syncFit();
+    const rc = character();
+    $("recipe").textContent = rc && rc.bake
+      ? "next bake:\n" + Object.entries(rc.bake).map(([k, s]) =>
+          `${k} ${Array.isArray(s.value) ? s.value.join(",") || "-" : s.value}  (${s.from})`).join("\n")
+      : "";
     const run = j.jobs.running[0];
     const done = j.jobs.done[0];
     if (run) {
@@ -294,7 +300,9 @@ async function refresh() {
       $("job").textContent = (done.rc === 0 ? "done" : "failed") + " · " + done.label;
       $("map").textContent = "map this clip";
     }
-    const head = !run && done ? ((done.rc === 0 ? "finished" : "FAILED") + " " + done.label) : "";
+    const pose = done && (done.lines || []).find((l) => l.startsWith("pose check:"));
+    const head = !run && done ? ((done.rc === 0 ? "finished" : "FAILED") + " " + done.label
+      + (pose ? " · " + pose.replace(/ at frame.*/, "") : "")) : "";
     const lines = run ? run.lines : done ? done.lines : [];
     $("log").textContent = [head, ...(lines || [])].filter(Boolean).join("\n");
     $("map").disabled = !!run;
