@@ -36,6 +36,15 @@ Locks (`tests/test_rigging_locks.py`, fixtures `tests/fixtures/rig_*.npz`, `rig_
 
 Old (pre-split) code vs new on the same inputs: every bone equal within 0.1 on all four; only the chest row differs because the old check measured chest -> first child in its table (barb: clavicle 25.8, now neck 9.7).
 
+Rig steps (`rigging/rig/steps/`, registry in `__init__.py`; run by `rigging/rig/run_step.py`): each declares SETTINGS, CHECKS (metric, op, value, gate), KIND, LANE. A run reserves v<N>, runs, measures, writes record.json (not accepted); a failed run deletes its folder. Blender checks: `rigging/blender/runner.py check weights <glb> <out.json>` (fresh process). Page: rig section lists versions with check numbers, "use" / "accept and use" (blocked on a failed gate), and a step form built from the step's settings.
+
+| step | wraps | gate |
+|---|---|---|
+| roles_walk | rigfix/anun_roles.py + overrides | required roles present |
+| reweight | rigfix/rig_reweight.py heat/smooth | 0 unweighted (info: jumps <= 1.95 %, neutral_bone 0) |
+| rehome_orphans | explode2/fix_neutral_bone.py | 0 on neutral_bone, 0 unweighted |
+| manual | copy a hand-made glb + reason | 0 unweighted |
+
 ## Known errors
 
 | Symptom | Cause | Fix |
@@ -48,6 +57,7 @@ Old (pre-split) code vs new on the same inputs: every bone equal within 0.1 on a
 
 ## Log
 
+- 2026-11-21: rig steps on barb v1 (test versions, deleted after): roles_walk = v1 roles exactly; rehome_orphans 0 neutral, 0.24 % edges jump > 0.3 (UniRig 1.95); reweight heat 0.5 60 s, 0.275 %, but 146,277 verts on neutral_bone (original heat run on the painted barb left 752) - not chased.
 - 2026-11-21: rigging library phases 1-4: `rigmap` -> `rigging` (roles, sources, settings, rig/version, map/{match,bind,transfer,pose_check,proportions,templates,pairs,character}, blender/pose_io). `retarget_bvh.py` is a driver; TARGETS/PAIRS/profile/env knobs/legacy.py/recipe.py/fits/DEFAULT_CHARACTERS gone. 7 rigs imported as v1. Page bake of barb_hit_heavy_01 via `--character barb`: rc 0, 29.4. Proportions shoulder width moved from clavicle heads to upper-arm heads (clavicles read 4.4x on the barb; now 1.14; demon 1.81).
 
 - 2026-11-21: Kimodo jaw / eyes static. First 40 of 312 clips, rotation range: `Jaw` max 1.1° (median 0.4), eyes max 3.7° (0.5), `Head` max 46° (20). An added jaw is posed or procedural, not driven.

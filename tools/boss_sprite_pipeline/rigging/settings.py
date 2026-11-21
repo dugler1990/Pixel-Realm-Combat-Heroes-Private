@@ -45,6 +45,10 @@ def _cast(s: Setting, v):
     elif t == "choice":
         if v not in s.choices:
             raise SettingError(f"{s.name}: {v!r} not in {list(s.choices)}")
+    elif t == "roles_map":
+        if not isinstance(v, dict) or not all(isinstance(x, str) and x for x in v.values()):
+            raise SettingError(f"{s.name}: want {{role: bone name}}")
+        v = dict(v)
     elif t == "roles_bool":
         if not isinstance(v, dict) or not all(isinstance(x, bool) for x in v.values()):
             raise SettingError(f"{s.name}: want {{role: true/false}}")

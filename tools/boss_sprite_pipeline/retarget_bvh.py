@@ -77,7 +77,7 @@ def main(argv):
         n = int(vnum) if vnum else int(char["rig"])
         rec = V.load(cid, n)
         rig_glb, roles = rec["glb_path"], rec["roles"]
-        rig_id = {"character": cid, "version": n, "bone_hash": rec["bone_hash"]}
+        rig_id = {"character": cid, "version": n, "bone_hash": rec["bone_hash"], "roles_hash": rec["roles_hash"]}
     else:
         if not (rig_glb and roles_path and map_path):
             raise SystemExit("--character, or all of --rig --roles --map")
@@ -85,7 +85,7 @@ def main(argv):
         char = {"id": pair_id, "map": json.load(open(map_path))}
         bones = G.skeleton(rig_glb)
         rig_id = {"character": pair_id or None, "version": None, "glb": rig_glb,
-                  "bone_hash": G.bone_hash(bones)}
+                  "bone_hash": G.bone_hash(bones), "roles_hash": V.roles_hash(roles)}
     settings = C.resolve(char, source)
     vals = {k: v["value"] for k, v in settings.items()}
     src_mod = sources.get(source)

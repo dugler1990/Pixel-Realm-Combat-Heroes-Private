@@ -24,7 +24,9 @@ from tools.boss_sprite_pipeline.rigging import paths, sources
 from tools.boss_sprite_pipeline.rigging.map import character as C
 from tools.boss_sprite_pipeline.rigging.map.match import match
 from tools.boss_sprite_pipeline.rigging.map.skeleton import load_bvh
+from tools.boss_sprite_pipeline.rigging.rig import steps as RIG_STEPS
 from tools.boss_sprite_pipeline.rigging.rig import version as V
+from tools.boss_sprite_pipeline.rigging.rig.run_step import run_step
 from tools.boss_sprite_pipeline.rigging.settings import SettingError, schema
 
 PIPE = Path(__file__).resolve().parent
@@ -155,9 +157,15 @@ def characters_state() -> list:
         row["versions"] = vers
         cur = next((v for v in vers if v["version"] == char["rig"]), None)
         row["bone_hash"] = cur["bone_hash"] if cur else None
+        row["roles_hash"] = V.load(cid, char["rig"])["roles_hash"] if cur else None
         row["roles"] = cur["roles"] if cur else []
         out.append(row)
     return out
+
+
+def rig_steps() -> list:
+    return [{"name": m.NAME, "doc": m.DOC, "kind": m.KIND, "lane": m.LANE, "settings": schema(m.SETTINGS),
+             "checks": {k: [list(r) for r in v] for k, v in m.CHECKS.items()}} for m in RIG_STEPS.STEPS.values()]
 
 
 class Jobs:
@@ -257,7 +265,8 @@ def run_map(clip_id: str, character_id: str, lines: list) -> dict:
     if not glb.is_file():
         raise FileNotFoundError(f"no {glb.name} in {view / 'clips'}")
     lines.extend(checks)      # last, so the page's job log ends on it
-    return {"glb": paths.rel(glb), "rig": n, "bone_hash": rec["bone_hash"], "bake": paths.rel(out / "run.json")}
+    return {"glb": paths.rel(glb), "rig": n, "bone_hash": rec["bone_hash"], "roles_hash": rec["roles_hash"],
+            "bake": paths.rel(out / "run.json")}
 
 
 def record_map(clip_id: str, character_id: str, entry) -> None:
@@ -279,7 +288,8 @@ def bake_report(clip_id: str, cid: str) -> dict:
     cur = V.load(cid, int(char["rig"]))
     rig = run.get("rig") or {}
     return {"baked": True, "rig": rig.get("version"), "current_rig": char["rig"],
-            "stale": rig.get("bone_hash") != cur["bone_hash"], "older_rig": rig.get("version") != char["rig"],
+            "stale": rig.get("bone_hash") != cur["bone_hash"] or rig.get("roles_hash") != cur["roles_hash"],
+            "older_rig": rig.get("version") != char["rig"],
             "pose_check": clip.get("pose_check"), "proportions": clip.get("proportions"),
             "settings": run.get("settings"), "bind_flags": run.get("bind_flags"), "when": run.get("when")}
 
@@ -395,7 +405,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/state":
                 return self._json({"clips": load_index(), "characters": characters_state(),
-                                   "schema": schema(C.MAP_SETTINGS), "jobs": JOBS.snapshot(),
+                                   "schema": schema(C.MAP_SETTINGS), "steps": rig_steps(), "jobs": JOBS.snapshot(),
                                    "root": str(data_root())})
             if url.path == "/api/match":
                 return self._json(match_report(arg("clip"), arg("character")))
@@ -444,6 +454,23 @@ class Handler(BaseHTTPRequestHandler):
 
                     JOBS.start("local", f"rebake {clip} → {cid}", work)
                 return self._json({"map": char["map"], "rebake": bool(clip)})
+            if url.path == "/api/rig/run":
+                cid, name = str(body.get("character") or ""), str(body.get("step") or "")
+                char = find_character(cid)
+                step = RIG_STEPS.get(name)
+                inp = int(body.get("input") or char["rig"])
+                V.load(cid, inp)
+
+                def work(lines, cid=cid, name=name, inp=inp, settings=body.get("settings") or {}):
+                    run_step(cid, name, settings, inp, lines)
+
+                JOBS.start(step.LANE, f"rig {name} on {cid} v{inp}", work)
+                return self._json({"started": True})
+            if url.path == "/api/rig/use":
+                cid = str(body.get("character") or "")
+                find_character(cid)
+                char = V.set_current(cid, int(body.get("version")))
+                return self._json({"rig": char["rig"]})
             if url.path == "/api/prompt":
                 host = str(body.get("host") or "")
                 port = str(body.get("port") or "")

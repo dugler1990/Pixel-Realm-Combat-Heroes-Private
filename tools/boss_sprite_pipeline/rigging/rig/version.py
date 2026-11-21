@@ -78,6 +78,7 @@ def finish(cid: str, n: int, *, step: str, kind: str, settings: dict, input_n: i
         "glb": paths.rel(glb_path),
         "bones": bones,
         "bone_hash": _glb.bone_hash(bones),
+        "roles_hash": roles_hash(roles),
         "checks": checks or {},
         "accepted": accepted,
         "when": _now(),
@@ -93,7 +94,25 @@ def load(cid: str, n: int) -> dict:
     rec = json.loads((d / "record.json").read_text(encoding="utf-8"))
     rec["roles"] = json.loads((d / "roles.json").read_text(encoding="utf-8"))
     rec["glb_path"] = str(paths.resolve(rec["glb"]))
+    rec.setdefault("roles_hash", roles_hash(rec["roles"]))
     return rec
+
+
+def roles_hash(roles: dict) -> str:
+    import hashlib
+    return hashlib.sha1(json.dumps(roles, sort_keys=True).encode()).hexdigest()[:12]
+
+
+def set_current(cid: str, n: int) -> dict:
+    """Make an accepted version the character's current rig."""
+    from ..map import character as C
+    rec = load(cid, n)
+    if not rec.get("accepted"):
+        rec = {**rec, **accept(cid, n)}
+    char = C.load(cid)
+    char["rig"] = n
+    C.save(char)
+    return char
 
 
 def chain(cid: str, n: int) -> list[dict]:

@@ -142,6 +142,38 @@ def test_rig_versions_number_link_and_gate(tmp_path, monkeypatch):
         V.finish("x", n3, step="m", kind="weights", settings={}, input_n=2, roles={"root": "nope"}, glb=glb)
 
 
+def test_a_step_makes_an_unaccepted_version_with_evaluated_checks(tmp_path, monkeypatch):
+    import types
+    from tools.boss_sprite_pipeline.rigging.rig import run_step as RS
+    from tools.boss_sprite_pipeline.rigging.rig import steps as S
+    from tools.boss_sprite_pipeline.rigging.rig import version as V
+    monkeypatch.setenv("ANIM_DATA_ROOT", str(tmp_path))
+    glb = _tiny_glb(tmp_path / "a.glb", ["bone_0", "bone_1"])
+    V.import_v1("x", str(glb), {"root": "bone_0"}, "h")
+
+    def run(ctx):
+        out = _tiny_glb(ctx.dir / "rig.glb", ["bone_0", "bone_1"])
+        ctx.check("weights", {"unweighted_verts": ctx.settings["bad"]})
+        return {"glb": out, "roles": ctx.input_roles}
+
+    fake = types.SimpleNamespace(NAME="fake", KIND="auto", LANE="local", DOC="",
+                                 SETTINGS=[Setting("bad", "int", "x", default=0)],
+                                 CHECKS={"weights": [("unweighted_verts", "==", 0, True)]}, run=run)
+    monkeypatch.setitem(S.STEPS, "fake", fake)
+    rec = RS.run_step("x", "fake", {"bad": 3}, 1, [])
+    assert rec["version"] == 2 and rec["kind"] == "weights" and not rec["accepted"]
+    assert rec["checks"]["weights"]["pass"] is False
+    with pytest.raises(ValueError):
+        V.set_current("x", 2)                      # a failed gate cannot become the rig
+
+    def boom(ctx):
+        raise RuntimeError("blender died")
+    monkeypatch.setitem(S.STEPS, "fake", types.SimpleNamespace(**{**fake.__dict__, "run": boom}))
+    with pytest.raises(RuntimeError):
+        RS.run_step("x", "fake", {}, 1, [])
+    assert V.versions("x") == [1, 2]               # the failed step left no half version
+
+
 def _tiny_glb(path: Path, bones: list[str]) -> Path:
     import struct
     nodes = [{"name": b} for b in bones]

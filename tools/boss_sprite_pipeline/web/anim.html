@@ -207,7 +207,7 @@ function entryBase(e) {
 function entryFlag(e, ch) {
   if (!e) return "";
   if (typeof e === "string") return "old";
-  if (e.bone_hash !== ch.bone_hash) return "stale";
+  if (e.bone_hash !== ch.bone_hash || (e.roles_hash && e.roles_hash !== ch.roles_hash)) return "stale";
   if (e.rig !== ch.rig) return "older rig";
   return "mapped";
 }
@@ -362,7 +362,7 @@ function drawForm() {
   if (!ch) return;
   if (!draft || draft._for !== ch.id) draft = Object.assign(JSON.parse(JSON.stringify(ch.map)), { _for: ch.id });
   $("tmpl").textContent = "(from template " + ch.template + ", now this character's own)";
-  for (const s of state.schema) {
+  for (const s of state.schema || []) {
     if (s.type === "roles_bool") continue;
     $("form").appendChild(field(s, draft[s.name]));
   }
@@ -389,17 +389,94 @@ function drawForm() {
   for (const v of [...ch.versions].reverse()) {
     const d = document.createElement("div");
     d.className = "ver";
-    const gates = Object.entries(v.checks || {}).map(([k, c]) => k + (c.pass ? " ok" : " FAIL")).join(", ");
-    d.textContent = "v" + v.version + (v.version === ch.rig ? " (current)" : "") + " · " + v.step + " · " + v.kind
+    const checks = Object.entries(v.checks || {}).map(([k, c]) => {
+      const nums = (c.rules || []).map((r) => r.metric + " " + r.got + (r.pass ? "" : " (want " + r.rule + ")")).join(", ");
+      return k + (c.pass ? " ok" : " FAIL") + (nums ? " [" + nums + "]" : "");
+    }).join("; ");
+    const gatesOk = Object.values(v.checks || {}).every((c) => !c.gate || c.pass);
+    const t = document.createElement("span");
+    t.textContent = "v" + v.version + (v.version === ch.rig ? " (current)" : "") + " · " + v.step + " · " + v.kind
       + (v.input ? " · from v" + v.input : "") + (v.accepted ? " · accepted" : " · not accepted")
-      + (gates ? " · " + gates : "") + (v.note ? " — " + v.note : "");
+      + (checks ? " · " + checks : "") + (v.note ? " — " + v.note : "") + " ";
+    if (!gatesOk) t.className = "bad";
+    d.appendChild(t);
+    if (v.version !== ch.rig) {
+      const b = document.createElement("button");
+      b.textContent = v.accepted ? "use" : "accept and use";
+      b.disabled = !gatesOk;
+      b.title = gatesOk ? "make this the rig every new bake uses; bakes on other bones turn stale" : "a gate check failed";
+      b.onclick = async () => {
+        try { await post("/api/rig/use", { character: ch.id, version: v.version }); draft = null; await refresh(); drawForm(); }
+        catch (err) { $("log").textContent = String(err); }
+      };
+      d.appendChild(b);
+    }
     $("rig").appendChild(d);
   }
+  drawStepForm(ch);
+}
+
+let stepDraft = {};
+function drawStepForm(ch) {
+  const box = document.createElement("div");
+  box.style.marginTop = "8px";
+  const pickStep = document.createElement("select");
+  for (const s of state.steps || []) { const o = document.createElement("option"); o.value = o.textContent = s.name; pickStep.appendChild(o); }
+  if (stepDraft.step) pickStep.value = stepDraft.step; else stepDraft.step = pickStep.value;
+  pickStep.onchange = () => { stepDraft = { step: pickStep.value }; drawForm(); };
+  const pickIn = document.createElement("select");
+  for (const v of ch.versions) { const o = document.createElement("option"); o.value = v.version; o.textContent = "from v" + v.version; pickIn.appendChild(o); }
+  pickIn.value = stepDraft.input || ch.rig;
+  pickIn.onchange = () => { stepDraft.input = Number(pickIn.value); };
+  const row = document.createElement("label");
+  row.append(pickStep, pickIn);
+  box.appendChild(row);
+  const step = (state.steps || []).find((s) => s.name === stepDraft.step);
+  if (step) {
+    const doc = document.createElement("div"); doc.className = "small"; doc.textContent = step.doc + " · " + step.kind + " · " + step.lane;
+    box.appendChild(doc);
+    stepDraft.settings = stepDraft.settings || {};
+    for (const s of step.settings) {
+      const v = s.name in stepDraft.settings ? stepDraft.settings[s.name] : (s.default == null ? "" : s.default);
+      const lab = document.createElement("label");
+      lab.title = s.doc;
+      lab.append(s.name);
+      let input;
+      if (s.type === "choice") {
+        input = document.createElement("select");
+        for (const c of s.choices) { const o = document.createElement("option"); o.value = o.textContent = c; input.appendChild(o); }
+        input.value = v;
+      } else {
+        input = document.createElement("input");
+        input.type = s.type === "float" || s.type === "int" ? "number" : "text";
+        input.value = typeof v === "object" ? JSON.stringify(v) : v;
+        if (s.type === "path" || s.type === "str" || s.type === "roles_map") input.style.width = "140px";
+      }
+      input.onchange = () => {
+        let val = input.value;
+        if (s.type === "float" || s.type === "int") val = Number(val);
+        if (s.type === "roles_map") { try { val = JSON.parse(val || "{}"); } catch (e) { val = {}; } }
+        stepDraft.settings[s.name] = val;
+      };
+      lab.appendChild(input);
+      box.appendChild(lab);
+    }
+    const go = document.createElement("button");
+    go.textContent = "run " + step.name;
+    go.onclick = async () => {
+      try {
+        await post("/api/rig/run", { character: ch.id, step: step.name, input: stepDraft.input || ch.rig, settings: stepDraft.settings });
+        $("log").textContent = "rig step started; the new version appears here when it finishes, not yet in use";
+      } catch (err) { $("log").textContent = String(err); }
+    };
+    box.appendChild(go);
+  }
+  $("rig").appendChild(box);
 }
 
 function patchFromDraft() {
   const p = {};
-  for (const s of state.schema) if (s.name in draft) p[s.name] = draft[s.name];
+  for (const s of state.schema || []) if (s.name in draft) p[s.name] = draft[s.name];
   // bind is replaced whole: roles missing from the draft go back to following bind_default
   const ch = character();
   const bind = {};
@@ -441,6 +518,7 @@ async function refresh() {
     $("apply").disabled = !!run;
     $("save").disabled = !!run;
     $("gen").disabled = !!run;
+    if (wasRunning && !run) drawForm();
     if (wasRunning && !run && current && character()) {
       const fresh = j.clips.find((c) => c.id === current.id);
       if (fresh) pick(fresh);
@@ -459,7 +537,7 @@ async function post(path, body) {
 }
 
 $("filter").oninput = drawList;
-$("char").onchange = () => { draft = null; lastBake = null; lastMatch = null; if (current) pick(current); else { drawList(); drawForm(); } };
+$("char").onchange = () => { draft = null; stepDraft = {}; lastBake = null; lastMatch = null; if (current) pick(current); else { drawList(); drawForm(); } };
 $("map").onclick = async () => {
   if (!current || !character()) return;
   $("job").textContent = "starting " + current.id + " → " + character().id;
