@@ -681,6 +681,14 @@ hit on a body card uses the elemental rule.
   244 → 29 µs. `tools/temperature_bench.py`, 100 squids frozen in air −60, all wounding, 3 runs:
   frame mean off 2.85-3.02 / on 2.92-3.10 ms, settle 52-66 µs, 0.026-0.033 ms per frame.
   Targeted set: 11 failed, same names; 564 passed.
+- 2026-11-21: temperature step 3. First table (`0e268107`): plate cooler than naked in the desert,
+  dashing too (the body pulled to 0 both ways). Douglas: stamina is heat, armour traps sweat, the
+  sun heats metal. Model revised (`PLAN_temperature.md`, `ec02a164`): thermostat warming anywhere /
+  sweat through bare skin, resting heat, sun by `sun_absorb` (new item property), `exert`.
+  Tuned to his feel targets with the table (staged grids): plate desert hurts 34 s standing, 12 s
+  dashing; naked desert dead 345 s; naked ice dead 308 s; vitality 60 safe in ice; mild never
+  hurts. `HOT_SCALE` 2 added (temperature used `HEAT_SCALE` 0.25, 8× gentler than cold).
+  Targeted set: 11 failed, same names; 567 passed. `test_item_card` 10 passed.
 
 ## Tried and dropped
 

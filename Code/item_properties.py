@@ -40,6 +40,7 @@ PROPERTIES = (
     Property("conductivity", "Conductivity", "element", "percent", "lower", "line", "Conducts lightning", at=0.5),
     Property("flammability", "Flammability", "element", "percent", "lower", "line", "Catches fire", at=0.5),
     Property("insulation", "Insulation", "element", "percent", "higher", "detail", "Insulation {v}"),
+    Property("sun_absorb", "Sun", "element", "percent", "lower", "detail", "Soaks up {v} of the sun"),
     Property("sealed", "Sealed", "physical", "yes-no", "higher", "line", "Sealed: stops gas"),
     Property("durability", "Durability", "state", "int", "higher", "line", "Durability {now} / {v}"),
 )

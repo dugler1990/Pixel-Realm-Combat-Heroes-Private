@@ -250,8 +250,10 @@ BODIES_PATH = os.path.join(CONFIG_DIR, "bodies.json")
 
 # The item property ids (item_properties.PROPERTIES) a layer has; coverage is where, not what.
 LAYER_NUMBERS = ("stopping_power", "absorb", "flammability", "conductivity", "insulation",
-                 "weight", "durability")
-LAYER_SHARES = ("absorb", "flammability", "conductivity", "insulation")   # 0..1
+                 "sun_absorb", "weight", "durability")
+LAYER_SHARES = ("absorb", "flammability", "conductivity", "insulation", "sun_absorb")   # 0..1
+# A missing number is 0, except these: skin and hides soak up half the sun.
+LAYER_DEFAULTS = {"sun_absorb": 0.5}
 _LAYER_FIELDS = frozenset(LAYER_NUMBERS + ("sealed",))
 _BODY_FIELDS = frozenset(("kind", "natural", "resist", "starts"))
 
@@ -265,7 +267,7 @@ class LayerDef:
     def __init__(self, name, **fields):
         self.name = name
         for field in LAYER_NUMBERS:
-            setattr(self, field, fields.get(field, 0))
+            setattr(self, field, fields.get(field, LAYER_DEFAULTS.get(field, 0)))
         self.sealed = fields.get("sealed", False)
 
     def __repr__(self):

@@ -87,19 +87,24 @@ COLD_SPEED = {"mild": -1, "medium": -2, "severe": -3}
 SIMPLE_COLD = {"mild": (2000, 0), "medium": (4000, 4), "severe": (6000, 8)}
 
 # Temperature on a full body (temperature.py, docs/damage/PLAN_temperature.md). First numbers,
-# tuned from tools/temperature_table.py. Strengths are per second; capacity 1 is the skin's.
+# tuned from tools/temperature_table.py to the plan's feel targets (2026-11-21). Strengths are
+# per second; capacity 1 is the skin's. A desert is air +10, sun 1; an ice field air -30.
 AIR_K = 0.02          # the air on the outer layer
-BODY_K = 0.02         # the body's own heat on the skin, at vitality REF_VIT
+WARM_K = 0.02         # the thermostat warming a cold skin, at vitality REF_VIT, armour or not
+SWEAT_K = 0.02        # the thermostat cooling a warm skin, at REF_VIT, times the bare share
+REST_HEAT = 0.02      # heat the body makes at rest, per second on the skin
+SUN_K = 0.1           # heat per second on the outer layer per point of sun, times its sun_absorb
 REF_VIT = 20.0
-CONTACT_K = 0.018     # piece to skin, divided by the piece's insulation (insulation is resistance)
+CONTACT_K = 0.08      # piece to skin, divided by the piece's insulation (insulation is resistance)
 INSULATION_MIN = 0.01  # a piece with no insulation is all but bare skin
-PIECE_CAP = 0.25      # a piece's capacity per weight (plate chest 12: 3)
+PIECE_CAP = 0.05      # a piece's capacity per weight (plate chest 12: 0.6)
 PIECE_CAP_MIN = 0.1
 FAINT = 2.0           # faint red from here to COOK
-COLD_SCALE = 1.0      # health per second per point of skin below -HURT_AT (heat: HEAT_SCALE above COOK)
+COLD_SCALE = 2.0      # health per second per point of skin below -HURT_AT
+HOT_SCALE = 2.0       # health per second per point of skin above COOK (a blow's cook keeps HEAT_SCALE)
 TICK_MS = 500         # while the skin is past a line, the wound arrives this often
 HELD_MS = 86_400_000  # hot_shell / chilled while temperature holds them: until it clears them
-EXERT = 0.15          # warmth per point of stamina paid (stamina wires it)
+HEAT_PER_STAMINA = 0.02  # warmth on the skin per point of stamina spent (a slide, 20: 0.4)
 
 WET_MULT = 1.5
 WET_CARRY = 0.4

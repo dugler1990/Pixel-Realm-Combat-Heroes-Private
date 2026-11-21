@@ -1,8 +1,10 @@
 """Temperature on a full body: layers that hold warmth, sources that pull them, one settle
 (docs/damage/PLAN_temperature.md).
 
-A body that `join`s keeps its skin and, when it wears a chest piece, that piece. The body's own
-heat is a source on the skin; the air, lava and a hold are sources on the outer layer. Between two
+A body that `join`s keeps its skin and, when it wears a chest piece, that piece. The body makes
+heat (at rest, and every stamina point spent: a bump) and its thermostat pulls the skin to 0:
+warming anywhere, cooling only by sweat through bare skin. The air, lava and a hold pull the
+outer layer; the sun heats it by its `sun_absorb`. Between two
 events the layers follow the exact curve of `heat_network`. Every change settles first: the wound
 since the last settle goes through the level's resolver, then the curve is solved again from the
 values at that instant. Only the skin wounds. The level's wake queue (`tick`) brings a body back at
@@ -12,8 +14,8 @@ import heapq
 import itertools
 
 from damage_rules import (
-    AIR_K, BODY_K, COLD_SCALE, COLD_SPEED, CONTACT_K, COOK, FAINT, HEAT_SCALE, HELD_MS, HURT_AT,
-    INSULATION_MIN,
+    AIR_K, COLD_SCALE, COLD_SPEED, CONTACT_K, COOK, FAINT, HELD_MS, HOT_SCALE, HURT_AT,
+    HEAT_PER_STAMINA, INSULATION_MIN, REST_HEAT, SUN_K, SWEAT_K, WARM_K,
     PIECE_CAP, PIECE_CAP_MIN, REF_VIT, SLOW_AT, TICK_MS, chest_layer, cold_band, heat_shade,
     resist_of, shock_wound,
 )
@@ -24,6 +26,7 @@ HORIZON_S = 120.0   # look this far ahead for the next crossing; past it, look a
 REST = 0.05         # a layer this close to its steady state is at rest: no wake
 _HEAT_LINES = (FAINT, COOK, 10.0, 18.0)       # the faint red, then heat_shade's three reds
 _COLD_LINES = (-SLOW_AT, -15.0, -20.0)        # cold_band's three blues
+_THERMOSTAT_LINE = 0.0                        # warming below, sweating above
 _WOUND_LINES = (COOK, -HURT_AT)
 _seq = itertools.count()
 
@@ -37,7 +40,7 @@ class Warmth:
     def __init__(self, level, now):
         self.level = level
         self.piece = None      # the worn chest LayerDef, None when naked
-        self.sources = {}      # key -> (SKIN or OUTER, T, k, outside)
+        self.sources = {}      # key -> (SKIN or OUTER, T, k): outside sources, cut by resist
         self.curve = None
         self.since_ms = now
         self.paid_ms = now
@@ -48,12 +51,12 @@ class Warmth:
 # --- the public calls -------------------------------------------------------------------------
 
 def join(body, level, now):
-    """Give `body` a temperature: its own heat on the skin, the level's air on its outer layer."""
+    """Give `body` a temperature: the level's air on its outer layer (the thermostat, rest heat
+    and the sun are read when solving)."""
     state = Warmth(level, now)
     body.warmth = state
     state.piece = _worn_piece(body)
-    state.sources["body"] = (SKIN, 0.0, 0.0, False)   # strength read live from vitality
-    state.sources["air"] = (OUTER, float(getattr(level, "air", 0.0) or 0.0), AIR_K, True)
+    state.sources["air"] = (OUTER, float(getattr(level, "air", 0.0) or 0.0), AIR_K)
     _solve_from(body, state, [0.0] * _layers(state), now)
     _schedule(body, state, now)
 
@@ -79,7 +82,7 @@ def add_source(body, key, T, k, now, placed_by=None, layer=OUTER):
         return
 
     def put():
-        state.sources[key] = (layer, float(T), float(k), True)
+        state.sources[key] = (layer, float(T), float(k))
 
     _change(body, state, now, put)
     if placed_by is not None:
@@ -120,11 +123,23 @@ def bump(body, layer, amount, now):
     return shock[0]
 
 
+def exert(body, stamina, now):
+    """Stamina spent is heat: a jump on the skin (stamina's `pay` calls this)."""
+    return bump(body, SKIN, stamina * HEAT_PER_STAMINA, now)
+
+
 def settle(body, now):
     """Bring the body to now: pay, paint, schedule. The wake queue calls it."""
     state = _state(body)
     if state is not None:
         _change(body, state, now, None)
+
+
+def set_sun(level, sun, now, bodies):
+    """The level's sun (0: night, a cave), on each of `bodies`."""
+    level.sun = float(sun)
+    for body in bodies:
+        settle(body, now)
 
 
 def set_air(level, air, now, bodies):
@@ -202,19 +217,36 @@ def _vitality(body):
     return float(value) if isinstance(value, (int, float)) and value > 0 else REF_VIT
 
 
+def _bare(body):
+    """The share of the body's regions with nothing worn: where sweat reaches the air."""
+    defence = getattr(body, "defence", None)
+    if defence is None or not defence.worn:
+        return 1.0
+    slots = defence.layers
+    return sum(1 for layers in slots if len(layers) < 2) / len(slots)
+
+
+def _outer_layer(body, state):
+    if state.piece is not None:
+        return state.piece
+    return getattr(getattr(body, "body_def", None), "natural", None)
+
+
 def _solve_from(body, state, values, now):
     """The curve from `values` at `now`, with the sources as they are."""
     n = _layers(state)
     pull = [[0.0, 0.0] for _ in range(n)]
     resist = _resist(body)
-    for where, T, k, outside in state.sources.values():
-        if where == SKIN and not outside:
-            k = BODY_K * _vitality(body) / REF_VIT   # the body's own heat, stronger with vitality
-        if outside:
-            if T > 0.0:
-                T = max(0.0, T - resist_of(resist, "fire"))
-            elif T < 0.0:
-                T = min(0.0, T + resist_of(resist, "ice"))
+    pull[0][1] += REST_HEAT
+    sun = float(getattr(state.level, "sun", 0.0) or 0.0)
+    if sun > 0.0:
+        layer = _outer_layer(body, state)
+        pull[n - 1][1] += SUN_K * sun * float(getattr(layer, "sun_absorb", 0.5) if layer else 0.5)
+    for where, T, k in state.sources.values():
+        if T > 0.0:
+            T = max(0.0, T - resist_of(resist, "fire"))
+        elif T < 0.0:
+            T = min(0.0, T + resist_of(resist, "ice"))
         i = 0 if where == SKIN else n - 1
         pull[i][0] += k
         pull[i][1] += k * T
@@ -224,6 +256,19 @@ def _solve_from(body, state, values, now):
         piece = state.piece
         capacity.append(max(PIECE_CAP_MIN, PIECE_CAP * float(piece.weight)))
         links = ((0, 1, CONTACT_K / max(INSULATION_MIN, float(piece.insulation))),)
+    # The thermostat (T 0): warming a skin below 0, sweating one above. Exactly at 0, the side
+    # the rest of the pull is taking it to. It cannot flip back and forth: the steady state's side
+    # is set by the other sources alone. A crossing of 0 is a wake, which solves again.
+    skin = values[0]
+    if abs(skin) < 1e-9:
+        drift = pull[0][1] - pull[0][0] * skin
+        if links:
+            drift += links[0][2] * (values[1] - skin)
+        cold = drift < 0.0
+    else:
+        cold = skin < 0.0
+    vitality = _vitality(body) / REF_VIT
+    pull[0][0] += (WARM_K if cold else SWEAT_K * _bare(body)) * vitality
     state.curve = solve(values, capacity, [tuple(p) for p in pull], links)
     state.since_ms = now
 
@@ -249,7 +294,7 @@ def _pay(body, state, now):
     t0 = (state.paid_ms - state.since_ms) / 1000.0
     t1 = (now - state.since_ms) / 1000.0
     curve = state.curve
-    heat = HEAT_SCALE * curve.area_past(0, COOK, t0, t1)
+    heat = HOT_SCALE * curve.area_past(0, COOK, t0, t1)
     cold = COLD_SCALE * curve.area_past(0, -HURT_AT, t0, t1, above=False)
     state.paid_ms = now
     state.owed += heat + cold
@@ -308,7 +353,7 @@ def _schedule(body, state, now):
     if skin_value > COOK or skin_value < -HURT_AT:
         when = now + TICK_MS
     last = len(curve.steady) - 1
-    lines_by_layer = {0: _COLD_LINES + _WOUND_LINES}
+    lines_by_layer = {0: _COLD_LINES + _WOUND_LINES + (_THERMOSTAT_LINE,)}
     lines_by_layer[last] = lines_by_layer.get(last, ()) + _HEAT_LINES
     moving = False
     for i, lines in lines_by_layer.items():

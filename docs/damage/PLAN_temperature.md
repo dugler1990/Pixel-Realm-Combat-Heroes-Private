@@ -27,13 +27,23 @@ price, untouched.
   - Deviation: temperature keeps its own wake queue on the level (`level.warmth_wakes`), not a
     second heap in `ConditionClock`: `conditions.py` stays unaware of it.
   - `hot_shell` / `chilled` start only when the shade changes (a settle is not a new clock entry).
-- Step 3 in progress: `tools/temperature_table.py` (36 s). Link is now `CONTACT_K / insulation`
-  (insulation is resistance; with `× (1 − insulation)` a piece with none still slowed heat).
-  First numbers `AIR_K` = `BODY_K` = 0.02, `CONTACT_K` 0.018. Ice −30: naked vitality 20 dead in
-  399 s, plate 1003 s, vitality 40 and 60 safe. Deep ice −60: naked 92 s. Desert +20: naked 1.25
-  hp/s, plate 1.0. Open: armour does not overheat you (plate is cooler than naked in the desert,
-  dashing too); the loincloth is on the waist, so the chest-only model sees it as naked; one slide
-  every 2 s heats the skin to +48.
+- Step 3 done: the thermostat (warming `WARM_K` anywhere, sweating `SWEAT_K × bare`, switch at
+  0), resting heat, the sun (`set_sun`, layer number `sun_absorb`: plate 0.8, loincloth 0.4, skin
+  and hides 0.5 by default), `exert(body, stamina, now)`, `HOT_SCALE` for the skin's heat wound
+  (a blow's cook keeps `HEAT_SCALE`). Link `CONTACT_K / insulation`. Tests 14.
+  Numbers (feel targets, `tools/temperature_table.py`, 10 s): `AIR_K` = `WARM_K` = `SWEAT_K` 0.02,
+  `REST_HEAT` 0.02, `SUN_K` 0.1, `CONTACT_K` 0.08, `PIECE_CAP` 0.05, `HEAT_PER_STAMINA` 0.02,
+  `COLD_SCALE` = `HOT_SCALE` 2. Desert = air +10, sun 1; ice field = air −30.
+  | Target | Result |
+  |---|---|
+  | plate, desert, standing: hurts ~30 s | 34 s, dead 144 s |
+  | plate, desert, a slide a second: hurts ~10 s | 12 s, dead 70 s |
+  | naked, desert, vitality 20: slowly dangerous | hurts 34 s, 3.5 hp/s, dead 345 s |
+  | naked, ice, vitality 20: dead in a few minutes | 308 s (plate 454 s) |
+  | vitality 60, ice | safe, any wear |
+  | mild, standing, any wear | never hurts, no red (skin 0.2-1.0) |
+  In full plate in the heat vitality does not cool you (sweat is trapped): only more health.
+  Bench after: settle 80-128 µs, 0.053-0.085 ms per frame (machine noisier: frame off 3.3-4.1 ms).
 
 ## The model, for reasoning (Douglas, 2026-11-21; revised the same day after the table)
 - **Layers hold warmth**: the skin, and the worn outer chest piece if there is one (naked: skin
@@ -57,7 +67,7 @@ price, untouched.
 - **A link** joins the piece and the skin, `CONTACT_K / insulation`: insulation is resistance, both
   ways; a piece with none is bare skin.
 - **Bumps** are instant jumps: a blow on the layer it hit, stamina spent on the skin.
-- **Only the skin wounds**: `HEAT_SCALE × (skin − COOK)` per second above `COOK`,
+- **Only the skin wounds**: `HOT_SCALE × (skin − COOK)` per second above `COOK`,
   `COLD_SCALE × (−skin − HURT_AT)` per second below `−HURT_AT`.
 
 What falls out, with no special case:
@@ -122,14 +132,14 @@ Between two events every source is fixed, so the layers follow
 | Blow (fire, ice) on a full body | `hit_resolve` | `bump`; price = blow + shock; no `hot_shell` / `chilled` start |
 | Hold | melee strategy, attack def with `hold` | in reach of a full body: `add_source(("hold", id))`, no strike; out of reach, new target: `remove_source` |
 | Lava | `HeatEffect` apply / remove | full body: `("lava", id)` source, no tick; simple body: today's tick |
-| Stamina spent | stamina's `pay` (item 2) | `bump(skin, paid × HEAT_PER_STAMINA)`; no caller in this plan |
+| Stamina spent | stamina's `pay` (item 2) | `exert(body, paid, now)`: a jump of `paid × HEAT_PER_STAMINA` on the skin; no caller in this plan |
 | Death | `Entity.die` | `forget(self)`: a dead ghost lets go |
 
 Data: `ghost_chill` gets `"hold": {"T": -10, "k": …}` in `attacks.json`. A new layer number
 `sun_absorb` (0..1) in `item_properties` and `item_bases.json` (plate 0.8, loincloth 0.4) and on
 the body cards' natural layer (default 0.5). Constants in `damage_rules`: `AIR_K`, `WARM_K`,
 `SWEAT_K`, `REST_HEAT`, `HEAT_PER_STAMINA`, `SUN_K`, `CONTACT_K`, `PIECE_CAP`, `TICK_MS`,
-`FAINT`, with the existing `COOK`, `SLOW_AT`, `HURT_AT`, `HEAT_SCALE`.
+`FAINT`, `HOT_SCALE`, `COLD_SCALE`, with the existing `COOK`, `SLOW_AT`, `HURT_AT`.
 `tools/temperature_table.py` reads the feel targets off a table: naked / loincloth / plate ×
 vitality 20 / 40 / 60 × mild / ice −30 / deep ice −60 / desert / hot desert, standing and dashing.
 
