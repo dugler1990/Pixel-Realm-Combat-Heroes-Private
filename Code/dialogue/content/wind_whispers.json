@@ -1,0 +1,7 @@
+{
+  "fog_enter": {
+    "speaker": "Wind",
+    "text": "You walk, yet the white returns…",
+    "cooldown_ms": 8000
+  }
+}
