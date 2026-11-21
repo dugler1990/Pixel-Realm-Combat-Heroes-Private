@@ -8,7 +8,7 @@ Launch (PowerShell, repo root):
 ```
 Code\sprite_venv\Scripts\python.exe -m tools.entity_pipeline.web
 ```
-Opens http://127.0.0.1:8768/ . `--port N`, `--no-browser`. 8765 SAM, 8766 levels, 8767 outfits, 8768 entity.
+Opens http://127.0.0.1:8769/ . `--port N`, `--no-browser`. 8765 SAM, 8766 levels, 8767 outfits, 8768 anim, 8769 entity; all in docs/DEV_SERVERS.md.
 
 - Keys: copy a key, press its "from clipboard" (OpenAI, Leonardo). The page shows set / –, never the value. OpenAI must start with `sk-`. Leonardo is a long token with no spaces and must not start with `sk-`.
 - Left: each session, step chips (done / stale / partial / missing / running), cost `$x` and `+N unknown` when a call has no cost. New session: name, map path (a png/jpg under `levels/` or a session folder), Start. That runs `scene`.

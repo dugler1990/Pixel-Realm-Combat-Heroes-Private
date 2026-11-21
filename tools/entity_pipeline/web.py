@@ -1,9 +1,9 @@
 """The entity pipeline in the browser.
 
-    python -m tools.entity_pipeline.web [--port 8768] [--no-browser]
+    python -m tools.entity_pipeline.web [--port 8769] [--no-browser]
 
 Every button runs one CLI command. The page reads the session folder; it never writes session.json.
-Listens on 127.0.0.1 only (8765 SAM, 8766 levels, 8767 outfits, 8768 entity).
+Listens on 127.0.0.1 only (8765 SAM, 8766 levels, 8767 outfits, 8768 anim, 8769 entity).
 """
 from __future__ import annotations
 
@@ -389,7 +389,7 @@ def make_server(port: int, jobs: Jobs | None = None) -> ThreadingHTTPServer:
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--port", type=int, default=8768)
+    ap.add_argument("--port", type=int, default=8769)
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args(argv)
     server = make_server(a.port)
