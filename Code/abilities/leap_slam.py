@@ -13,6 +13,7 @@ import hit_core
 from damage_data import attack_of
 from Interaction import InteractionContext
 from Settings import VIEW_ELEVATION_DEG
+from stamina import pay
 
 
 class ChargedLeapSlamAbility(PlayerAbility):
@@ -161,9 +162,6 @@ class ChargedLeapSlamAbility(PlayerAbility):
             return False
         if getattr(entity, "_dash_runtime", None) is not None:
             return False
-        cost = int(self.config.get("cost", 0))
-        if getattr(entity, "energy", 0) < cost:
-            return False
         entity._charge_runtime = {
             "start_time": pygame.time.get_ticks(),
             "direction": direction,
@@ -235,11 +233,8 @@ class ChargedLeapSlamAbility(PlayerAbility):
         return max(min_ratio, raw)
 
     def _launch(self, entity, context, direction, charge_ratio) -> bool:
-        cost = int(self.config.get("cost", 0))
-        energy = getattr(entity, "energy", 0)
-        if energy < cost:
-            return False
-        entity.energy = energy - cost
+        # Stamina: an empty bar still leaps, the unpaid part is health.
+        pay(entity, self.config.get("cost", 0), pygame.time.get_ticks())
 
         distance = self._leap_distance(direction, charge_ratio)
         dx, dy = self._leap_delta(direction, distance)

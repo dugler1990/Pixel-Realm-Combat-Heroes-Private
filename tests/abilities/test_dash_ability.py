@@ -21,6 +21,7 @@ pygame.init()
 from abilities.dash import DashAbility, entity_speed, validate_collision_mode  # noqa: E402
 from abilities.protocol import PlayerAbilityContext  # noqa: E402
 from Settings import evasion_data  # noqa: E402
+from stamina import HEALTH_PER_UNPAID  # noqa: E402
 
 
 class _StubRect:
@@ -59,10 +60,24 @@ class _StubHitbox:
         self.y = value[1]
 
 
+class _Resolver:
+    """Takes the health the way the real resolver would, without the game."""
+
+    def apply(self, ctx):
+        ctx.target.health -= ctx.amount
+
+
+class _Level:
+    def __init__(self):
+        self.interaction_resolver = _Resolver()
+
+
 class _StubEntity:
-    def __init__(self, speed=10, energy=30, collision_blocks=False):
+    def __init__(self, speed=10, energy=30, stamina=30, health=100, collision_blocks=False):
         self.stats = {"speed": speed}
         self.energy = energy
+        self.stamina = stamina
+        self.health = health
         self.rect = _StubRect()
         self.hitbox = _StubHitbox()
         self.status = "right_idle"
@@ -72,6 +87,7 @@ class _StubEntity:
         self._dash_runtime = None
         self.wall_steps = 0
         self.collision_blocks = collision_blocks
+        self.level = _Level()
 
     def groups(self):
         return []
@@ -93,18 +109,41 @@ def dash():
     return DashAbility("slide", evasion_data["slide"])
 
 
-def test_try_start_spends_energy_once(dash):
-    entity = _StubEntity(energy=30)
+def test_try_start_spends_stamina_once(dash):
+    entity = _StubEntity(energy=30, stamina=30, health=100)
     ctx = PlayerAbilityContext()
     cost = evasion_data["slide"]["cost"]
 
     assert dash.try_start(entity, ctx, direction="right") is True
-    assert entity.energy == 30 - cost
+    assert entity.stamina == 30 - cost
+    assert entity.energy == 30
+    assert entity.health == 100
     assert entity._dash_runtime is not None
     assert entity._dash_runtime["_ability"] is dash
 
     assert dash.try_start(entity, ctx, direction="right") is False
-    assert entity.energy == 30 - cost
+    assert entity.stamina == 30 - cost
+    assert entity.health == 100
+
+
+def test_empty_stamina_still_dashes_and_takes_health(dash):
+    entity = _StubEntity(stamina=0, health=100)
+    ctx = PlayerAbilityContext()
+    cost = evasion_data["slide"]["cost"]
+
+    assert dash.try_start(entity, ctx, direction="right") is True
+    assert entity.stamina == 0
+    assert entity.health == 100 - cost * HEALTH_PER_UNPAID
+    assert entity._dash_runtime is not None
+
+
+def test_partial_stamina_splits_the_cost(dash):
+    entity = _StubEntity(stamina=5, health=80)
+    ctx = PlayerAbilityContext()
+
+    assert dash.try_start(entity, ctx, direction="left") is True
+    assert entity.stamina == 0
+    assert entity.health == 80 - (evasion_data["slide"]["cost"] - 5) * HEALTH_PER_UNPAID
 
 
 def test_pass_through_does_not_step_against_walls(dash):

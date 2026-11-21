@@ -1,5 +1,6 @@
 import pygame
 import legion_ui as L
+from stamina import max_stamina
 
 ATTRIBUTES = ("magic", "strength", "vitality", "agility", "charisma")
 DERIVED = ("health", "attack", "energy", "speed")
@@ -69,6 +70,7 @@ class PlayerConfiguration:
         self.final_stats["energy"] = self.base_stats["magic"] + self.final_stats["magic"] * 50
         self.final_stats["health"] = self.base_stats["vitality"] + self.final_stats["vitality"] * 50
         self.final_stats["speed"] = self.base_stats["speed"] + self.final_stats["agility"] * 0.2
+        self.final_stats["stamina"] = max_stamina(self.final_stats)
 
     def draw(self, backend):
         kit = L.kit_for(backend)

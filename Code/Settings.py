@@ -173,6 +173,7 @@ ability_data = {
     "slide": {
         "type": "dash",
         "attack": "dash_hit",
+        # Stamina, not energy. An empty bar still slides; the unpaid part is health.
         "cost": 20,
         "speed_mult": 3,
         "duration_ms": 300,

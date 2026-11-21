@@ -66,7 +66,9 @@ def test_input_locked_during_dash():
 def test_try_use_slot_evasion_starts_dash():
     controller, player = _make_controller()
     cost = evasion_data["slide"]["cost"]
-    player.energy = cost + 10
+    player.energy = 50
+    player.stamina = cost + 10
+    player.health = 100
     player.stats = {"speed": 10}
     player.rect = SimpleNamespace(center=(0, 0))
     player.hitbox = SimpleNamespace(x=0, y=0, center=(0, 0))
@@ -77,4 +79,6 @@ def test_try_use_slot_evasion_starts_dash():
 
     assert controller.try_use_slot(player, "evasion", direction="right") is True
     assert player._dash_runtime is not None
-    assert player.energy == 10
+    assert player.stamina == 10
+    assert player.energy == 50
+    assert player.health == 100

@@ -110,8 +110,8 @@ class _StubTarget:
 
 
 class _StubEntity:
-    def __init__(self, energy=30, x=100, y=100):
-        self.energy = energy
+    def __init__(self, stamina=30, x=100, y=100):
+        self.stamina = stamina
         self.team_id = "player"
         self.id = "player-1"
         self.rect = _StubRect(x, y)
@@ -151,24 +151,24 @@ def _ctx():
     )
 
 
-def test_energy_not_spent_on_press_only():
+def test_stamina_not_spent_on_press_only():
     ability = _ability()
-    entity = _StubEntity(energy=20)
+    entity = _StubEntity(stamina=20)
     cost = ability.config["cost"]
     assert ability.on_press(entity, _ctx(), direction="right") is True
     assert entity._charge_runtime is not None
-    assert entity.energy == 20
+    assert entity.stamina == 20
     entity._charge_runtime = None
 
 
-def test_energy_spent_once_on_release_launch():
+def test_stamina_spent_once_on_release_launch():
     ability = _ability()
-    entity = _StubEntity(energy=20)
+    entity = _StubEntity(stamina=20)
     cost = ability.config["cost"]
     ability.on_press(entity, _ctx(), direction="right")
     assert ability.on_release(entity, _ctx(), direction="right") is True
     assert entity._leap_runtime is not None
-    assert entity.energy == 20 - cost
+    assert entity.stamina == 20 - cost
     assert entity._charge_runtime is None
 
 
