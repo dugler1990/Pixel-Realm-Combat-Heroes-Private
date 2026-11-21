@@ -75,6 +75,8 @@ class Scene:
     WATCH = ""              # one line: what Douglas should see
     SECONDS = 6.0           # how long it runs before it is decided (visible); headless runs FAST_SECONDS
     FAST_SECONDS = 4.0
+    GRASS = None            # None leaves the grass; False clears it for this scene
+    HOUR = None             # None leaves the layout clock; a number pins that hour
 
     def __init__(self):
         self.t = 0.0
@@ -529,8 +531,88 @@ class Lava(_Warm):
         layout.visible_sprites.floor_patches.clear()
 
 
+class WaterHole(Scene):
+    """Still hole on the arena floor. Not in a full run; name it with --scenario water_hole."""
+
+    NAME = "water_hole"
+    WATCH = "1 flat    2 beach    3 cliff    4 sloped box    5 vertical box."
+    SECONDS = 600.0
+    FAST_SECONDS = 0.2
+    GRASS = False
+    HOUR = 14
+
+    def setup(self, level):
+        from water_hole import FloorHole
+
+        hole = FloorHole()
+        hero = level.player.hitbox.center
+        hole.place(hero[0], hero[1] + 180)
+        level.layout_manager.visible_sprites.water_hole = hole
+        self.hole = hole
+
+    def tick(self, level, dt):
+        keys = level.input_manager
+        if keys.is_key_just_pressed(pygame.K_1):
+            self.hole.set_style("flat")
+        elif keys.is_key_just_pressed(pygame.K_2):
+            self.hole.set_style("pit")
+        elif keys.is_key_just_pressed(pygame.K_3):
+            self.hole.set_style("cliff")
+        elif keys.is_key_just_pressed(pygame.K_4):
+            self.hole.set_style("cube")
+        elif keys.is_key_just_pressed(pygame.K_5):
+            self.hole.set_style("shaft")
+        label = {
+            "flat": "flat cut",
+            "pit": "beach, wade in",
+            "cliff": "cliff, jump in",
+            "cube": "isometric box, cliff into the pool",
+            "shaft": "vertical box, 90° walls",
+        }[self.hole.style]
+        self.lines = [
+            label,
+            "water draw %0.2f ms" % self.hole.draw_ms,
+        ]
+
+    def decide(self, level):
+        return "probe", self.hole.style
+
+    def teardown(self, level):
+        level.layout_manager.visible_sprites.water_hole = None
+
+
 SCENARIOS = (KnockbackMass, ArrowsStop, PlateShove, ArrowsWhereDrawn, PointsVsCapsules, PlateStops,
              Haste, Fire, Ice, IceNaked, Desert, Lava)
+# Named only. A full combat run does not dig a hole.
+EXTRA_SCENARIOS = (WaterHole,)
+
+
+# --- conditions ------------------------------------------------------------------------------------
+
+def apply_scene_conditions(level, scene):
+    """Turn the scene's GRASS and HOUR into level state. The only place that does this."""
+    layout = level.layout_manager
+    saved = {"daytime_layout": layout.daytime_layout}
+    hour = getattr(scene, "HOUR", None)
+    if hour is None:
+        level.weather.pinned_hour = None
+    else:
+        level.weather.pinned_hour = hour
+        level.weather.current_time = float(hour)
+        layout.daytime_layout = True
+        if layout.lighting is None:
+            from Lighting import LightingManager
+            layout.lighting = LightingManager()
+    if getattr(scene, "GRASS", None) is False:
+        layout.grass_manager.grass_tiles.clear()
+        level.benchmark_runtime.grass_benchmark_enabled = False
+    return saved
+
+
+def clear_scene_conditions(level, saved):
+    level.weather.pinned_hour = None
+    if saved is not None:
+        level.layout_manager.daytime_layout = saved["daytime_layout"]
 
 
 # --- the driver ----------------------------------------------------------------------------------
@@ -539,7 +621,11 @@ class CombatValidationDriver:
     """Level4 calls tick(level, dt) every frame; True when every scene is done."""
 
     def __init__(self):
-        self.queue = [cls for cls in SCENARIOS if RUNTIME.wants_scenario(cls.NAME)]
+        requested = [n for n in RUNTIME.scenario_filter if n and n.lower() != "all"]
+        classes = list(SCENARIOS)
+        if requested:
+            classes += [cls for cls in EXTRA_SCENARIOS if cls.NAME in requested]
+        self.queue = [cls for cls in classes if RUNTIME.wants_scenario(cls.NAME)]
         self.total = len(self.queue)
         self.scene = None
         self.state = "start"
@@ -548,6 +634,7 @@ class CombatValidationDriver:
         self.anchor = None
         self.status = ""
         self.details = ""
+        self._saved_conditions = None
         contact_debug.ENABLED = True
         contact_debug.KEEP_MS = 4000
 
@@ -588,6 +675,7 @@ class CombatValidationDriver:
             self.scene = self.queue.pop(0)()
             remove_enemies(level)
             self._reset_hero(level)
+            self._saved_conditions = apply_scene_conditions(level, self.scene)
             self.scene.setup(level)
             self.started_ms = time.perf_counter()
             self.state = "run"
@@ -606,6 +694,8 @@ class CombatValidationDriver:
             self._overlay(self.status.upper(), [f"{self.status.upper()}: {self.details}"])
             self.hold_left -= dt
             if self.hold_left <= 0:
+                clear_scene_conditions(level, self._saved_conditions)
+                self._saved_conditions = None
                 self.scene.teardown(level)
                 remove_enemies(level)
                 self.state = "start"
