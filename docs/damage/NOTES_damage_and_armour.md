@@ -722,3 +722,8 @@ hit on a body card uses the elemental rule.
 - **Wards per spell**: replaced by general buffs on resistance stats.
 - **Coverage roll for holes**: not precise enough; replaced by exact lookup at the contact pixel.
 - **Magic physical / magic elemental as types**: a spell is a delivery plus a category; no extra type.
+- 2026-11-21: temperature 5, scenes `fire`, `ice`, `ice_naked`, `desert`, `lava` (probes) in
+  `combat_validation_driver.py`; hero gets a fresh temperature each scene. Headless (4-12 s): fire lost 3
+  skin +5.1; ice skin -4.9 no blue; ice_naked skin -2.1; desert skin +1.8; lava lost 33 skin +15.1.
+  Hit log now wraps `land` (strike skips `apply` since cleanup 2): `arrows_stop`, `plate_stops` pass
+  again. `elemental` still expects the old instant fire/cold: fails. Not watched.

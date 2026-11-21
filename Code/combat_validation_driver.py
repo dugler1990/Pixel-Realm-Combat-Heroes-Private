@@ -14,6 +14,7 @@ import time
 import pygame
 
 import contact_debug
+import temperature
 import Player as player_module
 from abilities.leap_slam import ChargedLeapSlamAbility
 from combat_validation_runtime import COMBAT_VALIDATION_RUNTIME as RUNTIME
@@ -106,13 +107,13 @@ class HitLog:
         self.regions = []
         self.wounds = []          # (kind, health delta, flinched: the hit stamped hit_time)
         self.stopped = []
-        self._original = level.interaction_resolver.apply
+        self._original = level.interaction_resolver.land
         self._effect = ParticleEffect
         self._stop = ParticleEffect.stop
         hero = level.player
         log = self
 
-        def apply(ctx):
+        def land(ctx):
             health, hit_time = hero.health, hero.hit_time
             landed = log._original(ctx)
             if ctx.target is hero:
@@ -135,11 +136,12 @@ class HitLog:
                 log.stopped.append(sprite)
             return log._stop(sprite)
 
-        level.interaction_resolver.apply = apply
+        # land, not apply: strike calls land itself, and apply goes through land.
+        level.interaction_resolver.land = land
         ParticleEffect.stop = stop
 
     def remove(self):
-        self.level.interaction_resolver.apply = self._original
+        del self.level.interaction_resolver.land
         self._effect.stop = self._stop
 
     def arrows(self):
@@ -477,8 +479,173 @@ def condition_name(cond_id):
     return CONDITIONS[cond_id].name
 
 
+def _warm_lines(hero):
+    now = pygame.time.get_ticks()
+    return [f"health {hero.health:.0f}",
+            f"skin {temperature.skin(hero, now):+.1f}  outer {temperature.outer(hero, now):+.1f}",
+            f"red {getattr(hero, 'heat_shade', None) or '-'}  blue {getattr(hero, 'cold_shade', None) or '-'}"
+            f"  speed {speed_of(hero):g}"]
+
+
+class _Warm(Scene):
+    """Temperature scenes: the level's air and sun, plate or naked, no health recovery. Probes:
+    the lines are for watching (docs/damage/PLAN_temperature.md, feel targets)."""
+
+    AIR = 0.0
+    SUN = 0.0
+    PLATE = True
+
+    def setup(self, level):
+        hero = level.player
+        wear(level, FULL_PLATE if self.PLATE else ())
+        now = pygame.time.get_ticks()
+        temperature.set_air(level, self.AIR, now, [hero])
+        temperature.set_sun(level, self.SUN, now, [hero])
+        self.recovery = hero.health_recovery
+        hero.health_recovery = lambda: None
+        self.start = self.low = hero.health
+        self.red = self.blue = None
+
+    def tick(self, level, dt):
+        hero = level.player
+        self.low = min(self.low, hero.health)
+        self.red = getattr(hero, "heat_shade", None) or self.red
+        self.blue = getattr(hero, "cold_shade", None) or self.blue
+        self.lines = [f"lost {self.start - self.low:.0f}"] + _warm_lines(hero)
+
+    def decide(self, level):
+        now = pygame.time.get_ticks()
+        hero = level.player
+        return "probe", (f"lost {self.start - self.low:.0f} red {self.red or '-'} blue {self.blue or '-'} "
+                         f"skin {temperature.skin(hero, now):+.1f} outer {temperature.outer(hero, now):+.1f}")
+
+    def teardown(self, level):
+        level.player.health_recovery = self.recovery
+
+
+class Fire(_Warm):
+    NAME = "fire"
+    WATCH = "Full plate. A demon dog spits fire: the plate goes red, the skin warms slowly, the red fades."
+    SECONDS = 12.0
+    FAST_SECONDS = 10.0
+
+    def setup(self, level):
+        super().setup(level)
+        spawn_at(level, "demon_dog", -220, 40)
+
+
+class Ice(_Warm):
+    NAME = "ice"
+    WATCH = "Warm plate. The ghost holds you: the blue waits for the plate to cool. At 8 s he goes; it fades."
+    SECONDS = 16.0
+    FAST_SECONDS = 12.0
+
+    def setup(self, level):
+        super().setup(level)
+        temperature.bump(level.player, temperature.OUTER, 10.0, pygame.time.get_ticks())
+        self.ghost = spawn_at(level, "ice_ghost", 200, 0)
+
+    def tick(self, level, dt):
+        super().tick(level, dt)
+        if self.t > 8.0 and self.ghost.alive():
+            feet = level.player.hitbox.midbottom
+            self.ghost.hitbox.midbottom = (int(feet[0] + 4000), int(feet[1]))
+            self.ghost.plant_sprite_on_hitbox()
+            self.ghost.direction.update(0, 0)
+
+
+class IceNaked(_Warm):
+    NAME = "ice_naked"
+    WATCH = "Naked, ice (air -30). Blue, then health falls from about 47 s (vitality 20)."
+    AIR, SUN, PLATE = -30.0, 0.3, False
+    SECONDS = 80.0
+    FAST_SECONDS = 4.0
+
+
+class Desert(_Warm):
+    NAME = "desert"
+    WATCH = "Full plate, desert, a slide every second: red, health falls from about 12 s."
+    AIR, SUN = 10.0, 1.0
+    SECONDS = 40.0
+    FAST_SECONDS = 4.0
+
+    def setup(self, level):
+        super().setup(level)
+        self.slides = 0
+
+    def tick(self, level, dt):
+        if self.t >= self.slides + 1:
+            temperature.exert(level.player, 20, pygame.time.get_ticks())
+            self.slides += 1
+        super().tick(level, dt)
+        self.lines.insert(0, f"slides {self.slides}")
+
+
+def _heat_patch(level, dx, dy, w, h):
+    """One heat area (the maps' own heat), drawn with the red debug outline."""
+    from EffectArea import EffectArea
+    from effect_cell_grid import EffectCellGrid
+    from QuadTree import QuadTree, QuadTreeManager
+
+    feet = level.player.hitbox.midbottom
+    rect = pygame.Rect(int(feet[0] + dx), int(feet[1] + dy - h), w, h)
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    surf.fill((255, 255, 255, 255))
+    area = EffectArea(rect, pygame.mask.from_surface(surf), {"heat": 100.0}, _id="validation_heat")
+    layout = level.layout_manager
+    if layout.effect_quad_trees is None:
+        layout.effect_quad_trees = {}
+    layout.effect_quad_trees["validation_heat"] = QuadTree(
+        [area], depth=4, bounding_rect=rect.inflate(800, 800), manager=QuadTreeManager())
+    layout.all_effect_areas = list(getattr(layout, "all_effect_areas", None) or []) + [area]
+    layout.effect_cell_grid = EffectCellGrid.build(
+        layout.all_effect_areas, layout.TILESIZE, layout.csv_layout_width, layout.csv_layout_height)
+    sprites = layout.visible_sprites
+    sprites.debug_effect_areas = list(getattr(sprites, "debug_effect_areas", None) or []) + [area]
+    return rect
+
+
+class Lava(_Warm):
+    NAME = "lava"
+    WATCH = "Full plate. Stand in the red box, then step off: the plate heats while in it, then cools."
+    SECONDS = 20.0
+    FAST_SECONDS = 4.0
+
+    def setup(self, level):
+        super().setup(level)
+        hero = level.player
+        sprites = level.layout_manager.visible_sprites
+        self.debug_was = sprites.runtime_debug_effect_rects
+        sprites.runtime_debug_effect_rects = True
+        self.box = _heat_patch(level, 80, 20, 160, 120)
+        self.home = hero.hitbox.midbottom
+
+    def tick(self, level, dt):
+        hero = level.player
+        if RUNTIME.fast_mode:      # headless walks him in and out; the window leaves it to you
+            feet = self.box.center if self.t < 1.6 else self.home
+            hero.hitbox.midbottom = (int(feet[0]), int(feet[1]))
+            hero.plant_sprite_on_hitbox()
+            hero.velocity.update(0, 0)
+        super().tick(level, dt)
+
+    def teardown(self, level):
+        super().teardown(level)
+        from effect_cell_grid import EffectCellGrid
+        layout = level.layout_manager
+        if layout.effect_quad_trees:
+            layout.effect_quad_trees.pop("validation_heat", None)
+        layout.all_effect_areas = [a for a in layout.all_effect_areas if getattr(a, "_id", None) != "validation_heat"]
+        layout.effect_cell_grid = EffectCellGrid.build(
+            layout.all_effect_areas, layout.TILESIZE, layout.csv_layout_width, layout.csv_layout_height)
+        sprites = layout.visible_sprites
+        sprites.runtime_debug_effect_rects = self.debug_was
+        sprites.debug_effect_areas = [a for a in sprites.debug_effect_areas
+                                      if getattr(a, "_id", None) != "validation_heat"]
+
+
 SCENARIOS = (KnockbackMass, ArrowsStop, PlateShove, ArrowsWhereDrawn, PointsVsCapsules, PlateStops,
-             Haste, Elemental)
+             Haste, Elemental, Fire, Ice, IceNaked, Desert, Lava)
 
 
 # --- the driver ----------------------------------------------------------------------------------
@@ -515,6 +682,16 @@ class CombatValidationDriver:
         hero.velocity.update(0, 0)
         hero.direction.update(0, 0)
         wear(level, ())
+        now = pygame.time.get_ticks()           # a fresh temperature at mild air, no sun
+        level.air = level.sun = 0.0
+        temperature.forget(hero, now)
+        temperature.join(hero, level, now)
+        hero.heat_shade = hero.cold_shade = hero.heat_piece = None
+        hero.heat_on_skin = False
+        clock = getattr(level, "condition_clock", None)
+        if clock is not None:
+            for name in ("chilled", "hot_shell", "burning"):
+                clock.cure(hero, name)
 
     def tick(self, level, dt):
         dt = max(0.0, float(dt or 0.0))
