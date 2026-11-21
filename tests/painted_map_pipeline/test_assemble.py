@@ -133,3 +133,30 @@ def test_register_is_idempotent_and_keeps_every_existing_level(tmp_path: Path):
     assert not again["ternary_refactored"]
     assert existing_levels(repo) == before_levels
     assert taken_slots(repo) == before_slots
+
+
+def test_taken_slots_reads_level_at_and_skips_comments(tmp_path: Path):
+    from tools.painted_map_pipeline.world_levels.register_level import taken_slots
+
+    code = tmp_path / "Code"
+    code.mkdir()
+    (code / "LevelSelection.py").write_text(
+        "LEVEL_AT = {\n    (0, 0): 8,\n    # (0, 1): 7,\n    (1, 2): 12,\n}\n",
+        encoding="utf-8",
+    )
+    assert taken_slots(tmp_path) == {(0, 0), (1, 2)}
+
+
+def test_ensure_name_writes_a_card_title_once(tmp_path: Path):
+    from tools.painted_map_pipeline.world_levels.register_level import ensure_name
+
+    code = tmp_path / "Code"
+    code.mkdir()
+    path = code / "level_layouts.py"
+    path.write_text('LEVEL_NAMES = {\n    12: "Sunspine",\n}\n', encoding="utf-8")
+    assert ensure_name(tmp_path, 13, "Bitter Floe")
+    assert not ensure_name(tmp_path, 13, "Bitter Floe")
+    text = path.read_text(encoding="utf-8")
+    assert '13: "Bitter Floe"' in text and '12: "Sunspine"' in text
+    assert ensure_name(tmp_path, 13, "Ice")
+    assert '13: "Ice"' in path.read_text(encoding="utf-8")

@@ -104,3 +104,7 @@ Graphics/Meshes/**/mesh.npz
 /_pod_upload/
 /pod_upload.zip
 tools/pipe.tgz
+
+# Big generated level folders (hundreds of MB): kept out of git.
+levels/Frostreach/bitter_floe_7x6_play/
+levels/Frostreach/bitter_floe_07/

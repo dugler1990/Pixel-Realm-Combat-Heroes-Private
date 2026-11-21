@@ -11,6 +11,12 @@
          padding: 8px 12px; background: #2a2a2a; border-bottom: 1px solid #444; }
   #mapwrap { position: relative; }
   #map { position: absolute; inset: 0; background: #111; }
+  #pair { display: none; position: absolute; inset: 0; overflow: auto; background: #111;
+         grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; box-sizing: border-box; }
+  #pair.on { display: grid; }
+  #pair figure { margin: 0; }
+  #pair figcaption { color: #aaa; font-size: 12px; margin-bottom: 4px; }
+  #pair img { width: 100%; height: auto; background: #000; }
   #map.dragpad { cursor: move; }
   #map.panning { cursor: grabbing; }
   .leaflet-image-layer { image-rendering: pixelated; }
@@ -24,11 +30,17 @@
   #align { background: #2d4a6a; }
   #replace.pending { background: #8a6a1a; border-color: #ffd36b; }
   #accept { background: #2d5a2d; }
+  #buildmap, #addmenu { background: #2d3f5a; }
   #generate, #retry { background: #5a3a2d; }
   label { display: block; margin-top: 12px; color: #aaa; }
   label.row { margin-top: 6px; color: #ddd; }
   input[type=range] { width: 100%; }
-  input[type=number], input[type=text] { background: #1e1e1e; color: #eee; border: 1px solid #555; padding: 2px 4px; }
+  input[type=number], input[type=text], textarea { background: #1e1e1e; color: #eee; border: 1px solid #555; padding: 2px 4px; }
+  textarea { width: 100%; box-sizing: border-box; font: 12px ui-monospace, monospace; }
+  #upscalebox { display: none; }
+  #side.upscale-on > :not(#upscalebox):not(#msg) { display: none; }
+  #side.upscale-on #upscalebox { display: block; }
+  #upstatus { white-space: pre-wrap; color: #ccc; margin-top: 8px; }
   input[type=number] { width: 64px; }
   input[type=text] { width: 100%; box-sizing: border-box; }
   select { background: #1e1e1e; color: #eee; border: 1px solid #555; padding: 2px 4px; }
@@ -54,11 +66,16 @@
       <button class="tab" data-view="align" title="Raw generation with the padding over it">Align</button>
       <button class="tab" data-view="result" title="The placed image">Result</button>
       <button class="tab" data-view="checks" title="The shape-error overlay from the tests">Tests</button>
+      <button class="tab" data-view="upscale" title="Send this level to HYPIR on a pod you already started">Upscale</button>
     </span>
     <span id="placement" style="color:#888"></span>
   </div>
   <div id="mapwrap">
     <div id="map"></div>
+    <div id="pair">
+      <figure><figcaption>This level</figcaption><img id="pair-source" alt="level image"></figure>
+      <figure><figcaption id="pair-cap">HYPIR, same size</figcaption><img id="pair-out" alt="HYPIR result"></figure>
+    </div>
     <div id="working"><div id="worktext"></div></div>
   </div>
   <div id="side">
@@ -96,6 +113,20 @@
       <button id="checks" title="Same as t in review_run">Run tests</button>
       <button id="accept">Accept</button>
     </div>
+    <div class="row" style="margin-top:10px">
+      <button id="buildmap" title="Stitch every accepted level in this run into assembled_world.png. Levels not yet accepted stay as the source map. Does not build a TMX or register the level.">Build map</button>
+    </div>
+    <h3>Level menu</h3>
+    <label>Folder</label>
+    <input id="menuslug" type="text" spellcheck="false">
+    <label>Name on the card</label>
+    <input id="menuname" type="text">
+    <label>Slot</label>
+    <select id="menuslot"></select>
+    <div id="menunote" style="color:#888; margin-top:6px"></div>
+    <div class="row" style="margin-top:10px">
+      <button id="addmenu" title="Build the playable map from the stitched image and put it on this slot. Writes into the folder this page was started from.">Add to menu</button>
+    </div>
     <div id="report"></div>
 
     <h3>New generation (API call)</h3>
@@ -112,6 +143,21 @@
     </div>
 
     <div id="msg"></div>
+    <div id="upscalebox">
+      <h3>Upscale</h3>
+      <label>RunPod Connect SSH line</label>
+      <textarea id="upssh" rows="3" spellcheck="false" placeholder="ssh root@HOST -p PORT -i ~/.ssh/id_ed25519"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button id="upconnect" type="button">Connect</button>
+        <button id="updisconnect" type="button" title="Drops this page's connection. Does not stop the pod.">Disconnect</button>
+      </div>
+      <div id="upstatus"></div>
+      <div class="row" style="margin-top:10px">
+        <button id="upsend" type="button" disabled title="Sends the accepted image, or the latest generation if this level is not accepted.">Send this level</button>
+        <button id="uptoggle" type="button" title="The 2x file, or the same-size copy">Show 2×</button>
+      </div>
+      <p class="help">Start the pod in RunPod, paste its Connect line, then Connect. The page installs HYPIR-SD2 on that machine. Send runs one 2× pass on the level on screen. Stop the pod in RunPod when you are done.</p>
+    </div>
     <div class="help">
       Align view: drag to move the padding onto the generation, or (Drag: picture, key P) the
       picture into the level's shape. Both set the same offset. Ctrl + drag pans, the wheel zooms.
@@ -125,7 +171,7 @@
       generation is moved back by the offset, so the colours are paired with the padding where it
       really matches (with the warp on, the offset only corrects the pairing).<br>
       Re-place applies the ticked settings and the offset; it turns amber while they differ from the placed image. Run tests checks the placed image, not the dragged position. A refused re-place leaves them as they were.<br>
-      Next skips a level. Use this page or review_run on a run, not both at once.
+      Next skips a level. Build map stitches every accepted level into assembled_world.png; one not yet accepted is filled from the source map. Add to menu builds the playable map from that image and puts it on an open card. A folder already on the menu keeps its slot. Both write into the folder this page was started from. Use this page or review_run on a run, not both at once.
     </div>
   </div>
 </div>
@@ -137,7 +183,8 @@ const CRS = L.extend({}, L.CRS.Simple, { transformation: new L.Transformation(1,
 const map = L.map('map', { crs: CRS, minZoom: -6, maxZoom: 4, zoomSnap: 0.25, attributionControl: false,
                           dragging: false, boxZoom: false, keyboard: false });
 const S = { levels: [], index: 0, info: null, view: 'align', top: 'padding', busy: false,
-            layers: {}, offset: [0, 0], drag: null, dragWhat: 'padding', fitTimer: null, fitToken: 0 };
+            layers: {}, offset: [0, 0], drag: null, dragWhat: 'padding', fitTimer: null, fitToken: 0,
+            upPhase: 'idle', upFiles: null, up2x: false };
 
 async function api(path, body) {
   const options = body === undefined ? {} : {
@@ -156,7 +203,7 @@ function cover(text) {
 }
 
 function lock(on) {
-  document.querySelectorAll('#app button, #app input, #app select').forEach(el => { el.disabled = on; });
+  document.querySelectorAll('#app button, #app input, #app select, #app textarea').forEach(el => { el.disabled = on; });
   if (!on) applyEnabled();
 }
 
@@ -210,7 +257,7 @@ function clearLayers() {
 function drawLayers(fit) {
   clearLayers();
   const i = info();
-  if (!i || i.attempt === null) return;
+  if (!i || i.attempt === null) { showPair(); return; }
   const full = [[0, 0], [i.height, i.width]];
   if (S.view === 'align') {
     if (i.images.raw) S.layers.raw = L.imageOverlay(imageUrl('raw'), rawBounds()).addTo(map);
@@ -230,7 +277,8 @@ function drawLayers(fit) {
     if (i.images.overlay) S.layers.overlay = L.imageOverlay(imageUrl('overlay'), full).addTo(map);
     else say('No shape overlay yet: press Run tests.');
   }
-  if (fit) map.fitBounds(full);
+  showPair();
+  if (fit && S.view !== 'upscale') map.fitBounds(full);
   $('map').classList.toggle('dragpad', S.view === 'align' && canMove());
 }
 
@@ -378,6 +426,7 @@ function applyEnabled() {
   for (const id of ['attempt', 'feather', 'warp', 'cut', 'alignon', 'colourmethod', 'padding', 'replace', 'align', 'checks', 'accept',
                     'dx', 'dy', 'reset', 'swap', 'opacity', 'retry', 'r1'])
     $(id).disabled = !has;
+  $('upsend').disabled = S.upPhase !== 'ready';
   const offsetOk = has && warpJob();
   for (const id of ['dx', 'dy', 'reset', 'dragmode', 'showfit', 'fitbest']) $(id).disabled = !offsetOk;
   $('offnote').style.display = has && !warpJob() ? 'block' : 'none';
@@ -433,6 +482,7 @@ async function command(path, body, then) {
   } catch (err) { p = { error: err.message }; }
   S.busy = false; cover(''); lock(false);
   await openLevel(S.index, then === undefined ? info() && info().attempt : then, false);
+  await loadMenu();
   if (p.error) { say(p.error, true); alert(p.error); } else say(p.message || 'done.');
   return p;
 }
@@ -450,8 +500,44 @@ async function watchExisting() {
 $('prev').onclick = () => openLevel(S.index - 1);
 $('next').onclick = () => openLevel(S.index + 1);
 $('attempt').onchange = () => openLevel(S.index, Number($('attempt').value));
+function showPair() {
+  const on = S.view === 'upscale';
+  $('pair').classList.toggle('on', on);
+  $('side').classList.toggle('upscale-on', on);
+  if (!on) return;
+  const id = level().id;
+  const files = S.upFiles || {};
+  const src = $('pair-source'), out = $('pair-out');
+  src.style.visibility = files.source ? '' : 'hidden';
+  if (files.source) src.src = `/api/upscale/image?level=${id}&which=source&v=${files.source}`;
+  const which = S.up2x ? 'hypir' : 'native';
+  const version = files[which];
+  $('pair-cap').textContent = S.up2x ? 'HYPIR, 2×' : 'HYPIR, same size';
+  $('uptoggle').textContent = S.up2x ? 'Show same size' : 'Show 2×';
+  if (version) {
+    out.style.visibility = '';
+    out.src = `/api/upscale/image?level=${id}&which=${which}&v=${version}`;
+  } else {
+    out.style.visibility = 'hidden';
+    out.removeAttribute('src');
+  }
+}
+
+async function refreshUpscale() {
+  const id = S.levels.length ? level().id : '';
+  const q = id ? `?level=${encodeURIComponent(id)}` : '';
+  const s = await api('upscale/status' + q);
+  S.upPhase = s.phase;
+  S.upFiles = s.files || null;
+  const host = s.host ? `${s.host} — ` : '';
+  $('upstatus').textContent = s.running && s.label ? s.label : (host + (s.detail || s.phase));
+  if (!S.busy) $('upsend').disabled = s.phase !== 'ready';
+  if (S.view === 'upscale') showPair();
+}
+
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
   S.view = b.dataset.view; say(''); renderLevelName(); drawLayers(false);
+  if (S.view === 'upscale') refreshUpscale().catch(err => say(err.message, true));
 });
 $('dx').onchange = $('dy').onchange = () => setOffset(Number($('dx').value) || 0, Number($('dy').value) || 0);
 $('reset').onclick = () => setOffset(0, 0);
@@ -496,6 +582,62 @@ $('accept').onclick = () => {
   if (!confirm(`Accept level ${level().id} attempt ${info().attempt}? Its pixels become its neighbours' padding.`)) return;
   command(`level/${level().id}/accept`, { attempt: info().attempt });
 };
+$('buildmap').onclick = () => {
+  if (!confirm('Stitch every accepted level into assembled_world.png? Levels not yet accepted stay as the source map.')) return;
+  command('assemble', {});
+};
+
+function fillMenu(m) {
+  if (!$('menuslug').value) $('menuslug').value = m.slug;
+  if (!$('menuname').value) $('menuname').value = m.name;
+  const sel = $('menuslot');
+  sel.innerHTML = '';
+  if (m.current) {
+    const o = document.createElement('option');
+    const [r, c] = m.current.slot;
+    o.value = `${r},${c}`;
+    o.textContent = `already level ${m.current.number}, row ${r + 1}, column ${c + 1}`;
+    sel.appendChild(o);
+    sel.disabled = true;
+    $('addmenu').textContent = 'Update menu level';
+    $('addmenu').disabled = false;
+    $('menunote').textContent = `${m.slug} is already on the menu in ${m.repo}. This rebuilds that map and keeps the slot.`;
+  } else {
+    sel.disabled = false;
+    $('addmenu').textContent = 'Add to menu';
+    for (const [r, c] of m.open) {
+      const o = document.createElement('option');
+      o.value = `${r},${c}`;
+      o.textContent = `row ${r + 1}, column ${c + 1}`;
+      sel.appendChild(o);
+    }
+    $('addmenu').disabled = m.open.length === 0;
+    $('menunote').textContent = m.open.length
+      ? `Adds the level to the game in ${m.repo}.`
+      : 'No open slot on the 3 by 4 grid.';
+  }
+}
+
+async function loadMenu() {
+  const slug = $('menuslug').value.trim();
+  const q = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  try { fillMenu(await api('menu' + q)); } catch (err) { $('menunote').textContent = err.message; }
+}
+
+$('menuslug').onchange = () => loadMenu();
+$('addmenu').onclick = () => {
+  const slug = $('menuslug').value.trim();
+  const name = $('menuname').value.trim();
+  const slot = $('menuslot').value.split(',').map(Number);
+  const where = $('addmenu').textContent.startsWith('Update')
+    ? 'its current slot' : `row ${slot[0] + 1}, column ${slot[1] + 1}`;
+  if (!confirm(`Put ${slug} ("${name}") on the level menu at ${where}?`)) return;
+  command('menu', { slug, name, slot });
+};
+$('upconnect').onclick = () => command('upscale/connect', { ssh: $('upssh').value }).then(refreshUpscale);
+$('updisconnect').onclick = () => api('upscale/disconnect', {}).then(refreshUpscale).catch(err => say(err.message, true));
+$('upsend').onclick = () => command('upscale/run', { level: level().id }).then(refreshUpscale);
+$('uptoggle').onclick = () => { S.up2x = !S.up2x; showPair(); };
 $('generate').onclick = () => {
   if (!confirm(`Generate level ${level().id} again? This is an API call.`)) return;
   command(`level/${level().id}/generate`, { retry: false }, null);
@@ -510,11 +652,14 @@ $('retry').onclick = () => {
 (async () => {
   try {
     S.levels = (await api('levels')).levels;
+    await loadMenu();
+    await refreshUpscale();
     await watchExisting();
   } catch (err) { say(err.message, true); return; }
   if (!S.levels.length) { say('No levels in this run.', true); return; }
   const first = S.levels.findIndex(lv => lv.state !== 'accepted');
   await openLevel(first < 0 ? 0 : first);
+  await loadMenu();
 })();
 </script>
 </body>

@@ -201,7 +201,8 @@ def test_routes(server):
     assert _get(f"{base}/api/level/99")[0] == 404
     assert _get(f"{base}/api/level/02/image/raw")[0] == 400
     status, body, _ = _get(f"{base}/")
-    assert status == 200 and b"Level review" in body
+    assert status == 200 and b"Level review" in body and b"Build map" in body and b"Add to menu" in body
+    assert b"Upscale" in body and b"upscale/connect" in body
 
 
 def test_every_route_is_refused_while_a_command_runs(server):
@@ -210,6 +211,7 @@ def test_every_route_is_refused_while_a_command_runs(server):
     try:
         for path, body in [("level/02/place", {"attempt": 1}), ("level/02/checks", {"attempt": 1}),
                            ("level/02/generate", {}), ("level/02/accept", {"attempt": 1}),
+                           ("assemble", {}), ("menu", {}),
                            ("level/02?attempt=1", None)]:
             assert _get(f"{base}/api/{path}", body)[0] == 409, path
         status, body, _ = _get(f"{base}/api/progress")
@@ -283,6 +285,86 @@ def test_the_fit_route_scores_an_offset_and_finds_the_best(tmp_path):
     for png in (holes, outline):
         with Image.open(io.BytesIO(png)) as opened:
             assert opened.mode == "RGBA" and opened.size == tuple(page.level_info("02", 1)["raw_size"])
+
+
+def _menu_page(tmp_path, **kwargs):
+    published = {}
+
+    def publish(png, slug, title, slot):
+        published.update(png=Path(png), slug=slug, title=title, slot=slot)
+        return {"level_number": 13, "slot": list(slot or (1, 3))}
+
+    page = _page(
+        tmp_path,
+        publish=kwargs.get("publish", publish),
+        slots=kwargs.get("slots", lambda repo: {(0, 0)}),
+        existing=kwargs.get("existing", lambda repo, slug: None),
+        assemble=kwargs.get("assemble"),
+    )
+    return page, published
+
+
+def test_menu_info_lists_open_slots_and_an_existing_card(tmp_path):
+    page, _ = _menu_page(tmp_path, existing=lambda repo, slug: (12, (1, 2)) if slug == "kept" else None)
+    info = page.menu_info("kept")
+    assert info["current"] == {"number": 12, "slot": [1, 2]}
+    assert [0, 0] not in info["open"] and [1, 3] in info["open"]
+    assert info["rows"] == 3 and info["columns"] == 4
+
+
+def test_add_to_menu_uses_the_open_slot_and_an_existing_png(tmp_path):
+    page, published = _menu_page(tmp_path)
+    Image.new("RGB", (2, 2)).save(page.root / "assembled_world.png")
+    page.add_to_menu({"slug": "bitter_floe_7x6_play", "name": "Bitter Floe", "slot": [1, 3]})
+    done = _wait(page)
+    assert done["error"] is None and "row 2, column 4" in done["message"]
+    assert published["slot"] == (1, 3) and published["slug"] == "bitter_floe_7x6_play"
+    assert published["title"] == "Bitter Floe"
+
+
+def test_add_to_menu_refuses_a_taken_slot(tmp_path):
+    page, published = _menu_page(tmp_path)
+    with pytest.raises(ValueError, match="not open"):
+        page.add_to_menu({"slug": "bitter_floe_7x6_play", "name": "Bitter Floe", "slot": [0, 0]})
+    assert published == {}
+
+
+def test_add_to_menu_keeps_the_slot_a_level_already_has(tmp_path):
+    page, published = _menu_page(tmp_path, existing=lambda repo, slug: (12, (1, 2)))
+    Image.new("RGB", (2, 2)).save(page.root / "assembled_world.png")
+    page.add_to_menu({"slug": "bitter_floe_7x6_play", "name": "Bitter Floe", "slot": [2, 0]})
+    assert _wait(page)["error"] is None
+    assert published["slot"] is None
+
+
+def test_add_to_menu_stitches_first_when_there_is_no_image(tmp_path):
+    def assemble(root, *, fallback=True):
+        assert fallback is True
+        return Image.new("RGB", (4, 3), (1, 2, 3)), {"levels_placed": 1, "levels_total": 2, "missing": ["02"]}
+
+    page, published = _menu_page(tmp_path, assemble=assemble)
+    page.add_to_menu({"slug": "bitter_floe_7x6_play", "name": "Bitter Floe", "slot": [1, 3]})
+    done = _wait(page)
+    assert done["error"] is None and "02" in done["message"]
+    assert published["png"].is_file()
+    with Image.open(published["png"]) as opened:
+        assert opened.size == (4, 3)
+
+
+def test_build_map_writes_the_stitched_png_and_names_what_is_missing(tmp_path):
+    image = Image.new("RGB", (4, 3), (1, 2, 3))
+
+    def fake(root, *, fallback=True):
+        assert Path(root) == page.root and fallback is True
+        return image, {"levels_placed": 1, "levels_total": 2, "missing": ["02"], "placed": ["01"]}
+
+    page = _page(tmp_path, assemble=fake)
+    page.assemble_map()
+    done = _wait(page)
+    assert done["error"] is None
+    assert "assembled_world.png" in done["message"] and "02" in done["message"]
+    with Image.open(page.root / "assembled_world.png") as opened:
+        assert opened.size == (4, 3)
 
 
 def test_the_fit_is_refused_on_a_frame_attempt(tmp_path):

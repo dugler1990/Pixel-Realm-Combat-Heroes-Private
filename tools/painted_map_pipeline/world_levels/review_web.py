@@ -16,6 +16,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import re
 import threading
 import traceback
 import webbrowser
@@ -27,7 +28,16 @@ from urllib.parse import parse_qs, urlparse
 
 from PIL import Image
 
+from .assemble import assemble_world
 from .checks import format_report, run_checks
+from .pod_upscale import (
+    PodError,
+    SystemRemote,
+    parse_ssh_line,
+    prepare_pod,
+    run_hypir,
+)
+from .register_level import ensure_name, find_existing, taken_slots
 from .job_builder import canvas_asset
 from .review_run import (
     CommandFailed,
@@ -53,6 +63,9 @@ STATIC = {
 REPO = Path(__file__).resolve().parents[3]
 IMAGE_KINDS = ("raw", "padding", "result", "overlay")
 FIT_IMAGES = ("outline", "holes")  # drawn from the masks, not files: no version of their own
+# LevelSelection.grid_rows / grid_columns. A card exists only inside this grid.
+MENU_ROWS, MENU_COLS = 3, 4
+_SLUG = re.compile(r"^[A-Za-z0-9_]+$")
 
 
 def _parse_offset(text: str | None) -> tuple[int, int]:
@@ -63,6 +76,41 @@ def _parse_offset(text: str | None) -> tuple[int, int]:
     if len(parts) != 2:
         raise ValueError("the offset is dx,dy")
     return parts[0], parts[1]
+
+
+class _PodSession:
+    """The Connect line for this page process. Not written to disk."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.remote: Any = None
+        self.host = ""
+        self.phase = "idle"
+        self.detail = "Paste the RunPod SSH line and press Connect."
+
+    def mark(self, phase: str, detail: str) -> None:
+        with self._lock:
+            self.phase = phase
+            self.detail = detail
+
+    def ready(self, host: str, remote: Any, detail: str) -> None:
+        with self._lock:
+            self.remote = remote
+            self.host = host
+            self.phase = "ready"
+            self.detail = detail
+
+    def clear(self) -> None:
+        with self._lock:
+            self.remote = None
+            self.host = ""
+            self.phase = "idle"
+            self.detail = "Disconnected. The pod is still running until you stop it in RunPod."
+
+    def snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return {"phase": self.phase, "detail": self.detail, "host": self.host,
+                    "connected": self.remote is not None}
 
 
 class RunProgress:
@@ -115,6 +163,35 @@ def _call_here(*args: str, fatal: bool = False, cwd: str | Path | None = None,
     return _payload(printed.getvalue())
 
 
+def _publish_playable(png: Path, slug: str, title: str, slot: tuple[int, int] | None) -> dict:
+    """Build the playable TMX from the stitched image and put it on the selection grid.
+
+    Same path as ``orchestrate assemble --level-dir``. Tile size 150, so the ground draws at
+    the size it was stitched. A level that already has a slot keeps it when ``slot`` is None.
+    """
+    from argparse import Namespace
+
+    from .orchestrate import _build_and_register
+
+    args = Namespace(
+        tile_size=150,
+        width_tiles=None,
+        height_tiles=None,
+        level_dir=str(REPO / "levels" / "Frostreach" / slug),
+        template_dir=str(REPO / "levels" / "Frostreach" / "ice_wall_gate"),
+        no_register=False,
+        level_number=None,
+        slot=None if slot is None else f"{slot[0]},{slot[1]}",
+    )
+    with Image.open(png) as opened:
+        size = opened.size
+    result = _build_and_register(args, None, Path(png), size)
+    if ensure_name(REPO, int(result["level_number"]), title):
+        result.setdefault("changed", []).append(str(Path("Code") / "level_layouts.py"))
+    result["card_name"] = title
+    return result
+
+
 def _warm_up() -> None:
     """Load the pipeline in the background at start, so the first press does not wait for it."""
     try:
@@ -140,6 +217,11 @@ class ReviewPage:
         call: Callable[..., dict] | None = None,
         generate_call: Callable[..., dict] | None = None,
         checks: Callable[..., dict] = run_checks,
+        assemble: Callable[..., tuple] | None = None,
+        publish: Callable[..., dict] | None = None,
+        slots: Callable[[Path], set] | None = None,
+        existing: Callable[..., Any] | None = None,
+        remote_factory: Callable[..., Any] | None = None,
     ) -> None:
         self.root = Path(root).resolve()
         self.levels = list(levels)
@@ -151,6 +233,14 @@ class ReviewPage:
         self.call = call or _call_here
         self.generate_call = generate_call or call or _call
         self.checks_fn = checks
+        # The whole run, not the level on screen. Image only: no TMX, no game tables.
+        self.assemble_fn = assemble or assemble_world
+        self.publish_fn = publish or _publish_playable
+        self.slots_fn = slots or taken_slots
+        self.existing_fn = existing or find_existing
+        # Builds the SSH remote for a parsed Connect line. Tests pass a fake.
+        self.remote_factory = remote_factory or SystemRemote
+        self.pod = _PodSession()
         self.lock = threading.Lock()
         self.run = RunProgress()
         self.settings: dict[str, dict[str, Any]] = {}
@@ -381,6 +471,8 @@ class ReviewPage:
                 self.run.update(message=work())
             except CommandFailed as refused:
                 self.run.update(error=f"REFUSED: {refused}")
+            except PodError as refused:
+                self.run.update(error=str(refused))
             except Exception as exc:
                 traceback.print_exc()
                 self.run.update(error=f"{type(exc).__name__}: {exc}")
@@ -491,12 +583,209 @@ class ReviewPage:
 
         return self._start(level_id, f"Accepting level {level_id}", work)
 
+    def assemble_map(self) -> dict[str, Any]:
+        """Stitch every accepted level in the run into one PNG. No API call, no TMX."""
+        out = self.root / "assembled_world.png"
+
+        def work() -> str:
+            world, info = self.assemble_fn(self.root, fallback=True)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            world.save(out)
+            placed = info.get("levels_placed", 0)
+            total = info.get("levels_total", placed)
+            text = f"stitched {placed}/{total} accepted levels to {out}"
+            missing = info.get("missing") or []
+            if missing:
+                text += f"; not accepted, filled from the source map: {', '.join(missing)}"
+            return text
+
+        return self._start("map", "Stitching the accepted levels into one map (no API call)", work)
+
+    def _default_slug(self) -> str:
+        name = self.root.name
+        return name if name.endswith("_play") else f"{name}_play"
+
+    def _default_title(self) -> str:
+        stem = re.sub(r"_play$", "", self.root.name)
+        stem = re.sub(r"_7x6$", "", stem)
+        return " ".join(part.capitalize() for part in stem.split("_") if part)
+
+    def menu_info(self, slug: str | None = None) -> dict[str, Any]:
+        """Open cells on the 3 by 4 selection grid, and this folder's card if it has one."""
+        slug = slug or self._default_slug()
+        if not _SLUG.fullmatch(slug):
+            raise ValueError("the folder name is letters, digits and underscores")
+        taken = self.slots_fn(REPO)
+        found = self.existing_fn(REPO, slug)
+        current = None
+        if found and found[1]:
+            current = {"number": found[0], "slot": [found[1][0], found[1][1]]}
+        return {
+            "slug": slug,
+            "name": self._default_title(),
+            "open": [[r, c] for r in range(MENU_ROWS) for c in range(MENU_COLS) if (r, c) not in taken],
+            "current": current,
+            "rows": MENU_ROWS,
+            "columns": MENU_COLS,
+            "repo": REPO.name,
+        }
+
+    def add_to_menu(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Stitch if needed, build the playable map, and put it on the chosen open slot."""
+        slug = str(body.get("slug") or self._default_slug())
+        info = self.menu_info(slug)
+        title = str(body.get("name") or info["name"]).strip()
+        if not title or '"' in title or "\n" in title:
+            raise ValueError("the card name needs text and no quotes")
+        current = info["current"]
+        slot: tuple[int, int] | None
+        if current:
+            slot = None
+        else:
+            raw = body.get("slot")
+            if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+                raise ValueError("pick an open slot")
+            slot = (int(raw[0]), int(raw[1]))
+            if [slot[0], slot[1]] not in info["open"]:
+                raise ValueError("that slot is not open")
+
+        def work() -> str:
+            png = self.root / "assembled_world.png"
+            stitched = ""
+            if not png.is_file():
+                world, assembled = self.assemble_fn(self.root, fallback=True)
+                png.parent.mkdir(parents=True, exist_ok=True)
+                world.save(png)
+                missing = assembled.get("missing") or []
+                stitched = (
+                    f" Stitched {assembled.get('levels_placed', 0)}/"
+                    f"{assembled.get('levels_total', 0)} first."
+                )
+                if missing:
+                    stitched += f" Not accepted, filled from the source map: {', '.join(missing)}."
+            result = self.publish_fn(png, slug, title, slot)
+            row, col = result["slot"]
+            where = f"row {int(row) + 1}, column {int(col) + 1}"
+            verb = "updated" if current else "added"
+            return (
+                f"{verb} level {result['level_number']} ({title}) at {where} "
+                f"in {REPO.name}.{stitched}"
+            )
+
+        label = f"Updating {slug} on the level menu" if current else f"Adding {slug} to the level menu"
+        return self._start("map", label, work)
+
+
+    def _upscale_source(self, level_id: str) -> Path | None:
+        """Accepted art when the level has it, else the latest generation. None if neither."""
+        accepted = self._level_dir(level_id) / "accepted" / "image.png"
+        if accepted.is_file():
+            return accepted
+        attempts = self.attempts(level_id)
+        if not attempts:
+            return None
+        raw = self._image_path(level_id, attempts[-1], "raw")
+        return raw if raw is not None and raw.is_file() else None
+
+    def _upscale_files(self, level_id: str) -> dict[str, int | None]:
+        folder = self._level_dir(level_id) / "upscale"
+        source = self._upscale_source(level_id)
+        return {
+            "source": _version(source),
+            "hypir": _version(folder / "hypir.png"),
+            "native": _version(folder / "hypir_native.png"),
+        }
+
+    def upscale_status(self, level_id: str | None) -> dict[str, Any]:
+        """Read without the page lock: install holds that lock for a long time."""
+        status = self.pod.snapshot()
+        run = self.run.snapshot()
+        status["running"] = bool(run.get("running"))
+        status["label"] = run.get("label")
+        if level_id and level_id in self.levels:
+            status["level"] = level_id
+            status["files"] = self._upscale_files(level_id)
+        return status
+
+    def upscale_image(self, level_id: str, which: str) -> Path:
+        level_id = self._level(level_id)
+        if which == "source":
+            path = self._upscale_source(level_id)
+        elif which == "hypir":
+            path = self._level_dir(level_id) / "upscale" / "hypir.png"
+        elif which == "native":
+            path = self._level_dir(level_id) / "upscale" / "hypir_native.png"
+        else:
+            raise ValueError("the upscale image is source, hypir, or native")
+        if path is None or not path.is_file():
+            raise KeyError(f"no {which} image for level {level_id}")
+        return path
+
+    def connect_pod(self, body: dict[str, Any]) -> dict[str, Any]:
+        target = parse_ssh_line(str(body.get("ssh") or ""))
+        if not target.key.is_file():
+            raise ValueError(f"SSH key not found: {target.key}")
+        host = f"{target.user}@{target.host}:{target.port}"
+        self.pod.mark("installing", f"Connecting to {host}")
+
+        def work() -> str:
+            try:
+                remote = self.remote_factory(target)
+                detail = prepare_pod(remote, label=lambda text: self.run.update(label=text))
+            except Exception:
+                self.pod.mark("idle", "Connect failed. The pod was left as it was.")
+                raise
+            self.pod.ready(host, remote, detail)
+            return detail
+
+        return self._start("upscale", f"Connecting to {host}", work)
+
+    def disconnect_pod(self) -> dict[str, Any]:
+        if self.run.running:
+            raise ValueError("A command is already running.")
+        self.pod.clear()
+        return self.pod.snapshot()
+
+    def run_upscale(self, body: dict[str, Any]) -> dict[str, Any]:
+        level_id = self._level(str(body.get("level") or ""))
+        remote = self.pod.snapshot()
+        if not remote["connected"]:
+            raise ValueError("Connect to the pod first.")
+        source = self._upscale_source(level_id)
+        if source is None:
+            raise ValueError(f"level {level_id} has no image to send")
+
+        def work() -> str:
+            dest = self._level_dir(level_id) / "upscale"
+            run_hypir(self.pod.remote, source, dest, label=lambda text: self.run.update(label=text))
+            return f"HYPIR wrote levels/{level_id}/upscale/hypir.png from {source.parent.name}/{source.name}."
+
+        return self._start(level_id, f"Running HYPIR on level {level_id}", work)
+
 
 def dispatch(
     page: ReviewPage, method: str, parts: list[str], query: dict[str, list[str]], body: dict
 ) -> dict[str, Any] | Path | bytes:
     if method == "GET" and parts == ["levels"]:
         return page.level_list()
+    if method == "POST" and parts == ["assemble"]:
+        return page.assemble_map()
+    if parts[:1] == ["upscale"]:
+        action = parts[1] if len(parts) > 1 else ""
+        if method == "GET" and action == "image":
+            return page.upscale_image((query.get("level") or [""])[0], (query.get("which") or [""])[0])
+        if method == "POST" and action == "connect":
+            return page.connect_pod(body)
+        if method == "POST" and action == "disconnect":
+            return page.disconnect_pod()
+        if method == "POST" and action == "run":
+            return page.run_upscale(body)
+    if parts == ["menu"]:
+        slug = (query.get("slug") or [None])[0]
+        if method == "GET":
+            return page.menu_info(slug or None)
+        if method == "POST":
+            return page.add_to_menu(body)
     if len(parts) >= 2 and parts[0] == "level":
         level_id = page._level(parts[1])
         action = parts[2] if len(parts) > 2 else ""
@@ -556,6 +845,11 @@ def make_handler(page: ReviewPage) -> type[BaseHTTPRequestHandler]:
                 return
             if parts[1:] == ["progress"]:
                 self._json(page.run.snapshot())
+                return
+            # Install holds the page lock, so this is read the same way as progress.
+            if method == "GET" and parts[1:] == ["upscale", "status"]:
+                level = (parse_qs(url.query).get("level") or [None])[0]
+                self._json(page.upscale_status(level))
                 return
             if page.run.running:
                 self._json({"error": "A command is running."}, HTTPStatus.CONFLICT)

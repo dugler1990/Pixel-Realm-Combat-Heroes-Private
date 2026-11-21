@@ -6,6 +6,9 @@
 - Opens `http://127.0.0.1:8766/`. Port 8765 is the SAM page / SAM server.
 - Re-place and accept run inside the page's own Python (pipeline loaded once, at start). After a change to pipeline code: restart the page. HTML change: Ctrl+F5. Generate still runs as its own process.
 - Same actions as `review_run`: re-place (feather / warp / cut / align / padding), checks, accept, retry (reason, image, note, r1), generate. Next = skip.
+- Build map: stitches every accepted level in the run (not only the one on screen) to `<run_root>/assembled_world.png`. A level not accepted is filled from the source map and named in the message. No TMX, no game tables. Same stitch as `orchestrate assemble` without `--level-dir`.
+- Add to menu: folder name, card name, open slot on the 3×4 grid (`LEVEL_AT` in `Code/LevelSelection.py`; commented cells are free). Builds the playable map from `assembled_world.png` (stitches first if that file is missing) and registers it. Tile size 150. A folder already on the menu keeps its slot and the button rebuilds that map. Writes `levels/Frostreach/<folder>`, `Code/level_layouts.py`, `Code/LevelSelection.py`, and `Graphics/Level/<row+1>_<col+1>.png` in the folder the page was started from.
+- Upscale tab: paste the RunPod Connect SSH line (`ssh user@host -p PORT -i key`). Connect installs HYPIR-SD2 on that pod when `weights/HYPIR_sd2.pth` is missing (`pod_upscale.py`). Send runs one 2× pass on the level on screen: accepted image, else the latest `generated.png`. Writes `levels/<id>/upscale/hypir.png` and `hypir_native.png` (2× scaled back to the source size). Disconnect drops the session only. The pod is stopped in RunPod. Plan: `PLAN_upscale_tab.md`.
 - Each level is pinned to one attempt (picker in the top bar). Re-place, the images and accept all use that attempt's files and pass `--attempt N`.
 - Align view: raw `jobs/attempt_N/generated.png` with the padding (`locked_overlap.png`, alpha = `locked_overlap_mask.png`) over it.
   - Drag moves the padding. Ctrl + drag pans, the wheel zooms.
@@ -37,6 +40,9 @@
 - 2026-11-12: built on `feat/level-review-page`. Stack copied from sam3local `feat/review-page` (stdlib server, one HTML file, Leaflet copied in, polling).
 - 2026-11-12: direction check on a copy of bitter_floe_7x6 level 06 attempt 16: raw shifted (5, -3) and placed with `--padding-offset=5,-3` matched the unshifted placement on 4,196,450 / 4,196,450 new-cell px; without the offset 20,108.
 - 2026-11-12: page on that copy: Align colours at (2, -1) took 15 s, 640,478 pairs, `colour_align_010.png`.
+- 2026-11-15: Build map button. Writes `assembled_world.png` only. Test: `test_build_map_writes_the_stitched_png_and_names_what_is_missing` (fake stitch, 4x3 png, missing level named).
+- 2026-11-15: Add to menu. `taken_slots` reads `LEVEL_AT` (the grid dict was renamed; it had been returning no slots). Tests: open slot used, taken slot refused, existing slot kept, stitch-if-missing, `ensure_name` once.
+- 2026-11-16: Bitter Floe spawn was the default (2250, 3750), which is black. `player_spawn` in its map.tmx at (11179, 6688), on the ice (600 px window, 0 near-black). Other levels keep tile (15, 25).
 - Not yet done: dragging in a browser by hand.
 
 ## Tried and dropped
