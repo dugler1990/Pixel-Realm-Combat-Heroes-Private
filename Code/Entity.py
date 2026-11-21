@@ -16,6 +16,13 @@ from Effect import EFFECT_REGISTRY, SlipperyEffect
 from benchmark_runtime import BENCHMARK_RUNTIME
 from Interaction import InteractionContext
 from terrain_height import GRADE_SMOOTH, PHYSICS_GRADIENT_STEP, grade_acceleration
+from Settings import (
+    KNOCKBACK_SCALE_MAX,
+    KNOCKBACK_SCALE_MIN,
+    REFERENCE_MASS,
+    STRENGTH_KNOCKBACK_CUT,
+    STRENGTH_KNOCKBACK_FLOOR,
+)
 # This is for file (images specifically) importing (This line changes the directory to where the project is saved)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 MAX_DISPLACEMENT = 5.5
@@ -59,8 +66,39 @@ def _pixel_step(rect, dx, dy):
     probe.y += dy
     return probe.x - rect.x, probe.y - rect.y
 
+def _strength(body):
+    """The body's strength: stats["strength"], else .strength, else None."""
+    stats = getattr(body, "stats", None)
+    raw = stats.get("strength") if isinstance(stats, dict) else None
+    if raw is None:
+        raw = getattr(body, "strength", None)
+    try:
+        return None if raw is None else float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def knockback_scale(body):
+    """How far a shove moves `body`, as a share of the force: REFERENCE_MASS / (mass + gear),
+    inside [KNOCKBACK_SCALE_MIN, KNOCKBACK_SCALE_MAX], times the strength cut. A body with no mass
+    counts as REFERENCE_MASS; no strength, no cut."""
+    total = float(getattr(body, "mass", REFERENCE_MASS)) + float(getattr(body, "gear_weight", 0.0))
+    scale = REFERENCE_MASS / total if total > 0 else KNOCKBACK_SCALE_MAX
+    scale = min(KNOCKBACK_SCALE_MAX, max(KNOCKBACK_SCALE_MIN, scale))
+    strength = _strength(body)
+    if strength is not None:
+        scale *= max(STRENGTH_KNOCKBACK_FLOOR, 1.0 - STRENGTH_KNOCKBACK_CUT * strength)
+    return scale
+
+
 class Entity(pygame.sprite.Sprite):
     casts_shadow = True  # entities (player/enemies/friendlies) drop directional shadows
+    takes_impulse = True  # False: shoves (knockback) do not move this body (can_receive_interaction)
+    is_dead = False  # set once by die()
+    # Who hit this body last, until when (ms): one fact, written by the resolver. Read by
+    # FactionPolicy.should_aggro (may a passive faction fight back) and CombatUnit (whom to prefer).
+    last_attacker_team = None
+    last_attacker_until_ms = 0
     # Statuses whose animation is a walk cycle, and so phased on distance rather than time.
     # Declared per subclass because each has its own vocabulary: the player uses bare
     # direction names, enemies and friendlies "move", neutrals "walking". A status missing
@@ -82,6 +120,10 @@ class Entity(pygame.sprite.Sprite):
         self.direction = pygame.math.Vector2()
         self.velocity = pygame.math.Vector2(0, 0)  # Current velocity for movement
         self.weight = 1.0  # Weight affects acceleration (higher weight = slower acceleration)
+        # How hard the body is to shove (knockback_scale). Monsters set mass from monster_data;
+        # gear_weight is what is worn (0 until armour has weights).
+        self.mass = REFERENCE_MASS
+        self.gear_weight = 0.0
         self.max_collision_distance_squared = 10000
         self.max_collision_distance = 10
         self.mask = None
@@ -97,6 +139,9 @@ class Entity(pygame.sprite.Sprite):
         self.move_not_called_before = True
         # Active effects tracking: {effect_area_id: effect_instance}
         self.active_effects = {}
+        # Conditions (chunk 6): by cond id, and a generation bumped on death so old heap entries go stale.
+        self.conditions = {}
+        self.condition_gen = 0
         # Interaction-driven effect state keyed by effect name, e.g. {"slippery": {...}}
         self.effect_state = {}
         self.fire_resistance = 0  # Reduces heat (and future fire) damage; can be set from stats later
@@ -996,12 +1041,7 @@ class Entity(pygame.sprite.Sprite):
                             effect_instance = effect_class(effect_area.properties)
                             self.active_effects[effect_instance_id] = effect_instance
                             effect_instance.apply(self)
-                            self._emit_effect_state_interaction(
-                                effect_key=prop_key,
-                                phase="begin",
-                                effect_instance=effect_instance,
-                                effect_area_id=effect_area_id,
-                            )
+                            self._set_effect_state(prop_key, "begin", effect_instance)
                             if _mask_log.isEnabledFor(logging.DEBUG):
                                 _mask_log.debug(
                                     "  Effect APPLIED: %s, velocity: %s",
@@ -1009,13 +1049,7 @@ class Entity(pygame.sprite.Sprite):
                                     self.velocity,
                                 )
                         else:
-                            effect_instance = self.active_effects[effect_instance_id]
-                            self._emit_effect_state_interaction(
-                                effect_key=prop_key,
-                                phase="tick",
-                                effect_instance=effect_instance,
-                                effect_area_id=effect_area_id,
-                            )
+                            self._set_effect_state(prop_key, "tick", self.active_effects[effect_instance_id])
         
         # Remove effects that are no longer colliding
         effects_to_remove = []
@@ -1024,13 +1058,7 @@ class Entity(pygame.sprite.Sprite):
                 # Check if effect should persist after exit
                 if not effect_instance.should_persist_after_exit():
                     effect_instance.remove(self)
-                    effect_area_id, effect_key = effect_instance_id
-                    self._emit_effect_state_interaction(
-                        effect_key=effect_key,
-                        phase="end",
-                        effect_instance=effect_instance,
-                        effect_area_id=effect_area_id,
-                    )
+                    self._set_effect_state(effect_instance_id[1], "end", effect_instance)
                     effects_to_remove.append(effect_instance_id)
                     if _mask_log.isEnabledFor(logging.DEBUG):
                         _mask_log.debug(
@@ -1055,73 +1083,88 @@ class Entity(pygame.sprite.Sprite):
                     "  All effects removed, velocity: %s", self.velocity
                 )
 
-    def apply_environmental_damage(self, dt):
-        """Apply damage from active effects that provide environmental damage (e.g. heat)."""
-        #print(f"applying environmental damage")
-        #print(self.active_effects)
-        resolver = self._get_interaction_resolver()
+    def apply_environmental_damage(self, dt, resolver):
+        """Damage from the ground under the body (heat, lava), through the resolver like any hit."""
         for (effect_area_id, effect_key), effect in self.active_effects.items():
-            if hasattr(effect, 'get_environmental_damage'):
-                result = effect.get_environmental_damage(self, dt)
-                if result:
-                    amount, damage_type = result
-                    if amount > 0:
-                        ctx = InteractionContext(
-                            kind="damage",
-                            source_kind="environment",
-                            source=effect,
-                            owner=None,
-                            source_team="environment",
-                            target=self,
-                            amount=amount,
-                            attack_type=damage_type,
-                            effect_key=effect_key,
-                            effect_area_id=effect_area_id,
-                            tags={"environment", effect_key},
-                        )
-                        if resolver is not None:
-                            resolver.apply(ctx)
-                        elif self.can_receive_interaction(ctx):
-                            self.receive_interaction(ctx)
+            if not hasattr(effect, "get_environmental_damage"):
+                continue
+            result = effect.get_environmental_damage(self, dt)
+            if not result or result[0] <= 0:
+                continue
+            amount, damage_type = result
+            resolver.apply(InteractionContext(
+                kind="damage",
+                source_kind="environment",
+                source=effect,
+                source_team="environment",
+                target=self,
+                amount=amount,
+                attack_type=damage_type,
+                effect_key=effect_key,
+                effect_area_id=effect_area_id,
+                tags={"environment", effect_key},
+            ))
 
-    def _get_interaction_resolver(self):
-        if hasattr(self, "level") and hasattr(self.level, "interaction_resolver"):
-            return self.level.interaction_resolver
-        return None
-
-    def _emit_effect_state_interaction(self, effect_key, phase, effect_instance, effect_area_id):
-        ctx = InteractionContext(
-            kind="effect_state",
-            source_kind="environment",
-            source=effect_instance,
-            owner=None,
-            source_team="environment",
-            target=self,
-            phase=phase,
-            effect_key=effect_key,
-            effect_area_id=effect_area_id,
-            tags={"environment", "effect_state", effect_key, phase},
-        )
-        resolver = self._get_interaction_resolver()
-        if resolver is not None:
-            resolver.apply(ctx)
-        elif self.can_receive_interaction(ctx):
-            self.receive_interaction(ctx)
-
-    def take_environmental_damage(self, amount, damage_type):
-        """Override in subclasses that have health. Base Entity does nothing."""
-        pass
+    def _set_effect_state(self, effect_key, phase, effect):
+        """What a ground effect (slippery) is doing to the body now; not a hit, so no resolver."""
+        if phase == "end":
+            self.effect_state.pop(effect_key, None)
+            return
+        payload = {"phase": phase, "source": effect}
+        if isinstance(effect, SlipperyEffect):
+            payload["acceleration_multiplier"] = effect.get_acceleration_multiplier()
+            payload["friction_multiplier"] = effect.get_friction_multiplier()
+        self.effect_state[effect_key] = payload
 
     def can_receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            return True
+        """The body's own gate; the resolver asks it after the team rule. A shove needs
+        `takes_impulse` and an enemy team (or the friendly-fire tag). Damage needs health left
+        (the team rule for damage is the resolver's)."""
         if ctx.kind == "impulse":
+            if not self.takes_impulse:
+                return False
             if "friendly_fire_impulse" in ctx.tags:
                 return True
-            if ctx.source_team is not None and ctx.source_team == getattr(self, "team_id", None):
-                return False
-            return True
-        return True
+            return ctx.source_team is None or ctx.source_team != getattr(self, "team_id", None)
+        if ctx.kind == "damage":
+            return getattr(self, "health", 1) > 0
+        return False
+
+    def take_damage(self, ctx: InteractionContext):
+        """The one place health goes down. The resolver already decided that the hit lands and
+        set its amount; this subtracts it, stamps the hit and lets the body react (`on_hurt`)."""
+        amount = ctx.amount
+        if not amount:
+            return
+        self.health -= amount
+        self.hit_time = pygame.time.get_ticks()
+        self.on_hurt(ctx)
+        if self.health <= 0:
+            self.die()
+
+    def die(self):
+        """The one way a body dies, once: marked dead, its conditions dropped, then `on_death`."""
+        if self.is_dead:
+            return
+        self.is_dead = True
+        from conditions import notify_death
+        notify_death(self)
+        import temperature
+        temperature.forget(self, pygame.time.get_ticks())
+        self.on_death()
+
+    def on_death(self):
+        """Leave the world: out of the entity tree and every group. Overrides add their extras
+        (particles, sound, XP) and call this; the player overrides it to stay on screen."""
+        self.layout_callback_update_quad_tree(HashableRect(self.rect, self.id), alive=False, remove_existing=True)
+        self.kill()
+
+    def on_hurt(self, ctx: InteractionContext):
+        """A body's reaction to damage it took. Default: its hit sound, except for the ground's own
+        damage (heat) and temperature's. Override for more."""
+        sound = getattr(self, "hit_sound", None)
+        if sound is not None and ctx.source_kind not in ("environment", "temperature"):
+            sound.play()
 
     def cancel_displacement_abilities(self) -> None:
         for attr in ("_dash_runtime", "_leap_runtime"):
@@ -1135,13 +1178,15 @@ class Entity(pygame.sprite.Sprite):
                 setattr(self, attr, None)
 
     def apply_impulse(self, force, follow_through=0.5) -> None:
+        """Shove the body by `force`, scaled by knockback_scale (mass and strength)."""
         self.cancel_displacement_abilities()
         if force is None:
             return
         if not hasattr(self, "velocity"):
             self.velocity = pygame.math.Vector2(0, 0)
-        dx = float(force[0]) if hasattr(force, "__getitem__") else float(force.x)
-        dy = float(force[1]) if hasattr(force, "__getitem__") else float(force.y)
+        scale = knockback_scale(self)
+        dx = (float(force[0]) if hasattr(force, "__getitem__") else float(force.x)) * scale
+        dy = (float(force[1]) if hasattr(force, "__getitem__") else float(force.y)) * scale
         if hasattr(self, "hitbox"):
             tree = getattr(self, "_wall_tree", None)
             if tree is not None:
@@ -1162,21 +1207,8 @@ class Entity(pygame.sprite.Sprite):
                 follow_through = float(getattr(ctx.source, "impulse_follow_through", 0.5))
             self.apply_impulse(force, follow_through=follow_through)
             return
-        if ctx.kind == "effect_state":
-            effect_key = ctx.effect_key
-            if not effect_key:
-                return
-            phase = ctx.phase or "tick"
-            if phase == "end":
-                self.effect_state.pop(effect_key, None)
-                return
-            payload = {"phase": phase, "source": ctx.source}
-            if effect_key == "slippery" and isinstance(ctx.source, SlipperyEffect):
-                payload["acceleration_multiplier"] = ctx.source.get_acceleration_multiplier()
-                payload["friction_multiplier"] = ctx.source.get_friction_multiplier()
-            self.effect_state[effect_key] = payload
-            return
-        return
+        if ctx.kind == "damage":
+            self.take_damage(ctx)
 
     def line_rect_intersection(start_point, end_point, rect):
         x1, y1 = start_point
@@ -1199,9 +1231,3 @@ class Entity(pygame.sprite.Sprite):
         return x, y
           
               
-    def wave_value(self):
-        value = sin(pygame.time.get_ticks())
-        if value >= 0:
-            return 255
-        else:
-            return 0

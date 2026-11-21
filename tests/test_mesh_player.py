@@ -98,7 +98,10 @@ def test_move_is_phased_on_distance_and_attack_restarts():
 
 def test_missing_pack_stays_a_sprite():
     from Player import SpecificPlayer
-    stub = SimpleNamespace(image=pygame.Surface((64, 63)), mesh_skin=None)
+    class _Stub:      # a real player is a sprite: hit_core keeps a weak reference to it
+        pass
+    stub = _Stub()
+    stub.image, stub.mesh_skin = pygame.Surface((64, 63)), None
     SpecificPlayer._attach_mesh(stub, "no_such_pack")
     assert stub.mesh_skin is None
     SpecificPlayer._attach_mesh(stub, "barb")
@@ -125,7 +128,7 @@ class _Backend:
         self.blits = []
         self.meshes = 0
 
-    def draw_mesh_boss(self, *a):
+    def draw_mesh_boss(self, *a, **k):
         self.meshes += 1
         return self.draws
 

@@ -58,10 +58,6 @@ _IDENTITY_COLORS = (
 _IDENTITY_STRENGTH = 0.1  # 0..1 multiply toward identity; cranked for A/B test
 # Targeting mark reads larger than the rock so the danger zone is obvious.
 _TARGETING_SCALE_BOOST = 1.5
-# Knockback resist: missing strength uses this; each point shaves a little shove.
-_DEFAULT_KNOCKBACK_STRENGTH = 5.0
-_STRENGTH_RESIST_PER_POINT = 0.015
-_MIN_KNOCKBACK_FACTOR = 0.55
 
 
 def _scale_frames(frames, scale: float) -> list[pygame.Surface]:
@@ -273,8 +269,6 @@ class MeteorStrike(pygame.sprite.Sprite):
         owner=None,
         source_team=None,
         scale: float = 1.0,
-        burst_damage: int = 75,
-        dot_damage: int = 8,
         dot_interval_ms: int = 500,
         linger_ms: int = 3000,
         impact_radius: float = 90,
@@ -283,17 +277,23 @@ class MeteorStrike(pygame.sprite.Sprite):
         knockback_follow_through: float = 0.55,
         shake_scale_threshold: float | None = None,
         base_frame_duration_ms: int | None = None,
+        attack_def=None,
+        residual_attack_def=None,
     ):
         super().__init__(groups)
         self.level = level
         self.owner = owner
+        # AttackDefs (damage_data.py): the impact, and the embers left burning (phase "residual").
+        self.attack_def = attack_def
+        self.residual_attack_def = residual_attack_def
         self.source_team = source_team or getattr(owner, "team_id", "enemy")
         self.ground_pos = (float(pos[0]), float(pos[1]))
         self.scale = float(scale)
         # Size weight at 1.0 = config baseline; bigger → more damage/knockback, slower.
         size_w = max(0.45, self.scale)
-        self.burst_damage = int(round(burst_damage * size_w))
-        self.dot_damage = max(1, int(round(dot_damage * (0.65 + 0.35 * size_w))))
+        # The share of each def's price a hit carries (InteractionContext.scale).
+        self.burst_scale = size_w
+        self.dot_scale = 0.65 + 0.35 * size_w
         self.dot_interval_ms = int(dot_interval_ms)
         self.linger_ms = int(linger_ms)
         self.impact_radius = float(impact_radius) * self.scale
@@ -597,18 +597,11 @@ class MeteorStrike(pygame.sprite.Sprite):
             blast, attackable.sprites(), exclude=(self.owner,), body=hit_core.foot_shape
         )
 
-    def _apply_damage(self, amount: int, *, phase: str):
+    def _apply_damage(self, scale: float, *, phase: str):
         resolver = getattr(self.level, "interaction_resolver", None)
-        if resolver is None or amount <= 0:
+        if resolver is None or scale <= 0:
             return
         for target in self._hosts_in_radius():
-            target_team = getattr(target, "team_id", None)
-            if not resolver.can_potentially_affect(
-                source_team=self.source_team,
-                target_team=target_team,
-                kind="damage",
-            ):
-                continue
             ctx = InteractionContext(
                 kind="damage",
                 source_kind="enemy_special",
@@ -616,30 +609,13 @@ class MeteorStrike(pygame.sprite.Sprite):
                 owner=self.owner,
                 source_team=self.source_team,
                 target=target,
-                amount=amount,
+                scale=scale,
                 attack_type="magic",
                 phase=phase,
                 tags={"meteor", phase},
+                attack_def=self.residual_attack_def if phase == "residual" else self.attack_def,
             )
             resolver.apply(ctx)
-
-    def _target_knockback_factor(self, target) -> float:
-        """Stronger targets shrug off a bit of explosion shove."""
-        strength = _DEFAULT_KNOCKBACK_STRENGTH
-        stats = getattr(target, "stats", None)
-        if isinstance(stats, dict) and stats.get("strength") is not None:
-            try:
-                strength = float(stats["strength"])
-            except (TypeError, ValueError):
-                pass
-        else:
-            raw = getattr(target, "strength", None)
-            if raw is not None:
-                try:
-                    strength = float(raw)
-                except (TypeError, ValueError):
-                    pass
-        return max(_MIN_KNOCKBACK_FACTOR, 1.0 - _STRENGTH_RESIST_PER_POINT * strength)
 
     def _apply_explosion_knockback(self):
         """Radial impulse from impact center — same pattern as leap slam."""
@@ -665,7 +641,7 @@ class MeteorStrike(pygame.sprite.Sprite):
             # to the footprint's edge: the circle the hit test used.
             reach = hit_core.ground_reach((cx, cy), hit_core.foot_shape(target), VIEW_ELEVATION_DEG)
             falloff = max(0.35, 1.0 - min(reach, radius) / radius)
-            mag = self.knockback * falloff * self._target_knockback_factor(target)
+            mag = self.knockback * falloff  # mass and strength: Entity.knockback_scale
             resolver.apply(
                 InteractionContext(
                     kind="impulse",
@@ -678,11 +654,12 @@ class MeteorStrike(pygame.sprite.Sprite):
                     impulse_y=ny * mag,
                     phase="impact",
                     tags={"meteor", "impact", "explosion"},
+                    attack_def=self.attack_def,
                 )
             )
 
     def _apply_burst(self):
-        self._apply_damage(self.burst_damage, phase="impact")
+        self._apply_damage(self.burst_scale, phase="impact")
         self._apply_explosion_knockback()
         self._maybe_screen_shake()
 
@@ -707,7 +684,7 @@ class MeteorStrike(pygame.sprite.Sprite):
         if now - self.last_dot_ms < self.dot_interval_ms:
             return
         self.last_dot_ms = now
-        self._apply_damage(self.dot_damage, phase="residual")
+        self._apply_damage(self.dot_scale, phase="residual")
 
     def update(self, dt=None):
         now = pygame.time.get_ticks()

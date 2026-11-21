@@ -11,8 +11,10 @@ class AttackSprite:
     """Mixin for sprites that hit things. Call init_attack() in __init__."""
 
     def init_attack(self, *, owner, source_team, source_kind, attack_type,
-                    amount=None, tags=(), rehit_ms=None, stops=False):
+                    amount=None, tags=(), rehit_ms=None, stops=False, attack_def=None):
         self.owner = owner
+        # The AttackDef (damage_data.py): what kind of blow this is. Shared, never copied.
+        self.attack_def = attack_def
         self.source_team = source_team
         self.source_kind = source_kind
         self.attack_type = attack_type

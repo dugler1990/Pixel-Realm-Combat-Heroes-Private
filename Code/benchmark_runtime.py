@@ -93,7 +93,6 @@ class BenchmarkMetrics:
     interactions_rejected_team: int = 0
     interactions_rejected_target: int = 0
     interactions_damage_applied_total: int = 0
-    interactions_effect_state_total: int = 0
     interactions_rejected_missing_target: int = 0
     interactions_rejected_team_policy: int = 0
     interactions_rejected_target_gate: int = 0
@@ -125,7 +124,6 @@ class BenchmarkMetrics:
         self.interactions_rejected_team = 0
         self.interactions_rejected_target = 0
         self.interactions_damage_applied_total = 0
-        self.interactions_effect_state_total = 0
         self.interactions_rejected_missing_target = 0
         self.interactions_rejected_team_policy = 0
         self.interactions_rejected_target_gate = 0
@@ -184,8 +182,6 @@ class BenchmarkMetrics:
         kind = getattr(ctx, "kind", None)
         if kind == "damage":
             self.interactions_damage_applied_total += 1
-        elif kind == "effect_state":
-            self.interactions_effect_state_total += 1
 
     def record_interaction_rejected_team(self):
         self.interactions_rejected_team += 1
@@ -250,7 +246,6 @@ class BenchmarkMetrics:
             "interactions_rejected_team": self.interactions_rejected_team,
             "interactions_rejected_target": self.interactions_rejected_target,
             "interactions_damage_applied_total": self.interactions_damage_applied_total,
-            "interactions_effect_state_total": self.interactions_effect_state_total,
             "interactions_rejected_missing_target": self.interactions_rejected_missing_target,
             "interactions_rejected_team_policy": self.interactions_rejected_team_policy,
             "interactions_rejected_target_gate": self.interactions_rejected_target_gate,
@@ -354,7 +349,7 @@ class BenchmarkRuntimeState:
         self.last_metrics_log_at = now
         snap = self.metrics.snapshot()
         _bench_log.debug(
-            "BENCHMARK_METRICS run=%s backend=%s floor=%s cap=%s frames=%s avg_fps=%.2f avg_ms=%.2f p95_ms=%.2f queries=%s candidates=%s resolved=%s maint(i/r/u)=%s/%s/%s interactions(e/r/tgt/team/dmg/eff)=%s/%s/%s/%s/%s/%s rejects(miss/team/gate/norecv)=%s/%s/%s/%s aggro(c/a)=%s/%s prefilter(c/s)=%s/%s",
+            "BENCHMARK_METRICS run=%s backend=%s floor=%s cap=%s frames=%s avg_fps=%.2f avg_ms=%.2f p95_ms=%.2f queries=%s candidates=%s resolved=%s maint(i/r/u)=%s/%s/%s interactions(e/r/tgt/team/dmg)=%s/%s/%s/%s/%s rejects(miss/team/gate/norecv)=%s/%s/%s/%s aggro(c/a)=%s/%s prefilter(c/s)=%s/%s",
             self.run_label,
             self.broadphase_backend,
             self.pushback_floor_enabled,
@@ -374,7 +369,6 @@ class BenchmarkRuntimeState:
             snap["interactions_rejected_target"],
             snap["interactions_rejected_team"],
             snap["interactions_damage_applied_total"],
-            snap["interactions_effect_state_total"],
             snap["interactions_rejected_missing_target"],
             snap["interactions_rejected_team_policy"],
             snap["interactions_rejected_target_gate"],

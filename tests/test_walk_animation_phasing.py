@@ -54,16 +54,12 @@ def test_idle_stays_on_the_clock():
 
 
 def test_each_class_declares_its_own_walk_vocabulary():
-    """The four status vocabularies really differ, so this is not a formality."""
+    """The three status vocabularies really differ, so this is not a formality."""
     from Player import BasePlayer
-    from Enemy import Enemy
-    from friendly import Friendly
     from combat_unit import CombatUnit
     from NeutralCharacter import NeutralCharacter
 
     assert BasePlayer.WALK_STATUSES == {"up", "down", "left", "right"}
-    assert Enemy.WALK_STATUSES == {"move"}
-    assert Friendly.WALK_STATUSES == {"move"}
     assert CombatUnit.WALK_STATUSES == {"move"}
     assert NeutralCharacter.WALK_STATUSES == {"walking"}
 

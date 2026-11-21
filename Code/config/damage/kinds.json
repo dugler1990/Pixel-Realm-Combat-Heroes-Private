@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "_about": "Creature kinds (damage chunk 4). Holy / unholy multipliers per kind come in chunk 9 (KIND_MULT). construct: built things (the catapult), not alive.",
+  "kinds": ["living", "undead", "demon", "construct"]
+}

@@ -3,6 +3,7 @@ import pygame
 from pygame.math import Vector2
 from  hashRect import HashableRect
 import hit_core
+from damage_data import attack_of
 
 
 
@@ -110,7 +111,8 @@ class CombatStrategy:
         With the clip restarted at frame 0 (start_melee_swing), every attack frame gets
         checked whether animate() runs before or after actions(). Bodies come
         from the entity tree around the attacker (hit_core.bodies_near), plus the chosen
-        target for anything without a tree entry; find_hits drops the duplicate.
+        target for anything without a tree entry; find_contacts drops the duplicate. Each
+        hit's contact is the first pixel the swing frame and the body share.
         attack["hit_frames"] lists the attack-animation frames that can hit; without it
         every frame of the swing can. attack["rehit_ms"] is the repeat rule (default once).
         The swing ends when the enemy leaves "attack": the clip ended, or decide_action
@@ -134,21 +136,22 @@ class CombatStrategy:
         candidates = hit_core.bodies_near(entity_tree, shape.rect, enemy.id)
         if target is not None:
             candidates.append(target)
-        targets = hit_core.find_hits(shape, candidates, exclude=(enemy,))
-        if not targets:
+        found = hit_core.find_contacts(shape, candidates, exclude=(enemy,))
+        if not found:
             return
         resolver.strike(
-            targets,
+            [target for target, _, _ in found],
             hits=swing["hits"],
+            contacts={id(target): point for target, point, _ in found},
             rehit_ms=attack.get("rehit_ms"),
             kind="damage",
             source_kind="enemy_melee",
             source=enemy,
             owner=enemy,
             source_team=getattr(enemy, "team_id", "enemy"),
-            amount=attack.get("damage"),
             attack_type=attack.get("type", "melee"),
             tags={"enemy_melee"},
+            attack_def=attack_of(attack),
         )
 
 
@@ -289,8 +292,8 @@ class RangedCombatStrategy(CombatStrategy):
                                                      groups=enemy.groups,
                                                      owner=enemy,
                                                      source_team=getattr(enemy, "team_id", None),
-                                                     amount=attack.get("damage"),
-                                                     rehit_ms=attack.get("rehit_ms"))
+                                                     rehit_ms=attack.get("rehit_ms"),
+                                                     attack_def=attack_of(attack))
                 enemy.attack_sound.play()
                 enemy.attack_cooldown = attack['cooldown']
                 enemy.direction = Vector2(0, 0)
@@ -425,8 +428,8 @@ class MixedCombatStrategy(CombatStrategy):
                                      groups=enemy.groups,
                                      owner=enemy,
                                      source_team=getattr(enemy, "team_id", None),
-                                     amount=attack.get("damage"),
-                                     rehit_ms=attack.get("rehit_ms"))
+                                     rehit_ms=attack.get("rehit_ms"),
+                                     attack_def=attack_of(attack))
                 enemy.attack_sound.play()
                 enemy.attack_cooldown = attack['cooldown']
             enemy.direction = Vector2(0, 0)  

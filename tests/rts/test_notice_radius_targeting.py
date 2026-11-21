@@ -43,14 +43,12 @@ def test_select_hostile_target_respects_notice_radius():
     unit.id = 1
     unit.team_id = "neutral_passive"
     unit.combat_config = {"notice_radius": 100}
-    unit.recent_attacker_team_id = None
-    unit.recent_attacker_until_ms = 0
+    unit.last_attacker_team = None
+    unit.last_attacker_until_ms = 0
     unit._aggro_target_cache = None
     unit._aggro_cache_frame = -1
     unit._aggro_cache_prefer_team = None
-    resolver.faction_policy.register_retaliation(unit, "enemy_1", 1000)
-    unit.retaliate_team_id = "enemy_1"
-    unit.retaliate_until_ms = 5000
+    resolver.faction_policy.remember_attacker(unit, "enemy_1", pygame.time.get_ticks())
     unit.get_target_distance_direction = CombatUnit.get_target_distance_direction.__get__(
         unit, CombatUnit
     )

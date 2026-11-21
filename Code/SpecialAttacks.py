@@ -8,6 +8,7 @@ from game_logging import get_debug_logger
 from abilities.dash import DashAbility
 from abilities.protocol import CombatAbilityContext
 import hit_core
+from damage_data import attack_of
 
 _combat_log = get_debug_logger("combat")
 
@@ -53,7 +54,8 @@ def create_special_attack(attack_config):
     elif name == 'MultiShotIceball':
         num_shots = attack_config['num_shots']
         projectile_type = attack_config['projectile_type']
-        return MultiShotIceball(cooldown, cooldown_variability, trigger_conditions, num_shots, projectile_type,chance)
+        return MultiShotIceball(cooldown, cooldown_variability, trigger_conditions, num_shots, projectile_type,chance,
+                                attack_def=attack_of(attack_config))
     elif name == 'SummonIceGhosts':
         spawn_radius = attack_config['spawn_radius']
         cast_time = attack_config['cast_time']
@@ -113,10 +115,10 @@ class DashAttack(SpecialAttack):
             "duration_ms": attack_config.get("duration_ms", 350),
             "collision_mode": attack_config.get("collision_mode", "pass_through"),
             "stop_on_wall": attack_config.get("stop_on_wall", False),
-            "damage": attack_config.get("damage"),
             "attack_type": attack_config.get("attack_type", "melee"),
             "hit_once_per_target": attack_config.get("hit_once_per_target", True),
             "rehit_ms": attack_config.get("rehit_ms"),
+            "attack": attack_config.get("attack"),
             "presentation": attack_config.get(
                 "presentation",
                 {"status_template": "move", "end_status": "idle"},
@@ -158,11 +160,13 @@ class MultiShotIceball(SpecialAttack):
                  trigger_condition,
                  num_shots,
                  projectile_type,
-                 chance):
+                 chance,
+                 attack_def=None):
         super().__init__('MultiShotIceball', cooldown, cooldown_variability, trigger_condition)
         self.num_shots = num_shots
         self.projectile_type = projectile_type
         self.chance = chance
+        self.attack_def = attack_def
 
     def execute(self, enemy, player, context):
         if random.random() < self.chance:
@@ -176,7 +180,7 @@ class MultiShotIceball(SpecialAttack):
                                             groups = enemy.groups,
                                             owner=enemy,
                                             source_team=getattr(enemy, "team_id", None),
-                                            amount=None)
+                                            attack_def=self.attack_def)
             enemy.status = 'MultiShotIceball'
             self.last_used_time = pygame.time.get_ticks()
             
@@ -262,8 +266,6 @@ class MeteorShower(SpecialAttack):
         self.scatter_radius = float(attack_config.get("scatter_radius", 420))
         self.scale_min = float(attack_config.get("scale_min", 0.35))
         self.scale_max = float(attack_config.get("scale_max", 1.6))
-        self.burst_damage = int(attack_config.get("burst_damage", 75))
-        self.dot_damage = int(attack_config.get("dot_damage", 8))
         self.dot_interval_ms = int(attack_config.get("dot_interval_ms", 500))
         self.linger_ms = int(attack_config.get("linger_ms", 3000))
         self.impact_radius = float(attack_config.get("impact_radius", 90))
@@ -278,6 +280,8 @@ class MeteorShower(SpecialAttack):
         )
         self.mana_cost = float(attack_config.get("mana_cost", attack_config.get("energy_cost", 80)))
         self.cast_action = str(attack_config.get("cast_action", "cast1_swift"))
+        self.attack_def = attack_of(attack_config)
+        self.residual_attack_def = attack_of(attack_config, "residual_attack")
         self.is_casting = False
         self.cast_start_time = None
         self.last_spawn_time = None
@@ -330,12 +334,12 @@ class MeteorShower(SpecialAttack):
             scale=scale,
             owner=enemy,
             source_team=getattr(enemy, "team_id", "enemy"),
-            burst_damage=self.burst_damage,
-            dot_damage=self.dot_damage,
             dot_interval_ms=self.dot_interval_ms,
             linger_ms=self.linger_ms,
             impact_radius=self.impact_radius,
             knockback=self.knockback,
             knockback_follow_through=self.knockback_follow_through,
             shake_scale_threshold=self.shake_scale_threshold,
+            attack_def=self.attack_def,
+            residual_attack_def=self.residual_attack_def,
         )

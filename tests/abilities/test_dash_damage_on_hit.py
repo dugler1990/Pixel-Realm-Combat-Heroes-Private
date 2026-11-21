@@ -27,6 +27,7 @@ from abilities.dash import DashAbility  # noqa: E402
 from abilities.protocol import CombatAbilityContext  # noqa: E402
 from hashRect import HashableRect  # noqa: E402
 from Interaction import InteractionContext, InteractionResolver  # noqa: E402
+from damage_data import attack  # noqa: E402
 
 
 class _Body:
@@ -65,17 +66,17 @@ class _Dasher:
 
 
 class _RecordingResolver(InteractionResolver):
-    """The real resolver and its strike, with apply recorded and the team check fixed."""
+    """The real resolver and its strike, with land recorded and the team rule fixed."""
 
     def __init__(self, allowed=True):
         super().__init__()
         self.applied = []
         self.allowed = allowed
 
-    def can_potentially_affect(self, source_team, target_team, kind="damage"):
+    def team_allows(self, source_team, target_team, kind="damage"):
         return self.allowed
 
-    def apply(self, ctx):
+    def land(self, ctx):
         self.applied.append(ctx)
         return True
 
@@ -99,7 +100,7 @@ def _dash(**config):
         "speed_mult": 1,
         "duration_ms": 99999,
         "collision_mode": "damage_on_hit",
-        "damage": 12,
+        "attack": "squid_slap",
         "attack_type": "melee",
     }
     base.update(config)
@@ -125,7 +126,7 @@ def test_damage_on_hit_hits_the_body_not_its_snapshot():
     applied = resolver.applied[0]
     assert isinstance(applied, InteractionContext)
     assert applied.target is target
-    assert applied.amount == 12
+    assert applied.attack_def is attack("squid_slap") and applied.amount is None   # priced in land
     assert applied.source_kind == "dash"
 
 

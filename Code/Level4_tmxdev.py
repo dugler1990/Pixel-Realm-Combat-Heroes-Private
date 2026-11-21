@@ -1,6 +1,7 @@
 ### Plan here is to make a Level class that uses Layout classes to 
 #   re-render the level when a <trigger> (door) is stepped on.
 from Eskimo import Eskimo
+import temperature
 import json
 from Spawner import Spawner
 from ItemSpawner import ItemSpawner
@@ -11,6 +12,7 @@ from abilities.charge_hud import draw_charge_bar
 from ItemVisual import ItemVisual
 import pygame
 from Settings import *
+import conditions
 import logging
 from game_logging import get_debug_logger
 
@@ -60,7 +62,9 @@ from Entity import Entity
 from tmx_layout_manager import LayoutManager
 from benchmark_runtime import BENCHMARK_RUNTIME
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
+from combat_validation_runtime import COMBAT_VALIDATION_RUNTIME
 from Interaction import InteractionContext, InteractionResolver
+from damage_data import attack_of
 from dialogue.session import DialogueSession
 from rts import RtsSession, RtsWorldSim
 from rts.world_adapter import RtsWorldAdapter
@@ -333,6 +337,7 @@ class Level4:
         self.attack_selection_open = False 
         self.player_config_open = False
         self._frame_number = 0
+        self.condition_clock = conditions.ConditionClock()
         self.selected_player_info_dir = selected_player_info_dir
         self.layouts_dir = layouts_dir
         self.input_manager = input_manager
@@ -471,6 +476,17 @@ class Level4:
 
             self._rts_validation_driver = RtsValidationDriver()
             self._apply_benchmark_player_survivability()
+        elif COMBAT_VALIDATION_RUNTIME.enabled:
+            from combat_validation_driver import CombatValidationDriver
+
+            # The benchmark arena (magenta walls), an unkillable hero, contact dots on; no map spawns.
+            self._apply_benchmark_player_survivability()
+            if not self._benchmark_walls_spawned:
+                self._spawn_benchmark_boundaries()
+                self._benchmark_walls_spawned = True
+            self.layout_manager.visible_sprites.runtime_debug_contacts = True
+            self.weather.weather_type = 'clear'
+            self._rts_validation_driver = CombatValidationDriver()
         elif self.benchmark_runtime.enabled:
             self._initialize_benchmark_mode()
 
@@ -653,9 +669,11 @@ class Level4:
         self.backend.blit(panel, (x, y))
 
     def _draw_rts_validation_overlay(self):
-        if not RTS_VALIDATION_RUNTIME.enabled or not RTS_VALIDATION_RUNTIME.overlay_enabled:
+        """The RTS or combat validation panel (whichever runs)."""
+        runtime = COMBAT_VALIDATION_RUNTIME if COMBAT_VALIDATION_RUNTIME.enabled else RTS_VALIDATION_RUNTIME
+        if not runtime.enabled or not runtime.overlay_enabled:
             return
-        state = RTS_VALIDATION_RUNTIME.overlay_state
+        state = runtime.overlay_state
         lines = state.get("lines") if state else None
         if not lines:
             return
@@ -675,7 +693,7 @@ class Level4:
 
         surfaces = []
         for i, line in enumerate(lines):
-            color = phase_color if i == 0 and line == "RTS VALIDATION" else (255, 255, 255)
+            color = phase_color if i == 0 and line in ("RTS VALIDATION", "COMBAT VALIDATION") else (255, 255, 255)
             surfaces.append(font.render(line, True, color))
         max_width = max(surface.get_width() for surface in surfaces)
         total_height = sum(surface.get_height() for surface in surfaces) + line_gap * (len(surfaces) - 1)
@@ -689,7 +707,8 @@ class Level4:
             panel.blit(surface, (padding, y))
             y += surface.get_height() + line_gap
 
-        self.backend.blit(panel, (12, 12))
+        width = pygame.display.get_surface().get_width()
+        self.backend.blit(panel, (width - panel_width - 12, 12))   # top right: the HUD is top left
 
     def _start_next_benchmark_case(self):
         case = self.benchmark_runtime.start_next_matrix_case()
@@ -1383,7 +1402,7 @@ class Level4:
                 visual_item.start_reject_shake()
 
     def check_enemy_deaths(self):
-        dead_enemies = [enemy for enemy in self.spawner.enemies if enemy.is_dead()]
+        dead_enemies = [enemy for enemy in self.spawner.enemies if enemy.is_dead]
 
         # Server-authoritative: capture each death as an enemy_died event (FX/XP
         # ride it to every client, awarded there) + roll loot WITHOUT building
@@ -1522,10 +1541,12 @@ class Level4:
             self.magic_player.heal(self.player, strength, cost, [self.layout_manager.visible_sprites])
         elif style == "flame":
             self.magic_player.flame(self.player, cost, [self.layout_manager.visible_sprites, self.attack_sprites],
-                                    rehit_ms=magic_data["flame"].get("rehit_ms"))
+                                    rehit_ms=magic_data["flame"].get("rehit_ms"),
+                                    attack_def=attack_of(magic_data["flame"]))
         if style == 'ice_ball':
             particle = self.magic_player.ice_ball2(self.player, cost, [self.layout_manager.visible_sprites, self.attack_sprites], self.layout_manager.entity_quad_tree,
-                                                   rehit_ms=magic_data["ice_ball"].get("rehit_ms"))
+                                                   rehit_ms=magic_data["ice_ball"].get("rehit_ms"),
+                                                   attack_def=attack_of(magic_data["ice_ball"]))
             # Register particle in the dictionary
             self.particle_dict[id(particle)] = particle
        
@@ -1562,17 +1583,30 @@ class Level4:
         sprite never hits its owner or itself; one without an owner (a parried projectile)
         is its own source. A sprite with `stops` set (arrows, stones) stops at the first
         body it lands on.
+
+        Each hit carries its contact (InteractionContext.contact): the shared pixel, or for
+        a sprite moving this frame (is_moving, movement) the pixel where it entered the
+        body, walked back along its movement (hit_core.entry_point).
         """
         # A copy: stop() kills the sprite, which takes it out of the group.
         for attack_sprite in list(group):
             owner = attack_sprite.owner
-            targets = hit_core.find_hits(
-                hit_core.shape_of(attack_sprite),
+            shape = hit_core.shape_of(attack_sprite)
+            found = hit_core.find_contacts(
+                shape,
                 self.attackable_sprites,
                 exclude=(owner, attack_sprite) + tuple(also_exclude),
             )
-            if not targets:
+            if not found:
                 continue
+            movement = getattr(attack_sprite, "movement", None) if getattr(attack_sprite, "is_moving", False) else None
+            if movement is not None and (movement[0] or movement[1]):
+                # This frame's travel plus the shot's own length: where it can have entered.
+                reach = int(math.hypot(movement[0], movement[1])) + max(shape.rect.size)
+                contacts = hit_core.EntryPoints(found, movement, reach)
+            else:
+                contacts = {id(target): point for target, point, _ in found}
+            targets = [target for target, _, _ in found]
             fields = dict(
                 kind=attack_sprite.interaction_kind,
                 source_kind=attack_sprite.source_kind,
@@ -1582,15 +1616,17 @@ class Level4:
                 amount=attack_sprite.amount,
                 attack_type=attack_sprite.attack_type,
                 tags=set(attack_sprite.tags),
+                attack_def=attack_sprite.attack_def,
+                toward=(tuple(movement) if movement is not None and (movement[0] or movement[1]) else None),
             )
             hits, rehit_ms = attack_sprite.hits, attack_sprite.rehit_ms
             if attack_sprite.stops:
                 for target in targets:
-                    if self.interaction_resolver.strike([target], hits, rehit_ms, **fields):
+                    if self.interaction_resolver.strike([target], hits, rehit_ms, contacts=contacts, **fields):
                         attack_sprite.stop()
                         break
             else:
-                self.interaction_resolver.strike(targets, hits, rehit_ms, **fields)
+                self.interaction_resolver.strike(targets, hits, rehit_ms, contacts=contacts, **fields)
 
     def player_attack_logic(self):
         """The player's weapon swings and spells."""
@@ -1602,66 +1638,6 @@ class Level4:
     def enemy_projectile_logic(self):
         """Enemy projectiles, and player projectiles a parry turned around."""
         self._strike_with_attack_sprites(self.enemy_attack_sprites)
-
-    def _safe_number(self, value, default=0.0):
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return float(default)
-
-    def _resolve_projectile_damage_payload(self, owner, projectile_type=None, base_amount=None):
-        base_damage = base_amount
-        combat_config = {}
-        if owner is not None:
-            owner_config = getattr(owner, "combat_config", None)
-            if isinstance(owner_config, dict):
-                combat_config = owner_config
-        if base_damage is None:
-            ranged_attacks = combat_config.get("ranged_attacks", [])
-            if isinstance(ranged_attacks, list):
-                for attack in ranged_attacks:
-                    if not isinstance(attack, dict):
-                        continue
-                    if projectile_type is not None and attack.get("type") != projectile_type:
-                        continue
-                    candidate = attack.get("damage")
-                    if candidate is not None:
-                        base_damage = candidate
-                        break
-        if base_damage is None:
-            base_damage = combat_config.get("default_ranged_damage")
-        if base_damage is None:
-            return None
-        multiplier = self._safe_number(combat_config.get("projectile_damage_multiplier", 1.0), 1.0)
-        bonus = self._safe_number(combat_config.get("projectile_damage_bonus", 0.0), 0.0)
-        if owner is not None:
-            getter_multiplier = getattr(owner, "get_projectile_damage_multiplier", None)
-            if callable(getter_multiplier):
-                multiplier *= self._safe_number(getter_multiplier(), 1.0)
-            getter_bonus = getattr(owner, "get_projectile_damage_bonus", None)
-            if callable(getter_bonus):
-                bonus += self._safe_number(getter_bonus(), 0.0)
-            multiplier *= self._safe_number(getattr(owner, "projectile_damage_multiplier", 1.0), 1.0)
-            bonus += self._safe_number(getattr(owner, "projectile_damage_bonus", 0.0), 0.0)
-        resolved_damage = int(round(self._safe_number(base_damage, 0.0) * multiplier + bonus))
-        return max(0, resolved_damage)
-
-    def damage_player(self, amount, attack_type=None):
-        
-        
-        #print(f"made it to damage player , vulerable: {self.player.vulnerable}")
-        #print(amount)
-        
-        if self.player.vulnerable:
-            self.player.health -= amount
-            self.player.vulnerable = False
-            self.player.hurt_time = pygame.time.get_ticks()
-            
-            if attack_type:
-                if attack_type != 'melee': ## TODO : a at the moment this is recieving attack type to do attack particles, 
-                                                    # we do not have any attack particles for this so screw it.
-                                                    
-                    self.animation_player.create_particles(attack_type, self.player.rect.center, [self.layout_manager.visible_sprites])
 
     def trigger_death_particles(self, pos, particle_type):
         # Server: the death FX ride the enemy_died event (each client plays them);
@@ -1748,6 +1724,7 @@ class Level4:
                                    # so we call it from level as opposed to level.player....
         new_stats = self.player.player_config.final_stats 
         self.player.stats = new_stats
+        temperature.settle(self.player, pygame.time.get_ticks())   # vitality is the thermostat
         
         # Define a method to get the direction vector from an angle
     def get_direction_from_angle(self, angle):
@@ -1759,7 +1736,7 @@ class Level4:
         # Return the direction vector
         return pygame.math.Vector2(direction_x, direction_y)
     #@profile
-    def fire_projectile(self, enemy_pos, target_pos, projectile_type, groups, owner=None, source_team=None, amount=None, rehit_ms=None): ### groups not actually used, we pass level references to the groups explicitely below , regardles,, this could be confusing ISSUE
+    def fire_projectile(self, enemy_pos, target_pos, projectile_type, groups, owner=None, source_team=None, rehit_ms=None, attack_def=None): ### groups not actually used, we pass level references to the groups explicitely below , regardles,, this could be confusing ISSUE
     
         # Calculate the angle to the target
         angle_to_target = self.calculate_angle(enemy_pos, target_pos)
@@ -1776,19 +1753,6 @@ class Level4:
         resolved_source_team = source_team
         if resolved_source_team is None:
             resolved_source_team = getattr(resolved_owner, "team_id", "enemy")
-        resolved_amount = self._resolve_projectile_damage_payload(
-            owner=resolved_owner,
-            projectile_type=projectile_type,
-            base_amount=amount,
-        )
-        _combat_log.debug(
-            "enemy_projectile payload owner_id=%s projectile_type=%r base_amount=%r resolved_amount=%r source_team=%r",
-            id(resolved_owner) if resolved_owner is not None else None,
-            projectile_type,
-            amount,
-            resolved_amount,
-            resolved_source_team,
-        )
         # Invoke the method responsible for creating the projectile, passing in the direction
         self.animation_player.create_particles(animation_type = projectile_type,
                                                pos = enemy_pos,
@@ -1802,9 +1766,11 @@ class Level4:
                                                source_team=resolved_source_team,
                                                source_kind="enemy_projectile",
                                                attack_type="magic",
-                                               amount=resolved_amount,
-                                               stops=projectile_type != "demon_dog_projectile",
+                                               # The def says whether it stops at the first body
+                                               # (arrows, stones); a shot without one flies through.
+                                               stops=attack_def is not None and attack_def.stops,
                                                rehit_ms=rehit_ms,
+                                               attack_def=attack_def,
                                                )
 
     def spawn_meteor(
@@ -1814,14 +1780,14 @@ class Level4:
         scale=1.0,
         owner=None,
         source_team=None,
-        burst_damage=75,
-        dot_damage=8,
         dot_interval_ms=500,
         linger_ms=3000,
         impact_radius=90,
         knockback=252.0,
         knockback_follow_through=0.55,
         shake_scale_threshold=None,
+        attack_def=None,
+        residual_attack_def=None,
     ):
         """Ground-targeted meteor strike used by MeteorShower special attacks."""
         frames = self.animation_player.frames
@@ -1844,14 +1810,14 @@ class Level4:
             owner=owner,
             source_team=resolved_team,
             scale=scale,
-            burst_damage=burst_damage,
-            dot_damage=dot_damage,
             dot_interval_ms=dot_interval_ms,
             linger_ms=linger_ms,
             impact_radius=impact_radius,
             knockback=knockback,
             knockback_follow_through=knockback_follow_through,
             shake_scale_threshold=shake_scale_threshold,
+            attack_def=attack_def,
+            residual_attack_def=residual_attack_def,
         )
 
     def _draw_smoke_fx(self):
@@ -1968,8 +1934,8 @@ class Level4:
 
             elif mtype == MSG_HIT_PLAYER:
                 # CS4: a server-owned enemy hit a player. Apply to MY real player
-                # only (each client filters by target_player_id); the local player's
-                # own get_damage handles i-frames + death.
+                # only (each client filters by target_player_id); the resolver and the
+                # local player handle i-frames + death.
                 if message.get("target_player_id") == my_id:
                     self._apply_relayed_player_hit(message.get("amount"),
                                                    message.get("attack_type"))
@@ -2337,14 +2303,19 @@ class Level4:
     #  server-mode methods on this class (gather_enemy_relay / apply_enemy_hit).)
 
     def _apply_relayed_player_hit(self, amount, attack_type):
-        """CS4: a server-owned enemy hit MY player. Apply the relayed damage to
-        the real local player via the existing get_damage, so its i-frames,
-        hurt-flash, and death all behave exactly as in singleplayer. The server
-        resolved the amount and gates nothing -- the local player's own
-        `vulnerable` window is authoritative for its own health."""
+        """CS4: a server-owned enemy hit MY player. The server already priced it
+        and applied the team rule, so it enters the resolver after that rule
+        (`land`): the local player's invulnerability, hurt reaction and death
+        behave exactly as in singleplayer."""
         if amount is None:
             return
-        self.player.get_damage(amount, attack_type)
+        self.interaction_resolver.land(InteractionContext(
+            kind="damage",
+            source_kind="relay",
+            target=self.player,
+            amount=amount,
+            attack_type=attack_type,
+        ))
 
     #@profile
     def run(self,dt):
@@ -2389,9 +2360,9 @@ class Level4:
             self.rts_session.update(dt_real)
         if getattr(self, "_rts_validation_driver", None) is not None:
             if self._rts_validation_driver.tick(self, dt_real):
-                RTS_VALIDATION_RUNTIME.write_results()
-                code = 0 if RTS_VALIDATION_RUNTIME.all_passed else 1
-                RTS_VALIDATION_RUNTIME.request_shutdown(code)
+                runtime = COMBAT_VALIDATION_RUNTIME if COMBAT_VALIDATION_RUNTIME.enabled else RTS_VALIDATION_RUNTIME
+                runtime.write_results()
+                runtime.request_shutdown(0 if runtime.all_passed else 1)
                 pygame.event.post(pygame.event.Event(pygame.QUIT))
         camera_focus = (
             self.rts_session.camera_focus()
@@ -2527,7 +2498,7 @@ class Level4:
             # CS-fix: in multiplayer the SERVER owns enemy spawning (it runs the
             # map's spawn areas), so the client does NOT -- this also stops the
             # per-client (unsynced) neutral spawns. Singleplayer is unchanged.
-            if getattr(self, "mp_client", None) is None:
+            if getattr(self, "mp_client", None) is None and not COMBAT_VALIDATION_RUNTIME.enabled:
                 self.layout_manager.spawner.handle_spawn_areas(self._spawn_area_reference(), dt_real)
             # Check for and update enemy sprites specifically
             if not self.is_server:
@@ -2541,7 +2512,14 @@ class Level4:
                 for s in self.layout_manager.visible_sprites.sprites()
                 if hasattr(s, "id")
             }
+            # A render client applies records when a later chunk sends them. Everyone else ends buffs here.
+            if getattr(self, "mp_client", None) is None:
+                now_ms = pygame.time.get_ticks()
+                self.condition_clock.tick(now_ms, entity_id_map)
+                temperature.tick(self, now_ms)
             for sprite in self.layout_manager.visible_sprites.sprites():
+                if not sprite.alive():
+                    continue  # died earlier this frame (a hit lands and kills at once)
                 # debug
                 # if hasattr(sprite, 'frozen'):
                 #     if hasattr(sprite, 'frozen_image'):
@@ -2567,7 +2545,7 @@ class Level4:
                         self.layout_manager.effect_quad_trees,
                         self.layout_manager.effect_cell_grid,
                     )
-                    sprite.apply_environmental_damage(dt)
+                    sprite.apply_environmental_damage(dt, self.interaction_resolver)
                        
              
             spawned_items = self.item_spawner.update()

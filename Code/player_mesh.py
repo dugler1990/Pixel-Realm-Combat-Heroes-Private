@@ -125,25 +125,36 @@ class PlayerMesh:
                     cache[name] = None
         self.pieces = {name: cache[name] for name in names if cache[name] is not None}
 
-    def draw(self, backend, feet, light_dir=(-0.4, -0.5, 0.75), ambient=0.35):
-        """The body, then each worn piece in its depth. False when the backend has no mesh pass."""
+    def piece_frames(self):
+        """(name, MeshBoss, frame) of each worn piece: the body's clip and step looked up in the piece's
+        own ranges (export_outfit.py makes them from one clips blend, so today the same numbers). draw()
+        and the hit outline (Player.hit_outline) both use this."""
+        action, step = self.skin.action, int(self.skin.frame)
+        frame = self.skin.frame_index
+        out = []
+        for name, piece in self.pieces.items():
+            lo, hi = piece.pack.ranges.get(action, (frame, frame))
+            out.append((name, piece, min(lo + step, hi)))
+        return out
+
+    def draw(self, backend, feet, light_dir=(-0.4, -0.5, 0.75), ambient=0.35, wearer=None):
+        """The body, then each worn piece. Skin tint on the body; each piece gets its own heat tint.
+        False when the backend has no mesh pass."""
         draw = getattr(backend, "draw_mesh_boss", None)
         if draw is None:
             return False
+        from hit_resolve import piece_tint, skin_tint
+        body_tint = skin_tint(wearer)
         body = self.skin.pack
         yaw = self.yaw_deg()
         scale = self.height_px / max(body.height_units, 1e-6)
         frame = self.skin.frame_index
         if not self.pieces:
-            return self.skin.draw(backend, feet, yaw, self.height_px)
+            return self.skin.draw(backend, feet, yaw, self.height_px, tint=body_tint)
         if not draw(body, frame, feet, yaw, scale, VIEW_ELEVATION_DEG, light_dir, ambient,
-                    clear_pad=self.PIECE_CLEAR_PAD):
+                    tint=body_tint, clear_pad=self.PIECE_CLEAR_PAD):
             return False
-        action, step = self.skin.action, int(self.skin.frame)
-        for piece in self.pieces.values():
-            # the body's clip and frame in the clip, looked up in the piece's own ranges (export_outfit.py makes
-            # them from one clips blend, so today they are the same numbers)
-            lo, hi = piece.pack.ranges.get(action, (frame, frame))
-            draw(piece.pack, min(lo + step, hi), feet, yaw, scale, VIEW_ELEVATION_DEG, light_dir, ambient,
-                 pivot=body.pivot, clear_depth=False)
+        for name, piece, piece_frame in self.piece_frames():
+            draw(piece.pack, piece_frame, feet, yaw, scale, VIEW_ELEVATION_DEG, light_dir, ambient,
+                 tint=piece_tint(wearer, name), pivot=body.pivot, clear_depth=False)
         return True

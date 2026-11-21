@@ -71,6 +71,11 @@ class RemotePlayer(BasePlayer):
             entity_quad_tree,
         )
 
+        # Its temperature runs on the client that owns this hero (it sends the damage); a second
+        # one here would hurt twice.
+        import temperature
+        temperature.forget(self, 0)
+
         self.player_id = player_id
         self.type = "remote_player"
 
@@ -140,7 +145,7 @@ class RemotePlayer(BasePlayer):
     def update(self, QuadTree=None, entity_quad_tree=None, dt=None, layout_switch=False):
         # Overridden + trimmed vs BasePlayer.update(): input() -> animate() ->
         # position sync. Deliberately skips move()/collision()/cooldowns()/
-        # get_status()/energy_recovery()/health_recovery()/player_death() --
+        # get_status()/energy_recovery()/health_recovery() --
         # the server owns position & status; nothing local should fight it.
         #
         # Signature matches what YSortCameraGroup._update_single_sprite passes
@@ -178,25 +183,18 @@ class RemotePlayer(BasePlayer):
         self.incoming_hits = []
         return hits
 
-    def receive_interaction(self, ctx):
-        # Server mode: RECORD the damage for relay; do NOT touch local health (the
-        # owning client is authoritative -- its own i-frames/death). Mirrors the
-        # amount-resolution in BasePlayer.receive_interaction. Client mode: defer
-        # to the inherited behavior (unused on a render-only puppet, but correct).
+    def die(self):
+        """Another client's player: its health and death are that client's, sent here."""
+
+    def take_damage(self, ctx):
+        # Server mode: RECORD the priced damage for relay; do NOT touch local health
+        # (the owning client is authoritative -- its own i-frames/death). Client
+        # mode: the inherited behavior (unused on a render-only puppet, but correct).
         if not self._server_mode:
-            return super().receive_interaction(ctx)
-        if getattr(ctx, "kind", None) != "damage":
+            return super().take_damage(ctx)
+        if not ctx.amount:
             return
-        amount = ctx.amount
-        if amount is None:
-            src = ctx.source
-            if src is not None and hasattr(src, "get_full_weapon_damage") and hasattr(src, "get_full_magic_damage"):
-                amount = (src.get_full_weapon_damage()
-                          if ctx.attack_type == "weapon"
-                          else src.get_full_magic_damage())
-        if amount is None:
-            return
-        self.incoming_hits.append((amount, ctx.attack_type))
+        self.incoming_hits.append((ctx.amount, ctx.attack_type))
 
     def _sync_position_from_snapshot(self):
         # v0 "snap" (no interpolation): teleport to each authoritative position.

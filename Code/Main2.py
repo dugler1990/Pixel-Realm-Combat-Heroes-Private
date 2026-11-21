@@ -1,4 +1,5 @@
 import pygame, sys
+import sounds
 import os
 import json
 
@@ -22,6 +23,7 @@ from SettingsMenu import SettingsMenu
 from DeathMenu import DeathMenu
 from benchmark_runtime import BENCHMARK_RUNTIME
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
+from combat_validation_runtime import COMBAT_VALIDATION_MESH_PACK, COMBAT_VALIDATION_RUNTIME
 from multiplayer_runtime import MULTIPLAYER_RUNTIME, default_spawn_offset
 from network import MultiplayerClient
 from level_layouts import DEFAULT_LAYOUT, LEVEL_TO_LAYOUT, MP_LEVEL_NUMBER
@@ -84,7 +86,7 @@ class Game:
         pygame.mixer.set_num_channels(max(16, pygame.mixer.get_num_channels()))
         pygame.mixer.set_reserved(1)
         self.music_channel = pygame.mixer.Channel(0)
-        self.main_music = pygame.mixer.Sound("../Audio/Main.ogg")
+        self.main_music = sounds.get("../Audio/Main.ogg")
         self.music_channel.play(self.main_music, loops=-1)
         self.level_selection = LevelSelection(self, self.input_manager)
         self.death_menu = DeathMenu(self, self.input_manager)
@@ -108,6 +110,8 @@ class Game:
 
         if RTS_VALIDATION_RUNTIME.enabled:
             self._bootstrap_rts_validation_run()
+        elif COMBAT_VALIDATION_RUNTIME.enabled:
+            self._bootstrap_combat_validation_run()
         elif BENCHMARK_RUNTIME.enabled:
             self._bootstrap_benchmark_run()
         elif MULTIPLAYER_RUNTIME.enabled:
@@ -122,6 +126,27 @@ class Game:
                 idx = i
                 break
         self.player_selection.selected_player_info_dir = unlocked_player_directory[idx]
+        base = unlocked_player_base_stats[idx].copy()
+        self.player_configuration = PlayerConfiguration(
+            input_manager=self.input_manager,
+            base_stats=base,
+            remaining_points=0,
+            game=self,
+        )
+        self.player_configuration.final_stats = base.copy()
+        self.in_start_menu = False
+        self.in_player_selection = False
+        self.in_level_selection = False
+        self.start_level(6)
+
+    def _bootstrap_combat_validation_run(self):
+        """Straight into the benchmark arena as the mesh hero (COMBAT_VALIDATION_MESH_PACK)."""
+        from PlayerSelection import unlocked_player_mesh_packs
+        if COMBAT_VALIDATION_MESH_PACK not in unlocked_player_mesh_packs:
+            raise RuntimeError(f"combat validation: no selectable hero with mesh_pack {COMBAT_VALIDATION_MESH_PACK!r}")
+        idx = unlocked_player_mesh_packs.index(COMBAT_VALIDATION_MESH_PACK)
+        self.player_selection.selected_player_info_dir = unlocked_player_directory[idx]
+        self.player_selection.selected_mesh_pack = COMBAT_VALIDATION_MESH_PACK
         base = unlocked_player_base_stats[idx].copy()
         self.player_configuration = PlayerConfiguration(
             input_manager=self.input_manager,
@@ -464,6 +489,8 @@ class Game:
             mesh_pack = getattr(self.player_selection, "selected_mesh_pack", None)
             if RTS_VALIDATION_RUNTIME.enabled:
                 layouts_dir = RTS_VALIDATION_RUNTIME.layout_dir
+            elif COMBAT_VALIDATION_RUNTIME.enabled:
+                layouts_dir = COMBAT_VALIDATION_RUNTIME.layout_dir
             elif BENCHMARK_RUNTIME.enabled:
                 layouts_dir = BENCHMARK_RUNTIME.layout_dir
             else:
@@ -682,6 +709,8 @@ class Game:
                     exit_code = 0
                     if RTS_VALIDATION_RUNTIME.shutdown_requested:
                         exit_code = RTS_VALIDATION_RUNTIME.shutdown_exit_code
+                    elif COMBAT_VALIDATION_RUNTIME.shutdown_requested:
+                        exit_code = COMBAT_VALIDATION_RUNTIME.shutdown_exit_code
                     self._close_multiplayer()
                     pygame.quit()
                     sys.exit(exit_code)

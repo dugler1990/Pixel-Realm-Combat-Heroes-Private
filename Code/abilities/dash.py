@@ -7,6 +7,7 @@ import pygame
 from abilities.base import PlayerAbility
 from abilities.protocol import CombatAbilityContext, PlayerAbilityContext
 import hit_core
+from damage_data import attack_of
 
 STUB_COLLISION_MODES = frozenset()
 IMPLEMENTED_COLLISION_MODES = frozenset({"pass_through", "resolve", "damage_on_hit"})
@@ -64,11 +65,11 @@ class DashAbility(PlayerAbility):
             "speed_mult": float(self.config.get("speed_mult", 3)),
             "collision_mode": self.collision_mode,
             "stop_on_wall": bool(self.config.get("stop_on_wall", False)),
-            "damage": self.config.get("damage"),
             "attack_type": self.config.get("attack_type", "melee"),
             "hit_once_per_target": bool(self.config.get("hit_once_per_target", True)),
             "hits": {},
             "rehit_ms": self.config.get("rehit_ms"),
+            "attack_def": attack_of(self.config),
             "end_status_template": end_status_template,
             "_ability": self,
         }
@@ -137,7 +138,7 @@ class DashAbility(PlayerAbility):
         Bodies come from the entity tree around the dasher (hit_core.bodies_near).
         hit_once_per_target False keeps no record, so it hits every frame.
         """
-        if runtime.get("damage") is None:
+        if runtime.get("attack_def") is None:
             return
         level = getattr(entity, "level", None)
         if level is None and isinstance(context, CombatAbilityContext):
@@ -147,18 +148,19 @@ class DashAbility(PlayerAbility):
         if resolver is None or shape is None:
             return
         nearby = hit_core.bodies_near(entity_quad_tree, shape.rect, getattr(entity, "id", -1))
-        targets = hit_core.find_hits(shape, nearby, exclude=(entity,))
+        found = hit_core.find_contacts(shape, nearby, exclude=(entity,))
         resolver.strike(
-            targets,
+            [target for target, _, _ in found],
             hits=runtime["hits"] if runtime["hit_once_per_target"] else None,
+            contacts={id(target): point for target, point, _ in found},
             rehit_ms=runtime["rehit_ms"],
             kind="damage",
             source_kind="dash",
             source=entity,
             owner=entity,
             source_team=getattr(entity, "team_id", None),
-            amount=runtime["damage"],
             attack_type=runtime["attack_type"],
+            attack_def=runtime["attack_def"],
         )
 
     def _end(self, entity, runtime) -> None:

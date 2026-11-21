@@ -1,12 +1,13 @@
 import pygame
+import sounds
 import random
 from Settings import TILESIZE
 
 from Entity import Entity
-from Interaction import InteractionContext
 class NeutralCharacter(Entity):
     # "walking" is the walk cycle; "idle" stays time-based.
     WALK_STATUSES = frozenset({"walking"})
+    takes_impulse = False
 
     def __init__(self, pos,
                  groups,
@@ -20,8 +21,8 @@ class NeutralCharacter(Entity):
         super().__init__(groups,
                          layout_callback_update_quad_tree = layout_callback_update_quad_tree )
         #print(f"name : {name}")
-        self.hit_sound = pygame.mixer.Sound("../Audio/Hit.wav")
-        self.vulnerable = True
+        self.hit_sound = sounds.get("../Audio/Hit.wav")
+        self.death_sound = sounds.get("../Audio/Hit.wav")
         self.sprite_type = "neutral"
         self.pos = pos
         self.obstacle_sprites = obstacle_sprites
@@ -156,33 +157,6 @@ class NeutralCharacter(Entity):
 
     def perform_action(self, action,tile_pos):
         pass
-
-    def can_receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            return True
-        if ctx.kind != "damage":
-            return False
-        if ctx.source_team == self.team_id:
-            return False
-        return True
-
-    def receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            super().receive_interaction(ctx)
-            return
-        if ctx.kind != "damage":
-            return
-        source = ctx.source
-        if source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
-            attack_type = "weapon" if ctx.attack_type == "weapon" else "magic"
-            self.get_damage(source, attack_type)
-            return
-        amount = ctx.amount
-        if amount is None:
-            return
-        if hasattr(self, "vulnerable") and self.vulnerable:
-            self.health -= amount
-            self.hit_time = pygame.time.get_ticks()
 
     def check_interactable_tile_old(self):
         #print(f"rect center : {self.rect.center}")

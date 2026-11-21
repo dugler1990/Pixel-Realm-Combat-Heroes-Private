@@ -94,6 +94,20 @@ def mask_footprint_size(mask):
     return bounds.width, bounds.height
 
 
+def mesh_feet_world(sprite):
+    """World pixel a mesh is drawn at (its feet): the hitbox's midbottom for an anchored sprite,
+    else the mask's opaque midbottom, else the hitbox's, else the rect's. The camera draws meshes
+    here and body_regions reads hits from here."""
+    hitbox = getattr(sprite, "hitbox", None)
+    if getattr(sprite, "sprite_anchor_px", None) is not None and hitbox is not None:
+        return hitbox.midbottom
+    if getattr(sprite, "mask", None) is not None:
+        return mask_midbottom_world(sprite.rect, sprite.mask)
+    if hitbox is not None:
+        return hitbox.midbottom
+    return sprite.rect.midbottom
+
+
 def mask_midbottom_world(sprite_rect, mask):
     """
     World pixel at bottom-center of the mask's opaque bounding box.

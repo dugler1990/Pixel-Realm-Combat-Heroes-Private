@@ -196,7 +196,8 @@ class AnimationPlayer:
                          amount=None,
                          interaction_tags=None,
                          stops=False,
-                         rehit_ms=None):
+                         rehit_ms=None,
+                         attack_def=None):
         
         animation_frames = self.frames.get(animation_type)
         if not animation_frames:
@@ -222,6 +223,7 @@ class AnimationPlayer:
                        interaction_tags=interaction_tags,
                        stops=stops,
                        rehit_ms=rehit_ms,
+                       attack_def=attack_def,
                        masks=self._masks_for(animation_type, animation_frames))
 
         # Register particle in the quadtree
@@ -259,7 +261,8 @@ class ParticleEffect(AttackSprite, pygame.sprite.Sprite):
                  interaction_tags=None,
                  stops=False,
                  rehit_ms=None,
-                 masks=None):
+                 masks=None,
+                 attack_def=None):
         
         super().__init__(groups)
         self.frames = frames
@@ -288,6 +291,7 @@ class ParticleEffect(AttackSprite, pygame.sprite.Sprite):
             tags=interaction_tags or (),
             rehit_ms=rehit_ms,
             stops=stops,
+            attack_def=attack_def,
         )
         self.quadtree = quadtree
         self.id = id(self)

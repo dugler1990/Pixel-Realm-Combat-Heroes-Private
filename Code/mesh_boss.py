@@ -195,6 +195,22 @@ def _capsule_projection(
     return facing_key, xy, radii, x0, y0, w, h
 
 
+def projected_capsules(pack, frame_index, facing_deg, scale, elevation_deg=VIEW_ELEVATION_DEG):
+    """Posed capsules on screen, from the feet at (0, 0), as build_body_mask places them:
+    (ends (N*2, 2): A then B per capsule, depth (N*2,): how near the camera each end is, larger is
+    nearer; radii (N,); bone index per capsule (N,))."""
+    if not pack.capsules:
+        raise RuntimeError(f"pack {pack.name!r} has no body capsules")
+    facing_key = int(round(float(facing_deg))) % 360
+    posed = _pose_capsule_ends(pack, frame_index)
+    ground = model_to_ground(posed, pack.pivot, facing_key, scale)
+    xy = ground_to_screen(ground, elevation_deg)
+    elev = math.radians(float(elevation_deg))
+    depth = ground[:, 1] * math.cos(elev) + ground[:, 2] * math.sin(elev)
+    radii = np.asarray([c["radius"] for c in pack.capsules], dtype=np.float64) * float(scale)
+    return xy, depth, radii, [c["bone"] for c in pack.capsules]
+
+
 def capsule_screen_bounds(
     pack,
     frame_index,
@@ -463,7 +479,7 @@ class MeshBoss:
     # --- drawing ------------------------------------------------------------------------
     def draw(self, backend, screen_pos, facing_deg=0.0, height_px=650,
              elevation_deg=VIEW_ELEVATION_DEG,
-             light_dir=(-0.4, -0.5, 0.75), ambient=0.35):
+             light_dir=(-0.4, -0.5, 0.75), ambient=0.35, tint=(1.0, 1.0, 1.0, 1.0)):
         """Draw at `screen_pos` (the ground-contact pixel), `height_px` tall on screen.
 
         `facing_deg` spins the model about its up axis, so any angle works -- not just the 8
@@ -477,4 +493,4 @@ class MeshBoss:
         if amb != "":
             ambient = float(amb)
         return draw(self.pack, self.frame_index, screen_pos, facing_deg, scale,
-                    elevation_deg, light_dir, ambient)
+                    elevation_deg, light_dir, ambient, tint=tint)

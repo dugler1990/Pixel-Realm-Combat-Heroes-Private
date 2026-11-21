@@ -66,6 +66,8 @@ class _StubHitbox:
 
 
 class _StubTarget:
+    takes_impulse = True  # Entity's class field; the stub borrows Entity's gate
+
     def __init__(self, x=0, y=0, team_id="enemy", target_id="target-1"):
         self.id = target_id
         self.team_id = team_id
@@ -103,6 +105,7 @@ class _StubTarget:
 
         if ctx.kind == "damage":
             self.damage_received += ctx.amount or 0
+            return
         Entity.receive_interaction(self, ctx)
 
 
@@ -283,7 +286,7 @@ def test_landing_aoe_hits_feet_on_the_ground_circle_with_falloff():
     assert center_target.hitbox.x == pytest.approx(14.0)
     # Falloff is the ground distance to the footprint's edge: 100 px minus half its 16 px width.
     edge_falloff = 1.0 - (100.0 - 8.0) / 120.0
-    assert edge_target.damage_received == pytest.approx(25.0 * edge_falloff)
+    assert edge_target.damage_received == round(25.0 * edge_falloff)   # the def's 25, priced flat
     assert edge_target.hitbox.x == pytest.approx(100.0 + int(14.0 * edge_falloff))
     assert below_target.damage_received == 0
     assert far_target.damage_received == 0

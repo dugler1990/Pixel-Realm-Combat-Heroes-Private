@@ -33,7 +33,6 @@ class RtsWorkerEntity(RtsTribeMember):
             obstacle_sprites = groups[0]
         if combat_context is None:
             combat_context = make_rts_combat_context()
-        self._quad_tree_callback_provided = layout_callback_update_quad_tree is not None
         super().__init__(
             pos,
             groups,
