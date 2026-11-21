@@ -18,7 +18,7 @@ All bind `127.0.0.1`. `--port N` and `--no-browser` work on all but the boss vie
 | 8766 | Level studio | `feat/level-studio`, `..\Pixel-Realm-level-studio` | `py -m tools.painted_map_pipeline.world_levels.studio_page` | `tools/painted_map_pipeline/world_levels/PROCESS_level_studio.md` |
 | 8767 | Outfit web | `main` | `py -m tools.boss_sprite_pipeline.outfit_web` | [PROCESS_outfit_web.md](../tools/boss_sprite_pipeline/PROCESS_outfit_web.md) |
 | 8768 | Anim web | `feat/anim-suite`, `..\Pixel-Realm-anim-suite` | `$env:ANIM_DATA_ROOT = "C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Boss"` then `py -m tools.boss_sprite_pipeline.anim_web` | `tools/boss_sprite_pipeline/PROCESS_anim_web.md` |
-| 8768 | Entity web | `feat/entity-web`, `..\Pixel-Realm-entity-web` | `py -m tools.entity_pipeline.web` | `tools/entity_pipeline/PROCESS_entity_web.md` |
+| 8769 | Entity web | `feat/entity-web`, `..\Pixel-Realm-entity-web` | `py -m tools.entity_pipeline.web` | `tools/entity_pipeline/PROCESS_entity_web.md` |
 | 8777 | Boss viewer | `dev_3d_boss`, `C:\Users\Douglas\Pixel-Realm-Combat-Heroes-Boss` | `python tools/boss_sprite_pipeline/viewer/serve.py 8777` (must run from the Boss folder) | `tools/boss_sprite_pipeline/viewer/PROCESS_viewer.md` |
 
 Paths in the last column are inside that row's folder, except outfit web (on `main`).
@@ -29,7 +29,6 @@ Two apps on one default port can't run together; start the second with `--port N
 
 - **8765:** SAM review page and SAM server.
 - **8766:** level review page and level studio.
-- **8768:** anim web and entity web.
 
 ## Not a web app
 
