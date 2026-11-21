@@ -27,6 +27,13 @@ price, untouched.
   - Deviation: temperature keeps its own wake queue on the level (`level.warmth_wakes`), not a
     second heap in `ConditionClock`: `conditions.py` stays unaware of it.
   - `hot_shell` / `chilled` start only when the shade changes (a settle is not a new clock entry).
+- Step 3 in progress: `tools/temperature_table.py` (36 s). Link is now `CONTACT_K / insulation`
+  (insulation is resistance; with `× (1 − insulation)` a piece with none still slowed heat).
+  First numbers `AIR_K` = `BODY_K` = 0.02, `CONTACT_K` 0.018. Ice −30: naked vitality 20 dead in
+  399 s, plate 1003 s, vitality 40 and 60 safe. Deep ice −60: naked 92 s. Desert +20: naked 1.25
+  hp/s, plate 1.0. Open: armour does not overheat you (plate is cooler than naked in the desert,
+  dashing too); the loincloth is on the waist, so the chest-only model sees it as naked; one slide
+  every 2 s heats the skin to +48.
 
 ## The model, for reasoning (Douglas, 2026-11-21)
 - **Layers hold warmth**: the skin, and the worn outer chest piece if there is one (naked: skin

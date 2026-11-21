@@ -13,6 +13,7 @@ import itertools
 
 from damage_rules import (
     AIR_K, BODY_K, COLD_SCALE, COLD_SPEED, CONTACT_K, COOK, FAINT, HEAT_SCALE, HELD_MS, HURT_AT,
+    INSULATION_MIN,
     PIECE_CAP, PIECE_CAP_MIN, REF_VIT, SLOW_AT, TICK_MS, chest_layer, cold_band, heat_shade,
     resist_of, shock_wound,
 )
@@ -222,7 +223,7 @@ def _solve_from(body, state, values, now):
     if n == 2:
         piece = state.piece
         capacity.append(max(PIECE_CAP_MIN, PIECE_CAP * float(piece.weight)))
-        links = ((0, 1, CONTACT_K * (1.0 - min(1.0, max(0.0, float(piece.insulation))))),)
+        links = ((0, 1, CONTACT_K / max(INSULATION_MIN, float(piece.insulation))),)
     state.curve = solve(values, capacity, [tuple(p) for p in pull], links)
     state.since_ms = now
 
