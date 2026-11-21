@@ -135,12 +135,16 @@ def has(entity, name):
 
 
 def bonus(entity, stat, defs=None):
-    """Sum of the strength of live buffs on `stat`. No conditions: 0, and nothing is allocated."""
+    """Sum of the strength of live buffs on `stat`, plus running venoms' debuffs. No conditions:
+    0, and nothing is allocated."""
+    total = 0
+    if getattr(entity, "venoms", None):
+        import venom
+        total += venom.debuff(entity, stat)
     conds = getattr(entity, "conditions", None)
     if not conds:
-        return 0
+        return total
     table = CONDITIONS if defs is None else defs
-    total = 0
     for inst in conds.values():
         defn = table[inst.cond_id]
         if defn.kind == "buff" and defn.stat == stat:

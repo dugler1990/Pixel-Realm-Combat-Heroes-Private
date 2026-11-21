@@ -514,7 +514,7 @@ class InteractionResolver:
         An attack def: against a body card, hit_resolve prices it (and starts its elements);
         otherwise its flat price. Neither, or both: an error, never a silent 0."""
         from damage_rules import landed
-        from hit_resolve import apply_element, flat, resolve
+        from hit_resolve import apply_element, apply_venom, flat, resolve
 
         if ctx.attack_def is None:
             if ctx.amount is None:
@@ -526,6 +526,7 @@ class InteractionResolver:
         if priced is not None:
             ctx.amount = landed(priced)
             apply_element(ctx, priced, self._now_ms())
+            apply_venom(ctx, priced, self._now_ms())
             return
         ctx.amount = flat(ctx)
 

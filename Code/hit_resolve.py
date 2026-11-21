@@ -289,6 +289,17 @@ def _grant(entity, name, now, strength, duration_ms):
     clock.start(entity, name, now, strength=strength, duration_ms=duration_ms)
 
 
+def apply_venom(ctx, priced, now):
+    """A pierce that reached flesh starts the attack's venom (chunk 8). Stopped: nothing."""
+    attack = ctx.attack_def
+    if attack is None or attack.venom is None or not getattr(priced, "reached_flesh", False):
+        return
+    import venom
+    name, dose = attack.venom
+    clock = _clock(ctx.target)
+    venom.start(ctx.target, name, dose * ctx.scale, now, rng=clock.rng if clock is not None else None)
+
+
 def apply_element(ctx, priced, now):
     """Start what the rule returned, tint the layer, and spend lightning hops. No clock: the
     wound still lands (the caller set the amount) and the condition does not."""

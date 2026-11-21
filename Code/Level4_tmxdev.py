@@ -2,6 +2,7 @@
 #   re-render the level when a <trigger> (door) is stepped on.
 from Eskimo import Eskimo
 import temperature
+import venom
 import json
 from Spawner import Spawner
 from ItemSpawner import ItemSpawner
@@ -2537,6 +2538,7 @@ class Level4:
                 now_ms = pygame.time.get_ticks()
                 self.condition_clock.tick(now_ms, entity_id_map)
                 temperature.tick(self, now_ms)
+                venom.tick(self, now_ms)
             for sprite in self.layout_manager.visible_sprites.sprites():
                 if not sprite.alive():
                     continue  # died earlier this frame (a hit lands and kills at once)
