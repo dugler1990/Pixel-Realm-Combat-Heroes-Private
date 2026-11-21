@@ -25,18 +25,12 @@ well contained, committed, then merged when Douglas says.
   flip it every frame; cold took health directly; one 80-line `temper()` with a special case per
   source; imports inside functions; duplicated thresholds and checks.
 - Next:
-  - 1a. Temperature rebuild plan, `docs/damage/PLAN_temperature.md`. Decided:
-    - Sources table per full body, `{key: (T, k)}`. The body heads to `Σk·T / Σk` at rate `Σk`.
-    - Ghost: adds its source (keyed by its id) when it reaches you, removes it when it leaves or dies.
-      Lava: the Effect's apply/remove. Air: the level sets it. Worn plate: a source for the skin.
-    - Blows and exertion: one-off bumps.
-    - `settle(body, now)`: moves the solved curve on; its damage goes through the resolver like
-      any hit (`invulnerable` blocks it; no over-time flag).
-    - New `temperature.py`; `hit_resolve` back to pricing only.
-    - Kept: `damage_rules` maths (`warmth_at`, `wound_between`, `wake_ms`), the clock's second heap,
-      `HeatEffect`. Ported: scenes fire / ice / ice_naked / desert / lava, and their tests.
-  - 1b. Cleanup with it: imports at the top, no functions passed as arguments, `_segment_over`
-    collapsed, `warmth_shade` calls `heat_shade`, vitality and insulation checked once, `_ticks` gone.
+  - 1a. Temperature rebuild: `docs/damage/PLAN_temperature.md`. A heat network solved exactly:
+    layers (skin, worn piece) hold warmth; sources pull them (the body as a heater by vitality, air,
+    lava, the ghost's hold, keyed by who placed them, released on death); insulation weakens the
+    piece-skin link; only the skin wounds, through the resolver; events and clock wakes only.
+  - 1b. Cleanup with it: imports at the top, no functions passed as arguments, `warmth_shade`
+    calls `heat_shade`, no `_ticks`; Cursor's single-sample maths replaced by the network solver.
   - 1c. Docs: what is still true from `temperature.plan.md` and the WIP's doc entries moves into
     the new plan and `NOTES_damage_and_armour.md`.
   - 1d. Douglas watches the scenes.
@@ -96,6 +90,8 @@ well contained, committed, then merged when Douglas says.
 - 2026-11-21: damage foundation steps 1-7, to `17fe7c3a`.
 
 ## Tried and dropped
+- Temperature, air pre-shrunk by clothes and vitality (Cursor): dropped for the body as a
+  source. Plate heat to skin in small steps: dropped for the exact solve.
 - Temperature, strongest source wins: dropped. Weighted average instead: two ghosts chill faster,
   never colder than a ghost; lava on ice lands between.
 - Legacy code folder for deleted classes: dropped. Git history is the archive.
