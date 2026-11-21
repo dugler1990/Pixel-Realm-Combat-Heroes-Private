@@ -18,7 +18,7 @@ import math
 import mesh_points
 from Interaction import InteractionContext
 from damage_data import body
-from conditions import notify_death, speed_of
+from conditions import speed_of
 import defence_profile
 from abilities.registry import build_action_controller, load_evasion_loadout
 
@@ -605,12 +605,9 @@ class BasePlayer(Entity):
         key = self.upgrade_stat_order[index]
         return self.stats.get(key, self.max_stats.get(key, 0))
 
-    def player_death(self):
-        if self.health <= 0:
-            if not self.is_dead:
-                notify_death(self)
-            self.health = 0
-            self.is_dead = True
+    def on_death(self):
+        """The player stays on screen, dead (`is_dead`, set by die): co-op and the level read it."""
+        self.health = 0
 
     def get_cost_by_index(self, index):
         key = self.upgrade_stat_order[index]
@@ -649,7 +646,6 @@ class BasePlayer(Entity):
             self.mesh_skin.update(self, dt)
         self.energy_recovery()
         self.health_recovery()
-        self.player_death()
 
     def _resolve_post_seat_status(self):
         if "left" in self.status:

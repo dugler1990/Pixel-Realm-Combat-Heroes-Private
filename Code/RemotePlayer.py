@@ -140,7 +140,7 @@ class RemotePlayer(BasePlayer):
     def update(self, QuadTree=None, entity_quad_tree=None, dt=None, layout_switch=False):
         # Overridden + trimmed vs BasePlayer.update(): input() -> animate() ->
         # position sync. Deliberately skips move()/collision()/cooldowns()/
-        # get_status()/energy_recovery()/health_recovery()/player_death() --
+        # get_status()/energy_recovery()/health_recovery() --
         # the server owns position & status; nothing local should fight it.
         #
         # Signature matches what YSortCameraGroup._update_single_sprite passes
@@ -177,6 +177,9 @@ class RemotePlayer(BasePlayer):
         hits = self.incoming_hits
         self.incoming_hits = []
         return hits
+
+    def die(self):
+        """Another client's player: its health and death are that client's, sent here."""
 
     def take_damage(self, ctx):
         # Server mode: RECORD the priced damage for relay; do NOT touch local health

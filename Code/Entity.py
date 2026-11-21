@@ -94,6 +94,7 @@ def knockback_scale(body):
 class Entity(pygame.sprite.Sprite):
     casts_shadow = True  # entities (player/enemies/friendlies) drop directional shadows
     takes_impulse = True  # False: shoves (knockback) do not move this body (can_receive_interaction)
+    is_dead = False  # set once by die()
     # Statuses whose animation is a walk cycle, and so phased on distance rather than time.
     # Declared per subclass because each has its own vocabulary: the player uses bare
     # direction names, enemies and friendlies "move", neutrals "walking". A status missing
@@ -1134,6 +1135,23 @@ class Entity(pygame.sprite.Sprite):
         self.health -= amount
         self.hit_time = pygame.time.get_ticks()
         self.on_hurt(ctx)
+        if self.health <= 0:
+            self.die()
+
+    def die(self):
+        """The one way a body dies, once: marked dead, its conditions dropped, then `on_death`."""
+        if self.is_dead:
+            return
+        self.is_dead = True
+        from conditions import notify_death
+        notify_death(self)
+        self.on_death()
+
+    def on_death(self):
+        """Leave the world: out of the entity tree and every group. Overrides add their extras
+        (particles, sound, XP) and call this; the player overrides it to stay on screen."""
+        self.layout_callback_update_quad_tree(HashableRect(self.rect, self.id), alive=False, remove_existing=True)
+        self.kill()
 
     def on_hurt(self, ctx: InteractionContext):
         """A body's reaction to damage it took. Default: its hit sound, except for the ground's own

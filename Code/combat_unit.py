@@ -430,9 +430,6 @@ class CombatUnit(Entity):
         
 
 
-    def is_dead(self):
-        """Check if the enemy is dead."""
-        return self.health <= 0
 
     
     
@@ -793,18 +790,12 @@ class CombatUnit(Entity):
             if current_time - self.hit_time >= self.invincibility_duration:
                 self.vulnerable = True
     #@profile
-    def check_death(self):
-        if self.health <= 0:
-            from conditions import notify_death
-            notify_death(self)
-            self.layout_callback_update_quad_tree( obstacle_sprite = HashableRect( self.rect, self.id ),
-                                                   remove_existing= True,
-                                                   alive = False )# confusing its a callback passed to all entities, this is child , it can use it right ? 
-            self.kill()
-            #### TODO , add frozen or not end to monster name for frozen death particles.
-            self.combat_context["trigger_death_particles"](self.rect.center, self.monster_name)
-            self.combat_context["add_exp"](self.exp)
-            self.death_sound.play()
+    def on_death(self):
+        super().on_death()
+        #### TODO , add frozen or not end to monster name for frozen death particles.
+        self.combat_context["trigger_death_particles"](self.rect.center, self.monster_name)
+        self.combat_context["add_exp"](self.exp)
+        self.death_sound.play()
             
 
     def _sync_mesh_layout(self):
@@ -877,7 +868,6 @@ class CombatUnit(Entity):
             energy = float(getattr(self, "energy", 0) or 0)
             if energy < max_e:
                 self.energy = min(max_e, energy + max_e * 0.0008)
-        self.check_death()
 
 
     def resume_default(self):

@@ -101,7 +101,7 @@ class EnemyPuppet(CombatUnit):
 
     def update(self, *args, **kwargs):
         # Render-only (camera group update_parallel calls this). Deliberately
-        # skips CombatUnit.update's move()/cooldowns()/check_death() -- the host
+        # skips CombatUnit.update's move()/cooldowns() -- the host
         # owns position/death. animate() rebuilds the frame and plants rect.
         self._sync_from_snapshot()
         self.animate()

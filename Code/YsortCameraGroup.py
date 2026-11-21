@@ -941,6 +941,8 @@ class YSortCameraGroup(pygame.sprite.Group):
     ):
         updated_sprites = []
         for sprite in batch:
+            if not sprite.alive():
+                continue  # died earlier this frame (a hit lands and kills at once)
             self._update_single_sprite(
                 sprite,
                 obstacle_quad_tree,

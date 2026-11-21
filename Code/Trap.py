@@ -5,7 +5,6 @@ from Entity import Entity
 _combat_log = get_debug_logger("combat")
 from Particles import AnimationPlayer, ParticleEffect
 from ImageCache import ImageCache
-from Interaction import InteractionContext
 
 class Trap(Entity):
     takes_impulse = False
@@ -88,10 +87,9 @@ class Trap(Entity):
             self.trigger_death_particles()
             self.kill()
 
-    def on_hurt(self, ctx: InteractionContext):
-        if self.health <= 0:
-            self.trigger_death_particles()
-            self.kill()
+    def on_death(self):
+        super().on_death()
+        self.trigger_death_particles()
 
     def trigger_death_particles(self):
         self.animation_player.create_particles(self.death_animation, self.rect.center, self.groups)

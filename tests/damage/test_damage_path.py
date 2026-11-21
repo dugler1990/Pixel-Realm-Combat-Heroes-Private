@@ -96,3 +96,29 @@ def test_the_one_team_rule_refuses_own_team_in_apply_and_in_strike():
     assert body.health == 100
     assert resolver.strike([body], kind="damage", source_kind="t", source_team="player", amount=5) == [body]
     assert body.health == 95
+
+
+def _mortal(**fields):
+    """A body that also dies Entity's way; `deaths` counts its on_death calls."""
+    body = _body(is_dead=False, deaths=[], **fields)
+    body.die = lambda: Entity.die(body)
+    body.on_death = lambda: body.deaths.append(1)
+    return body
+
+
+def test_a_killing_hit_dies_once_and_later_hits_do_not_die_again():
+    body = _mortal(health=10)
+    resolver = InteractionResolver()
+    resolver.apply(_hit(body, amount=15))
+    assert body.is_dead and body.deaths == [1]
+    Entity.take_damage(body, _hit(body, amount=5))   # past the gate, still only one death
+    assert body.deaths == [1]
+
+
+def test_a_strike_that_kills_its_first_target_still_hits_the_rest():
+    first, second = _mortal(health=5), _mortal(health=50)
+    landed = InteractionResolver().strike([first, second], kind="damage", source_kind="t",
+                                          source_team="player", amount=10)
+    assert landed == [first, second]
+    assert first.is_dead and first.deaths == [1]
+    assert second.health == 40 and not second.is_dead

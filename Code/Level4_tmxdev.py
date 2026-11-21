@@ -1400,7 +1400,7 @@ class Level4:
                 visual_item.start_reject_shake()
 
     def check_enemy_deaths(self):
-        dead_enemies = [enemy for enemy in self.spawner.enemies if enemy.is_dead()]
+        dead_enemies = [enemy for enemy in self.spawner.enemies if enemy.is_dead]
 
         # Server-authoritative: capture each death as an enemy_died event (FX/XP
         # ride it to every client, awarded there) + roll loot WITHOUT building
@@ -2542,6 +2542,8 @@ class Level4:
             if getattr(self, "mp_client", None) is None:
                 self.condition_clock.tick(pygame.time.get_ticks(), entity_id_map)
             for sprite in self.layout_manager.visible_sprites.sprites():
+                if not sprite.alive():
+                    continue  # died earlier this frame (a hit lands and kills at once)
                 # debug
                 # if hasattr(sprite, 'frozen'):
                 #     if hasattr(sprite, 'frozen_image'):
