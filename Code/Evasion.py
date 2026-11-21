@@ -28,7 +28,6 @@ class EvasionPlayer:
                 'source_team': getattr(player, "team_id", "player"),
                 'source_kind': "special",
                 'attack_type': effect_type,
-                'amount': None,
                 'tags': {"summon", "special"},
             }
             self.create_trap(trap_config)

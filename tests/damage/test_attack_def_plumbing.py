@@ -44,8 +44,7 @@ def _level_stub():
         enemy_attack_sprites="enemy_attack_sprites",
         layout_manager=SimpleNamespace(visible_sprites="visible", entity_quad_tree=None),
     )
-    for name in ("calculate_angle", "round_angle", "get_direction_from_angle",
-                 "_resolve_projectile_damage_payload"):
+    for name in ("calculate_angle", "round_angle", "get_direction_from_angle"):
         setattr(stub, name, types.MethodType(getattr(Level4, name), stub))
     return stub
 
@@ -58,7 +57,7 @@ def _level_stub():
 ])
 def test_fire_projectile_puts_the_def_on_the_shot_and_stops_by_it(art, def_name, stops):
     level = _level_stub()
-    Level4.fire_projectile(level, (0, 0), (100, 0), art, [], amount=5, attack_def=attack(def_name))
+    Level4.fire_projectile(level, (0, 0), (100, 0), art, [], attack_def=attack(def_name))
     kwargs = level.animation_player.create_particles.call_args.kwargs
     assert kwargs["attack_def"] is attack(def_name)
     assert kwargs["stops"] is stops
@@ -66,7 +65,7 @@ def test_fire_projectile_puts_the_def_on_the_shot_and_stops_by_it(art, def_name,
 
 def test_fire_projectile_without_a_def_flies_through():
     level = _level_stub()
-    Level4.fire_projectile(level, (0, 0), (100, 0), "arrow", [], amount=5)
+    Level4.fire_projectile(level, (0, 0), (100, 0), "arrow", [])
     kwargs = level.animation_player.create_particles.call_args.kwargs
     assert kwargs["attack_def"] is None and kwargs["stops"] is False
 

@@ -307,7 +307,6 @@ class ChargedLeapSlamAbility(PlayerAbility):
         min_radius = float(self.config.get("min_impact_radius", 40))
         max_radius = float(self.config.get("max_impact_radius", 120))
         radius = min_radius + (max_radius - min_radius) * charge_ratio
-        base_damage = float(self.config.get("base_damage", 0))
         base_knockback = float(self.config.get("base_knockback", 0))
         attack_type = self.config.get("damage_attack_type", "weapon")
         attack_def = attack_of(self.config)
@@ -347,7 +346,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
             # Falloff by ground distance to the footprint's edge: the circle the hit test used.
             reach = hit_core.ground_reach(ground, foot, VIEW_ELEVATION_DEG)
             falloff = max(0.0, 1.0 - min(reach, radius) / radius) if radius > 0 else 0.0
-            damage_amount = base_damage * charge_ratio * falloff
+            share = charge_ratio * falloff
             knockback_mag = base_knockback * charge_ratio * falloff
             if dist == 0:
                 nx, ny = 1.0, 0.0
@@ -355,7 +354,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
                 nx = (tx - gx) / dist
                 ny = (ty - gy) / dist
 
-            if damage_amount > 0:
+            if share > 0:
                 dmg_ctx = InteractionContext(
                     kind="damage",
                     source_kind="leap_slam",
@@ -363,7 +362,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
                     owner=entity,
                     source_team=getattr(entity, "team_id", None),
                     target=target,
-                    amount=damage_amount,
+                    scale=share,
                     attack_type=attack_type,
                     attack_def=attack_def,
                 )

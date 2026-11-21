@@ -1637,17 +1637,6 @@ class Level4:
         """Enemy projectiles, and player projectiles a parry turned around."""
         self._strike_with_attack_sprites(self.enemy_attack_sprites)
 
-    def _resolve_projectile_damage_payload(self, owner, projectile_type=None, base_amount=None):
-        """The shot's flat amount: the one stated, else the owner's ranged attack of this type."""
-        if base_amount is not None:
-            return base_amount
-        combat_config = getattr(owner, "combat_config", None) or {}
-        for attack in combat_config.get("ranged_attacks", []):
-            if projectile_type is None or attack.get("type") == projectile_type:
-                if attack.get("damage") is not None:
-                    return attack["damage"]
-        return None
-
     def trigger_death_particles(self, pos, particle_type):
         # Server: the death FX ride the enemy_died event (each client plays them);
         # nothing is rendered here.
@@ -1744,7 +1733,7 @@ class Level4:
         # Return the direction vector
         return pygame.math.Vector2(direction_x, direction_y)
     #@profile
-    def fire_projectile(self, enemy_pos, target_pos, projectile_type, groups, owner=None, source_team=None, amount=None, rehit_ms=None, attack_def=None): ### groups not actually used, we pass level references to the groups explicitely below , regardles,, this could be confusing ISSUE
+    def fire_projectile(self, enemy_pos, target_pos, projectile_type, groups, owner=None, source_team=None, rehit_ms=None, attack_def=None): ### groups not actually used, we pass level references to the groups explicitely below , regardles,, this could be confusing ISSUE
     
         # Calculate the angle to the target
         angle_to_target = self.calculate_angle(enemy_pos, target_pos)
@@ -1761,19 +1750,6 @@ class Level4:
         resolved_source_team = source_team
         if resolved_source_team is None:
             resolved_source_team = getattr(resolved_owner, "team_id", "enemy")
-        resolved_amount = self._resolve_projectile_damage_payload(
-            owner=resolved_owner,
-            projectile_type=projectile_type,
-            base_amount=amount,
-        )
-        _combat_log.debug(
-            "enemy_projectile payload owner_id=%s projectile_type=%r base_amount=%r resolved_amount=%r source_team=%r",
-            id(resolved_owner) if resolved_owner is not None else None,
-            projectile_type,
-            amount,
-            resolved_amount,
-            resolved_source_team,
-        )
         # Invoke the method responsible for creating the projectile, passing in the direction
         self.animation_player.create_particles(animation_type = projectile_type,
                                                pos = enemy_pos,
@@ -1787,7 +1763,6 @@ class Level4:
                                                source_team=resolved_source_team,
                                                source_kind="enemy_projectile",
                                                attack_type="magic",
-                                               amount=resolved_amount,
                                                # The def says whether it stops at the first body
                                                # (arrows, stones); a shot without one flies through.
                                                stops=attack_def is not None and attack_def.stops,
@@ -1802,8 +1777,6 @@ class Level4:
         scale=1.0,
         owner=None,
         source_team=None,
-        burst_damage=75,
-        dot_damage=8,
         dot_interval_ms=500,
         linger_ms=3000,
         impact_radius=90,
@@ -1834,8 +1807,6 @@ class Level4:
             owner=owner,
             source_team=resolved_team,
             scale=scale,
-            burst_damage=burst_damage,
-            dot_damage=dot_damage,
             dot_interval_ms=dot_interval_ms,
             linger_ms=linger_ms,
             impact_radius=impact_radius,

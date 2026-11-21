@@ -82,9 +82,14 @@ def test_every_player_weapon_and_spell_and_ability_names_a_def():
     assert attack_of(ability_data["leap_slam"]) is attack("leap_slam")
 
 
-def test_player_weapon_def_damage_matches_weapon_data():
+def test_damage_numbers_live_only_in_the_defs():
+    """No attack entry in Settings carries its own damage: the def is the number."""
     for name, entry in weapon_data.items():
-        assert attack(name).damage == entry["damage"], name
+        assert "damage" not in entry, name
+    for name in ("flame", "ice_ball"):
+        assert "strength" not in magic_data[name], name
+    for monster, where, entry in _monster_attacks():
+        assert "damage" not in entry, (monster, where)
 
 
 def test_every_monster_attack_names_a_def():

@@ -13,6 +13,7 @@ if str(CODE_DIR) not in sys.path:
     sys.path.insert(0, str(CODE_DIR))
 
 import pygame  # noqa: E402
+import pytest  # noqa: E402
 
 pygame.init()
 
@@ -49,7 +50,7 @@ def test_an_invulnerable_body_spends_the_hit_and_starts_nothing(monkeypatch):
     started = []
     monkeypatch.setattr(hit_resolve, "apply_element", lambda *a: started.append(a))
     body = _invulnerable(_body())
-    ctx = _hit(body, amount=10, attack_def=attack("sword"))
+    ctx = _hit(body, attack_def=attack("sword"))
     assert InteractionResolver().apply(ctx) is SPENT   # the attack does not try again
     assert body.health == 100 and body.hurt == [] and started == []
     assert not hasattr(body, "last_attacker_team")
@@ -71,12 +72,34 @@ def test_no_grace_by_default_a_second_hit_lands_at_once():
     assert body.health == 90
 
 
-def test_a_hit_with_no_amount_and_no_attack_def_takes_the_attackers_damage():
-    source = SimpleNamespace(get_full_weapon_damage=lambda: 25, get_full_magic_damage=lambda: 40)
+def test_a_def_on_a_body_with_no_card_is_its_damage_plus_the_attackers_stat():
+    """The same formula for player and monster: the def's number, plus the stat it scales with."""
+    source = SimpleNamespace(stats={"attack": 10, "magic": 40})
     body = _body()
-    InteractionResolver().apply(_hit(body, source=source, attack_type="weapon"))
-    InteractionResolver().apply(_hit(body, source=source, attack_type="magic"))
-    assert body.health == 100 - 25 - 40
+    resolver = InteractionResolver()
+    resolver.apply(_hit(body, source=source, attack_def=attack("sword")))       # 15 + 10
+    assert body.health == 75
+    resolver.apply(_hit(body, source=source, attack_def=attack("flame")))       # fire 5 + 40
+    assert body.health == 30
+    resolver.apply(_hit(body, source=SimpleNamespace(stats={}), attack_def=attack("spear_thrust"),
+                        scale=0.5))                                              # 6 * 0.5
+    assert body.health == 27
+
+
+def test_holy_alone_is_its_power_even_on_a_carded_body():
+    from damage_data import body as body_card
+    from defence_profile import natural_profile
+    card = body_card("warrior")
+    body = _body(body_def=card, defence=natural_profile(card))
+    InteractionResolver().apply(_hit(body, source=None, attack_def=attack("sun_bolt")))
+    assert body.health == 100 - 8
+
+
+@pytest.mark.parametrize("fields", [{}, {"amount": 5, "attack_def": attack("sword")}],
+                         ids=["neither", "both"])
+def test_a_hit_needs_a_def_or_an_amount_not_both(fields):
+    with pytest.raises(ValueError):
+        InteractionResolver().apply(_hit(_body(), **fields))
 
 
 def test_take_damage_subtracts_stamps_and_reacts_and_zero_does_nothing():

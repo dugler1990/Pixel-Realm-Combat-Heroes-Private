@@ -18,6 +18,8 @@ class InteractionContext:
     owner: Any = None
     source_team: Optional[str] = None
     target: Any = None
+    # A number already priced (a co-op relay, a lightning hop, lava per second). A hit has an
+    # amount or an attack_def, never both: the def is the price.
     amount: Optional[float] = None
     attack_type: Optional[str] = None
     phase: Optional[str] = None
@@ -26,9 +28,11 @@ class InteractionContext:
     impulse_x: Optional[float] = None
     impulse_y: Optional[float] = None
     tags: Set[str] = field(default_factory=set)
-    # The AttackDef (damage_data.py) this hit is; None for an old path. A delivery is priced
-    # by hit_resolve before receive_interaction. No card, and holy or unholy alone, stay today's amount.
+    # The AttackDef (damage_data.py) this hit is. Its damage plus the attacker's stat is the price
+    # (hit_resolve), before receive_interaction.
     attack_def: Any = None
+    # The share of the def's price this hit carries: a blast's falloff, a charge, a meteor's size.
+    scale: float = 1.0
     # World pixel where the hit landed (hit_core.find_contacts); None for blasts and old paths.
     contact: Optional[Tuple[int, int]] = None
     # The attack's travel on the ground (a shot's movement). None: source to target, and a
@@ -506,23 +510,24 @@ class InteractionResolver:
         return LANDED
 
     def _price(self, ctx: InteractionContext) -> None:
-        """The one place a hit's amount is set. An attack def is priced by hit_resolve (and
-        starts its elements). Without one, a stated amount stays, and a hit with no amount
-        takes the attacker's weapon or magic damage."""
+        """The one place a hit's amount is set. A stated amount is already priced and stays.
+        An attack def: against a body card, hit_resolve prices it (and starts its elements);
+        otherwise its flat price. Neither, or both: an error, never a silent 0."""
         from damage_rules import landed
-        from hit_resolve import apply_element, resolve
+        from hit_resolve import apply_element, flat, resolve
 
+        if ctx.attack_def is None:
+            if ctx.amount is None:
+                raise ValueError(f"damage from {ctx.source_kind!r} has no attack def and no amount")
+            return
+        if ctx.amount is not None:
+            raise ValueError(f"damage from {ctx.source_kind!r} has both an attack def and an amount")
         priced = resolve(ctx)
         if priced is not None:
             ctx.amount = landed(priced)
             apply_element(ctx, priced, self._now_ms())
             return
-        source = ctx.source
-        if ctx.amount is None and hasattr(source, "get_full_weapon_damage"):
-            if ctx.attack_type == "weapon":
-                ctx.amount = source.get_full_weapon_damage()
-            elif hasattr(source, "get_full_magic_damage"):
-                ctx.amount = source.get_full_magic_damage()
+        ctx.amount = flat(ctx)
 
     def strike(self, targets, hits=None, rehit_ms=None, contacts=None, **fields) -> list:
         """Apply one attack to every target it touched: the attack's repeat rule, the team rule

@@ -174,7 +174,7 @@ def test_storm_bolt_jumps_by_charge_and_stops():
     assert bamboo == 20
 
 
-def test_apply_fire_spit_on_loincloth_burns_and_does_not_ask_magic():
+def test_apply_fire_spit_on_loincloth_burns():
     from types import SimpleNamespace
     from Interaction import LANDED, InteractionContext, InteractionResolver
     from conditions import ConditionClock, condition
@@ -203,11 +203,8 @@ def test_apply_fire_spit_on_loincloth_burns_and_does_not_ask_magic():
             self.health -= ctx.amount
 
     class Source:
-        stats = {"magic": 99}
+        stats = {}
         team_id = "player"
-
-        def get_full_magic_damage(self):
-            raise AssertionError("get_full_magic_damage")
 
     target = Body()
     ctx = InteractionContext(

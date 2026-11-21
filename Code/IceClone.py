@@ -46,7 +46,6 @@ class IceClone(Trap):
                 source_team=getattr(self, "source_team", None)
                 or getattr(getattr(self, "owner", None), "team_id", "neutral"),
                 target=sprite,
-                amount=getattr(self, "amount", 50) or 50,
                 attack_type=getattr(self, "attack_type", "explosion"),
                 tags=set(getattr(self, "tags", {"special"})),
                 attack_def=getattr(self, "attack_def", None),

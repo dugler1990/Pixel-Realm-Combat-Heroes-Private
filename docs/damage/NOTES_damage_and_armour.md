@@ -36,8 +36,10 @@ drawn, and armour is where each piece is drawn, not a whole body region.
   (`apply` = the one team rule `team_allows`, then `land`; `strike` checks the team once per target,
   then `land`). `land` **decides**: the body's gate (`Entity.can_receive_interaction`: health left;
   shoves need `takes_impulse`), the `invulnerable` condition (blocks all damage, heat and cold too;
-  nothing grants it by default), the price (`_price`: attack def, else the stated amount, else the
-  attacker's weapon or magic damage), the elements. Returns `LANDED`, `SPENT` (invulnerable) or
+  nothing grants it by default), the price (`_price`: a hit has an attack def or an already-priced
+  amount, never both, never neither; the def's damage + the attacker's `scales_with` stat, times
+  `ctx.scale`; a card prices it in `hit_resolve.resolve`, else `hit_resolve.flat`), the elements.
+  Damage numbers live only in `attacks.json`; a monster's strength is `monster_data` `stats`. Returns `LANDED`, `SPENT` (invulnerable) or
   `REFUSED`. `Entity.take_damage` is the one place health goes down; a class reacts in `on_hurt`;
   at 0 `die()` runs once (`is_dead`, condition notice) and calls `on_death` (leave the tree, kill;
   classes add particles, sound, XP; the player stays on screen). The resolver records the attacker
@@ -68,9 +70,8 @@ drawn, and armour is where each piece is drawn, not a whole body region.
 ## A hit, step by step
 
 0. **Team and avoid**: existing team policy (`Interaction.py`), dodge, parry, block. Unchanged.
-1. **Amount from attacker**: the attack def's `damage`, plus attacker stats for player attacks
-   (today `get_full_weapon_damage` / `get_full_magic_damage`, computed in two receivers; moves into
-   the resolver).
+1. **Amount from attacker**: the attack def's `damage` plus the attacker's stat (`scales_with`),
+   player and monster alike, times the hit's share (`scale`: falloff, charge, meteor size).
 2. **Contact point**: the pixel where the attack met the body (see Contact).
 3. **Physical** (attack has a delivery), layers outer → inner at the contact point:
    - pierce: `excess = penetration − stopping_power`. `≤ 0`: stops at this layer. `> 0`: next layer
@@ -450,7 +451,7 @@ its scenario rows, a perf line in `Code/NOTES_performance.md` if it touches the 
 → `refactor/elemental` (7, built, not watched in the window) → `refactor/damage-path` (one damage
 path, worktree `..\Pixel-Realm-damage-path`, from 7's last commit; the temperature work still
 uncommitted in `..\Pixel-Realm-elemental` does not have it yet).
-Tests: the targeted set, same 11 known failures (540 passed after the foundation cleanup). In play, knockback uses
+Tests: the targeted set, same 11 known failures (543 passed after the foundation cleanup). In play, knockback uses
 mass and worn weight, the mesh hero is hit on his points, a pierce stops on plate, a haste buff
 adds to speed until its end (the `haste` scene is the only thing that grants it), and a fire or ice
 hit on a body card uses the elemental rule.
@@ -650,7 +651,21 @@ hit on a body card uses the elemental rule.
   before). Crowd bench, 3 runs each, 600 frames, 40 units: before mean 8.28 / 8.66 / 8.24 ms, p95
   11.7 / 12.9 / 11.4, strike 278 / 223 / 248 µs over 36 / 33 / 33 targets (~7 µs each); after mean
   7.47 / 7.73 / 7.78 ms, p95 10.9 / 11.8 / 11.2, strike 192 / 168 / 163 µs over 38 / 37 / 34 (~4.8
-  µs each). Step 7 (prices from defs only) not started: see the plan's open question.
+  µs each).
+- 2026-11-21: foundation step 7, prices from defs only. Douglas: the number belongs in the def; a
+  monster's strength is its stat. A hit has a def or an already-priced amount (relay, hop, lava),
+  never both, never neither (ValueError). Removed: `damage` in `weapon_data` (6) and in every monster
+  attack (36), flame/ice_ball `strength`, leap_slam `base_damage`, meteor `burst_damage`/`dot_damage`
+  (now `scale`), `_resolve_projectile_damage_payload`, trap/ice-clone `amount`,
+  `Player.get_full_*_damage`. Monsters whose number was above the def got `stats.attack` = the
+  difference (warriors 1-2, workers 1, chiefs 5, venom plant 10); every monster attack def
+  `scales_with` attack or magic. Changes in play: ice mage's ice shard blow 15 → 8 (its def; the
+  staff keeps 15); meteor fire now scales with size like its blow; a blast or leap on a body with no
+  card rounds to a whole number. Holy or unholy alone is its power (`flat`). Checks: targeted set 11
+  failed, same names, 543 passed; `interaction_validation.py` same as before (only FactionPolicyRoute,
+  stale); headless smoke in the real level: warrior_01 spear on a bare body 8 (was 8), arrows from
+  warrior_06 land on the hero, meteor impact and embers land, hero's unarmed hit lands on a squid.
+  Crowd bench after: mean 7.73 / 7.83 / 8.37 ms, p95 10.6 / 10.7 / 12.7, strike 181 / 161 / 176 µs.
 
 ## Tried and dropped
 

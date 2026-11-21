@@ -27,6 +27,7 @@ from abilities.dash import DashAbility  # noqa: E402
 from abilities.protocol import CombatAbilityContext  # noqa: E402
 from hashRect import HashableRect  # noqa: E402
 from Interaction import InteractionContext, InteractionResolver  # noqa: E402
+from damage_data import attack  # noqa: E402
 
 
 class _Body:
@@ -99,7 +100,7 @@ def _dash(**config):
         "speed_mult": 1,
         "duration_ms": 99999,
         "collision_mode": "damage_on_hit",
-        "damage": 12,
+        "attack": "squid_slap",
         "attack_type": "melee",
     }
     base.update(config)
@@ -125,7 +126,7 @@ def test_damage_on_hit_hits_the_body_not_its_snapshot():
     applied = resolver.applied[0]
     assert isinstance(applied, InteractionContext)
     assert applied.target is target
-    assert applied.amount == 12
+    assert applied.attack_def is attack("squid_slap") and applied.amount is None   # priced in land
     assert applied.source_kind == "dash"
 
 

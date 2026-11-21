@@ -269,8 +269,6 @@ class MeteorStrike(pygame.sprite.Sprite):
         owner=None,
         source_team=None,
         scale: float = 1.0,
-        burst_damage: int = 75,
-        dot_damage: int = 8,
         dot_interval_ms: int = 500,
         linger_ms: int = 3000,
         impact_radius: float = 90,
@@ -293,8 +291,9 @@ class MeteorStrike(pygame.sprite.Sprite):
         self.scale = float(scale)
         # Size weight at 1.0 = config baseline; bigger → more damage/knockback, slower.
         size_w = max(0.45, self.scale)
-        self.burst_damage = int(round(burst_damage * size_w))
-        self.dot_damage = max(1, int(round(dot_damage * (0.65 + 0.35 * size_w))))
+        # The share of each def's price a hit carries (InteractionContext.scale).
+        self.burst_scale = size_w
+        self.dot_scale = 0.65 + 0.35 * size_w
         self.dot_interval_ms = int(dot_interval_ms)
         self.linger_ms = int(linger_ms)
         self.impact_radius = float(impact_radius) * self.scale
@@ -598,9 +597,9 @@ class MeteorStrike(pygame.sprite.Sprite):
             blast, attackable.sprites(), exclude=(self.owner,), body=hit_core.foot_shape
         )
 
-    def _apply_damage(self, amount: int, *, phase: str):
+    def _apply_damage(self, scale: float, *, phase: str):
         resolver = getattr(self.level, "interaction_resolver", None)
-        if resolver is None or amount <= 0:
+        if resolver is None or scale <= 0:
             return
         for target in self._hosts_in_radius():
             ctx = InteractionContext(
@@ -610,7 +609,7 @@ class MeteorStrike(pygame.sprite.Sprite):
                 owner=self.owner,
                 source_team=self.source_team,
                 target=target,
-                amount=amount,
+                scale=scale,
                 attack_type="magic",
                 phase=phase,
                 tags={"meteor", phase},
@@ -660,7 +659,7 @@ class MeteorStrike(pygame.sprite.Sprite):
             )
 
     def _apply_burst(self):
-        self._apply_damage(self.burst_damage, phase="impact")
+        self._apply_damage(self.burst_scale, phase="impact")
         self._apply_explosion_knockback()
         self._maybe_screen_shake()
 
@@ -685,7 +684,7 @@ class MeteorStrike(pygame.sprite.Sprite):
         if now - self.last_dot_ms < self.dot_interval_ms:
             return
         self.last_dot_ms = now
-        self._apply_damage(self.dot_damage, phase="residual")
+        self._apply_damage(self.dot_scale, phase="residual")
 
     def update(self, dt=None):
         now = pygame.time.get_ticks()

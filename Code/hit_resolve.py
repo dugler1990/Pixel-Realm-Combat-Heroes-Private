@@ -1,7 +1,7 @@
 """Turn a damage context into the int the receiver subtracts (damage chunks 5 and 7).
 
-Reads the attack def and the target's body card. No card: the hit keeps the amount it arrived
-with. A card: the blow, then fire, cold and lightning. Holy and unholy add nothing. A body that
+Reads the attack def and the target's body card. A card: the blow, then fire, cold and
+lightning; holy and unholy add nothing there. No card, or holy or unholy alone: `flat`. A body that
 wears nothing stays on its hide and never looks up a region. Lightning hops only after a hit,
 and only as many times as the bolt's arcs allow.
 """
@@ -27,10 +27,10 @@ class _Priced:
 
 
 def resolve(ctx):
-    """A priced hit, or None when this hit keeps the amount it arrived with.
+    """A priced hit, or None when the def is priced flat (`flat`).
 
-    No body card: None. Holy or unholy alone: None, so today's amount stays. Fire, cold or
-    lightning: a result, even when the resist brings the wound to 0.
+    No body card: None. Holy or unholy alone: None. Fire, cold or lightning: a result, even
+    when the resist brings the wound to 0.
     """
     attack = getattr(ctx, "attack_def", None)
     if getattr(ctx, "kind", None) != "damage" or attack is None:
@@ -55,16 +55,19 @@ def resolve(ctx):
 
 
 def _damage(ctx, attack):
-    """The hookup's amount when it set one (a monster's own damage, a blast's falloff);
-    otherwise the def's damage plus the attacker's stat. The stat never raises penetration."""
-    if ctx.amount is not None:
-        return float(ctx.amount)
-    damage = float(attack.damage)
-    stat = attack.scales_with
-    stats = getattr(ctx.source, "stats", None) if ctx.source is not None else None
-    if stat and isinstance(stats, dict) and stat in stats:
-        damage += float(stats[stat])
-    return damage
+    """The blow: the def's damage plus the attacker's stat, times the hit's share. The stat
+    never raises penetration."""
+    return (float(attack.damage) + _stat(attack, ctx.source)) * ctx.scale
+
+
+def flat(ctx):
+    """The def's price with no body to read: the blow, every magic power and the bolt, plus the
+    attacker's stat once, times the hit's share. Holy or unholy alone is its power."""
+    attack = ctx.attack_def
+    total = float(attack.damage) + sum(power for _cat, power in attack.magic) + attack.cold
+    if attack.lightning is not None:
+        total += attack.lightning.damage
+    return int(round((total + _stat(attack, ctx.source)) * ctx.scale))
 
 
 def _center(body):
@@ -170,15 +173,16 @@ def _constitution(target):
 
 def _element_for(ctx, attack, card, layer):
     extra = _stat(attack, ctx.source)
+    share = ctx.scale
     fire = 0.0
     fire_id = CATEGORIES.ids["fire"]
     for cat, power in attack.magic:
         if cat == fire_id:
-            fire = power + extra
-    cold = (attack.cold + extra) if attack.cold else 0.0
+            fire = (power + extra) * share
+    cold = (attack.cold + extra) * share if attack.cold else 0.0
     bolt = attack.lightning
     if bolt is not None:
-        bolt = Lightning(bolt.damage + extra, bolt.reach, bolt.arcs, bolt.spark)
+        bolt = Lightning((bolt.damage + extra) * share, bolt.reach, bolt.arcs, bolt.spark)
     return elemental(
         fire=fire, cold=cold, bolt=bolt, layer=layer, resist=card.resist,
         constitution=_constitution(ctx.target), wet=_wet(ctx.target, card),

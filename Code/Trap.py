@@ -45,7 +45,6 @@ class Trap(Entity):
         self.source_kind = "trap"
         self.attack_type = "trap"
         self.interaction_kind = "damage"
-        self.amount = None
         self.tags = {"trap"}
         self.team_id = "neutral"
         #self.animations = self.load_animations()

@@ -579,16 +579,6 @@ class BasePlayer(Entity):
         else:
             self.plant_sprite_on_hitbox()
 
-    def get_full_weapon_damage(self):
-        base_damage = self.stats["attack"]
-        weapon_damage = weapon_data[self.weapon]["damage"]
-        return base_damage + weapon_damage
-
-    def get_full_magic_damage(self):
-        base_damage = self.stats["magic"]
-        spell_damage = magic_data[self.magic]["strength"]
-        return base_damage + spell_damage
-
     def get_value_by_index(self, index):
         key = self.upgrade_stat_order[index]
         return self.stats.get(key, self.max_stats.get(key, 0))

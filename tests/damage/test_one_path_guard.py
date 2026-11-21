@@ -42,6 +42,9 @@ RULES = [
     ("one attacker record", r"recent_attacker_|retaliate_team_id|retaliate_until_ms|register_retaliation", {}),
     ("one team rule", r"can_potentially_affect|can_team_interact", {}),
     ("ground effects are not hits", r"[\"']effect_state[\"']", {}),
+    ("damage numbers live in the attack defs",
+     r"(^\s*|[{,]\s*)[\"']damage[\"']\s*:|get_full_\w*_damage|_resolve_projectile_damage_payload"
+     r"|[\"'](base_damage|burst_damage|dot_damage)[\"']", {}),
     ("sounds load through sounds.get", r"mixer\.Sound\(",
      {"sounds.py": "the cache", "dialogue/voice.py": "its own loader, one file per line"}),
 ]

@@ -43,7 +43,6 @@ class InstantEvasionAbility(PlayerAbility):
             "source_kind": "special",
             "attack_type": self.config.get("effect_type", "freeze"),
             "attack": self.config.get("attack"),
-            "amount": None,
             "tags": {"summon", "special"},
         }
         create_trap(trap_config)

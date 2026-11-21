@@ -100,7 +100,6 @@ class Spawner:
             )
             trap.source_kind = trap_config.get('source_kind', 'special')
             trap.attack_type = trap_config.get('attack_type', trap_config.get('effect_type', 'special'))
-            trap.amount = trap_config.get('amount')
             trap.tags = set(trap_config.get('tags', {'special'}))
             trap.attack_def = attack_of(trap_config)
             #print(trap_config)
@@ -129,7 +128,6 @@ class Spawner:
             )
             trap.source_kind = trap_config.get('source_kind', 'trap')
             trap.attack_type = trap_config.get('attack_type', trap_config.get('effect_type', 'trap'))
-            trap.amount = trap_config.get('amount')
             trap.tags = set(trap_config.get('tags', {'trap'}))
             trap.attack_def = attack_of(trap_config)
     

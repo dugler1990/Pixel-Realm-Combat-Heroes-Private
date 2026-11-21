@@ -17,12 +17,17 @@ Script and numbers in the notes' Method and Log.
   never a general post-hit grace. Repeat hits stay with `rehit_ms`.
 - Invulnerable blocks all damage, heat and cold included. `over_time` goes.
 - Attacker memory: one fact on every body, two distinct rules read it.
-- Damage numbers live only in attack defs (`Code/config/damage/attacks.json`).
+- Damage numbers live only in attack defs (`Code/config/damage/attacks.json`). A hit = the def's
+  damage + the attacker's stat (`scales_with`), player and monster alike. A strong monster has a
+  higher stat, not its own copy of the number.
 
 ## Status (2026-11-21)
-Steps 1-6 done, one commit each: `202fdcfd`, `d87dc708`, `e429ea58`, `31649c6f`, `faea0307`,
-`0849cecb`. Guard test `tests/damage/test_one_path_guard.py` added (covers 1-6). Step 7 waits on
-the open question below. Changes from the plan as written:
+All 7 steps done. Steps 1-6 one commit each: `202fdcfd`, `d87dc708`, `e429ea58`, `31649c6f`,
+`faea0307`, `0849cecb`; guard test, bench and notes `51033da9`; step 7 its own commit after.
+Changes from the plan as written:
+- Step 7: monsters keep today's hits through an attack stat (`monster_data` `stats.attack`, the
+  difference from the def), not through 20 new defs. Answer from Douglas 2026-11-21: the number
+  belongs in the def; how hard a monster hits is its stat.
 - Step 4: default hit/death sounds stay in code (CombatUnit, NeutralCharacter); a monster's data may
   override them. Putting the same two paths in ~30 `monster_data` entries would be the duplication.
 - Step 3: tribe members leave the entity tree on death always (the worker-only guard flag is gone).
@@ -84,23 +89,18 @@ the open question below. Changes from the plan as written:
      the reset code, the dead flicker, the `land()` check; update `combat_validation_driver.py`.
    - `apply` / `land` return an explicit result: landed / spent (invulnerable) / refused.
    - Done when: `rg "\bvulnerable\b|invulnerability_duration|over_time" Code` → 0.
-7. **Damage numbers from defs only** (open question first)
-   - Found: of 36 monster attacks with a number in `Settings`, 20 differ from their def's damage on
-     purpose (a warrior's spear 8 vs the def's 6; a ghost's chill 20 with a magic-only def). The def
-     is how a hit lands; the monster's number is how hard (`hit_resolve._damage` uses it). Removing
-     them is a balance change (20 new defs, or 20 new numbers), not a cleanup.
-     Player weapons: `weapon_data` damage equals the def for all 6. Magic `strength` sits in
-     `magic_data` and in the def's `magic`.
-   - Recommendation: keep monster numbers (the attacker's strength); remove only true copies:
-     the player's weapon damage comes from the def (+ attack stat), `weapon_data` keeps cooldown and art.
-   - Projectile, weapon, magic damage priced from `attacks.json`; copies in `Settings`
-     (`ranged_attacks` damage, `weapon_data`) removed.
-   - Holy rule: holy or unholy alone (no blow, no fire/cold/lightning) is priced as its power, flat;
-     no element starts. Today it falls through to the stated amount.
-   - The `get_full_*_damage` tier in `_price` goes. A hit with no def and no amount raises an error
-     (not a silent 0).
-   - Guard test (built): add a rule for no `get_full_.*_damage` in pricing.
-   - Done when: the guard test passes.
+7. **Damage numbers from defs only**
+   - A hit carries an attack def or an amount, never both; neither is an error. An amount is
+     already priced (co-op relay, lightning hop, lava per second).
+   - Price: def damage + the attacker's stat, times `InteractionContext.scale` (blast falloff,
+     leap charge, meteor size). A body card: `hit_resolve.resolve`. No card, or holy/unholy alone:
+     `hit_resolve.flat` (blow + every magic power + bolt + stat, once).
+   - Removed copies: `damage` in `weapon_data` and every monster attack, `strength` of flame and
+     ice_ball (heal keeps its own), leap_slam `base_damage`, meteor `burst_damage`/`dot_damage`,
+     the projectile payload lookup, trap/ice-clone `amount`, `Player.get_full_*_damage`.
+   - Monsters: `CombatUnit.stats` from `monster_data` `stats`; every monster attack def
+     `scales_with` attack (blows) or magic (spells).
+   - Guard rule: no `damage` key in code data, no `get_full_*_damage`, no copied base numbers.
 
 ## Next (not this plan)
 - Temperature rebuild: `temperature.py`, sources table, weighted pull, `settle` through the resolver.

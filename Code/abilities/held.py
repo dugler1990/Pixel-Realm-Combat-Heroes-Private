@@ -39,7 +39,8 @@ class HeldMagicAbility(PlayerAbility):
         entity.attacking = True
         entity.attack_time = pygame.time.get_ticks()
         style = list(magic_data.keys())[entity.magic_index]
-        strength = list(magic_data.values())[entity.magic_index]["strength"] + entity.stats["magic"]
+        # Only heal reads it; an attack spell is priced by its def.
+        strength = list(magic_data.values())[entity.magic_index].get("strength", 0) + entity.stats["magic"]
         cost = list(magic_data.values())[entity.magic_index]["cost"]
         self.create_magic(style, strength, cost)
         return True

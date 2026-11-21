@@ -115,7 +115,6 @@ class DashAttack(SpecialAttack):
             "duration_ms": attack_config.get("duration_ms", 350),
             "collision_mode": attack_config.get("collision_mode", "pass_through"),
             "stop_on_wall": attack_config.get("stop_on_wall", False),
-            "damage": attack_config.get("damage"),
             "attack_type": attack_config.get("attack_type", "melee"),
             "hit_once_per_target": attack_config.get("hit_once_per_target", True),
             "rehit_ms": attack_config.get("rehit_ms"),
@@ -181,7 +180,6 @@ class MultiShotIceball(SpecialAttack):
                                             groups = enemy.groups,
                                             owner=enemy,
                                             source_team=getattr(enemy, "team_id", None),
-                                            amount=None,
                                             attack_def=self.attack_def)
             enemy.status = 'MultiShotIceball'
             self.last_used_time = pygame.time.get_ticks()
@@ -268,8 +266,6 @@ class MeteorShower(SpecialAttack):
         self.scatter_radius = float(attack_config.get("scatter_radius", 420))
         self.scale_min = float(attack_config.get("scale_min", 0.35))
         self.scale_max = float(attack_config.get("scale_max", 1.6))
-        self.burst_damage = int(attack_config.get("burst_damage", 75))
-        self.dot_damage = int(attack_config.get("dot_damage", 8))
         self.dot_interval_ms = int(attack_config.get("dot_interval_ms", 500))
         self.linger_ms = int(attack_config.get("linger_ms", 3000))
         self.impact_radius = float(attack_config.get("impact_radius", 90))
@@ -338,8 +334,6 @@ class MeteorShower(SpecialAttack):
             scale=scale,
             owner=enemy,
             source_team=getattr(enemy, "team_id", "enemy"),
-            burst_damage=self.burst_damage,
-            dot_damage=self.dot_damage,
             dot_interval_ms=self.dot_interval_ms,
             linger_ms=self.linger_ms,
             impact_radius=self.impact_radius,

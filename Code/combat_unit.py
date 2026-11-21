@@ -161,6 +161,9 @@ class CombatUnit(Entity):
         self.exp = monster_info["exp"]
         self.speed = monster_info["speed"]
         self.mass = monster_info["mass"]  # knockback_scale (Entity.py)
+        # What it adds to each attack def that scales with a stat (hit_resolve): a strong monster
+        # hits harder with the same attack.
+        self.stats = dict(monster_info.get("stats", {}))
         # What is between a hit and the flesh (defence_profile.py): its hide, shared per body.
         self.body_def = body_of(monster_info)
         self.defence = natural_profile(self.body_def)
@@ -172,7 +175,6 @@ class CombatUnit(Entity):
         
         #### All in combat config now
         self.combat_config = monster_info["combat_config"]
-        # self.attack_damage = monster_info["damage"]
         # self.attack_radius = monster_info["attack_radius"]
         # self.notice_radius = monster_info["notice_radius"]
         # self.melee_attack_radius = monster_info.get("melee_attack_radius", self.attack_radius)

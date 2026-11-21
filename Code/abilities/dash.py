@@ -65,7 +65,6 @@ class DashAbility(PlayerAbility):
             "speed_mult": float(self.config.get("speed_mult", 3)),
             "collision_mode": self.collision_mode,
             "stop_on_wall": bool(self.config.get("stop_on_wall", False)),
-            "damage": self.config.get("damage"),
             "attack_type": self.config.get("attack_type", "melee"),
             "hit_once_per_target": bool(self.config.get("hit_once_per_target", True)),
             "hits": {},
@@ -139,7 +138,7 @@ class DashAbility(PlayerAbility):
         Bodies come from the entity tree around the dasher (hit_core.bodies_near).
         hit_once_per_target False keeps no record, so it hits every frame.
         """
-        if runtime.get("damage") is None:
+        if runtime.get("attack_def") is None:
             return
         level = getattr(entity, "level", None)
         if level is None and isinstance(context, CombatAbilityContext):
@@ -160,7 +159,6 @@ class DashAbility(PlayerAbility):
             source=entity,
             owner=entity,
             source_team=getattr(entity, "team_id", None),
-            amount=runtime["damage"],
             attack_type=runtime["attack_type"],
             attack_def=runtime["attack_def"],
         )

@@ -44,11 +44,11 @@ def _ctx(target, **fields):
     return InteractionContext(**base)
 
 
-def test_no_attack_and_holy_leave_the_amount_and_fire_is_priced():
+def test_no_attack_and_holy_are_priced_flat_and_fire_here():
     target = _worn()
     assert resolve(_ctx(target, amount=9)) is None
-    assert resolve(_ctx(target, amount=9, attack_def=attack("curse_bolt"))) is None
-    flame = resolve(_ctx(target, amount=9, attack_def=attack("flame")))
+    assert resolve(_ctx(target, attack_def=attack("curse_bolt"))) is None
+    flame = resolve(_ctx(target, attack_def=attack("flame")))
     assert flame is not None and landed(flame) == 0
 
 
@@ -59,12 +59,12 @@ def test_unarmoured_uses_the_hide_and_does_not_look_up_a_region(monkeypatch):
     monkeypatch.setattr(body_regions, "hit_layers", boom)
     target = SimpleNamespace(body_def=body("barb"), defence=natural_profile(body("barb")),
                              team_id="player")
-    result = resolve(_ctx(target, amount=6, attack_def=attack("arrow"), contact=(1, 2)))
+    result = resolve(_ctx(target, attack_def=attack("arrow"), contact=(1, 2)))
     assert result.reached_flesh is True
     assert landed(result) == 6
 
 
-def test_a_set_amount_is_the_damage_and_the_stat_is_not_added(monkeypatch):
+def test_the_share_scales_the_def_and_the_stat(monkeypatch):
     seen = {}
 
     def fake(delivery, damage, penetration, force, layers):
@@ -73,8 +73,8 @@ def test_a_set_amount_is_the_damage_and_the_stat_is_not_added(monkeypatch):
 
     monkeypatch.setattr(hit_resolve, "physical", fake)
     source = SimpleNamespace(stats={"attack": 10})
-    resolve(_ctx(_worn(), amount=6, attack_def=attack("sword"), source=source))
-    assert seen["damage"] == 6
+    resolve(_ctx(_worn(), attack_def=attack("sword"), source=source, scale=0.5))
+    assert seen["damage"] == (15 + 10) * 0.5
 
 
 def test_a_player_sword_adds_the_attack_stat(monkeypatch):
@@ -104,7 +104,7 @@ def test_points_front_piece_then_the_region_under_it(monkeypatch):
 
     monkeypatch.setattr(hit_resolve, "physical", fake)
     monkeypatch.setattr(body_regions, "hit_layers", spot)
-    resolve(_ctx(_worn(), amount=6, attack_def=attack("arrow"), contact=(3, 4)))
+    resolve(_ctx(_worn(), attack_def=attack("arrow"), contact=(3, 4)))
     assert seen["layers"] == (PLATE, GAMBESON, HIDE)
 
 
@@ -120,7 +120,7 @@ def test_a_skin_pixel_is_the_hide_only(monkeypatch):
 
     monkeypatch.setattr(hit_resolve, "physical", fake)
     monkeypatch.setattr(body_regions, "hit_layers", spot)
-    resolve(_ctx(_worn(), amount=6, attack_def=attack("arrow"), contact=(3, 4)))
+    resolve(_ctx(_worn(), attack_def=attack("arrow"), contact=(3, 4)))
     assert seen["layers"] == (HIDE,)
 
 
@@ -136,7 +136,7 @@ def test_capsules_keep_the_spots_own_stack(monkeypatch):
 
     monkeypatch.setattr(hit_resolve, "physical", fake)
     monkeypatch.setattr(body_regions, "hit_layers", spot)
-    resolve(_ctx(_worn(), amount=6, attack_def=attack("arrow"), contact=(3, 4)))
+    resolve(_ctx(_worn(), attack_def=attack("arrow"), contact=(3, 4)))
     assert seen["layers"] == (GAMBESON, HIDE)
 
 
@@ -152,12 +152,11 @@ def test_no_contact_uses_the_chest_stack(monkeypatch):
         return Physical(damage, 0.0, False, None)
 
     monkeypatch.setattr(hit_resolve, "physical", fake)
-    resolve(_ctx(_worn(), amount=25, attack_def=attack("leap_slam")))
+    resolve(_ctx(_worn(), attack_def=attack("leap_slam")))
     assert seen["layers"][0] is PLATE and HIDE in seen["layers"]
 
 
 def test_apply_sets_the_landed_int_and_the_body_subtracts_it():
-    """A priced hit keeps its price: the attacker's flat weapon damage (999) is not used."""
     target = SimpleNamespace(
         body_def=body("raccoon"), defence=natural_profile(body("raccoon")),
         team_id="enemy_1", health=100, hit_time=0,
@@ -167,7 +166,6 @@ def test_apply_sets_the_landed_int_and_the_body_subtracts_it():
     target.receive_interaction = lambda ctx: Entity.receive_interaction(target, ctx)
     source = SimpleNamespace(
         stats={"attack": 10}, team_id="player", rect=pygame.Rect(0, 0, 8, 8),
-        get_full_weapon_damage=lambda: 999, get_full_magic_damage=lambda: 999,
     )
     ctx = InteractionContext(
         kind="damage", source_kind="player_attack", source=source, source_team="player",
@@ -175,4 +173,4 @@ def test_apply_sets_the_landed_int_and_the_body_subtracts_it():
     )
     assert InteractionResolver().apply(ctx) is LANDED
     lost = 100 - target.health
-    assert ctx.amount == lost and lost != 999 and lost < 100
+    assert ctx.amount == lost and 0 < lost < 100
