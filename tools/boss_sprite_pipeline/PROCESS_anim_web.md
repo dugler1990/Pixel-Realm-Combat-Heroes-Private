@@ -44,6 +44,8 @@ Rig steps (`rigging/rig/steps/`, registry in `__init__.py`; run by `rigging/rig/
 | reweight | rigfix/rig_reweight.py heat/smooth | 0 unweighted (info: jumps <= 1.95 %, neutral_bone 0) |
 | rehome_orphans | explode2/fix_neutral_bone.py | 0 on neutral_bone, 0 unweighted |
 | manual | copy a hand-made glb + reason | 0 unweighted |
+| move_pivot | rigging/blender/ops.py (fix_jaw_hinge generalised) | pivot moved |
+| add_bone | joint placement built (ops.py); geometry, sam raise "not built yet" | bone added |
 
 ## Known errors
 
@@ -57,6 +59,9 @@ Rig steps (`rigging/rig/steps/`, registry in `__init__.py`; run by `rigging/rig/
 
 ## Log
 
+- 2026-11-21: move_pivot on the demon pre-hinge rig (rigged_jaw_smoothw.glb), jaw geometry_top: p97 -> z 0.1814, p100 -> 0.1922; hand fix 0.193. Default p100.
+- 2026-11-21: add_bone joint on a barb copy (walk_v1_00 frame 1, scale 0.605): jaw 1.75 cm forward, 0.7 cm up from the skull base; eye.L 2.2 cm left, 3.8 forward, 4.0 up. Not looked at.
+- 2026-11-21: experiment 1, bind_axis joint (segment to driven child) vs bone_y, barb_hit_heavy_01 fixture. Human template: same except chest 9.7 -> 0.0. All bound: bone_y hips 149.3 (fold); joint hips 0.0, neck 0.2, chest 0.0, worst 22.2 right shin, 0 fails. Caveat: joint bind aligns the quantity the pose check measures; twist unmeasured. Setting `bind_axis` (default bone_y in both templates).
 - 2026-11-21: rig steps on barb v1 (test versions, deleted after): roles_walk = v1 roles exactly; rehome_orphans 0 neutral, 0.24 % edges jump > 0.3 (UniRig 1.95); reweight heat 0.5 60 s, 0.275 %, but 146,277 verts on neutral_bone (original heat run on the painted barb left 752) - not chased.
 - 2026-11-21: rigging library phases 1-4: `rigmap` -> `rigging` (roles, sources, settings, rig/version, map/{match,bind,transfer,pose_check,proportions,templates,pairs,character}, blender/pose_io). `retarget_bvh.py` is a driver; TARGETS/PAIRS/profile/env knobs/legacy.py/recipe.py/fits/DEFAULT_CHARACTERS gone. 7 rigs imported as v1. Page bake of barb_hit_heavy_01 via `--character barb`: rc 0, 29.4. Proportions shoulder width moved from clavicle heads to upper-arm heads (clavicles read 4.4x on the barb; now 1.14; demon 1.81).
 

@@ -58,6 +58,15 @@ class Ctx:
     def check(self, name, numbers):
         self.measured[name] = numbers
 
+    def op(self, name, params, glb=None):
+        """A Blender edit from rigging/blender/ops.py on the input (or `glb`), into this version's rig.glb."""
+        p = self.dir / f"op_{name}.json"
+        p.write_text(json.dumps(params), encoding="utf-8")
+        out = self.dir / "rig.glb"
+        self.blender([str(self.pipe / "rigging" / "blender" / "runner.py"), "op", name, str(glb or self.input_glb),
+                      str(p), str(out)], expect="RUNNER_OK")
+        return out, json.loads(Path(str(out) + ".json").read_text(encoding="utf-8"))
+
 
 def evaluate(step, measured: dict) -> dict:
     out = {}

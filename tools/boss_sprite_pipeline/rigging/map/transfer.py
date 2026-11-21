@@ -36,7 +36,7 @@ from .linalg import (Y, Z, aim_dir, axis_angle, mat_to_quat, ncols, quat_axis_an
                      slerp_from_identity, translate, unit)
 
 REQUIRED = ("mode", "ik_body", "root_loc", "reference_pose", "arm_cap", "clavicle_damp",
-            "jaw_closed", "flags")
+            "jaw_closed", "bind_axis", "flags")
 
 
 def cap_elevation(m3, max_deg):
@@ -95,9 +95,10 @@ def transfer(src: dict, rig: dict, roles: dict, use: list, s: dict, idle_rots: d
     rest_head = {t: rest_world[t][:3, 3].copy() for _, _, t in use}
     info = []
 
+    segs = PC.segments(use, src["parent"], parent)
     bind_rot, ref_inv = bind(use, W[f0], src.get("rest_world", {}), rest_rot, s["flags"],
                              s["reference_pose"] if s["reference_pose"] in ("frame1", "tpose") else "idle",
-                             idle_rots)
+                             idle_rots, axis=s["bind_axis"], segments=segs, rest_world=rest_world)
 
     t_of = {r: t for r, _, t in use}
     s_of = {r: sj for r, sj, _ in use}
@@ -133,7 +134,6 @@ def transfer(src: dict, rig: dict, roles: dict, use: list, s: dict, idle_rots: d
     travel = float(rig["height"]) / max(float(src["height_f0"]), 1e-6)
     ref_root = W[f0][root_src][:3, 3].copy() if root_src else np.zeros(3)
 
-    segs = PC.segments(use, src["parent"], parent)
     worst = {}
     rot = {t: [] for _, _, t in use}
     loc = {root_t: []} if root_t in rot else {}

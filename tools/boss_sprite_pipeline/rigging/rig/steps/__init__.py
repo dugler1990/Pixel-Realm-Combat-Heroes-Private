@@ -9,9 +9,9 @@ A new technique is a new module here; nothing else changes.
 """
 from __future__ import annotations
 
-from . import manual, rehome_orphans, reweight, roles_walk
+from . import add_bone, manual, move_pivot, rehome_orphans, reweight, roles_walk
 
-STEPS = {m.NAME: m for m in (roles_walk, reweight, rehome_orphans, manual)}
+STEPS = {m.NAME: m for m in (roles_walk, reweight, rehome_orphans, move_pivot, add_bone, manual)}
 
 
 def get(name: str):

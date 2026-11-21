@@ -21,6 +21,7 @@ TEMPLATES = {
             # bind match on the hips folds him (149.3 deg on barb_hit_heavy_01); the neck was
             # always skipped in the old code
             "bind": {"root": False, "neck": False},
+            "bind_axis": "bone_y",
             "arm_cap": 90.0,
             "clavicle_damp": 1.0,
             "jaw_closed": 0.0,
@@ -36,6 +37,7 @@ TEMPLATES = {
             "bind_default": False,
             # the old code always skipped the key "neck", which on him is the skull
             "bind": {"head": False},
+            "bind_axis": "bone_y",
             "arm_cap": 35.0,
             "clavicle_damp": 1.0,
             "jaw_closed": 14.0,

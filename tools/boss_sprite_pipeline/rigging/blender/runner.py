@@ -2,8 +2,9 @@
 process that did not make it - NOTES_rig_jaw_sam3.md).
 
     .venv-bpy/Scripts/python.exe runner.py check <name> <glb> <out.json>
+    .venv-bpy/Scripts/python.exe runner.py op <name> <in.glb> <params.json> <out.glb>   (numbers -> out.glb.json)
 
-Prints RUNNER_OK <out.json> last. Proven one-off scripts (rig_reweight.py, fix_neutral_bone.py,
+Prints RUNNER_OK <out> last. Proven one-off scripts (rig_reweight.py, fix_neutral_bone.py,
 anun_roles.py) are still called directly by their steps until they are folded in here.
 """
 from __future__ import annotations
@@ -19,6 +20,14 @@ if REPO not in sys.path:
 
 
 def main(argv):
+    if len(argv) == 5 and argv[0] == "op":
+        _, name, glb, params, out = argv
+        from tools.boss_sprite_pipeline.rigging.blender import ops
+        result = ops.run(name, glb, params, out)
+        with open(out + ".json", "w") as f:
+            json.dump(result, f, indent=1)
+        print("RUNNER_OK", out, flush=True)
+        return
     if len(argv) != 4 or argv[0] != "check":
         raise SystemExit(__doc__)
     _, name, glb, out = argv

@@ -85,6 +85,16 @@ def test_human_template_passes_and_binding_the_neck_reaches_the_bake():
     assert abs(skip["pose_check"]["by_role"]["neck"] - bound["pose_check"]["by_role"]["neck"]) > 10
 
 
+def test_joint_bind_binds_the_hips_without_folding_them():
+    """Experiment 1 (2026-11-21): every role bound, bind_axis joint. Not the default; twist unmeasured."""
+    got, _ = _bake("barb_hit", "barb", dict(HUMAN, bind={}, bind_axis="joint"))
+    br = got["pose_check"]["by_role"]
+    assert br["root"] <= 0.1 and br["neck"] <= 0.3 and br["chest"] <= 0.1
+    assert abs(got["pose_check"]["worst"]["deg"] - 22.2) <= TOL and not got["pose_check"]["fail"]
+    folded, _ = _bake("barb_hit", "barb", dict(HUMAN, bind={}))
+    assert folded["pose_check"]["by_role"]["root"] == 149.3
+
+
 def test_demon_lock():
     got, n = _bake("demon_walk", "demon", templates.get("demon")["map"])
     assert n == 20

@@ -22,6 +22,9 @@ MAP_SETTINGS = [
     Setting("reference_pose", "str", "pose the bind is measured against: frame1, tpose, or an idle_pose.json path"),
     Setting("bind_default", "bool", "bind match for every paired role unless listed in bind"),
     Setting("bind", "roles_bool", "per-role bind match, overriding bind_default"),
+    Setting("bind_axis", "choice", "bone_y: aim each bone's own +Y axis (graded barb bake); joint: aim the "
+            "joint-to-joint segment (experiment 1: binds the barb's hips without folding them)",
+            default="bone_y", choices=("bone_y", "joint")),
     Setting("arm_cap", "float", "highest the upper arm may point above horizontal; 90 = open",
             min=0.0, max=120.0, unit="deg"),
     Setting("clavicle_damp", "float", "share of the source clavicle rotation copied; 1 = all",
