@@ -1,4 +1,5 @@
 import pygame
+import sounds
 from Support import import_folder, position_surface_mask_midbottom_at
 from Settings import *
 from game_logging import get_debug_logger
@@ -163,8 +164,7 @@ class BasePlayer(Entity):
         self.invulnerability_duration = 0
 
         # Import Sound
-        self.weapon_attack_sound = pygame.mixer.Sound("../Audio/Sword.wav")
-        self.weapon_attack_sound.set_volume(0.2)
+        self.weapon_attack_sound = sounds.get("../Audio/Sword.wav", 0.2)
 
         self.action_controller = build_action_controller(
             self,

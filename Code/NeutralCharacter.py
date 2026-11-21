@@ -1,4 +1,5 @@
 import pygame
+import sounds
 import random
 from Settings import TILESIZE
 
@@ -20,7 +21,8 @@ class NeutralCharacter(Entity):
         super().__init__(groups,
                          layout_callback_update_quad_tree = layout_callback_update_quad_tree )
         #print(f"name : {name}")
-        self.hit_sound = pygame.mixer.Sound("../Audio/Hit.wav")
+        self.hit_sound = sounds.get("../Audio/Hit.wav")
+        self.death_sound = sounds.get("../Audio/Hit.wav")
         self.vulnerable = True
         self.sprite_type = "neutral"
         self.pos = pos

@@ -1,4 +1,5 @@
 import pygame, sys
+import sounds
 import os
 import json
 
@@ -85,7 +86,7 @@ class Game:
         pygame.mixer.set_num_channels(max(16, pygame.mixer.get_num_channels()))
         pygame.mixer.set_reserved(1)
         self.music_channel = pygame.mixer.Channel(0)
-        self.main_music = pygame.mixer.Sound("../Audio/Main.ogg")
+        self.main_music = sounds.get("../Audio/Main.ogg")
         self.music_channel.play(self.main_music, loops=-1)
         self.level_selection = LevelSelection(self, self.input_manager)
         self.death_menu = DeathMenu(self, self.input_manager)

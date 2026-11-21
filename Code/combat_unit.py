@@ -1,4 +1,5 @@
 import pygame
+import sounds
 from damage_data import body_of
 from defence_profile import natural_profile
 import math
@@ -244,13 +245,10 @@ class CombatUnit(Entity):
         self.hit_time = None
         self.invincibility_duration = 300
 
-        # Sounds
-        self.death_sound = pygame.mixer.Sound("../Audio/Death.wav")
-        self.hit_sound = pygame.mixer.Sound("../Audio/Hit.wav")
-        self.attack_sound = pygame.mixer.Sound(monster_info["attack_sound"])
-        self.death_sound.set_volume(0.6)
-        self.hit_sound.set_volume(0.6)
-        self.attack_sound.set_volume(0.3)
+        # Sounds: the monster's data may name its own hit and death sounds.
+        self.death_sound = sounds.get(monster_info.get("death_sound", "../Audio/Death.wav"), 0.6)
+        self.hit_sound = sounds.get(monster_info.get("hit_sound", "../Audio/Hit.wav"), 0.6)
+        self.attack_sound = sounds.get(monster_info["attack_sound"], 0.3)
         
         # Combat Strategy Setup
         parry_effects = {

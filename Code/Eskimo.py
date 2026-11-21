@@ -45,8 +45,6 @@ class Eskimo(NeutralCharacter):
         self.speed = 2
         self.ice_holes = {} 
         self.ice_hole_duration = 20  # Ice hole closes after 20 seconds of no fishing
-        self.hit_sound = pygame.mixer.Sound("../Audio/Hit.wav")
-        self.death_sound = pygame.mixer.Sound("../Audio/Hit.wav")
         
 
 
