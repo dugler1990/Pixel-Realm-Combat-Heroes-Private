@@ -1,7 +1,7 @@
 """Turn a damage context into the int the receiver subtracts (damage chunks 5 and 7).
 
 Reads the attack def and the target's body card. A card: the blow, then fire, cold and
-lightning; holy and unholy add nothing there. No card, or holy or unholy alone: `flat`. A body that
+lightning, and holy and unholy through armour times the kind (`sacred`). No card: `flat`. A body that
 wears nothing stays on its hide and never looks up a region. Lightning hops only after a hit,
 and only as many times as the bolt's arcs allow.
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 import defence_profile
 import temperature
 from damage_data import CATEGORIES, Lightning
-from damage_rules import CATCH, Elemental, cold_sticks, elemental, physical, resist_of
+from damage_rules import CATCH, Elemental, cold_sticks, elemental, past_resist, physical, resist_of, sacred
 
 
 class _Priced:
@@ -30,14 +30,15 @@ class _Priced:
 def resolve(ctx, now=None):
     """A priced hit, or None when the def is priced flat (`flat`).
 
-    No body card: None. Holy or unholy alone: None. Fire, cold or lightning: a result, even
+    No body card: None. Holy and unholy go through armour, times the kind. Fire, cold or lightning: a result, even
     when the resist brings the wound to 0. A body with a temperature takes fire and cold as
     warmth (`now` needed): the price keeps the shock, a caught cloth's burn and the bolt.
     """
     attack = getattr(ctx, "attack_def", None)
     if getattr(ctx, "kind", None) != "damage" or attack is None:
         return None
-    if not attack.delivery and not _has_element(attack):
+    holy = _has_sacred(attack)
+    if not attack.delivery and not _has_element(attack) and not holy:
         return None
     target = ctx.target
     defence = getattr(target, "defence", None)
@@ -49,11 +50,12 @@ def resolve(ctx, now=None):
     if attack.delivery:
         phys = physical(attack.delivery, _damage(ctx, attack), attack.penetration, attack.force, layers)
     element = _element_for(ctx, attack, card, layers[0], now) if _has_element(attack) else None
-    if element is None:
+    through = sacred(attack.magic, _stat(attack, ctx.source), ctx.scale, card.resist, card.kind) if holy else 0.0
+    if element is None and not holy:
         return phys
     if phys is None:
-        return _Priced(0.0, 0.0, element)
-    return _Priced(phys.amount, phys.bruise, element, phys.reached_flesh, phys.stopped_at)
+        return _Priced(through, 0.0, element)
+    return _Priced(phys.amount + through, phys.bruise, element, phys.reached_flesh, phys.stopped_at)
 
 
 def _damage(ctx, attack):
@@ -139,6 +141,11 @@ def _card(target, defence):
     return card
 
 
+def _has_sacred(attack):
+    holy, unholy = CATEGORIES.ids["holy"], CATEGORIES.ids["unholy"]
+    return any(cat in (holy, unholy) for cat, _power in attack.magic)
+
+
 def _has_element(attack):
     if attack.cold or attack.lightning is not None:
         return True
@@ -207,7 +214,7 @@ def _into_warmth(ctx, card, layer, fire, cold, bolt, now):
                      resist=card.resist, constitution=_constitution(target), wet=_wet(target, card))
     jump = 0.0
     if fire > 0 and not caught:
-        jump += max(0.0, fire - resist_of(card.resist, "fire"))
+        jump += past_resist(fire, resist_of(card.resist, "fire"))
     if cold:
         jump -= cold_sticks(cold, card.resist, _constitution(target), _wet(target, card))
     where = temperature.SKIN if layer is None or layer is card.natural else temperature.OUTER

@@ -105,14 +105,49 @@ def test_fire_table():
     assert CATCH == 0.5
 
 
-def test_parent_resist_cuts_the_power_and_a_stored_weakness_does_not_raise_it():
+def test_parent_resist_cuts_the_power_and_a_weakness_raises_it():
     assert resist_of({"fire": 0, "elemental": 10}, "fire") == 10
     caught = _fire(12, _layer(flammability=0.8), {"elemental": 10})
     assert caught.wound == 2
-    ghost = _fire(15, _layer(), body("ice_ghost").resist)
-    bare = _fire(15, _layer())
-    assert round(ghost.wound) == round(bare.wound) == 5
-    assert ghost.wound < _fire(45, _layer()).wound
+    ghost = _fire(15, _layer(), body("ice_ghost").resist)      # fire -30: a weakness
+    assert resist_of(body("ice_ghost").resist, "fire") == -30
+    assert ghost.wound == _fire(45, _layer()).wound
+
+
+def _hit(name, card_name, worn=()):
+    """Price `name` on a body of `card_name` wearing `worn` (item bases), through hit_resolve."""
+    from types import SimpleNamespace
+
+    import json as _json
+    from defence_profile import build_profile, natural_profile
+    from hit_resolve import resolve
+    from damage_rules import landed
+
+    card = body(card_name)
+    bases = _json.loads((Path(__file__).resolve().parents[2] / "Graphics" / "Standard_Items"
+                         / "item_bases.json").read_text(encoding="utf-8"))
+    if worn == "plate":
+        worn = [n for n, b in bases.items() if not n.startswith("_") and b.get("set") == "fullplate"]
+    defence = build_profile(card, [(n, bases[n], None) for n in worn]) if worn else natural_profile(card)
+    target = SimpleNamespace(body_def=card, defence=defence, stats={}, conditions={})
+    ctx = SimpleNamespace(kind="damage", attack_def=attack(name), target=target, source=None,
+                          scale=1.0, contact=None, toward=None)
+    return landed(resolve(ctx, 0))
+
+
+def test_holy_is_times_the_kind_and_goes_through_plate():
+    assert _hit("sun_bolt", "demon") == 16                    # holy 8 x 2
+    assert _hit("sun_bolt", "barb") == 4                      # living x 0.5
+    assert _hit("sun_bolt", "barb", "plate") == 4               # plate does not stop it
+    assert _hit("curse_bolt", "ice_ghost") == 0               # unholy does nothing to undead
+
+
+def test_holy_on_a_blow_adds_to_what_gets_through():
+    from damage_rules import sacred
+    holy = CATEGORIES.ids["holy"]
+    assert sacred(((holy, 20),), 0, 1.0, {}, "demon") == 40
+    assert sacred(((holy, 20),), 0, 1.0, {"holy": -10}, "living") == 15   # weakness adds
+    assert sacred(((holy, 20),), 0, 1.0, {}, "construct") == 0
 
 
 def test_cold_table():

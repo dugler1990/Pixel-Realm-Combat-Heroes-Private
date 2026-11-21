@@ -44,10 +44,10 @@ def _ctx(target, **fields):
     return InteractionContext(**base)
 
 
-def test_no_attack_and_holy_are_priced_flat_and_fire_here():
+def test_no_attack_is_flat_and_holy_and_fire_are_priced_here():
     target = _worn()
     assert resolve(_ctx(target, amount=9)) is None
-    assert resolve(_ctx(target, attack_def=attack("curse_bolt"))) is None
+    assert landed(resolve(_ctx(target, attack_def=attack("curse_bolt")))) == 9   # unholy x living 1
     flame = resolve(_ctx(target, attack_def=attack("flame")))
     assert flame is not None and landed(flame) == 0
 

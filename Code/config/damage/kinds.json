@@ -1,5 +1,9 @@
 {
   "schema_version": 1,
-  "_about": "Creature kinds (damage chunk 4). Holy / unholy multipliers per kind come in chunk 9 (KIND_MULT). construct: built things (the catapult), not alive.",
-  "kinds": ["living", "undead", "demon", "construct"]
+  "_about": "Creature kinds (damage chunk 4). kind_mult: holy / unholy times this per kind (chunk 9; a kind left out is 1). construct: built things (the catapult), not alive.",
+  "kinds": ["living", "undead", "demon", "construct"],
+  "kind_mult": {
+    "holy":   {"living": 0.5, "undead": 2, "demon": 2, "construct": 0},
+    "unholy": {"living": 1,   "undead": 0, "demon": 0, "construct": 0}
+  }
 }

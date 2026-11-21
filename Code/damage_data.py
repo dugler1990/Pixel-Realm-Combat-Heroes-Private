@@ -374,7 +374,30 @@ def load_bodies(path=BODIES_PATH, kinds=None):
     return bodies
 
 
+def load_kind_mult(path=KINDS_PATH, kinds=None, categories=None):
+    """{category id: {kind: multiplier}} for holy and unholy (chunk 9). A kind left out is 1."""
+    kinds = kinds if kinds is not None else load_kinds(path)
+    categories = categories if categories is not None else CATEGORIES
+    rows = _read(path).get("kind_mult", {})
+    if not isinstance(rows, dict):
+        raise DamageDataError(f"{path}: kind_mult must be a category -> {{kind: number}} map")
+    out = {}
+    for category, row in rows.items():
+        if category not in categories.ids:
+            raise DamageDataError(f"{path}: kind_mult: unknown category {category!r}")
+        if not isinstance(row, dict):
+            raise DamageDataError(f"{path}: kind_mult {category}: must be a kind -> number map")
+        clean = {}
+        for kind, value in row.items():
+            if kind not in kinds:
+                raise DamageDataError(f"{path}: kind_mult {category}: unknown kind {kind!r}")
+            clean[kind] = _number(path, category, f"kind_mult {kind}", value)
+        out[categories.ids[category]] = clean
+    return out
+
+
 KINDS = load_kinds()
+KIND_MULT = load_kind_mult(kinds=KINDS)
 BODIES = load_bodies(kinds=KINDS)
 _BODY_BY_NAME = {b.name: b for b in BODIES}
 

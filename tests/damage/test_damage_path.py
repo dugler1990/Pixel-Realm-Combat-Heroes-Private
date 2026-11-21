@@ -86,13 +86,13 @@ def test_a_def_on_a_body_with_no_card_is_its_damage_plus_the_attackers_stat():
     assert body.health == 27
 
 
-def test_holy_alone_is_its_power_even_on_a_carded_body():
+def test_holy_alone_is_its_power_times_the_kind_on_a_carded_body():
     from damage_data import body as body_card
     from defence_profile import natural_profile
     card = body_card("warrior")
     body = _body(body_def=card, defence=natural_profile(card))
     InteractionResolver().apply(_hit(body, source=None, attack_def=attack("sun_bolt")))
-    assert body.health == 100 - 8
+    assert body.health == 100 - 4          # holy 8 x living 0.5
 
 
 @pytest.mark.parametrize("fields", [{}, {"amount": 5, "attack_def": attack("sword")}],
