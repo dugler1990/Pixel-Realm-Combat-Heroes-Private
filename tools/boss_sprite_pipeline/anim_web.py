@@ -269,6 +269,61 @@ def run_map(clip_id: str, character_id: str, lines: list) -> dict:
             "bake": paths.rel(out / "run.json")}
 
 
+def run_map_many(clip_ids: list, character_id: str, lines: list) -> dict:
+    """Bake many clips in one Blender run and one export. Writes each clip's own run.json and index entry.
+    Returns {clip: entry}. The 68 MB animated.glb is skipped (SKIP_GLB): the page plays the split clips."""
+    char = find_character(character_id)
+    n = int(char["rig"])
+    rec = V.load(character_id, n)
+    clips = [find_clip(c) for c in clip_ids]
+    by_source = {}
+    for c in clips:
+        by_source.setdefault(clip_source(c), []).append(c)
+    out_all, fails = {}, []
+    py = str(bpy_python())
+    view = paths.character_dir(character_id) / "view" / f"v{n}"
+    view.mkdir(parents=True, exist_ok=True)
+    for src, group in by_source.items():
+        stage = library() / "stage" / f"{character_id}_batch"
+        if stage.exists():
+            shutil.rmtree(stage)
+        stage.mkdir(parents=True)
+        for c in group:
+            shutil.copy(resolve_rel(c["bvh"]), stage / f"{c['id']}.bvh")
+        out = paths.character_dir(character_id) / "bakes" / "_batch"
+        if out.exists():
+            shutil.rmtree(out)
+        out.mkdir(parents=True)
+        _log(lines, f"baking {len(group)} clips onto {character_id} v{n} ({src})")
+        _run([py, str(PIPE / "retarget_bvh.py"), "--character", character_id, "--version", str(n), "--source", src,
+              str(stage), str(out)], lines, env={"ANIM_DATA_ROOT": str(data_root()), "SKIP_GLB": "1"}, cwd=str(PIPE))
+        split = [py, str(PIPE / "viewer" / "export_split.py"), str(out / "animated.blend"), str(view)]
+        if (view / "base.glb").is_file():
+            split.append("--clips-only")
+        _run(split, lines, cwd=str(PIPE))
+        run = read_json(out / "run.json", {})
+        for c in group:
+            cid = c["id"]
+            glb = view / "clips" / f"{cid}.glb"
+            if cid not in run.get("clips", {}) or not glb.is_file():
+                _log(lines, f"MISSING {cid}")
+                continue
+            one = dict(run, clips={cid: run["clips"][cid]})
+            write_json(bake_dir(character_id, cid) / "run.json", one)
+            entry = {"glb": paths.rel(glb), "rig": n, "bone_hash": rec["bone_hash"], "roles_hash": rec["roles_hash"],
+                     "bake": paths.rel(bake_dir(character_id, cid) / "run.json")}
+            record_map(cid, character_id, entry)
+            out_all[cid] = entry
+            pc = run["clips"][cid].get("pose_check") or {}
+            if pc.get("fail"):
+                fails.append(f"{cid}: {pc['worst']['bone']} {pc['worst']['deg']}")
+        shutil.rmtree(out, ignore_errors=True)
+    for f in fails:
+        lines.append("pose check FAIL " + f)
+    lines.append(f"MAP_ALL_DONE {len(out_all)} of {len(clip_ids)} baked, pose check FAIL on {len(fails)}")
+    return out_all
+
+
 def record_map(clip_id: str, character_id: str, entry) -> None:
     rows = load_index()
     for row in rows:
@@ -438,6 +493,20 @@ class Handler(BaseHTTPRequestHandler):
 
                 JOBS.start("local", f"map {clip} → {cid}", work)
                 return self._json({"started": True})
+            if url.path == "/api/map_all":
+                cid = str(body.get("character") or "")
+                find_character(cid)
+                ids = [str(c) for c in (body.get("clips") or [])]
+                if not ids or not all(NAME.match(c) for c in ids):
+                    return self._json({"error": "no clips, or a bad clip name"}, 400)
+                for c in ids:
+                    find_clip(c)
+
+                def work(lines, ids=ids, cid=cid):
+                    run_map_many(ids, cid, lines)
+
+                JOBS.start("local", f"map {len(ids)} clips → {cid}", work)
+                return self._json({"started": True, "clips": len(ids)})
             if url.path == "/api/character":
                 cid = str(body.get("character") or "")
                 find_character(cid)

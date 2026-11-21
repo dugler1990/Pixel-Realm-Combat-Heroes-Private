@@ -59,6 +59,7 @@
     <h2 id="title">pick a clip</h2>
     <p id="meta"></p>
     <button id="map">map this clip</button>
+    <button id="mapall" title="every clip in the list (as filtered), not yet baked on this character's current rig">map all shown</button>
     <h2>match</h2>
     <p id="match">—</p>
     <h2>last bake</h2>
@@ -519,6 +520,8 @@ async function refresh() {
     const lines = run ? run.lines : done ? done.lines : [];
     $("log").textContent = [head, ...(lines || [])].filter(Boolean).join("\n");
     $("map").disabled = !!run;
+    $("mapall").disabled = !!run;
+    $("mapall").textContent = "map all shown (" + todo().length + ")";
     $("apply").disabled = !!run;
     $("save").disabled = !!run;
     $("gen").disabled = !!run;
@@ -559,6 +562,24 @@ async function saveMap(rebake) {
     drawForm();
   } catch (err) { $("log").textContent = String(err); }
 }
+function todo() {
+  const ch = character();
+  if (!ch) return [];
+  const q = $("filter").value.toLowerCase();
+  return state.clips.filter((c) => (!q || c.id.toLowerCase().includes(q))
+    && (!c.maps || entryFlag(c.maps[ch.id], ch) !== "mapped" || typeof c.maps[ch.id] === "string"))
+    .map((c) => c.id);
+}
+$("mapall").onclick = async () => {
+  const ch = character();
+  const ids = todo();
+  if (!ch || !ids.length) { $("log").textContent = "nothing to bake: every shown clip is already baked on this rig"; return; }
+  if (!confirm("Bake " + ids.length + " clips onto " + ch.id + " (rig v" + ch.rig + ")?")) return;
+  try {
+    await post("/api/map_all", { character: ch.id, clips: ids });
+    $("log").textContent = "baking " + ids.length + " clips in one Blender run; each shows as mapped when the run ends";
+  } catch (err) { $("log").textContent = String(err); }
+};
 $("save").onclick = () => saveMap(false);
 $("apply").onclick = () => saveMap(true);
 $("gen").onclick = async () => {
