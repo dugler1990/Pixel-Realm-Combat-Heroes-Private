@@ -45,7 +45,7 @@ def _level_stub():
         layout_manager=SimpleNamespace(visible_sprites="visible", entity_quad_tree=None),
     )
     for name in ("calculate_angle", "round_angle", "get_direction_from_angle",
-                 "_resolve_projectile_damage_payload", "_safe_number"):
+                 "_resolve_projectile_damage_payload"):
         setattr(stub, name, types.MethodType(getattr(Level4, name), stub))
     return stub
 

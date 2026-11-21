@@ -30,7 +30,6 @@ class CombatUnit(Entity):
                  groups,
                  obstacle_sprites,
                  combat_context,
-                 #damage_player,
                  #redirect_projectile_callback,
                  #trigger_death_particles,
                  #add_exp,
@@ -226,7 +225,6 @@ class CombatUnit(Entity):
         # TODO: cooldowns just takes the max cooldown from all attacks, i can do better than this
         
         self.attack_cooldown = max([attack["cooldown"] for attack in self.melee_attacks + self.ranged_attacks], default=400)
-        #self.damage_player = damage_player
         #self.trigger_death_particles = trigger_death_particles
         #self.add_exp = add_exp
         self.persistent = persistent

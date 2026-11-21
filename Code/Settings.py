@@ -284,7 +284,6 @@ monster_data = {
 				}
 			],
 			"combat_context": {
-				"damage_player": True,
 				"trigger_death_particles": True,
 				"add_exp": True,
 				"update_quad_tree": True,
@@ -305,7 +304,6 @@ monster_data = {
                "notice_radius": 1000,
                
                 'combat_context':{
-                    'damage_player': True,
                     'trigger_death_particles': True,
                     'add_exp': True,
                     'update_quad_tree': True
@@ -325,7 +323,6 @@ monster_data = {
                "notice_radius": 1000,
                
                 'combat_context':{
-                    'damage_player': True,
                     'trigger_death_particles': True,
                     'add_exp': True,
                     'update_quad_tree': True
@@ -358,7 +355,6 @@ monster_data = {
                                           "parameters": {"radius": 200}}]},
              ],
                 'combat_context':{
-                    'damage_player': True,
                     'trigger_death_particles': True,
                     'add_exp': True,
                     'update_quad_tree': True
@@ -378,7 +374,6 @@ monster_data = {
                "notice_radius": 1000,
                    
                 'combat_context':{
-                    'damage_player': True,
                     'trigger_death_particles': True,
                     'add_exp': True,
                     'update_quad_tree': True
@@ -399,7 +394,6 @@ monster_data = {
                 "notice_radius": 1000,
                 
                 'combat_context':{
-                    'damage_player': True,
                     'trigger_death_particles': True,
                     'add_exp': True,
                     'update_quad_tree': True
@@ -428,7 +422,6 @@ monster_data = {
         "parry_cooldown": 0,
         
             'combat_context':{
-                'damage_player': True,
                 'trigger_death_particles': True,
                 'add_exp': True,
                 'update_quad_tree': True
@@ -453,7 +446,6 @@ monster_data = {
             "parry_cooldown": 0,
             
                 'combat_context':{
-                    'damage_player': True,
                     'trigger_death_particles': True,
                     'add_exp': True,
                     'update_quad_tree': True
@@ -481,7 +473,6 @@ monster_data = {
             "parry_cooldown": 0,
             
             'combat_context':{
-                'damage_player': True,
                 'fire_projectile': True,
                 'trigger_death_particles': True,
                 'add_exp': True,
@@ -510,7 +501,6 @@ monster_data = {
             "parry_cooldown": 0,
             
             'combat_context':{
-                'damage_player': True,
                 'fire_projectile': True,
                 'trigger_death_particles': True,
                 'add_exp': True,
@@ -565,7 +555,6 @@ monster_data = {
                 "parry_cooldown": 1000,
                 'evasive_change_interval': 500,
                 'combat_context':{
-                'damage_player': True,
                 'fire_projectile': True,
                 'redirect_projectile': True,
                 'trigger_death_particles': True,
@@ -655,8 +644,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True,
                                               'fire_projectile': True},
@@ -675,8 +663,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
         "warrior_02": {'health': 118,
@@ -693,8 +680,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
         "warrior_03": {'health': 62,
@@ -711,8 +697,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
         "warrior_04": {'health': 118,
@@ -729,8 +714,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
         "warrior_05": {'health': 84,
@@ -747,8 +731,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
         "warrior_06": {'health': 73,
@@ -765,8 +748,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True,
                                               'fire_projectile': True},
@@ -785,8 +767,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
         "warrior_08": {'health': 73,
@@ -803,8 +784,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
         "warrior_09": {'health': 84,
@@ -821,8 +801,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
         "warrior_10": {'health': 73,
@@ -839,8 +818,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
         "warrior_11": {'health': 62,
@@ -857,8 +835,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
         "warrior_12": {'health': 62,
@@ -875,8 +852,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True,
                                               'fire_projectile': True},
@@ -895,8 +871,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
         "warrior_14": {'health': 118,
@@ -913,8 +888,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
         "warrior_15": {'health': 51,
@@ -931,8 +905,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True,
                                               'fire_projectile': True},
@@ -953,8 +926,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True,
                                               'fire_projectile': True},
@@ -975,8 +947,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True,
                                               'fire_projectile': True},
@@ -997,8 +968,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True,
                                               'fire_projectile': True},
@@ -1017,8 +987,7 @@ monster_data = {
                            'melee_parry_chance': 0.0,
                            'projectile_parry_chance': 0.0,
                            'parry_cooldown': 0,
-                           'combat_context': {'damage_player': True,
-                                              'trigger_death_particles': True,
+                           'combat_context': {'trigger_death_particles': True,
                                               'add_exp': True,
                                               'update_quad_tree': True}}},
     }

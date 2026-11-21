@@ -1637,48 +1637,16 @@ class Level4:
         """Enemy projectiles, and player projectiles a parry turned around."""
         self._strike_with_attack_sprites(self.enemy_attack_sprites)
 
-    def _safe_number(self, value, default=0.0):
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return float(default)
-
     def _resolve_projectile_damage_payload(self, owner, projectile_type=None, base_amount=None):
-        base_damage = base_amount
-        combat_config = {}
-        if owner is not None:
-            owner_config = getattr(owner, "combat_config", None)
-            if isinstance(owner_config, dict):
-                combat_config = owner_config
-        if base_damage is None:
-            ranged_attacks = combat_config.get("ranged_attacks", [])
-            if isinstance(ranged_attacks, list):
-                for attack in ranged_attacks:
-                    if not isinstance(attack, dict):
-                        continue
-                    if projectile_type is not None and attack.get("type") != projectile_type:
-                        continue
-                    candidate = attack.get("damage")
-                    if candidate is not None:
-                        base_damage = candidate
-                        break
-        if base_damage is None:
-            base_damage = combat_config.get("default_ranged_damage")
-        if base_damage is None:
-            return None
-        multiplier = self._safe_number(combat_config.get("projectile_damage_multiplier", 1.0), 1.0)
-        bonus = self._safe_number(combat_config.get("projectile_damage_bonus", 0.0), 0.0)
-        if owner is not None:
-            getter_multiplier = getattr(owner, "get_projectile_damage_multiplier", None)
-            if callable(getter_multiplier):
-                multiplier *= self._safe_number(getter_multiplier(), 1.0)
-            getter_bonus = getattr(owner, "get_projectile_damage_bonus", None)
-            if callable(getter_bonus):
-                bonus += self._safe_number(getter_bonus(), 0.0)
-            multiplier *= self._safe_number(getattr(owner, "projectile_damage_multiplier", 1.0), 1.0)
-            bonus += self._safe_number(getattr(owner, "projectile_damage_bonus", 0.0), 0.0)
-        resolved_damage = int(round(self._safe_number(base_damage, 0.0) * multiplier + bonus))
-        return max(0, resolved_damage)
+        """The shot's flat amount: the one stated, else the owner's ranged attack of this type."""
+        if base_amount is not None:
+            return base_amount
+        combat_config = getattr(owner, "combat_config", None) or {}
+        for attack in combat_config.get("ranged_attacks", []):
+            if projectile_type is None or attack.get("type") == projectile_type:
+                if attack.get("damage") is not None:
+                    return attack["damage"]
+        return None
 
     def trigger_death_particles(self, pos, particle_type):
         # Server: the death FX ride the enemy_died event (each client plays them);
