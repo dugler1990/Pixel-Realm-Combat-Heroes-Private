@@ -727,3 +727,12 @@ hit on a body card uses the elemental rule.
   skin +5.1; ice skin -4.9 no blue; ice_naked skin -2.1; desert skin +1.8; lava lost 33 skin +15.1.
   Hit log now wraps `land` (strike skips `apply` since cleanup 2): `arrows_stop`, `plate_stops` pass
   again. `elemental` still expects the old instant fire/cold: fails. Not watched.
+- 2026-11-22: damage 8/9 (`feat/venom-holy`, plan `PLAN_venom_holy.md`). Holy / unholy through
+  armour, times `kind_mult` (kinds.json), in `damage_rules.sacred`. `resist_of` is signed now:
+  a negative resist is a weakness through one rule, `past_resist` (raises a power, never makes one;
+  the old clamp hid it). Venom: rows in `venoms.json` (phases of damage per s and debuffs, floor,
+  save, class, class_cure, max_dose), `venom.py` (start on flesh, per-level wakes every 500 ms,
+  damage through the resolver, debuffs in `conditions.bonus`, cure by venom or class); antivenom
+  belt potion (snake class). Snake and venom plant immune. Tests: test_venom 9, test_rules_magic
+  14, the touched files 62, guard 10 (2 new rules). Headless: holy 16 per bolt on the demon, 4 on
+  the barb in plate; venom none on plate, snake + frog on skin, potion drunk 3 -> 2. Not watched.

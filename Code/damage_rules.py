@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 
-from damage_data import CATEGORIES
+from damage_data import CATEGORIES, KIND_MULT
 
 BRUISE_SCALE = 0.05  # force that becomes health. 2 is a speck; 120 still shows. Tune in play.
 
@@ -132,12 +132,33 @@ class Elemental:
 
 
 def resist_of(resist, name):
-    """max(0, the category plus its parent). Negatives are stored and not used yet."""
+    """The category plus its parent. Negative is a weakness: `power − resist` grows."""
     resist = resist or {}
     own = float(resist.get(name, 0) or 0)
     parent = CATEGORIES.parent.get(name)
     extra = float(resist.get(parent, 0) or 0) if parent else 0.0
-    return max(0.0, own + extra)
+    return own + extra
+
+
+def past_resist(power, resist):
+    """What is left of `power` after `resist`. A negative resist (a weakness) raises a power that
+    is there; it never makes one from nothing."""
+    if power <= 0.0:
+        return 0.0
+    return max(0.0, power - resist)
+
+
+def sacred(magic, extra, share, resist, kind):
+    """Holy and unholy: through armour. (power + the attacker's stat) × share, minus the resist
+    (a weakness adds), times the kind's multiplier. The only place KIND_MULT is read."""
+    total = 0.0
+    for cat, power in magic:
+        mult = KIND_MULT.get(cat)
+        if mult is None:
+            continue
+        hit = past_resist((power + extra) * share, resist_of(resist, CATEGORIES.names[cat]))
+        total += hit * mult.get(kind, 1.0)
+    return total
 
 
 def heat_shade(H):
@@ -202,7 +223,7 @@ def cold_seconds(sticks, constitution):
 
 def bolt_body(charge, conductivity, wet, resist, origin_damage, reach):
     """One body a bolt has just hit. Returns (wound, passed charge, next reach px)."""
-    charge = max(0.0, charge - max(0.0, resist))
+    charge = past_resist(charge, resist)
     wound = charge * (1.0 + conductivity) * (WET_MULT if wet else 1.0)
     if conductivity > 0:
         passed = charge * conductivity
@@ -238,7 +259,7 @@ def bolt_chain(damage, reach, arcs, spark, bodies, full):
 
 
 def cold_sticks(cold, resist, constitution, wet):
-    stuck = max(0.0, cold - resist_of(resist, "ice")) * BASE_CON / constitution
+    stuck = past_resist(cold, resist_of(resist, "ice")) * BASE_CON / constitution
     if wet:
         stuck += WET_COLD
     return stuck
@@ -260,7 +281,7 @@ def elemental(fire=0, cold=0, bolt=None, layer=None, resist=None, constitution=B
     starts = []
     heat = None
 
-    power = max(0.0, fire - resist_of(resist, "fire"))
+    power = past_resist(fire, resist_of(resist, "fire"))
     if power > 0 and flamm >= CATCH:
         wound += power
         heat = "searing"
@@ -328,4 +349,4 @@ def patch_rate(entity, heat):
         card = entity.defence.body
     resist = resist_of(card.resist, "fire") if card is not None else 0.0
     insulation = 0.0 if layer is None else layer.insulation
-    return max(0.0, heat - resist) * (1.0 - insulation)
+    return past_resist(heat, resist) * (1.0 - insulation)

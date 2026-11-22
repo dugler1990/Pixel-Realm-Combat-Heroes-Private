@@ -117,7 +117,7 @@ class PlayerActionController:
             belt_keys = (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4)
             for i, key in enumerate(belt_keys):
                 if input_manager.is_key_just_pressed(key) and i < player.belt_capacity:
-                    player.use_belt_slot(i)
+                    player.inventory.use_belt_slot(i)
 
         if input_manager.is_key_just_pressed(pygame.K_i):
             if current_time - player.last_i_press_time > 500:

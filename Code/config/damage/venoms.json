@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "_about": "Venoms (damage chunk 8, docs/damage/PLAN_venom_holy.md). One row per venom, no venom has code of its own. phases: in order, each {ms, damage_per_s, debuffs: {stat: amount}}; damage and debuffs are times the strength (the doses, up to max_dose). floor: health it never takes you below. save: vitality save on the first dose (d20 + vitality >= save shrugs it off). class_cure: how much a class cure works on it, 0 to 1. Starting numbers, tuned in the venom scene.",
+  "venoms": {
+    "plant_venom":    {"class": "plant",  "floor": 20, "save": 30, "class_cure": 1,   "max_dose": 5,
+                       "phases": [{"ms": 30000, "damage_per_s": 0.5, "debuffs": {"speed": -1}}]},
+    "snake_venom":    {"class": "snake",  "floor": 0,  "save": 35, "class_cure": 0.8, "max_dose": 4,
+                       "phases": [{"ms": 15000, "damage_per_s": 0.5, "debuffs": {"speed": -1}},
+                                  {"ms": 20000, "damage_per_s": 2,   "debuffs": {"speed": -2}}]},
+    "scorpion_venom": {"class": "insect", "floor": 0,  "save": 38, "class_cure": 0.5, "max_dose": 3,
+                       "phases": [{"ms": 4000,  "damage_per_s": 8},
+                                  {"ms": 10000, "damage_per_s": 0.5, "debuffs": {"speed": -1}}]},
+    "frog_venom":     {"class": "frog",   "floor": 0,  "save": 45, "class_cure": 0,   "max_dose": 3,
+                       "phases": [{"ms": 8000,  "damage_per_s": 1, "debuffs": {"speed": -2}},
+                                  {"ms": 12000, "damage_per_s": 6, "debuffs": {"speed": -4}}]}
+  }
+}

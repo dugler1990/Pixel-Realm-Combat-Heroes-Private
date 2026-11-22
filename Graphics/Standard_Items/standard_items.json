@@ -10,6 +10,16 @@
         "belt_allowed": true
     },
     {
+        "item_id": "antivenom",
+        "item_type": "consumable",
+        "spawn_type": "fixed",
+        "positions": [],
+        "image_path": "../levels/Map7/start/Items/frost_potion.png",
+        "effect": {"cure": [{"class": "snake", "strength": 1}]},
+        "effect_type": "consumable",
+        "belt_allowed": true
+    },
+    {
         "item_id": "ice_shard",
         "item_type": "weapon",
         "spawn_type": "fixed",

@@ -47,6 +47,10 @@ RULES = [
      r"|[\"'](base_damage|burst_damage|dot_damage)[\"']", {}),
     ("sounds load through sounds.get", r"mixer\.Sound\(",
      {"sounds.py": "the cache", "dialogue/voice.py": "its own loader, one file per line"}),
+    ("holy and unholy go through KIND_MULT in damage_rules.sacred", r"\bKIND_MULT\b",
+     {"damage_rules.py": "sacred", "damage_data.py": "the loader"}),
+    ("no venom has code of its own: venoms are rows in venoms.json",
+     r"[\"'](snake|plant|scorpion|frog)_venom[\"']", {}),
 ]
 
 

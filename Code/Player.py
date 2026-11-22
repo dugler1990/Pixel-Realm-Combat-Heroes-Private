@@ -262,6 +262,9 @@ class BasePlayer(Entity):
         if "health" in effect:
             cap = self.stats.get("health", self.health)
             self.health = min(self.health + effect["health"], cap)
+        if "cure" in effect:
+            import venom
+            venom.cure(self, effect["cure"], pygame.time.get_ticks())
         if "mana" in effect:
             cap = self.stats.get("energy", self.energy)
             self.energy = min(self.energy + effect["mana"], cap)

@@ -359,7 +359,7 @@ def load_bodies(path=BODIES_PATH, kinds=None):
             raise DamageDataError(f"{where}: resist must be a category -> number map")
         clean_resist = {}
         for category, value in resist.items():
-            if category not in CATEGORIES.ids:
+            if category not in CATEGORIES.ids and category != "venom" and category not in VENOM_CLASSES:
                 raise DamageDataError(f"{where}: unknown resist {category!r}")
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise DamageDataError(f"{where}: resist {category} must be a number, got {value!r}")
@@ -374,7 +374,100 @@ def load_bodies(path=BODIES_PATH, kinds=None):
     return bodies
 
 
+def load_kind_mult(path=KINDS_PATH, kinds=None, categories=None):
+    """{category id: {kind: multiplier}} for holy and unholy (chunk 9). A kind left out is 1."""
+    kinds = kinds if kinds is not None else load_kinds(path)
+    categories = categories if categories is not None else CATEGORIES
+    rows = _read(path).get("kind_mult", {})
+    if not isinstance(rows, dict):
+        raise DamageDataError(f"{path}: kind_mult must be a category -> {{kind: number}} map")
+    out = {}
+    for category, row in rows.items():
+        if category not in categories.ids:
+            raise DamageDataError(f"{path}: kind_mult: unknown category {category!r}")
+        if not isinstance(row, dict):
+            raise DamageDataError(f"{path}: kind_mult {category}: must be a kind -> number map")
+        clean = {}
+        for kind, value in row.items():
+            if kind not in kinds:
+                raise DamageDataError(f"{path}: kind_mult {category}: unknown kind {kind!r}")
+            clean[kind] = _number(path, category, f"kind_mult {kind}", value)
+        out[categories.ids[category]] = clean
+    return out
+
+
+VENOMS_PATH = os.path.join(CONFIG_DIR, "venoms.json")
+_VENOM_FIELDS = frozenset(("class", "floor", "save", "class_cure", "max_dose", "phases"))
+_PHASE_FIELDS = frozenset(("ms", "damage_per_s", "debuffs"))
+
+
+class VenomDef:
+    """One venom (chunk 8): its class, its phases ((ms, damage_per_s, {stat: amount}), ...), the
+    health floor, the save, how much a class cure works, and the most doses that count."""
+
+    __slots__ = ("name", "cls", "phases", "floor", "save", "class_cure", "max_dose", "length_ms")
+
+    def __init__(self, name, cls, phases, floor, save, class_cure, max_dose):
+        self.name = name
+        self.cls = cls
+        self.phases = phases
+        self.floor = floor
+        self.save = save
+        self.class_cure = class_cure
+        self.max_dose = max_dose
+        self.length_ms = sum(ms for ms, _dps, _debuffs in phases)
+
+    def __repr__(self):
+        return f"VenomDef({self.name!r})"
+
+
+def load_venoms(path=VENOMS_PATH):
+    """{name: VenomDef}. Every field is required except a phase's debuffs (stat names are
+    checked against the conditions' stats in venom.py)."""
+    rows = _read(path).get("venoms")
+    if not isinstance(rows, dict) or not rows:
+        raise DamageDataError(f"{path}: venoms must be a name -> row map")
+    out = {}
+    for name, row in rows.items():
+        where = f"{path}: venom {name!r}"
+        if not isinstance(row, dict) or set(row) != _VENOM_FIELDS:
+            raise DamageDataError(f"{where}: needs exactly {sorted(_VENOM_FIELDS)}")
+        if not isinstance(row["class"], str) or not row["class"]:
+            raise DamageDataError(f"{where}: class must be a name")
+        phases = row["phases"]
+        if not isinstance(phases, list) or not phases:
+            raise DamageDataError(f"{where}: phases must be a list of {{ms, damage_per_s, debuffs}}")
+        clean = []
+        for phase in phases:
+            if not isinstance(phase, dict) or not {"ms", "damage_per_s"} <= set(phase) <= _PHASE_FIELDS:
+                raise DamageDataError(f"{where}: a phase needs ms and damage_per_s (debuffs optional)")
+            debuffs = phase.get("debuffs", {})
+            if not isinstance(debuffs, dict) or not all(
+                    isinstance(stat, str) and isinstance(v, (int, float)) and not isinstance(v, bool)
+                    for stat, v in debuffs.items()):
+                raise DamageDataError(f"{where}: debuffs must be a stat -> number map")
+            ms = _number(path, name, "phase ms", phase["ms"])
+            if ms <= 0:
+                raise DamageDataError(f"{where}: a phase's ms must be > 0")
+            clean.append((float(ms), float(_number(path, name, "damage_per_s", phase["damage_per_s"])),
+                          dict(debuffs)))
+        cure = _number(path, name, "class_cure", row["class_cure"])
+        if cure > 1:
+            raise DamageDataError(f"{where}: class_cure must be 0 to 1")
+        out[name] = VenomDef(name, row["class"], tuple(clean), float(_number(path, name, "floor", row["floor"])),
+                             float(_number(path, name, "save", row["save"])), float(cure),
+                             float(_number(path, name, "max_dose", row["max_dose"])))
+    return out
+
+
+VENOMS = load_venoms()
+VENOM_CLASSES = frozenset(v.cls for v in VENOMS.values())
+for _attack in ATTACKS:
+    if _attack.venom is not None and _attack.venom[0] not in VENOMS:
+        raise DamageDataError(f"attack {_attack.name!r}: unknown venom {_attack.venom[0]!r}")
+
 KINDS = load_kinds()
+KIND_MULT = load_kind_mult(kinds=KINDS)
 BODIES = load_bodies(kinds=KINDS)
 _BODY_BY_NAME = {b.name: b for b in BODIES}
 
