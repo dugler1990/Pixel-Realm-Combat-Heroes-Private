@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Entities</title>
+<style>
+  :root { --bg:#16181d; --panel:#1f2229; --line:#2e333d; --text:#e4e6ea; --dim:#9aa1ad; --ok:#4caf7a; --gate:#e0a33a;
+          --bad:#e05a5a; --run:#4a90d9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; gap:18px; align-items:center; padding:8px 14px; background:var(--panel);
+           border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header b { color:var(--dim); font-weight:600; margin-right:4px; }
+  .key { padding:2px 8px; border-radius:10px; border:1px solid var(--line); }
+  .key.on { border-color:var(--ok); color:var(--ok); } .key.off { color:var(--dim); }
+  button { background:#2b303a; color:var(--text); border:1px solid #3a404c; border-radius:5px; padding:4px 10px;
+           cursor:pointer; font:inherit; }
+  button:hover { background:#353b47; } button.main { background:#2d5d93; border-color:#3a72b0; }
+  button:disabled { opacity:.45; cursor:default; }
+  input[type=text], input[type=number], textarea, select { background:#12141a; color:var(--text); border:1px solid var(--line);
+                     border-radius:5px; padding:4px 8px; font:inherit; }
+  main { display:grid; grid-template-columns:270px 1fr; min-height:calc(100vh - 48px); }
+  nav { border-right:1px solid var(--line); padding:10px; overflow:auto; }
+  .outfit { padding:8px; border-radius:6px; cursor:pointer; margin-bottom:6px; border:1px solid transparent; }
+  .outfit:hover { background:var(--panel); } .outfit.sel { border-color:var(--run); background:var(--panel); }
+  .outfit .name { font-weight:600; } .outfit .kind { color:var(--dim); font-size:12px; }
+  .chips { display:flex; flex-wrap:wrap; gap:3px; margin-top:5px; }
+  .chip { font-size:11px; padding:1px 6px; border-radius:8px; background:#2a2e36; color:var(--dim); }
+  .chip.done { background:#1f3b2c; color:var(--ok); }
+  .chip.stale { background:#3d3020; color:var(--gate); }
+  .chip.partial { background:#3a2a3d; color:#d38ad9; }
+  .chip.missing { background:#3d2224; color:var(--bad); }
+  .chip.running { background:#1e3248; color:var(--run); }
+  section { padding:12px 16px; overflow:auto; }
+  h2 { margin:0 0 4px; font-size:18px; } h3 { margin:0 0 6px; font-size:15px; }
+  .dim { color:var(--dim); } .err { color:var(--bad); } .okc { color:var(--ok); } .gatec { color:var(--gate); }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+  .attempt { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px; margin:8px 0; }
+  .attempt img, .big { max-width:100%; border-radius:4px; background:#fff; display:block; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:8px; }
+  .grid img { width:100%; background:#fff; border-radius:4px; }
+  .grid video, video.clip { width:100%; max-height:280px; background:#000; border-radius:4px; }
+  pre { background:#0f1115; border:1px solid var(--line); border-radius:6px; padding:8px; max-height:220px;
+        overflow:auto; font:12px/1.35 Consolas, monospace; white-space:pre-wrap; }
+  table { border-collapse:collapse; margin-top:8px; }
+  td, th { border:1px solid var(--line); padding:3px 8px; text-align:left; }
+  .lightbox { position:fixed; inset:0; background:rgba(0,0,0,.88); display:none; align-items:center;
+              justify-content:center; z-index:9; cursor:zoom-out; }
+  .lightbox img { max-width:96vw; max-height:96vh; background:#fff; }
+  img.zoom { cursor:zoom-in; }
+  #toast { position:fixed; right:16px; bottom:16px; background:var(--bad); color:#fff; padding:10px 14px;
+           border-radius:6px; display:none; max-width:520px; white-space:pre-wrap; z-index:10; }
+  #newsess { margin-top:12px; padding-top:10px; border-top:1px solid var(--line); }
+  #newsess input { width:100%; margin:4px 0; }
+</style>
+</head>
+<body>
+<header>
+  <span><b>Keys</b><span id="keys"></span></span>
+</header>
+<main>
+  <nav>
+    <div id="sessions"></div>
+    <div id="newsess">
+      <div class="dim">New session</div>
+      <input id="newname" type="text" placeholder="name">
+      <input id="newmap" type="text" placeholder="map path">
+      <button class="main" onclick="startSession()">Start</button>
+    </div>
+  </nav>
+  <section id="main"><p class="dim">Pick a session on the left.</p></section>
+</main>
+<div class="lightbox" id="lb" onclick="this.style.display='none'"><img id="lbimg"></div>
+<div id="toast" onclick="this.style.display='none'"></div>
+<script>
+const S = { state:null, sel:null, detail:null, warrior:null, sig:null, seenRun:undefined, seenDone:undefined };
+const STEPS = ["scene", "sheet", "cut", "stats", "anim", "frames", "brawl"];
+
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function img(path) {
+  return path ? `<img class="zoom" src="/media?path=${encodeURIComponent(path)}&t=${S.detailAt || 0}" onclick="zoom(this.src)">` : "";
+}
+function zoom(src) { document.getElementById("lbimg").src = src; document.getElementById("lb").style.display = "flex"; }
+function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.style.display = "block";
+                      setTimeout(() => t.style.display = "none", 9000); }
+async function api(path, body) {
+  const r = await fetch(path, body ? { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) } : {});
+  const j = await r.json();
+  if (!r.ok || j.error) throw new Error(j.error || r.statusText);
+  return j;
+}
+function sessionRow() { return S.state && S.sel ? S.state.sessions.find(s => s.name === S.sel) : null; }
+function running() { return S.state ? S.state.jobs.running.find(j => j.key === S.sel) : null; }
+function newestDone() {
+  if (!S.state) return null;
+  return S.state.jobs.done.find(j => j.key === S.sel) || null;
+}
+function busy() { return !!running(); }
+function dis() { return busy() ? "disabled" : ""; }
+function field(id, fallback) { const el = document.getElementById(id); return el ? el.value : fallback; }
+function stale(status) { return status === "stale" ? `<span class="gatec">made before its input changed</span>` : ""; }
+function chip(step, status) {
+  const job = running();
+  const on = job && (job.args[0] === step || (job.args[0] === "anim-all" && step === "anim"));
+  return `<span class="chip ${on ? "running" : status}">${step}</span>`;
+}
+function costText(s) {
+  const n = Math.round((s.cost_usd || 0) * 10000) / 10000;
+  return "$" + n + (s.calls_unknown ? " +" + s.calls_unknown + " unknown" : "");
+}
+
+async function refresh() {
+  try { S.state = await api("/api/state"); } catch (e) { return; }
+  drawHeader(); drawNav();
+  if (!S.sel) return;
+  const job = running(), done = newestDone();
+  const runId = job ? job.id : null, doneId = done ? done.id : null;
+  if (!S.detail || S.seenRun !== runId || S.seenDone !== doneId) {
+    S.seenRun = runId; S.seenDone = doneId;
+    await loadDetail();
+  }
+  drawLog();
+}
+setInterval(refresh, 2000);
+
+function drawHeader() {
+  const k = S.state.keys;
+  document.getElementById("keys").innerHTML = Object.entries({openai:"OpenAI", leonardo:"Leonardo"}).map(([n, l]) =>
+    `<span class="key ${k[n] ? "on" : "off"}">${l} ${k[n] ? "set" : "–"}</span> <button onclick="setKey('${n}')" title="copy the key first">from clipboard</button>`).join(" ");
+}
+function drawNav() {
+  document.getElementById("sessions").innerHTML = S.state.sessions.map(s => {
+    const job = S.state.jobs.running.find(j => j.key === s.name);
+    const chips = STEPS.map(step => {
+      const on = job && (job.args[0] === step || (job.args[0] === "anim-all" && step === "anim"));
+      return `<span class="chip ${on ? "running" : s.steps[step]}" onclick="event.stopPropagation(); jump('${s.name}','${step}')">${step}</span>`;
+    }).join("");
+    return `<div class="outfit ${s.name === S.sel ? "sel" : ""}" onclick="select('${s.name}')">
+      <div class="name">${esc(s.name)}</div><div class="kind">${costText(s)}</div>
+      <div class="chips">${chips}</div></div>`;
+  }).join("") || `<p class="dim">No sessions yet.</p>`;
+}
+async function select(name) {
+  if (S.sel === name && S.detail) { drawNav(); return; }
+  S.sel = name; S.warrior = null; S.detail = null; S.sig = null;
+  S.seenRun = undefined; S.seenDone = undefined;
+  await loadDetail(); drawLog();
+}
+async function jump(name, step) {
+  if (S.sel !== name || !S.detail) await select(name);
+  const el = document.getElementById("panel-" + step);
+  if (el) el.scrollIntoView({block:"start"});
+}
+async function loadDetail() {
+  if (!S.sel) return;
+  let d;
+  try { d = await api("/api/session?name=" + encodeURIComponent(S.sel)); }
+  catch (e) {
+    S.detail = null;
+    document.getElementById("main").innerHTML = `<p class="dim">${esc(e.message)}</p><h3>Log</h3><pre id="log"></pre>`;
+    return;
+  }
+  S.detail = d;
+  if (!S.warrior || !d.warriors.some(w => w.name === S.warrior)) S.warrior = d.warriors.length ? d.warriors[0].name : null;
+  const job = running();
+  const sig = JSON.stringify([d, job && job.id, job && job.rc]);
+  if (sig === S.sig) return;
+  S.sig = sig; S.detailAt = Date.now();
+  drawMain();
+}
+async function setKey(n) { try { await api("/api/key", { name:n }); } catch (e) { toast(e.message); } refresh(); }
+async function startSession() {
+  const name = document.getElementById("newname").value.trim();
+  const map = document.getElementById("newmap").value.trim();
+  if (!name || !map) return toast("need a name and a map path");
+  S.sel = name; S.detail = null; S.sig = null;
+  await go({ step:"scene", session:name, map });
+}
+async function go(body) {
+  try { await api("/api/do", body); }
+  catch (e) { toast(e.message); return; }
+  await refresh();
+}
+async function critic(step) {
+  const why = field("why-" + step, "").trim();
+  const input = document.getElementById("file-" + step);
+  const file = input && input.files[0];
+  try {
+    let attach = null;
+    if (file) {
+      const data = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(file); });
+      attach = (await api("/api/upload", { session:S.sel, name:file.name, data })).path;
+    }
+    if (!why && !attach) return toast("say what was wrong, or attach an image");
+    const body = { step, session:S.sel };
+    if (why) body.why = why;
+    if (attach) body.attach = attach;
+    await go(body);
+  } catch (e) { toast(e.message); }
+}
+async function criticClip(action) {
+  const why = field("why-" + action, "").trim();
+  if (!why) return toast("say what was wrong");
+  if (!S.warrior) return toast("no warrior");
+  await go({ step:"anim", session:S.sel, name:S.warrior, action, why });
+}
+function animateMissing() {
+  if (!confirm("Animate all missing clips? This pays for every missing clip.")) return;
+  go({ step:"anim-all", session:S.sel });
+}
+function pack(name) { go({ step:"frames", session:S.sel, name, band:field("band", S.detail.band || "near") }); }
+function fight() {
+  const each = Number(field("each", "1")), hold = Number(field("hold", "60"));
+  go({ step:"brawl", session:S.sel, each, hold });
+}
+
+function pictureStep(step, path, prompt) {
+  const st = S.detail.steps[step];
+  return `<div class="attempt" id="panel-${step}"><h3>${chip(step, st)} ${stale(st)}</h3>
+    ${path ? img(path) : `<p class="dim">No picture yet.</p>`}
+    <pre>${esc(prompt || "")}</pre>
+    <div class="row"><button ${dis()} onclick="go({step:'${step}', session:S.sel, force:true})">Redraw</button></div>
+    <div class="row"><input type="text" id="why-${step}" size="48" placeholder="what was wrong" value="${esc(field("why-" + step, ""))}">
+      <input type="file" id="file-${step}" accept="image/png,image/jpeg">
+      <button ${dis()} onclick="critic('${step}')">Redraw with this</button></div></div>`;
+}
+function drawMain() {
+  const d = S.detail; if (!d) return;
+  const b = busy();
+  const band = field("band", d.band || "near");
+  const each = field("each", "1"), hold = field("hold", "60");
+  let h = `<h2>${esc(d.name)}</h2>`;
+  h += pictureStep("scene", d.scene, d.scene_prompt);
+  h += pictureStep("sheet", d.sheet, d.sheet_prompt);
+  const cut = d.steps.cut, sheet = d.steps.sheet;
+  h += `<div class="attempt" id="panel-cut"><h3>${chip("cut", cut)} ${stale(cut)}</h3>
+    <div class="row"><button class="main" ${b || (sheet !== "done" && sheet !== "stale") ? "disabled" : ""} onclick="go({step:'cut', session:S.sel})">Cut</button></div>
+    ${d.contact ? img(d.contact) : `<p class="dim">No contact sheet yet.</p>`}
+    <div class="grid">${d.warriors.map(w => `<div>${img(w.cell)}<div class="dim">${esc(w.name)}</div></div>`).join("")}</div></div>`;
+  const stats = d.steps.stats;
+  const scoreLabel = stats === "missing" ? "Score" : "Ask again";
+  h += `<div class="attempt" id="panel-stats"><h3>${chip("stats", stats)} ${stale(stats)}</h3>
+    <div class="row"><button class="main" ${dis()} onclick="go({step:'stats', session:S.sel${stats === "missing" ? "" : ", force:true"}})">${scoreLabel}</button></div>
+    <table><tr><th>name</th><th>label</th><th>reach</th><th>size</th><th>speed</th><th>damage</th><th>bulk</th><th>copies</th></tr>
+    ${d.warriors.map(w => { const s = w.score || {}; return `<tr><td>${esc(w.name)}</td><td>${esc(s.label ?? "")}</td><td>${esc(s.reach ?? "")}</td><td>${esc(s.size ?? "")}</td><td>${esc(s.speed ?? "")}</td><td>${esc(s.damage ?? "")}</td><td>${esc(s.bulk ?? "")}</td><td>${w.copies ?? "–"}</td></tr>`; }).join("")}
+    </table></div>`;
+  const w = d.warriors.find(x => x.name === S.warrior);
+  h += `<div class="attempt" id="panel-anim"><h3>${chip("anim", d.steps.anim)} ${stale(d.steps.anim)}</h3>
+    ${d.warriors.length ? `<div class="row"><select id="warrior" onchange="S.warrior=this.value; S.sig=null; drawMain()">${d.warriors.map(x => `<option ${x.name === S.warrior ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select>
+      <button class="main" ${dis()} onclick="animateMissing()">Animate all missing</button></div>` : `<p class="dim">No warriors yet.</p>`}
+    ${w ? ["idle", "move", "attack"].map(a => `<h3>${a} <span class="chip ${w.anim[a].status}">${w.anim[a].status}</span> ${stale(w.anim[a].status)}</h3>
+      ${w.anim[a].path ? `<video class="clip" controls loop src="/media?path=${encodeURIComponent(w.anim[a].path)}&t=${S.detailAt}"></video>` : `<p class="dim">No clip yet.</p>`}
+      <div class="row"><button ${dis()} onclick="go({step:'anim', session:S.sel, name:S.warrior, action:'${a}', force:true})">Redraw</button>
+        <input type="text" id="why-${a}" size="40" placeholder="what was wrong" value="${esc(field("why-" + a, ""))}">
+        <button ${dis()} onclick="criticClip('${a}')">Redraw with this</button></div>`).join("") : ""}</div>`;
+  h += `<div class="attempt" id="panel-frames"><h3>${chip("frames", d.steps.frames)} ${stale(d.steps.frames)}</h3>
+    <div class="row"><label>band <select id="band"><option value="near" ${band === "near" ? "selected" : ""}>near</option><option value="center" ${band === "center" ? "selected" : ""}>center</option></select></label></div>
+    ${d.warriors.map(x => `<div class="row"><b>${esc(x.name)}</b> ${chip(x.frames.status, x.frames.status)} ${stale(x.frames.status)}
+      <button ${dis()} onclick="pack('${x.name}')">Pack</button></div>
+      ${x.frames.contact ? img(x.frames.contact) : ""}`).join("")}</div>`;
+  h += `<div class="attempt" id="panel-brawl"><h3>${chip("brawl", d.steps.brawl)} ${stale(d.steps.brawl)}</h3>
+    <div class="row"><label>copies <input id="each" type="number" min="1" value="${esc(each)}"></label>
+      <label>seconds <input id="hold" type="number" min="0.1" step="1" value="${esc(hold)}"></label>
+      <button class="main" ${dis()} onclick="fight()">Fight</button></div>
+    <p class="dim">It opens the game window and adds the warriors to Code/Settings.py monster_data.</p></div>`;
+  h += `<h3>Log</h3><pre id="log"></pre>`;
+  document.getElementById("main").innerHTML = h;
+  drawLog();
+}
+async function drawLog() {
+  const el = document.getElementById("log"); if (!el || !S.sel) return;
+  let job;
+  try { job = await api("/api/log?name=" + encodeURIComponent(S.sel)); } catch (e) { return; }
+  const lines = job.lines || [];
+  let text = lines.join("\n");
+  if (job.rc !== undefined && job.rc !== null) text += (text ? "\n" : "") + "exit " + job.rc;
+  const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+  el.textContent = text || "(no log yet)";
+  if (atEnd) el.scrollTop = el.scrollHeight;
+}
+refresh();
+</script>
+</body>
+</html>

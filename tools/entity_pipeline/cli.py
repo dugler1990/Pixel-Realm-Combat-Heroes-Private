@@ -140,9 +140,9 @@ def _paid_call(step: str, call) -> dict:
 
 
 def _set_aside(paths: list[Path]) -> None:
-    """Move whichever of `paths` exist into old/<date_time>/ beside them. A draw is paid for,
-    so it is moved, not deleted."""
-    found = [path for path in paths if path.is_file()]
+    """Move whichever of `paths` exist into old/<date_time>/ beside them. files or folders.
+    A draw is paid for, so it is moved, not deleted."""
+    found = [path for path in paths if path.exists()]
     if not found:
         return
     stamp = found[0].parent / "old" / datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -152,7 +152,7 @@ def _set_aside(paths: list[Path]) -> None:
     folder.mkdir(parents=True)
     for path in found:
         shutil.move(str(path), str(folder / path.name))
-    print(f"  moved the last draw to {folder}")
+    print(f"  moved the last one to {folder}")
 
 
 def _draw(dest: Path, prompt: str, images: list[tuple[str, Path]], draw) -> None:
@@ -174,7 +174,14 @@ def _gate(args, step: str, dest: Path, base_prompt: str, source: Path, label: st
     """
     prompt_file = dest.with_name(f"{dest.stem}_prompt.txt")
     images = [(label, source)]
-    if dest.exists() and not args.force:
+    attach = [Path(args.attach)] if args.attach else []
+    if args.why or attach:
+        if attach and not attach[0].is_file():
+            print(f"no such image: {attach[0]}", file=sys.stderr)
+            return False
+        images += [("attached", path) for path in attach]
+        _draw(dest, with_criticism(base_prompt, args.why or "", attach), images, draw)
+    elif dest.exists() and not args.force:
         print(f"{step}: already have {dest}")
     else:
         _draw(dest, base_prompt, images, draw)
@@ -261,8 +268,9 @@ def cmd_cut(args: argparse.Namespace) -> int:
     if not sheet.exists():
         print(f"sheet not found: {sheet}", file=sys.stderr)
         return 1
+    _set_aside([work / "cells", work / "layout.json", work / "contact.png"])
     with Image.open(sheet) as image:
-        figures = cut_sheet(image, work)
+        figures = cut_sheet(image, work, prefix=args.session)
     print(f"cut: {len(figures)} sprites -> {work / 'cells'}")
     for fig in figures:
         print(f"  {fig.name} {list(fig.box)}")
@@ -304,7 +312,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
         print(f"stats failed: {exc}", file=sys.stderr)
         return 1
     try:
-        scores = parse_scores(text, names)
+        scores = parse_scores(text, names, prefix=args.session)
         cells, scores, renamed = adopt_names(work, cells, scores)
     except StatsClientError as exc:
         print(f"stats failed: {exc}\n--- reply ---\n{text}", file=sys.stderr)
@@ -312,6 +320,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
     for old, new in renamed:
         print(f"stats: {old} -> {new}")
     out = save_scores(work, model, sheet, cells, scores)
+    record_call(args.session, "stats", {"cost_usd": None, "output_path": str(out)})
     print_scores(scores)
     print(f"stats: {out}")
     return 0
@@ -345,6 +354,9 @@ def cmd_anim(args: argparse.Namespace) -> int:
     before the next one is paid for."""
     from tools.painted_map_pipeline.leonardo_api import generate_image_to_video
 
+    if args.why and not args.action:
+        print("--why redraws one clip: add --action idle, move or attack", file=sys.stderr)
+        return 1
     sprite = _sprite_path(args)
     if not sprite.exists():
         print(f"sprite not found: {sprite}", file=sys.stderr)
@@ -377,7 +389,7 @@ def cmd_anim(args: argparse.Namespace) -> int:
             )
         return draw
 
-    for action in ACTIONS:
+    for action in (args.action,) if args.action else ACTIONS:
         prompt = ANIM_PROMPT.format(action=ANIM_ACTIONS[action])
         kept = _gate(args, f"anim:{action}", out / f"{action}.mp4", prompt, sprite, "sprite",
                      video_draw(action), attach_ok=False)
@@ -408,6 +420,18 @@ def cmd_anim_all(args: argparse.Namespace) -> int:
             return 1
     print(f"anim-all: {len(names)} sprites")
     return 0
+
+
+def _band(args: argparse.Namespace) -> str:
+    """The scene band frames sizes against. A --band given is kept in session.json, so the
+    next frames run (or the web page) uses it without being told."""
+    data = load_session(args.session)
+    if args.band:
+        if data.get("band") != args.band:
+            data["band"] = args.band
+            save_session(args.session, data)
+        return args.band
+    return data.get("band") or "near"
 
 
 def _default_action_path(work: Path, action: str) -> Path:
@@ -446,7 +470,7 @@ def cmd_frames(args: argparse.Namespace) -> int:
             try:
                 man = sheet_man_height(cell_images)
                 with Image.open(scene_path) as scene:
-                    scale = battle_scale(scene.convert("RGB"), cell_images, getattr(args, "band", "near"))
+                    scale = battle_scale(scene.convert("RGB"), cell_images, _band(args))
             except RuntimeError as exc:
                 print(f"  scale: {exc}; using the cut cell")
             finally:
@@ -680,17 +704,29 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
                         help="show each prompt and keep each result without asking")
 
 
-def main(argv: list[str] | None = None) -> int:
+def _add_why(parser: argparse.ArgumentParser, attach: bool) -> None:
+    parser.add_argument("--why", default=None,
+                        help="redraw now, with this criticism added to the prompt")
+    if attach:
+        parser.add_argument("--attach", default=None,
+                            help="redraw now, with this image sent as image 2")
+    else:
+        parser.set_defaults(attach=None)
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m tools.entity_pipeline.cli")
     sub = parser.add_subparsers(dest="command", required=True)
 
     scene = sub.add_parser("scene", help="map image -> battle picture")
     _add_common(scene)
     scene.add_argument("--image", required=True)
+    _add_why(scene, attach=True)
     scene.set_defaults(func=cmd_scene)
 
     sheet = sub.add_parser("sheet", help="battle picture -> idle sheet")
     _add_common(sheet)
+    _add_why(sheet, attach=True)
     sheet.set_defaults(func=cmd_sheet)
 
     cut = sub.add_parser("cut", help="idle sheet -> one clean sprite per warrior")
@@ -715,6 +751,8 @@ def main(argv: list[str] | None = None) -> int:
     anim.add_argument("--width", type=int, default=None)
     anim.add_argument("--height", type=int, default=None)
     anim.add_argument("--audio", action="store_true")
+    anim.add_argument("--action", choices=ACTIONS, default=None, help="only this clip. Default: all three")
+    _add_why(anim, attach=False)
     anim.set_defaults(func=cmd_anim)
 
     anim_all = sub.add_parser("anim-all", help="every cut sprite, idle move and attack, auto-kept")
@@ -724,9 +762,9 @@ def main(argv: list[str] | None = None) -> int:
     anim_all.add_argument("--width", type=int, default=None)
     anim_all.add_argument("--height", type=int, default=None)
     anim_all.add_argument("--audio", action="store_true")
-    anim_all.add_argument("--band", choices=("near", "center"), default="near",
-                          help="near is the bottom half. center is the middle 60 percent")
-    anim_all.set_defaults(func=cmd_anim_all, name=None, sprite=None, idle=None, move=None, attack=None)
+    anim_all.add_argument("--band", choices=("near", "center"), default=None,
+                          help="near is the bottom half. center is the middle 60 percent. Default: the band in session.json, else near")
+    anim_all.set_defaults(func=cmd_anim_all, name=None, sprite=None, idle=None, move=None, attack=None, action=None, why=None, attach=None)
 
     frames = sub.add_parser("frames", help="black sheets -> monster folders")
     _add_common(frames)
@@ -734,8 +772,8 @@ def main(argv: list[str] | None = None) -> int:
     frames.add_argument("--idle", default=None)
     frames.add_argument("--move", default=None)
     frames.add_argument("--attack", default=None)
-    frames.add_argument("--band", choices=("near", "center"), default="near",
-                        help="near is the bottom half. center is the middle 60 percent")
+    frames.add_argument("--band", choices=("near", "center"), default=None,
+                        help="near is the bottom half. center is the middle 60 percent. Default: the band in session.json, else near")
     frames.set_defaults(func=cmd_frames)
 
     wire = sub.add_parser("wire", help="print monster_data and add one map object")
@@ -777,16 +815,20 @@ def main(argv: list[str] | None = None) -> int:
     everything.add_argument("--width", type=int, default=None)
     everything.add_argument("--height", type=int, default=None)
     everything.add_argument("--audio", action="store_true")
-    everything.add_argument("--band", choices=("near", "center"), default="near",
-                            help="near is the bottom half. center is the middle 60 percent")
-    everything.set_defaults(func=cmd_all, name=None, sprite=None, idle=None, move=None, attack=None)
+    everything.add_argument("--band", choices=("near", "center"), default=None,
+                            help="near is the bottom half. center is the middle 60 percent. Default: the band in session.json, else near")
+    everything.set_defaults(func=cmd_all, name=None, sprite=None, idle=None, move=None, attack=None, action=None, why=None, attach=None)
 
     run = sub.add_parser("run", help="scene, sheet, cut, then stop")
     _add_common(run)
     run.add_argument("--image", required=True)
-    run.set_defaults(func=cmd_run, sheet=None)
+    run.set_defaults(func=cmd_run, sheet=None, why=None, attach=None)
 
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     return args.func(args)
 
 

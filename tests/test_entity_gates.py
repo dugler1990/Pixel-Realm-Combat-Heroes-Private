@@ -136,13 +136,13 @@ def test_anim_asks_once_per_clip(run, monkeypatch):
 
 def test_cut_never_asks(run, monkeypatch):
     _never_ask(monkeypatch)
-    monkeypatch.setattr(cli_mod, "cut_sheet", lambda image, out_dir: [])
+    monkeypatch.setattr(cli_mod, "cut_sheet", lambda image, out_dir, prefix: [])
     assert cli_mod.main(["cut", *run["common"], "--sheet", str(run["image"])]) == 0
 
 
 def test_run_command_gets_through_cut(run, monkeypatch):
     _answers(monkeypatch, "", "")
-    monkeypatch.setattr(cli_mod, "cut_sheet", lambda image, out_dir: [])
+    monkeypatch.setattr(cli_mod, "cut_sheet", lambda image, out_dir, prefix: [])
     assert cli_mod.main(["run", *run["common"], "--image", str(run["image"])]) == 0
     assert len(run["calls"]) == 2
 
@@ -293,3 +293,70 @@ def test_fight_each_keeps_copies_of_one_warrior_on_the_same_team(run, monkeypatc
     a_team = written.split('name="a_1"', 1)[1].split('name="a_2"', 1)[0]
     assert a_team.count("enemy_1") == 1 or a_team.count("enemy_3") == 1
     assert "enemy_1" in written and "enemy_3" in written
+
+
+def test_yes_why_redraws_a_scene_that_already_exists(run, monkeypatch):
+    _never_ask(monkeypatch)
+    assert _scene(run, "--yes") == 0
+    assert _scene(run, "--yes", "--why", "too dark") == 0
+    assert len(run["calls"]) == 2
+    second = run["calls"][1]["prompt"]
+    assert second.startswith(cli_mod.SCENE_PROMPT)
+    assert second.rstrip().endswith("too dark")
+    assert len(list((run["work"] / "old").glob("*/scene.png"))) == 1
+
+
+def test_yes_attach_sends_the_reference_with_the_map(run, monkeypatch):
+    _never_ask(monkeypatch)
+    assert _scene(run, "--yes", "--attach", str(run["ref"])) == 0
+    assert run["calls"][0]["sources"] == [run["image"], run["ref"]]
+
+
+def test_anim_action_draws_only_that_clip(run, monkeypatch):
+    _never_ask(monkeypatch)
+    assert _anim(run, "--yes", "--action", "move") == 0
+    assert len(run["calls"]) == 1
+    assert (run["work"] / "anim" / "w" / "move.mp4").exists()
+    assert not (run["work"] / "anim" / "w" / "idle.mp4").exists()
+    assert not (run["work"] / "anim" / "w" / "attack.mp4").exists()
+
+
+def test_anim_why_without_action_draws_nothing(run, monkeypatch):
+    _never_ask(monkeypatch)
+    assert _anim(run, "--yes", "--why", "x") == 1
+    assert run["calls"] == []
+
+
+def test_band_is_kept_on_the_session(run):
+    from types import SimpleNamespace
+
+    assert cli_mod._band(SimpleNamespace(session="s", band="center")) == "center"
+    data = json.loads((run["work"] / "session.json").read_text(encoding="utf-8"))
+    assert data["band"] == "center"
+    assert cli_mod._band(SimpleNamespace(session="s", band=None)) == "center"
+
+
+def test_cut_sets_the_last_cells_aside(run, monkeypatch):
+    cells = run["work"] / "cells"
+    cells.mkdir(parents=True)
+    Image.new("RGB", (4, 4)).save(cells / "old.png")
+
+    def fake(image, out_dir, prefix):
+        return []
+
+    monkeypatch.setattr(cli_mod, "cut_sheet", fake)
+    assert cli_mod.main(["cut", *run["common"], "--sheet", str(run["image"])]) == 0
+    assert len(list((run["work"] / "old").glob("*/cells/old.png"))) == 1
+    assert not (run["work"] / "cells" / "old.png").exists()
+
+
+def test_cut_passes_the_session_as_the_prefix(run, monkeypatch):
+    seen = {}
+
+    def fake(image, out_dir, prefix):
+        seen["prefix"] = prefix
+        return []
+
+    monkeypatch.setattr(cli_mod, "cut_sheet", fake)
+    assert cli_mod.main(["cut", *run["common"], "--sheet", str(run["image"])]) == 0
+    assert seen["prefix"] == "s"
