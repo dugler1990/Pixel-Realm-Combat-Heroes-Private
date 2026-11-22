@@ -56,5 +56,9 @@ animation and facing). Player only for now; certain bosses may get it later. Vis
 - The player only for now; certain bosses maybe later.
 - Later, not now: pulling arrows out, bleeding while they are in, arrows slowing you.
 
+## Log
+- 2026-11-22: built, steps 1-5 (`feat/stuck-arrows`). Arrow-like = pierce + `stops` (no new attack
+  field). Headless: 12 landed, 8 stuck (cap), 5 drawn in front. Not watched.
+
 ## Tried and dropped
 - (none yet)

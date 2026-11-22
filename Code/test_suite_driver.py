@@ -14,6 +14,7 @@ import time
 import pygame
 
 import contact_debug
+import stuck_arrows
 import temperature
 import venom as venom_module
 import Player as player_module
@@ -688,8 +689,45 @@ class Venom(Scene):
         venom_module.forget(hero)
 
 
+class StuckArrows(Scene):
+    """Archers round the barb in half plate (chest, legs) over the loincloth; head and arms bare.
+    Arrows that go in stay; plate glances. Walk and turn: they move with him, the ones behind hide."""
+
+    NAME = "stuck_arrows"
+    WATCH = "Arrows stay in skin and cloth, none on the plate. Walk and turn: they move with you; ones behind hide."
+    SECONDS = 30.0
+    FAST_SECONDS = 8.0
+
+    def setup(self, level):
+        hero = level.player
+        wear(level, ("barb_fullplate_chest", "barb_fullplate_pants_l", "barb_fullplate_pants_r",
+                     "barb_loincloth_loincloth"))
+        hero.health = 100000
+        stuck_arrows.forget(hero)
+        ring(level, ARCHER, 6, 185)
+        self.log = HitLog(level)
+        self.shown = 0
+
+    def tick(self, level, dt):
+        hero = level.player
+        hero.health = max(hero.health, 50000)
+        self.shown = len(stuck_arrows.placed(hero, pygame.time.get_ticks()))
+        kept = len(getattr(hero, "stuck_arrows", None) or [])
+        self.lines = [f"arrows landed {len(self.log.arrows())}   stuck {kept}   drawn now {self.shown}"]
+
+    def decide(self, level):
+        hero = level.player
+        kept = len(getattr(hero, "stuck_arrows", None) or [])
+        on = sorted({kind for _ctx, landed, kind in self.log.arrows() if landed and kind})
+        return "probe", f"landed {len(self.log.arrows())} on {on}, stuck {kept}, drawn {self.shown}"
+
+    def teardown(self, level):
+        self.log.remove()
+        stuck_arrows.forget(level.player)
+
+
 SCENARIOS = (KnockbackMass, ArrowsStop, PlateShove, ArrowsWhereDrawn, PointsVsCapsules, PlateStops,
-             Haste, Fire, Ice, IceNaked, Desert, Lava, Holy, Venom)
+             Haste, Fire, Ice, IceNaked, Desert, Lava, Holy, Venom, StuckArrows)
 # Named only. A full combat run does not dig a hole.
 EXTRA_SCENARIOS = (WaterHole,)
 
