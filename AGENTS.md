@@ -26,9 +26,14 @@ and leave the user in charge of it.
 - Facing a decision about how the repo is handled (a workaround, leaving something behind):
   stop and tell the user first.
 
-## In-game test suite
-Default: combat validation. Read `Code/PROCESS_combat_validation.md`
-(and `Code/INTERACTION_TESTING_WORKFLOW.md`). Not `rts_validation`.
+## The test suite
+When the user says "test suite" or "test it in game", it means `Code/test_suite.py`: the
+empty black benchmark arena (magenta walls, mesh hero) with scripted pass/fail scenes. Run
+from `Code`: `python test_suite.py` (window) or `--headless`. Scenes, flags, how to add one:
+`Code/PROCESS_test_suite.md`.
+Not `rts_validation.py`: that runs in a real level (tmx map) for RTS and terrain, only when
+asked. Not `interaction_validation.py`: no game window, resolver checks only.
+Formerly named `combat_validation` (renamed 2026-11-22).
 
 ## Process docs
 Every initiative keeps one: `PROCESS_*.md` or `NOTES_*.md` in its folder. Read it before

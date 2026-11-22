@@ -1,4 +1,4 @@
-"""Still water in a hole, drawn on the combat-validation arena floor.
+"""Still water in a hole, drawn on the test-suite arena floor.
 
 `flat` is a circle the water fills. `pit` is the beach: the same ground at 45°,
 a short near wall you could wade down. `cliff` keeps that opening, but the side

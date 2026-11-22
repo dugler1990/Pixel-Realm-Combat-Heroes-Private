@@ -9,7 +9,7 @@ CODE_DIR = Path(__file__).resolve().parents[1] / "Code"
 if str(CODE_DIR) not in sys.path:
     sys.path.insert(0, str(CODE_DIR))
 
-from combat_validation_driver import (  # noqa: E402
+from test_suite_driver import (  # noqa: E402
     apply_scene_conditions,
     clear_scene_conditions,
 )

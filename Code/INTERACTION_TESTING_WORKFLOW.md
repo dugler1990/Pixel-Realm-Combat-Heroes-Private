@@ -1,6 +1,6 @@
 # Interaction Testing Workflow
 
-The default in-game test is combat validation: `python combat_validation.py` from `Code`. Black floor, magenta walls, benchmark arena. Scenes, how to add one, and the hour/grass fields are in `PROCESS_combat_validation.md`. `rts_validation.py` is the RTS and terrain suite on the tmx map, not the window to open for a normal look at the game.
+The default in-game test is the test suite: `python test_suite.py` from `Code`. Empty black floor, magenta walls, benchmark arena. Scenes, how to add one, and the hour/grass fields are in `PROCESS_test_suite.md`. `rts_validation.py` is the RTS and terrain suite on the tmx map, not the window to open for a normal look at the game.
 
 This workflow keeps interaction correctness and performance checks parallel:
 
