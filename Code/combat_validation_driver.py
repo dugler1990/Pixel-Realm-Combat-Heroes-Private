@@ -15,6 +15,7 @@ import pygame
 
 import contact_debug
 import temperature
+import venom as venom_module
 import Player as player_module
 from abilities.leap_slam import ChargedLeapSlamAbility
 from combat_validation_runtime import COMBAT_VALIDATION_RUNTIME as RUNTIME
@@ -581,8 +582,114 @@ class WaterHole(Scene):
         level.layout_manager.visible_sprites.water_hole = None
 
 
+def _strike(level, target, name, team="enemy_1"):
+    """One hit of attack `name` on `target`; the health it cost."""
+    before = target.health
+    level.interaction_resolver.apply(InteractionContext(
+        kind="damage", source_kind="combat_validation", source_team=team, target=target,
+        attack_type="magic", attack_def=attack(name)))
+    return before - target.health
+
+
+class Holy(Scene):
+    """A sun bolt every 2 s on a demon and on the barb in full plate: holy goes through plate, and a
+    demon takes it times 2, the living times 0.5."""
+
+    NAME = "holy"
+    WATCH = "A sun bolt every 2 s on the demon and on you in plate: the demon loses far more."
+    SECONDS = 10.0
+    FAST_SECONDS = 4.5
+
+    def setup(self, level):
+        wear(level, FULL_PLATE)
+        self.demon = spawn_at(level, "demon", 420, 0)
+        self.demon.health = 5000
+        self.demon_lost = self.hero_lost = 0
+        self.bolts = 0
+
+    def tick(self, level, dt):
+        if self.t >= 2.0 * self.bolts:
+            self.demon_lost += _strike(level, self.demon, "sun_bolt", team="player")
+            self.hero_lost += _strike(level, level.player, "sun_bolt")
+            self.bolts += 1
+        self.lines = [f"bolts {self.bolts}", f"demon lost {self.demon_lost:g}", f"you lost {self.hero_lost:g}"]
+
+    def decide(self, level):
+        return "probe", f"bolts {self.bolts} demon lost {self.demon_lost:g} you lost {self.hero_lost:g}"
+
+
+def _venom_lines(hero):
+    rows = []
+    for name, held in sorted((getattr(hero, "venoms", None) or {}).items()):
+        defn = venom_module.VENOMS[name]
+        t = held.paid_ms - held.start_ms
+        edge, phase = 0.0, len(defn.phases)
+        for i, (ms, _dps, _debuffs) in enumerate(defn.phases):
+            if t < edge + ms:
+                phase = i
+                break
+            edge += ms
+        left = max(0.0, (defn.length_ms - t) / 1000.0)
+        rows.append(f"{name}: phase {phase + 1}/{len(defn.phases)} strength {held.strength:.2f} {left:.0f}s left")
+    return rows or ["no venom"]
+
+
+class Venom(Scene):
+    """Plate, a snake bites and darts fly: no venom. Then naked with a belt holding the antivenom
+    (snake class): the bites and darts take, the lines show each venom; 1 drinks the potion."""
+
+    NAME = "venom"
+    WATCH = "Plate: no venom. Then naked: snake and frog venom run. Press 1: the antivenom cuts the snake's, not the frog's."
+    SECONDS = 40.0
+    FAST_SECONDS = 8.0
+
+    def setup(self, level):
+        hero = level.player
+        self.recovery = hero.health_recovery
+        hero.health_recovery = lambda: None
+        venom_module.forget(hero)
+        wear(level, FULL_PLATE)
+        self.snake = spawn_at(level, "tribey_snake", 50, 0)
+        self.half = (self.FAST_SECONDS if RUNTIME.fast_mode else self.SECONDS) * 0.3
+        self.naked = False
+        self.darts = 0
+        self.plate_venom = None
+        self.drunk = False
+        self.start = hero.health
+
+    def tick(self, level, dt):
+        hero = level.player
+        if not self.naked and self.t >= self.half:
+            self.plate_venom = sorted(getattr(hero, "venoms", None) or {})
+            self.naked = True
+            wear(level, ("simple_belt",))
+            potion = level.item_spawner.create_item(copy.deepcopy(level.item_spawner.item_mapping["antivenom"]), [0, 0])
+            slot = hero.inventory.slots[hero.inventory.belt_start_index]
+            slot.item, slot.quantity = potion, 3
+        if self.t >= 3.0 * (self.darts + 1):
+            _strike(level, hero, "blowgun_dart")
+            self.darts += 1
+        if RUNTIME.fast_mode and self.naked and not self.drunk and self.t >= self.half + 3.0:
+            hero.inventory.use_belt_slot(0)          # headless drinks it; the window leaves it to you
+            self.drunk = True
+        self.lines = [("naked + belt (1: antivenom)" if self.naked else "full plate"),
+                      f"health {hero.health:.0f} (lost {self.start - hero.health:.0f})  speed {speed_of(hero):g}"]
+        self.lines += _venom_lines(hero)
+
+    def decide(self, level):
+        hero = level.player
+        slot = hero.inventory.slots[hero.inventory.belt_start_index]
+        return "probe", (f"plate venom {self.plate_venom or 'none'}; now " + "; ".join(_venom_lines(hero))
+                         + f"; lost {self.start - hero.health:.0f}; potions left {slot.quantity}")
+
+    def teardown(self, level):
+        hero = level.player
+        hero.health_recovery = self.recovery
+        venom_module.forget(hero)
+
+
 SCENARIOS = (KnockbackMass, ArrowsStop, PlateShove, ArrowsWhereDrawn, PointsVsCapsules, PlateStops,
-             Haste, Fire, Ice, IceNaked, Desert, Lava)
+             Haste, Fire, Ice, IceNaked, Desert, Lava, Holy, Venom)
 # Named only. A full combat run does not dig a hole.
 EXTRA_SCENARIOS = (WaterHole,)
 
