@@ -3,6 +3,8 @@ import json
 import os
 from typing import Any, Dict, Optional, Set, Tuple
 
+import contact_debug
+from conditions import has as has_condition
 from game_logging import get_debug_logger
 
 _interaction_log = get_debug_logger("combat")
@@ -16,6 +18,8 @@ class InteractionContext:
     owner: Any = None
     source_team: Optional[str] = None
     target: Any = None
+    # A number already priced (a co-op relay, a lightning hop, lava per second). A hit has an
+    # amount or an attack_def, never both: the def is the price.
     amount: Optional[float] = None
     attack_type: Optional[str] = None
     phase: Optional[str] = None
@@ -24,6 +28,22 @@ class InteractionContext:
     impulse_x: Optional[float] = None
     impulse_y: Optional[float] = None
     tags: Set[str] = field(default_factory=set)
+    # The AttackDef (damage_data.py) this hit is. Its damage plus the attacker's stat is the price
+    # (hit_resolve), before receive_interaction.
+    attack_def: Any = None
+    # The share of the def's price this hit carries: a blast's falloff, a charge, a meteor's size.
+    scale: float = 1.0
+    # World pixel where the hit landed (hit_core.find_contacts); None for blasts and old paths.
+    contact: Optional[Tuple[int, int]] = None
+    # The attack's travel on the ground (a shot's movement). None: source to target, and a
+    # torso hit counts as chest (body_regions).
+    toward: Optional[Tuple[float, float]] = None
+
+
+# What apply / land / strike's per-target step did. Truthy: the attack is used up on that body.
+LANDED = "landed"    # the body took it
+SPENT = "spent"      # reached the body, which is invulnerable: no effect, and the attack does not try again
+REFUSED = None       # did not reach the body (team rule, its gate): the attack may try it again
 
 
 class FactionPolicy:
@@ -287,8 +307,8 @@ class FactionPolicy:
             return self.relations_defaults["same_archetype"]
         return self.relations_defaults["fallback"]
 
-    def can_apply_damage(self, source_id: Optional[str], target_id: Optional[str], ctx: InteractionContext) -> bool:
-        if ctx.kind != "damage":
+    def can_apply_damage(self, source_id: Optional[str], target_id: Optional[str], kind: str = "damage") -> bool:
+        if kind != "damage":
             return True
         source = self.resolve_faction(source_id)
         target = self.resolve_faction(target_id)
@@ -304,7 +324,9 @@ class FactionPolicy:
             return relation != "ally"
         return relation == "hostile"
 
-    def should_aggro(self, source: Any, target: Any) -> bool:
+    def should_aggro(self, source: Any, target: Any, now_ms: int) -> bool:
+        """May `source` attack `target`. A `retaliate_only` faction may attack only the team that
+        hit it, while that memory lasts (permission; CombatUnit's preference reads the same fact)."""
         source_id = getattr(source, "team_id", None)
         target_id = getattr(target, "team_id", None)
         source_faction = self.resolve_faction(source_id)
@@ -320,26 +342,22 @@ class FactionPolicy:
         if aggro_mode == "hostile_only":
             return relation == "hostile"
         if aggro_mode == "retaliate_only":
-            retaliate_team = getattr(source, "retaliate_team_id", None)
-            retaliate_until = getattr(source, "retaliate_until_ms", 0)
-            return retaliate_team == target_id and retaliate_until > 0
+            return (getattr(source, "last_attacker_team", None) == target_id
+                    and now_ms < getattr(source, "last_attacker_until_ms", 0))
         return relation == "hostile"
 
-    def register_retaliation(self, target: Any, attacker_team: Optional[str], now_ms: int):
-        if attacker_team is None:
-            return
+    def remember_attacker(self, target: Any, attacker_team: Optional[str], now_ms: int):
+        """Who hit this body, until when (its faction's retaliation window). One fact on every body;
+        the readers are should_aggro (permission) and CombatUnit._current_prefer_team (preference)."""
         target_team = getattr(target, "team_id", None)
+        if attacker_team is None or attacker_team == target_team:
+            return
         target_faction = self.resolve_faction(target_team)
-        if target_faction is None:
-            return
-        if target_faction.get("aggro_mode") != "retaliate_only":
-            return
-        retaliation_window_ms = target_faction.get(
-            "retaliation_window_ms",
-            self.default_retaliation_window_ms,
-        )
-        setattr(target, "retaliate_team_id", attacker_team)
-        setattr(target, "retaliate_until_ms", now_ms + retaliation_window_ms)
+        window_ms = self.default_retaliation_window_ms
+        if target_faction is not None:
+            window_ms = target_faction.get("retaliation_window_ms", window_ms)
+        target.last_attacker_team = attacker_team
+        target.last_attacker_until_ms = now_ms + window_ms
 
 
 class InteractionResolver:
@@ -393,23 +411,17 @@ class InteractionResolver:
         if sink is not None and hasattr(sink, "record_interaction_prefilter"):
             sink.record_interaction_prefilter(skipped)
 
-    def can_potentially_affect(self, source_team: Optional[str], target_team: Optional[str], kind: str = "damage") -> bool:
-        if kind != "damage":
-            return True
-        probe_ctx = InteractionContext(kind="damage", source_kind="prefilter")
-        allowed = self.faction_policy.can_apply_damage(source_team, target_team, probe_ctx)
-        self._record_prefilter(skipped=not allowed)
-        return allowed
+    def team_allows(self, source_team: Optional[str], target_team: Optional[str], kind: str = "damage") -> bool:
+        """The one team rule (the faction policy). Only damage is ruled here; other kinds pass."""
+        return self.faction_policy.can_apply_damage(source_team, target_team, kind)
 
-    def can_team_interact(self, source_team: Optional[str], target_team: Optional[str], ctx: InteractionContext) -> bool:
-        return self.faction_policy.can_apply_damage(source_team, target_team, ctx)
-
-    def can_aggro(self, source: Any, target: Any) -> bool:
-        allowed = self.faction_policy.should_aggro(source, target)
+    def can_aggro(self, source: Any, target: Any, now_ms: Optional[int] = None) -> bool:
+        allowed = self.faction_policy.should_aggro(source, target, self._now_ms() if now_ms is None else now_ms)
         self._record_aggro_check(allowed)
         return allowed
 
-    def apply(self, ctx: InteractionContext) -> bool:
+    def apply(self, ctx: InteractionContext):
+        """The team rule, then land. Returns LANDED, SPENT or REFUSED."""
         self._record_emitted()
         target = ctx.target
         if target is None:
@@ -423,9 +435,9 @@ class InteractionResolver:
             )
             self._record_rejected_target()
             self._record_rejected_reason("missing_target")
-            return False
+            return REFUSED
         target_team = getattr(target, "team_id", None)
-        if not self.can_team_interact(ctx.source_team, target_team, ctx):
+        if not self.team_allows(ctx.source_team, target_team, ctx.kind):
             _interaction_log.debug(
                 "interaction reject reason=team_policy source_kind=%r source_team=%r target_team=%r kind=%r attack_type=%r amount=%r",
                 ctx.source_kind,
@@ -437,7 +449,15 @@ class InteractionResolver:
             )
             self._record_rejected_team()
             self._record_rejected_reason("team_policy")
-            return False
+            return REFUSED
+        return self.land(ctx)
+
+    def land(self, ctx: InteractionContext):
+        """Everything after the team rule: the body's gate, invulnerability, the price, the
+        elements, then the body applies it. A hit the server already passed (the co-op relay)
+        starts here. Returns LANDED, SPENT or REFUSED."""
+        target = ctx.target
+        target_team = getattr(target, "team_id", None)
         if hasattr(target, "can_receive_interaction") and not target.can_receive_interaction(ctx):
             _interaction_log.debug(
                 "interaction reject reason=target_gate source_kind=%r source_team=%r target_team=%r kind=%r attack_type=%r amount=%r",
@@ -450,7 +470,7 @@ class InteractionResolver:
             )
             self._record_rejected_target()
             self._record_rejected_reason("target_gate")
-            return False
+            return REFUSED
         if not hasattr(target, "receive_interaction"):
             _interaction_log.debug(
                 "interaction reject reason=no_receive_interaction source_kind=%r source_team=%r target_team=%r kind=%r attack_type=%r amount=%r",
@@ -463,11 +483,20 @@ class InteractionResolver:
             )
             self._record_rejected_target()
             self._record_rejected_reason("no_receive_interaction")
-            return False
+            return REFUSED
+        if ctx.kind == "damage":
+            # Before the price, so a blocked hit starts no fire, chill or retaliation. Spent: the
+            # attack counts the body as hit and does not land when the condition ends. All damage,
+            # heat and cold included.
+            if has_condition(target, "invulnerable"):
+                self._record_rejected_reason("invulnerable")
+                return SPENT
+            self._price(ctx)
         target.receive_interaction(ctx)
-        # Neutral retaliation registration happens after a successful hostile damage interaction.
+        if contact_debug.ENABLED and ctx.contact is not None:
+            contact_debug.record(ctx.contact, self._now_ms(), contact_debug.kind_of(target, ctx.contact))
         if ctx.kind == "damage" and ctx.source_team is not None:
-            self.faction_policy.register_retaliation(target, ctx.source_team, self._now_ms())
+            self.faction_policy.remember_attacker(target, ctx.source_team, self._now_ms())
         _interaction_log.debug(
             "interaction resolved source_kind=%r source_team=%r target_team=%r kind=%r attack_type=%r amount=%r",
             ctx.source_kind,
@@ -478,17 +507,39 @@ class InteractionResolver:
             ctx.amount,
         )
         self._record_resolved(ctx)
-        return True
+        return LANDED
 
-    def strike(self, targets, hits=None, rehit_ms=None, **fields) -> list:
-        """Apply one flat-damage attack to every target it touched: team prefilter, the
-        attack's repeat rule, then apply.
+    def _price(self, ctx: InteractionContext) -> None:
+        """The one place a hit's amount is set. A stated amount is already priced and stays.
+        An attack def: against a body card, hit_resolve prices it (and starts its elements);
+        otherwise its flat price. Neither, or both: an error, never a silent 0."""
+        from damage_rules import landed
+        from hit_resolve import apply_element, flat, resolve
+
+        if ctx.attack_def is None:
+            if ctx.amount is None:
+                raise ValueError(f"damage from {ctx.source_kind!r} has no attack def and no amount")
+            return
+        if ctx.amount is not None:
+            raise ValueError(f"damage from {ctx.source_kind!r} has both an attack def and an amount")
+        priced = resolve(ctx, self._now_ms())
+        if priced is not None:
+            ctx.amount = landed(priced)
+            apply_element(ctx, priced, self._now_ms())
+            return
+        ctx.amount = flat(ctx)
+
+    def strike(self, targets, hits=None, rehit_ms=None, contacts=None, **fields) -> list:
+        """Apply one attack to every target it touched: the attack's repeat rule, the team rule
+        (checked here, before any context is built, so a crowd of allies costs little), then land.
 
         `hits` is the attack's own record, target id -> time of its last hit (ms); None
         keeps no record, so every call applies. With a record, `rehit_ms` None hits each
         target once per attack, and a number lets the same target be hit again after that
-        many ms (0 = every frame). `fields` are InteractionContext fields; strike fills in
-        `target`. Returns the targets the attack landed on.
+        many ms (0 = every frame). `contacts` maps target id -> the world pixel it was hit
+        at (ctx.contact), through .get, asked only for targets past the repeat and team
+        checks (hit_core.EntryPoints works this out then); None leaves contact None. `fields` are InteractionContext fields;
+        strike fills in `target` and `contact`. Returns the targets the attack is used up on (LANDED or SPENT).
         """
         landed = []
         kind = fields.get("kind", "damage")
@@ -499,9 +550,13 @@ class InteractionResolver:
             if hits is not None and key in hits:
                 if rehit_ms is None or now - hits[key] < rehit_ms:
                     continue
-            if not self.can_potentially_affect(source_team, getattr(target, "team_id", None), kind):
+            allowed = self.team_allows(source_team, getattr(target, "team_id", None), kind)
+            self._record_prefilter(skipped=not allowed)
+            if not allowed:
                 continue
-            if self.apply(InteractionContext(target=target, **fields)):
+            self._record_emitted()
+            contact = contacts.get(key) if contacts else None
+            if self.land(InteractionContext(target=target, contact=contact, **fields)):
                 landed.append(target)
                 if hits is not None:
                     hits[key] = now

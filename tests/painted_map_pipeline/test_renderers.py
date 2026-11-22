@@ -236,6 +236,7 @@ def test_describe_padding_names_the_edges_it_lies_along():
     assert describe_padding(_padding_mask(size, (200, 0, 800, 129))) == "the top 13%"
     both = describe_padding(_padding_mask(size, (0, 0, 89, 999)))
     assert "the left 9%" in both
+    assert describe_padding(_padding_mask(size, (0, 0, 999, 999))) == "about 100%"
     assert describe_padding(Image.new("L", size, 0)) is None
 
 

@@ -1,0 +1,13 @@
+{
+  "circle": {"cx": 200, "cy": 200, "r": 120},
+  "inset": 8,
+  "cooldown_ms": 250,
+  "whisper_on_enter": "fog_enter",
+  "track_sequence_on_wrap": false,
+  "pads": [
+    {"id": "A", "angle_deg": 0, "half_width_deg": 30},
+    {"id": "B", "angle_deg": 90, "half_width_deg": 30},
+    {"id": "C", "angle_deg": 180, "half_width_deg": 30}
+  ],
+  "pad_order": ["A", "B", "C"]
+}

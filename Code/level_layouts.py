@@ -12,6 +12,7 @@ level_9_layout_path = '../levels/Frostreach/ice_wall_gate'
 level_10_layout_path = '../levels/Frostreach/expanse'
 level_11_layout_path = '../levels/Frostreach/sunspine_dunes_01'
 level_12_layout_path = '../levels/Frostreach/sunspine_7x6_play'
+level_13_layout_path = '../levels/Frostreach/bitter_floe_7x6_play'
 
 LAYOUT_TO_LEVEL = {
     level_6_layout_path: 6,
@@ -21,6 +22,7 @@ LAYOUT_TO_LEVEL = {
     level_10_layout_path: 10,
     level_11_layout_path: 11,
     level_12_layout_path: 12,
+    level_13_layout_path: 13,
 }
 
 # Inverted so a level number resolves to its folder in one lookup.
@@ -45,4 +47,6 @@ LEVEL_NAMES = {
     11: "Sunspine Dunes",
     6: "Level 6",
     12: "Sunspine",
+
+    13: "Bitter Floe",
 }

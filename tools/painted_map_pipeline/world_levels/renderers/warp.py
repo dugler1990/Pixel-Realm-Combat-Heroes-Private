@@ -152,7 +152,7 @@ class WarpRenderer:
         # Score the RAW generation before the warp. fit_generated_to_mask will happily squash
         # a reframed render onto the silhouette, so without this the shape error is invisible
         # downstream.
-        raw_iou = footprint_iou(returned, ctx.generation_mask)
+        raw_iou = footprint_iou(returned, ctx.generation_mask, enclosed_is_art=True)
         info: dict = {
             "footprint_iou_raw": round(raw_iou, 4),
             "rescale_below_iou": ctx.rescale_below_iou,
@@ -182,7 +182,7 @@ class WarpRenderer:
                     returned, ctx.generation_mask, outside_color=ctx.outside_color
                 )
                 info["cut_to_mask"] = True
-                info["footprint_iou"] = round(footprint_iou(cut, ctx.generation_mask), 4)
+                info["footprint_iou"] = round(footprint_iou(cut, ctx.generation_mask, enclosed_is_art=True), 4)
                 return cut, info
             # Otherwise return exactly what came back; where two levels overlap, core
             # ownership decides at assembly.
@@ -198,7 +198,7 @@ class WarpRenderer:
             returned, rescale_info = rescale_to_mask(
                 returned, ctx.generation_mask, outside_color=ctx.outside_color
             )
-            final_iou = footprint_iou(returned, ctx.generation_mask)
+            final_iou = footprint_iou(returned, ctx.generation_mask, enclosed_is_art=True)
             info["rescale_applied"] = True
             info.update(rescale_info)
         info["footprint_iou"] = round(final_iou, 4)

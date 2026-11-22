@@ -30,6 +30,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from tools.boss_sprite_pipeline import characters, outfit_fields
 from tools.boss_sprite_pipeline import outfit as of
 
 WEB = Path(__file__).resolve().parent / "web" / "outfit.html"
@@ -146,15 +147,25 @@ class Pod:
 
 def outfits() -> list[dict]:
     rows = []
-    for f in sorted((of.TOOLS / "outfits").glob("*/*.json")):
-        ctx = of.Ctx(f.parent.name, f.stem)
+    for f in sorted(characters.OUTFITS.glob("*/*.json")):
+        if f.name == characters.FILE:
+            continue
+        try:
+            ctx = of.Ctx(f.parent.name, f.stem)
+        except SystemExit as exc:                      # a file that does not check out: listed with its errors
+            rows.append({"character": f.parent.name, "outfit": f.stem, "kind": "?", "about": "", "models": [],
+                         "steps": [], "next": None, "error": str(exc)})
+            continue
         steps = of.STEPS[ctx.o["kind"]]
         rows.append({"character": ctx.character, "outfit": ctx.outfit, "kind": ctx.o["kind"],
                      "about": ctx.o.get("_about", ""), "models": ctx.models() if ctx.o["kind"] != "cut" else [],
                      "steps": [{"name": s, "status": ctx.step(s).get("status", "-"),
                                 "cost_usd": ctx.step(s).get("cost_usd"), "pod_minutes": ctx.step(s).get("pod_minutes"),
                                 "time": ctx.step(s).get("time")} for s in steps],
-                     "next": next((s for s in steps if not ctx.done(s)), None)})
+                     "next": next((s for s in steps if not ctx.done(s)), None),
+                     "missing": [{"field": f.name, "level": f.level, "steps": list(f.steps)}
+                                 for f in outfit_fields.needed(ctx.o)],
+                     "images": ctx.o.get("images") or {}})
     return rows
 
 
@@ -167,6 +178,11 @@ def run_detail(character: str, outfit: str) -> dict:
             sheet = Path(t["draw"]).with_name(Path(t["draw"]).stem + "_sheet.png")
             t["sheet"] = str(sheet) if sheet.is_file() else None
         out[g.stem[5:]] = {"status": d.get("status"), "accepted": d.get("accepted"), "attempts": d.get("attempts", [])}
+    cg = ctx.work / "concept" / "gate_concept.json"            # a new character's concept candidates
+    if cg.is_file():
+        d = json.loads(cg.read_text(encoding="utf-8"))
+        out["concept"] = {"status": d.get("status"), "accepted": d.get("accepted"), "attempts": d.get("attempts", []),
+                          "sheet": d.get("sheet")}
     paint = sorted((ctx.work / "paint" / "result").glob("after_*.png"), key=lambda p: int(p.stem.split("_")[1]))
     trellis = {m: str(ctx.work / "trellis" / f"{m}_from_front.glb")
                for m in of.MODEL_VIEWS if (ctx.work / "trellis" / f"{m}_from_front.glb").is_file()}
@@ -195,6 +211,18 @@ def build_args(ctx: of.Ctx, body: dict, pod: Pod) -> tuple[str | None, list[str]
         if not models:
             raise ValueError("tick at least one model")
         return None, ["--models", ",".join(models), "--status"], "local"
+    if action == "on":                     # run on from the first step not done, to the next gate or pod step
+        todo = [s for s in steps if not ctx.done(s)]
+        if not todo:
+            raise ValueError("every step is done")
+        lane = "pod" if todo[0] in of.POD_STEPS else "local"
+        other = next((s for s in todo if (s in of.POD_STEPS) != (lane == "pod")), None)   # where the lane changes
+        args = ["--to", other] if other else []
+        if lane == "pod":
+            if not (pod.host and pod.port):
+                raise ValueError("next is a pod step: paste the pod's ssh line first")
+            args += ["--host", pod.host, "--port", pod.port]
+        return todo[0], args, lane
     if step not in steps:
         raise ValueError(f"{step!r} is not a step of a {ctx.o['kind']} outfit")
     args = ["--only", step]
@@ -214,6 +242,13 @@ def build_args(ctx: of.Ctx, body: dict, pod: Pod) -> tuple[str | None, list[str]
             if not inside(Path(img), allowed_roots()):
                 raise ValueError(f"attached image outside the run folders: {img}")
         args += ["--retry", retry]
+    elif action == "use":
+        if step not in ("front", "back", "sides"):
+            raise ValueError("an image can stand in for front, back or a side view only")
+        image = Path(str(body.get("image") or ""))
+        if not image.is_file() or not inside(image, allowed_roots()) or image.suffix.lower() not in EXT["image"]:
+            raise ValueError("the image must be an uploaded or picked file in the data folder")
+        args += ["--use", str(image)]
     elif action == "pick":
         if body.get("model") not in of.MODEL_VIEWS:
             raise ValueError("unknown model")
@@ -231,6 +266,161 @@ def build_args(ctx: of.Ctx, body: dict, pod: Pod) -> tuple[str | None, list[str]
             raise ValueError("a pod step: paste the pod's ssh line first")
         args += ["--host", pod.host, "--port", pod.port]
     return step, args, lane
+
+
+# --- settings files: characters and outfits made and edited from the page (outfit_fields.py) -------------------
+
+EXT = {"image": (".png", ".jpg", ".jpeg", ".webp"), "glb": (".glb",), "blend": (".blend",), "json": (".json",)}
+REPO_JSON = ("tools/boss_sprite_pipeline/repaint/looks", "tools/boss_sprite_pipeline/explode2",
+             "tools/painted_map_pipeline", "tools/boss_sprite_pipeline/view_prompts",
+             "tools/boss_sprite_pipeline/view_checks")          # repo folders a json field may point into (looks, configs)
+FILES_MAX = 400
+
+
+# What the page calls things. The files and the driver keep their names (kind "armour", step "sam3"); the page shows
+# these, with the file name small beside them.
+KIND_UI = {
+    "body": ("Body variant", "Redraw an existing character's body (e.g. the barb without his loincloth) and build "
+                             "it in 3D on his rig."),
+    "armour": ("Armour set", "Draw armour over a character, build it in 3D, cut it into wearable pieces."),
+    "cut": ("Pieces from a mesh", "Cut wearable pieces out of a painted mesh you already have; nothing is drawn."),
+    "character": ("New character", "An original character: concept from a description (or your image), views, 3D "
+                                   "model, rig, clips, its own sprites, into the game. Its rig is then used by its "
+                                   "armour sets."),
+    "weapon": ("Weapon", "A weapon from a description (or your image): views, 3D model, then put in this "
+                         "character's hand (grip), sized to him. Export to the game comes later."),
+}
+PHASES = [("views", "Views"), ("model", "3D model"), ("pieces", "Pieces"), ("animation", "Animation"), ("game", "Game")]
+STEP_UI = {  # step: (label, phase, what it does)
+    "concept": ("Concept", "views", "Candidates from the description, in the A-pose, checked; pick one (or your image)."),
+    "front": ("Front", "views", "The front view: drawn from the concept, or your image."),
+    "back": ("Back", "views", "The back view: drawn from the front, or your image."),
+    "sides": ("Sides & 3/4", "views", "Side and 3/4 views the TRELLIS models need: drawn, mirrored, or yours."),
+    "trellis": ("3D model", "model", "TRELLIS builds the mesh from the views (pod); pick one by eye."),
+    "skeleton": ("Fit to rig", "model", "The mesh fitted onto the character's rig."),
+    "paint": ("Paint", "model", "Colours painted onto the mesh from the drawings."),
+    "views": ("Render angles", "pieces", "The painted mesh rendered from many angles."),
+    "sam3": ("Find parts", "pieces", "SAM3 marks every part in each render (pod)."),
+    "cut": ("Cut parts", "pieces", "The mesh split into parts by those marks."),
+    "holopart": ("Complete parts", "pieces", "HoloPart fills in the hidden sides of each part (pod)."),
+    "merge": ("Merge parts", "pieces", "The completed parts put back together."),
+    "worn": ("Wear test", "pieces", "The parts posed on the body: nothing should poke through."),
+    "slots": ("Sort into slots", "pieces", "Parts grouped into the game's slots (helmet, chest, ...), skinned to "
+                                           "the game rig."),
+    "sheet": ("Pieces sheet", "pieces", "One picture of every piece."),
+    "rig": ("Rig", "model", "UniRig gives the 3D model a skeleton and skin weights (pod)."),
+    "grip": ("Grip", "model", "The weapon in his hand: handle found from its shape, sized to him; adjust "
+                              "weapon_length / grip_offset / grip_turn in Outfit settings and run again."),
+    "reweight": ("Reweight", "model", "Smoother skin weights (bone heat)."),
+    "roles": ("Bone roles", "model", "Which bone is which: shoulder, elbow, knee ..."),
+    "game_rig": ("Game rig", "model", "The rig the game and the armour use (neutral bone fixed)."),
+    "clips": ("Clips", "animation", "The anunaki clips put on its rig; pick idle, move, attack."),
+    "sprites": ("Sprite body", "game", "Its own sprite folder and portrait, rendered from the mesh."),
+    "export": ("Export", "game", "The game's mesh pack."),
+    "install": ("Install", "game", "Into the game: piece stats and items, or the hero entry."),
+}
+CHARACTER_PHASE = {"rig_fit": "model", "rig_game": "model", "roles": "model", "clips_blend": "game",
+                   "greedy_dirs": "pieces", "views": "pieces", "clips_from": "game", "roster": "game",
+                   "clips": "animation", "retarget": "animation"}
+
+
+def fields() -> dict:
+    return {"fields": [dict(f.__dict__) for f in outfit_fields.FIELDS], "kinds": list(outfit_fields.KINDS),
+            "model_views": of.MODEL_VIEWS, "given_by_image": outfit_fields.GIVEN_BY_IMAGE,
+            "kind_steps": of.STEPS, "kind_ui": KIND_UI, "phases": PHASES, "step_ui": STEP_UI,
+            "character_phase": CHARACTER_PHASE}
+
+
+def character_info(character: str) -> dict:
+    """A character's page: each character field set or not, and whether its file is there."""
+    name_ok(character)
+    p = characters.path(character)
+    data = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    rows = []
+    for f in outfit_fields.FIELDS:
+        if f.level != "character":
+            continue
+        v = data.get(f.name)
+        there = None
+        if v is not None and f.type in outfit_fields.FILE_TYPES:
+            there = (Path(v) if Path(v).is_absolute() else data_root() / v).exists()
+        rows.append({"field": f.name, "set": v is not None, "exists": there, "kinds": list(f.kinds),
+                     "steps": list(f.steps), "help": f.help})
+    return {"character": character, "file": str(p), "about": data.get("_about", ""), "fields": rows}
+
+
+def config(character: str | None, outfit: str | None) -> dict:
+    """The raw files (not merged) and what exists, for the forms."""
+    have = {p.parent.name: sorted(o.stem for o in p.parent.glob("*.json") if o.name != characters.FILE)
+            for p in sorted(characters.OUTFITS.glob(f"*/{characters.FILE}"))}
+    out = {"characters": have, "character": None, "outfit": None}
+    if character:
+        name_ok(character)
+        p = characters.path(character)
+        out["character"] = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+    if character and outfit:
+        name_ok(outfit)
+        p = characters.OUTFITS / character / f"{outfit}.json"
+        out["outfit"] = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+    return out
+
+
+def name_ok(name: str) -> str:
+    if not NAME.match(name or "") or name == characters.FILE[:-5]:
+        raise ValueError(f"a name is letters, digits, _ and -, not {name!r}")
+    return name
+
+
+def write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def save_character(character: str, data: dict) -> dict:
+    name_ok(character)
+    bad = outfit_fields.file_problems(data, "character")
+    if bad:
+        raise ValueError("; ".join(bad))
+    write_json(characters.path(character), data)
+    return {"saved": str(characters.path(character))}
+
+
+def save_outfit(character: str, outfit: str, data: dict) -> dict:
+    name_ok(character), name_ok(outfit)
+    if not characters.path(character).is_file():
+        raise ValueError(f"no character {character!r}: make it first")
+    data = {**data, "character": character}
+    merged = {**characters.load(character), **data}
+    bad = outfit_fields.file_problems(data, "outfit")
+    bad += [p for p in outfit_fields.problems(merged) if p not in bad]
+    for view, rel in (data.get("images") or {}).items():
+        if isinstance(rel, str) and not (Path(rel) if Path(rel).is_absolute() else data_root() / rel).is_file():
+            bad.append(f"images.{view}: no file {rel}")
+    if bad:
+        raise ValueError("; ".join(bad))
+    path = characters.OUTFITS / character / f"{outfit}.json"
+    write_json(path, data)
+    # Saved: what is still to fill in is named per step (each is checked when its step runs).
+    return {"saved": str(path), "missing": outfit_fields.missing(merged)}
+
+
+def list_files(character: str, ftype: str) -> list[str]:
+    """Files a field of this type can point at: the character's data folder (paths relative to the data root), and
+    for json the repo folders of looks and configs (repo-relative). Newest first."""
+    name_ok(character)
+    if ftype not in EXT:
+        raise ValueError(f"not a file type: {ftype!r}")
+    found = []
+    roots = [(data_root(), data_root() / "generated" / "bosses" / character)]
+    if ftype == "json":
+        roots += [(of.REPO, of.REPO / d) for d in REPO_JSON]
+    for base, top in roots:
+        for dirpath, _, names in os.walk(top):
+            for n in names:
+                if n.lower().endswith(EXT[ftype]):
+                    p = Path(dirpath) / n
+                    found.append((p.stat().st_mtime, p.relative_to(base).as_posix()))
+    return [rel for _, rel in sorted(found, reverse=True)[:FILES_MAX]]
 
 
 def read_clipboard() -> str:
@@ -268,11 +458,26 @@ def make_handler(jobs: Jobs, pod: Pod):
                 if u.path == "/api/state":
                     keys = {k: bool(os.environ.get(env)) for k, (env, _) in KEYS.items()}
                     return self.json({"outfits": outfits(), "jobs": jobs.snapshot(), "pod": pod.info(), "keys": keys,
-                                      "data_root": str(data_root())})
+                                      "data_root": str(data_root()),
+                                      "characters": sorted(p.parent.name for p in
+                                                           characters.OUTFITS.glob(f"*/{characters.FILE}"))})
+                if u.path == "/api/character":
+                    return self.json(character_info(q["character"]))
                 if u.path == "/api/run":
                     return self.json(run_detail(q["character"], q["outfit"]))
                 if u.path == "/api/pod/status":
                     return self.json(pod.refresh())
+                if u.path == "/api/fields":
+                    return self.json(fields())
+                if u.path == "/api/config":
+                    return self.json(config(q.get("character"), q.get("outfit")))
+                if u.path == "/api/item_properties":           # the stats form (Code/item_properties.py)
+                    from tools.boss_sprite_pipeline import install_outfit as io
+                    return self.json({"properties": [dict(p.__dict__) for p in io.IP.PROPERTIES],
+                                      "identity": list(io.IP.IDENTITY), "regions": list(io.IP.REGIONS),
+                                      "bases": io.IP.load_bases(io.BASES)})
+                if u.path == "/api/files":
+                    return self.json({"files": list_files(q["character"], q["type"])})
                 if u.path == "/api/log":
                     ctx = of.Ctx(q["character"], q["outfit"])
                     if not NAME.match(q.get("step", "")):
@@ -318,9 +523,24 @@ def make_handler(jobs: Jobs, pod: Pod):
                         raise ValueError(f"the clipboard does not hold a {name} key")
                     os.environ[env] = value
                     return self.json({"set": True})
+                if u.path == "/api/bases":
+                    from tools.boss_sprite_pipeline import install_outfit as io
+                    return self.json({"added": io.add_bases(b["bases"])})
+                if u.path == "/api/character":
+                    return self.json(save_character(b["character"], b["data"]))
+                if u.path == "/api/outfit":
+                    return self.json(save_outfit(b["character"], b["outfit"], b["data"]))
                 if u.path == "/api/upload":
-                    ctx = of.Ctx(b["character"], b["outfit"])
                     name = re.sub(r"[^A-Za-z0-9_.\-]", "_", b.get("name") or "attach.png")
+                    if b.get("input"):                  # an input file of a character: kept in its inputs folder
+                        if not name.lower().endswith(sum(EXT.values(), ())):
+                            raise ValueError(f"one of {sum(EXT.values(), ())}")
+                        folder = data_root() / "generated" / "bosses" / name_ok(b["character"]) / "inputs"
+                        dst = folder / f"{time.strftime('%Y%m%d_%H%M%S')}_{name}"
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        dst.write_bytes(base64.b64decode(b["data"].split(",", 1)[-1]))
+                        return self.json({"path": str(dst), "rel": dst.relative_to(data_root()).as_posix()})
+                    ctx = of.Ctx(b["character"], b["outfit"])
                     if not name.lower().endswith((".png", ".jpg")):
                         raise ValueError("png or jpg only")
                     dst = ctx.work / "gate" / "uploads" / f"{time.strftime('%Y%m%d_%H%M%S')}_{name}"

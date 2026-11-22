@@ -250,7 +250,7 @@ def run_matrix(
 
     header = (
         "entity_count | backend | grid_cell_size | collision_mode | swarm_n | grass_wind | disturbance | variant | avg_fps | p95_ms | "
-        "grass_ms | grass_visible | grass_custom | grass_force | queries | candidates | resolved | maint_u | i_emit | i_resolve | i_rej_team | i_rej_target | i_damage | i_effect_state | i_rej_missing | i_rej_policy | i_rej_gate | i_rej_norecv | aggro_checks | aggro_allowed | i_prefilter_checked | i_prefilter_skipped"
+        "grass_ms | grass_visible | grass_custom | grass_force | queries | candidates | resolved | maint_u | i_emit | i_resolve | i_rej_team | i_rej_target | i_damage | i_rej_missing | i_rej_policy | i_rej_gate | i_rej_norecv | aggro_checks | aggro_allowed | i_prefilter_checked | i_prefilter_skipped"
     )
     print("\nComparison table")
     print(header)
@@ -272,7 +272,6 @@ def run_matrix(
             f"{_as_int(row, 'interactions_emitted_total')} | {_as_int(row, 'interactions_resolved_total')} | "
             f"{_as_int(row, 'interactions_rejected_team')} | {_as_int(row, 'interactions_rejected_target')} | "
             f"{_as_int(row, 'interactions_damage_applied_total')} | "
-            f"{_as_int(row, 'interactions_effect_state_total')} | "
             f"{_as_int(row, 'interactions_rejected_missing_target')} | "
             f"{_as_int(row, 'interactions_rejected_team_policy')} | "
             f"{_as_int(row, 'interactions_rejected_target_gate')} | "
@@ -303,7 +302,6 @@ def run_matrix(
                 f"{_as_int(row, 'interactions_emitted_total')} | {_as_int(row, 'interactions_resolved_total')} | "
                 f"{_as_int(row, 'interactions_rejected_team')} | {_as_int(row, 'interactions_rejected_target')} | "
                 f"{_as_int(row, 'interactions_damage_applied_total')} | "
-                f"{_as_int(row, 'interactions_effect_state_total')} | "
                 f"{_as_int(row, 'interactions_rejected_missing_target')} | "
                 f"{_as_int(row, 'interactions_rejected_team_policy')} | "
                 f"{_as_int(row, 'interactions_rejected_target_gate')} | "
@@ -338,7 +336,7 @@ def summarize_from_csv(run_prefix, csv_path=None):
         return 1
     header = (
         "entity_count | backend | grid_cell_size | collision_mode | swarm_n | grass_wind | disturbance | variant | avg_fps | p95_ms | "
-        "grass_ms | grass_visible | grass_custom | grass_force | queries | candidates | resolved | maint_u | i_emit | i_resolve | i_rej_team | i_rej_target | i_damage | i_effect_state | i_rej_missing | i_rej_policy | i_rej_gate | i_rej_norecv | aggro_checks | aggro_allowed | i_prefilter_checked | i_prefilter_skipped"
+        "grass_ms | grass_visible | grass_custom | grass_force | queries | candidates | resolved | maint_u | i_emit | i_resolve | i_rej_team | i_rej_target | i_damage | i_rej_missing | i_rej_policy | i_rej_gate | i_rej_norecv | aggro_checks | aggro_allowed | i_prefilter_checked | i_prefilter_skipped"
     )
     print("\nComparison table")
     print(header)
@@ -360,7 +358,6 @@ def summarize_from_csv(run_prefix, csv_path=None):
             f"{_as_int(row, 'interactions_emitted_total')} | {_as_int(row, 'interactions_resolved_total')} | "
             f"{_as_int(row, 'interactions_rejected_team')} | {_as_int(row, 'interactions_rejected_target')} | "
             f"{_as_int(row, 'interactions_damage_applied_total')} | "
-            f"{_as_int(row, 'interactions_effect_state_total')} | "
             f"{_as_int(row, 'interactions_rejected_missing_target')} | "
             f"{_as_int(row, 'interactions_rejected_team_policy')} | "
             f"{_as_int(row, 'interactions_rejected_target_gate')} | "

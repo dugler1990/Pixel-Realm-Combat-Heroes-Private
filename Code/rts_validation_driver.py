@@ -264,6 +264,59 @@ def _seed_trade_pack(player):
             inventory.add_item(item)
 
 
+def _install_ice_fog_walk(level):
+    """Benchmark room + heavy snow/wind + FogOrdeal circle around the barb."""
+    from pathlib import Path
+
+    from ice_fog.config import ordeal_config_from_dict
+    from ice_fog.geometry import FogCircle
+    from ice_fog.ordeal import FogOrdeal
+    from Settings import DEBUG_PIN_WIND_DIRECTION, DEBUG_PIN_WIND_INTENSITY
+
+    runtime = getattr(level, "benchmark_runtime", None)
+    if runtime is not None:
+        runtime.grass_benchmark_enabled = False
+    if not getattr(level, "_benchmark_walls_spawned", False):
+        level._spawn_benchmark_boundaries()
+        level._benchmark_walls_spawned = True
+
+    player = getattr(level, "player", None)
+    if player is None or getattr(player, "hitbox", None) is None:
+        return "fail: no player"
+
+    weather = getattr(level, "weather", None)
+    if weather is not None:
+        weather.set_climate("snowy_cold")
+        # Hold for the whole play session; Level4 pins wind via ice_fog_atmosphere.
+        weather.force_weather("snow", intensity=2, duration_s=60 * 60)
+        weather.wind_direction = float(DEBUG_PIN_WIND_DIRECTION)
+        weather.wind_intensity = float(DEBUG_PIN_WIND_INTENSITY)
+
+    level.ice_fog_atmosphere = {
+        "wind_direction": float(DEBUG_PIN_WIND_DIRECTION),
+        "wind_intensity": float(DEBUG_PIN_WIND_INTENSITY),
+    }
+
+    fixture = (
+        Path(__file__).resolve().parents[1]
+        / "tests"
+        / "fixtures"
+        / "ice_fog"
+        / "ordeal_wrap.json"
+    )
+    data = json.loads(fixture.read_text(encoding="utf-8"))
+    cfg = ordeal_config_from_dict(data)
+    cx, cy = float(player.hitbox.centerx), float(player.hitbox.centery)
+    r = float(cfg.circle.r) if cfg.circle.r else 140.0
+    cfg.circle = FogCircle(cx, cy, r)
+    level.ice_fog = FogOrdeal(cfg)
+    level.ice_fog_teleport_count = 0
+    level.ice_fog_debug_draw = True
+    # Start tangled: player is already at the center.
+    level.ice_fog.update_position(cx, cy, now_ms=pygame.time.get_ticks())
+    return f"fog r={int(r)} snow=heavy wind={DEBUG_PIN_WIND_INTENSITY}"
+
+
 class RtsValidationDriver:
     WARMUP_FRAMES = 30
     DT = 0.05
@@ -291,6 +344,7 @@ class RtsValidationDriver:
         "terrain_shadow_slope": 14.0,
         "warrior_brawl": 20.0,
         "dialogue_talk": 0.0,
+        "ice_fog_walk": 0.0,
     }
 
     DEFAULT_SCENARIO_NAMES = (
@@ -319,8 +373,8 @@ class RtsValidationDriver:
     # Not in the default list. The entity pipeline launches this one on its own
     # so the generated warriors fight in the visible game window.
     BRAWL_SCENARIO_NAMES = ("warrior_brawl",)
-    # Not in the default list. tests/test_dialogue_play.py opens this one.
-    PLAY_SCENARIO_NAMES = ("dialogue_talk",)
+    # Not in the default list. tests/test_dialogue_play.py / test_ice_fog_ingame_play.py.
+    PLAY_SCENARIO_NAMES = ("dialogue_talk", "ice_fog_walk")
     TERRAIN_WALK_FRAMES_FAST = 8
     TERRAIN_WALK_FRAMES_VISIBLE = 70
     TERRAIN_SLOPE_LAPS = 3
@@ -364,6 +418,9 @@ class RtsValidationDriver:
         self._brawl_spawned = False
         self._dialogue_spawned = False
         self._dialogue_details = ""
+        self._ice_fog_spawned = False
+        self._ice_fog_details = ""
+        self._ice_fog_probe_phase = None
 
     def _filtered_names(self):
         requested = [
@@ -403,6 +460,18 @@ class RtsValidationDriver:
                     "Space talks. Up and Down choose.",
                     "His icons are on the left. Your inventory is on the right.",
                     "E changes his tabs. Tab moves between them. Space buys or sells.",
+                    "Close the window to finish.",
+                ],
+                phase=phase,
+            )
+            return
+        if name == "ice_fog_walk":
+            runtime.set_overlay(
+                [
+                    "ICE FOG",
+                    "Heavy snow + wind (existing weather).",
+                    "Yellow circle: walk out to wrap.",
+                    "Wind whisper uses the conversation panel.",
                     "Close the window to finish.",
                 ],
                 phase=phase,
@@ -489,6 +558,10 @@ class RtsValidationDriver:
             if name == "dialogue_talk":
                 self._dialogue_spawned = False
                 self._dialogue_details = ""
+            if name == "ice_fog_walk":
+                self._ice_fog_spawned = False
+                self._ice_fog_details = ""
+                self._ice_fog_probe_phase = None
             if name.startswith("terrain_"):
                 self._terrain_phase = None
                 self._terrain_walk_frames = 0
@@ -502,7 +575,9 @@ class RtsValidationDriver:
 
         elapsed = time.time() - self._scenario_started
         limit = self._max_seconds_for(name, runtime)
-        stay_open = name == "dialogue_talk" and runtime.visible_mode
+        stay_open = (
+            name in ("dialogue_talk", "ice_fog_walk") and runtime.visible_mode
+        )
 
         # Complete post-pass hold even when runner returns done=False on later frames.
         if self._hold_started is not None and self._pending_result is not None:
@@ -625,6 +700,48 @@ class RtsValidationDriver:
             if self._dialogue_details.startswith("fail:"):
                 return True, False, self._dialogue_details
         return False, False, self._dialogue_details
+
+    def _run_ice_fog_walk(self, level):
+        """Benchmark room, heavy snow/wind, fog wrap circle. Visible stays open."""
+        runtime = RTS_VALIDATION_RUNTIME
+        if self._scenario_frame < 2:
+            return False, False, ""
+        if not self._ice_fog_spawned:
+            self._ice_fog_spawned = True
+            self._ice_fog_details = _install_ice_fog_walk(level)
+            if self._ice_fog_details.startswith("fail:"):
+                return True, False, self._ice_fog_details
+            if not runtime.visible_mode:
+                self._ice_fog_probe_phase = "push_out"
+                return False, False, self._ice_fog_details
+
+        if runtime.visible_mode:
+            return False, False, self._ice_fog_details
+
+        # Headless probe: step outside the rim; Level4 ordeal tick should wrap.
+        ordeal = getattr(level, "ice_fog", None)
+        player = getattr(level, "player", None)
+        if ordeal is None or player is None:
+            return True, False, "fail: ordeal missing"
+
+        if self._ice_fog_probe_phase == "push_out":
+            circle = ordeal.circle
+            _teleport_player(
+                player,
+                (circle.cx + circle.r + 40, circle.cy),
+            )
+            self._ice_fog_probe_phase = "wait_wrap"
+            return False, False, self._ice_fog_details
+
+        if self._ice_fog_probe_phase == "wait_wrap":
+            wraps = int(getattr(level, "ice_fog_teleport_count", 0) or 0)
+            if wraps >= 1 or self._scenario_frame > 30:
+                ok = wraps >= 1
+                details = f"{self._ice_fog_details} wraps={wraps}"
+                return True, ok, details
+            return False, False, self._ice_fog_details
+
+        return True, False, "fail: unknown probe phase"
 
     def _run_map_entities_loaded(self, level):
         if self._scenario_frame < 2:

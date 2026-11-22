@@ -26,10 +26,11 @@ def _ensure_display():
         pygame.display.set_mode((64, 64))
     yield
 
-from Interaction import InteractionContext, InteractionResolver  # noqa: E402
+from Interaction import LANDED, REFUSED, InteractionContext, InteractionResolver  # noqa: E402
 from combat_unit import CombatUnit  # noqa: E402
 from Player import BasePlayer  # noqa: E402
 from Settings import monster_data  # noqa: E402
+from Entity import knockback_scale  # noqa: E402
 
 
 class _StubRect:
@@ -65,6 +66,8 @@ class _StubHitbox:
 
 
 class _StubEntity:
+    takes_impulse = True  # Entity's class field; the stub borrows Entity's gate
+
     def __init__(self, team_id="enemy"):
         self.team_id = team_id
         self.rect = _StubRect()
@@ -99,6 +102,7 @@ class _StubEntity:
 
 
 class _StubPlayer:
+    takes_impulse = True  # Entity's class field; the stub borrows the player's gate
     team_id = "player"
 
     def __init__(self):
@@ -150,7 +154,7 @@ def test_hostile_impulse_displaces_stub_entity():
         impulse_x=10,
         impulse_y=-4,
     )
-    assert _resolver().apply(ctx) is True
+    assert _resolver().apply(ctx) is LANDED
     assert target.hitbox.x == 10
     assert target.hitbox.y == -4
 
@@ -166,7 +170,7 @@ def test_player_rejects_ally_impulse():
         impulse_y=0,
     )
     assert player.can_receive_interaction(ctx) is False
-    assert _resolver().apply(ctx) is False
+    assert _resolver().apply(ctx) is REFUSED
     assert player.hitbox.x == 0
 
 
@@ -181,7 +185,7 @@ def test_player_accepts_hostile_impulse():
         impulse_y=0,
     )
     assert player.can_receive_interaction(ctx) is True
-    assert _resolver().apply(ctx) is True
+    assert _resolver().apply(ctx) is LANDED
     assert player.hitbox.x == 15
 
 
@@ -207,7 +211,7 @@ def test_combat_unit_rejects_ally_impulse():
         impulse_y=0,
     )
     assert enemy.can_receive_interaction(ctx) is False
-    assert _resolver().apply(ctx) is False
+    assert _resolver().apply(ctx) is REFUSED
 
 
 def test_combat_unit_accepts_hostile_impulse():
@@ -233,8 +237,9 @@ def test_combat_unit_accepts_hostile_impulse():
         impulse_y=3,
     )
     assert enemy.can_receive_interaction(ctx) is True
-    assert _resolver().apply(ctx) is True
-    assert enemy.hitbox.x == before_x + 8
+    assert _resolver().apply(ctx) is LANDED
+    # Shoved by its mass: the first monster is the demon (Entity.knockback_scale).
+    assert enemy.hitbox.x == before_x + int(8 * knockback_scale(enemy))
 
 
 def test_impulse_cancels_dash_runtime():
@@ -313,5 +318,5 @@ def test_knockback_stops_at_a_wall():
         impulse_x=50,
         impulse_y=0,
     )
-    assert _resolver().apply(ctx) is True
+    assert _resolver().apply(ctx) is LANDED
     assert enemy.hitbox.x == before_x + 10  # flush against the wall, not through it

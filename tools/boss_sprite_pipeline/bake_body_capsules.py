@@ -1,10 +1,12 @@
 """Bake one capsule per bone from a skinned mesh pack's skin.npz.
 
 For each bone, take the rest vertices whose largest weight is that bone. The
-capsule axis is the principal direction of those points, the ends sit at their
-extremes along it, and the radius is the 90th-percentile distance from the axis
-so stray vertices do not inflate it. Bones that own fewer than 15 vertices get
-no capsule.
+capsule axis is the principal direction of those points and the radius is the
+90th-percentile distance from the axis, so stray vertices do not inflate it. The
+ends start at the points' extremes along the axis, then move in as far as the
+capsule still holds 90% of the points: ends at the extremes put a half-sphere of
+the radius past the body at each end (the barb's head capsule reached down over
+his chest). Bones that own fewer than 15 vertices get no capsule.
 
 Writes Graphics/Meshes/<name>/body.json with a version, the sha1 of skin.npz,
 and for each capsule the bone index, two rest-space ends, and a radius.
@@ -24,6 +26,8 @@ import numpy as np
 BODY_VERSION = 1
 MIN_OWNED_VERTS = 15
 RADIUS_PERCENTILE = 90.0
+END_KEEP = 0.90          # the ends move in while this share of the points stays inside
+END_STEPS = 12           # binary search steps for how far
 
 
 def _mesh_root():
@@ -66,7 +70,37 @@ def fit_capsule(points: np.ndarray) -> tuple[np.ndarray, np.ndarray, float] | No
         # A perfectly linear chain still needs a tiny thickness so projection
         # produces at least a stroke of pixels.
         radius = 1e-4
+    a, b = _pull_ends_in(pts, a, b, axis, radius)
     return a.astype(np.float64), b.astype(np.float64), radius
+
+
+def share_inside(points: np.ndarray, a: np.ndarray, b: np.ndarray, radius: float) -> float:
+    """Share of `points` within `radius` of the segment a-b."""
+    axis = b - a
+    length = float(np.linalg.norm(axis))
+    if length < 1e-12:
+        dists = np.linalg.norm(points - a, axis=1)
+    else:
+        unit = axis / length
+        t = np.clip((points - a) @ unit, 0.0, length)
+        dists = np.linalg.norm(points - (a + np.outer(t, unit)), axis=1)
+    return float((dists <= radius).mean())
+
+
+def _pull_ends_in(pts, a, b, axis, radius):
+    """Both ends in by the same amount, as far as END_KEEP of the points stay inside (binary
+    search, at most the radius or half the length)."""
+    length = float(np.linalg.norm(b - a))
+    if length < 1e-12 or share_inside(pts, a, b, radius) < END_KEEP:
+        return a, b
+    lo, hi = 0.0, min(radius, length / 2.0)
+    for _ in range(END_STEPS):
+        mid = (lo + hi) / 2.0
+        if share_inside(pts, a + axis * mid, b - axis * mid, radius) >= END_KEEP:
+            lo = mid
+        else:
+            hi = mid
+    return a + axis * lo, b - axis * lo
 
 
 def bake_pack(name: str, mesh_root: str | None = None) -> dict:

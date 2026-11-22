@@ -2,7 +2,8 @@
 
 When a server-owned enemy hits a player, the server broadcasts a `hit_player`
 event; each client applies it to its OWN real player only (filtering by
-target_player_id) via the existing get_damage (its own i-frames/death). Covers
+target_player_id) through the resolver after its team rule (`land`: its own
+i-frames/death). Covers
 the inbox routing + the apply, driven against duck-typed stubs.
 """
 
@@ -42,16 +43,18 @@ class _FakeClient:
         return self._batches.pop(0) if self._batches else []
 
 
-def test_apply_relayed_player_hit_damages_local_player():
-    stub = SimpleNamespace(player=SimpleNamespace(get_damage=Mock()))
+def test_apply_relayed_player_hit_lands_on_local_player_after_the_team_rule():
+    stub = SimpleNamespace(player=object(), interaction_resolver=SimpleNamespace(land=Mock()))
     Level4._apply_relayed_player_hit(stub, 8, "melee")
-    stub.player.get_damage.assert_called_once_with(8, "melee")
+    stub.interaction_resolver.land.assert_called_once()
+    ctx = stub.interaction_resolver.land.call_args.args[0]
+    assert (ctx.kind, ctx.target, ctx.amount, ctx.attack_type) == ("damage", stub.player, 8, "melee")
 
 
 def test_apply_relayed_player_hit_ignores_none_amount():
-    stub = SimpleNamespace(player=SimpleNamespace(get_damage=Mock()))
+    stub = SimpleNamespace(player=object(), interaction_resolver=SimpleNamespace(land=Mock()))
     Level4._apply_relayed_player_hit(stub, None, "melee")
-    stub.player.get_damage.assert_not_called()
+    stub.interaction_resolver.land.assert_not_called()
 
 
 def test_inbox_applies_hit_player_only_to_my_id():

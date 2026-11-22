@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "deliveries": ["pierce", "crush", "blast"],
+  "categories": {
+    "elemental": null,
+    "fire": "elemental",
+    "ice": "elemental",
+    "lightning": "elemental",
+    "holy": null,
+    "unholy": null
+  }
+}

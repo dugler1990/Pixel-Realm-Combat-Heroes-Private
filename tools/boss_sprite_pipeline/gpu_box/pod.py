@@ -5,7 +5,7 @@
     python tools/boss_sprite_pipeline/gpu_box/pod.py address "<the ssh line from RunPod's Connect tab>"
     python tools/boss_sprite_pipeline/gpu_box/pod.py status --host <ip> --port <port>
 
-<step>: trellis | sam3 | holopart. --host / --port default to POD_HOST / POD_PORT; --key to POD_KEY, else the
+<step>: trellis | sam3 | holopart | unirig. --host / --port default to POD_HOST / POD_PORT; --key to POD_KEY, else the
 key `ppp` in the main repo folder. You start and stop the pod; this never does. outfit.py says "stop the pod"
 after the outfit's last pod step.
 address  asks the ssh.runpod.io proxy (TTY, commands on stdin) for the pod's direct address; prints POD <ip> <port>.
@@ -23,6 +23,9 @@ sam3    push: the SAM3 snapshot (HF cache), sam3local src, explode_sam.py, sam3_
 holopart push: holopart_pod.sh, holopart_patch.py, <work>/cut/input_parts.glb
         run:  install (once) then run until HP_DONE
         pull: /workspace/holopart_out/* -> <work>/holopart/
+unirig  push: unirig_pod.sh + the picked TRELLIS mesh (--mesh) -> /workspace/unirig_in/mesh.glb
+        run:  unirig_pod.sh (install once, NOTES_rig_jaw_sam3.md section 1) until RIG_OK
+        pull: /workspace/unirig_out/rigged.glb -> <work>/rig/
 Long runs are started detached (nohup) and watched by polling their log, so a dropped connection does not
 stop them; `run` again re-attaches.
 """
@@ -119,6 +122,20 @@ def step_trellis(pod: Pod, action: str, work: Path, models: list[str]) -> None:
             have = pod.ssh(f"test -s /workspace/out/{n}_from_front.glb && echo yes || true", check=False).strip()
             if have == "yes":
                 pod.get(f"/workspace/out/{n}_from_front.glb", work / "trellis")
+
+
+def step_unirig(pod: Pod, action: str, work: Path, mesh: Path | None) -> None:
+    if action == "push":
+        if not mesh or not mesh.is_file():
+            sys.exit(f"unirig push needs --mesh <the picked TRELLIS glb>: {mesh}")
+        pod.ssh("mkdir -p /workspace/gpu_box /workspace/unirig_in /workspace/unirig_out /workspace/logs")
+        pod.put(HERE / "unirig_pod.sh", "/workspace/gpu_box/unirig_pod.sh")
+        pod.put(mesh, "/workspace/unirig_in/mesh.glb")
+    elif action == "run":
+        pod.run_detached("bash /workspace/gpu_box/unirig_pod.sh", "/workspace/logs/unirig.log")
+        pod.wait_for("/workspace/logs/unirig.log", "RIG_OK", ("RIG_FAILED",))
+    elif action == "pull":
+        pod.get("/workspace/unirig_out/rigged.glb", work / "rig")
 
 
 def step_sam3(pod: Pod, action: str, work: Path, prompts: Path | None) -> None:
@@ -247,13 +264,14 @@ def main(argv=None) -> None:
         status(Pod(b.host, b.port, key))
         return
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("step", choices=("trellis", "sam3", "holopart"))
+    ap.add_argument("step", choices=("trellis", "sam3", "holopart", "unirig"))
     ap.add_argument("action", choices=("push", "run", "pull", "token"))
     ap.add_argument("--work", type=Path, required=True)
     ap.add_argument("--host", default=os.environ.get("POD_HOST"))
     ap.add_argument("--port", default=os.environ.get("POD_PORT"))
     ap.add_argument("--key", type=Path, default=Path(os.environ.get("POD_KEY", MAIN_KEY)))
     ap.add_argument("--prompts", type=Path, help="sam3: the prompts file (crop -> prompts)")
+    ap.add_argument("--mesh", type=Path, help="unirig: the mesh to rig (the picked TRELLIS glb)")
     ap.add_argument("--models", default=",".join(MODELS), help="trellis: the models to build / pull, comma-separated")
     a = ap.parse_args(argv)
     if not a.host or not a.port:
@@ -270,6 +288,8 @@ def main(argv=None) -> None:
         step_trellis(pod, a.action, a.work, models)
     elif a.step == "sam3":
         step_sam3(pod, a.action, a.work, a.prompts)
+    elif a.step == "unirig":
+        step_unirig(pod, a.action, a.work, a.mesh)
     else:
         step_holopart(pod, a.action, a.work)
     if a.action == "pull":

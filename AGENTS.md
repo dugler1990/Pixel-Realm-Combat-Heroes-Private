@@ -26,6 +26,10 @@ and leave the user in charge of it.
 - Facing a decision about how the repo is handled (a workaround, leaving something behind):
   stop and tell the user first.
 
+## In-game test suite
+Default: combat validation. Read `Code/PROCESS_combat_validation.md`
+(and `Code/INTERACTION_TESTING_WORKFLOW.md`). Not `rts_validation`.
+
 ## Process docs
 Every initiative keeps one: `PROCESS_*.md` or `NOTES_*.md` in its folder. Read it before
 starting. Terse lines, no narrative: facts, commands, numbers.
@@ -39,6 +43,10 @@ starting. Terse lines, no narrative: facts, commands, numbers.
 
 Maintain it as you go, don't just append: a retry with small changes merges into its existing
 line; a wrong claim is replaced; what proved out moves into Method.
+
+## Dev servers
+New local web app, port change, or its branch merged/removed → update
+[docs/DEV_SERVERS.md](docs/DEV_SERVERS.md).
 
 ## Say exactly where things stand
 - End every task with: the branch, its commits, what is pushed, and anything left uncommitted

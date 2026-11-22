@@ -3,16 +3,17 @@ from Settings import *
 from ImageCache import ImageCache
 import legion_ui as L
 import os
+from stamina import max_stamina
 
 # This is for file (images specifically) importing (This line changes the directory to where the project is saved)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
 class UI:
-    """The HUD in the Legion look, drawn every gameplay frame: health and energy as painted
-    meters top left, the level top right, experience bottom right beside the gem, the weapon and
-    magic boxes bottom left in the slot frame. Every piece is kept and under 512 px a side, so
-    it batches in the atlas; text is re-rendered only when its value changes."""
+    """The HUD in the Legion look, drawn every gameplay frame: health, energy, and stamina as
+    painted meters top left, the level top right, experience bottom right beside the gem, the
+    weapon and magic boxes bottom left in the slot frame. Every piece is kept and under 512 px
+    a side, so it batches in the atlas; text is re-rendered only when its value changes."""
 
     def __init__(self, backend):
         self.backend = backend
@@ -20,6 +21,7 @@ class UI:
         self.margin = kit.px(18)
         self.health = L.Meter(kit, kit.px(300), kit.px(26), "fill_blood.png")
         self.energy = L.Meter(kit, kit.px(220), kit.px(22), "fill_energy.png")
+        self.stamina = L.Meter(kit, kit.px(160), kit.px(18), "fill_gold.png")
         self._exp = L.TextSlot(backend, kit, "display", 22, L.GOLD)
         self._level = L.TextSlot(backend, kit, "display", 18, L.GOLD, spacing=0.12, upper=True)
         self.box = kit.px(72)
@@ -31,6 +33,11 @@ class UI:
         self.health.draw(self.backend, (x, y), max(0.0, min(1.0, player.health / (player.stats["health"] or 1))))
         y += self.health.h + self.kit.px(6)
         self.energy.draw(self.backend, (x, y), max(0.0, min(1.0, player.energy / (player.stats["energy"] or 1))))
+        y += self.energy.h + self.kit.px(6)
+        cap = max_stamina(getattr(player, "stats", None))
+        current = float(getattr(player, "stamina", 0) or 0)
+        ratio = 0.0 if cap <= 0 else max(0.0, min(1.0, current / cap))
+        self.stamina.draw(self.backend, (x, y), ratio)
 
     def show_exp(self, exp):
         kit = self.kit

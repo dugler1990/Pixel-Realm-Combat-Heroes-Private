@@ -2,7 +2,6 @@ import pygame
 import random
 from Support import import_folder
 from Settings import TILESIZE
-from hashRect import HashableRect
 
 from NeutralCharacter import NeutralCharacter
 class Eskimo(NeutralCharacter):
@@ -46,24 +45,14 @@ class Eskimo(NeutralCharacter):
         self.speed = 2
         self.ice_holes = {} 
         self.ice_hole_duration = 20  # Ice hole closes after 20 seconds of no fishing
-        self.hit_sound = pygame.mixer.Sound("../Audio/Hit.wav")
-        self.death_sound = pygame.mixer.Sound("../Audio/Hit.wav")
         
 
 
 
-    def check_death(self):
-        if self.health <= 0:
-            self.layout_callback_update_quad_tree( obstacle_sprite = HashableRect( self.rect, self.id ),
-                                                   remove_existing= True,
-                                                   alive = False )
-            self.kill()
-            #### TODO , add frozen or not end to monster name for frozen death particles.
-            self.trigger_death_particles(self.rect.center, self.sprite_type)
-            
-            # REMOVE KARMA IF NECESSARY ( how do drops work with enemes, maybe h should drop too.)
-            
-            self.death_sound.play()
+    def on_death(self):
+        super().on_death()
+        self.trigger_death_particles(self.rect.center, self.sprite_type)
+        self.death_sound.play()
 
     def import_graphics(self):
         self.animations = {"idle": [], "walking": [], "fishing": [], "building": [], "building_in_progress": []}
@@ -78,17 +67,6 @@ class Eskimo(NeutralCharacter):
 
 
     
-    def get_damage(self, player, attack_type):
-        if self.vulnerable:
-            self.hit_sound.play()
-            self.direction = self.get_player_distance_direction(player)[1]
-            if attack_type == "weapon":
-                self.health -= player.get_full_weapon_damage()
-            else:
-                self.health -= player.get_full_magic_damage()
-            self.hit_time = pygame.time.get_ticks()
-            #self.vulnerable = False
-
     def perform_action(self, action, tile_position):
         if action == "create_fishing_hole":
             self.status = "building"
@@ -159,7 +137,6 @@ class Eskimo(NeutralCharacter):
        # print(dt)
         #print(self.building_timer)
         #print(self.fishing_timer)
-        self.check_death()
            # Decrement timers for all ice holes and close them if their time runs out
         for position, timer in list(self.ice_holes.items()):
             #print(self.position,timer)

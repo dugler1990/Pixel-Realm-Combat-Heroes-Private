@@ -3,8 +3,9 @@
     python -m tools.boss_sprite_pipeline.export_outfit <character> <outfit>
 
 body    the painted body into the clips blend (swap_body.py), exported as Graphics/Meshes/<pack> (skinned,
-        40k tris, 1024 texture, idle / move / attack), body capsules baked, clips.json copied from the barb's
-        pack. Prints the PlayerSelectionDict.json entry to add (not written: paste it).
+        40k tris, 1024 texture, idle / move / attack), body capsules baked, clips.json copied from the pack the
+        character file names ("clips_from"). Prints the PlayerSelectionDict.json entry to add (from the character
+        file's "roster"; not written: paste it).
 armour  one pack per slot (explode2/slot_packs.py: rigid on the clips' skeleton) in <run>/packs/<slot>/;
 cut     the game cannot draw slot packs yet, so they stay out of Graphics/. Check: every pack loads as a
         PlayerMesh, frames and size printed.
@@ -35,11 +36,25 @@ def run(cmd: list, ok: str | None = None) -> str:
     return out
 
 
-def clips_json(dst: Path, made_by: str) -> None:
-    src = REPO / "Graphics" / "Meshes" / "barb" / "clips.json"
+def clips_json(dst: Path, made_by: str, clips_from: str) -> None:
+    """clips.json of a new body pack: the one of the pack its clips came from (character file "clips_from")."""
+    src = REPO / "Graphics" / "Meshes" / clips_from / "clips.json"
     c = json.loads(src.read_text(encoding="utf-8"))
     c["made_by"] = made_by
     (dst / "clips.json").write_text(json.dumps(c, indent=2), encoding="utf-8")
+
+
+def hero_entry(o: dict, ctx: of.Ctx) -> dict:
+    """The body's PlayerSelectionDict.json entry, from the character file's "roster" (+ the outfit's display_name)."""
+    r = o["roster"]
+    need = [k for k in ("display_name", "painting", "roster_stats", "player_info_dir", "evasion_loadout", "base_stats")
+            if k not in r]
+    if need:
+        sys.exit(f"outfits/{ctx.character}/character.json roster has no {', '.join(need)}")
+    return {"selection_position": {"x": 0, "y": 1}, "name": f"{o['pack']}_mesh",
+            "display_name": o.get("display_name", f"{r['display_name']} ({ctx.outfit}, mesh)"),
+            "painting": r["painting"], "roster_stats": r["roster_stats"], "player_info_dir": r["player_info_dir"],
+            "mesh_pack": o["pack"], "evasion_loadout": r["evasion_loadout"], "base_stats": r["base_stats"]}
 
 
 def export_body(o: dict, ctx: of.Ctx) -> dict:
@@ -50,13 +65,8 @@ def export_body(o: dict, ctx: of.Ctx) -> dict:
     pack = REPO / "Graphics" / "Meshes" / o["pack"]
     out = run([ctx.bpy, of.TOOLS / "export_mesh_runtime.py", blend, pack, TRIS, TEX, "--skin", "--only", CLIPS])
     run([sys.executable, "-m", "tools.boss_sprite_pipeline.bake_body_capsules", o["pack"]], ok="baked")
-    clips_json(pack, f"export_outfit.py {ctx.character}/{ctx.outfit}: {painted} in {o['clips_blend']}")
-    entry = {"selection_position": {"x": 0, "y": 1}, "name": f"{o['pack']}_mesh",
-             "display_name": o.get("display_name", f"Barbarian ({ctx.outfit}, mesh)"), "painting": "barbarian.png",
-             "roster_stats": ["strength", "vitality"], "player_info_dir": "../Graphics/barb/", "mesh_pack": o["pack"],
-             "evasion_loadout": ["slide", "leap_slam"],
-             "base_stats": {"health": 2000, "energy": 20, "attack": 10, "magic": 7, "speed": 5, "strength": 20,
-                            "vitality": 20, "agility": 4, "charisma": 3}}
+    clips_json(pack, f"export_outfit.py {ctx.character}/{ctx.outfit}: {painted} in {o['clips_blend']}", o["clips_from"])
+    entry = hero_entry(o, ctx)
     if o.get("start_equipment"):          # what the hero starts wearing / carrying (equipment.start_equipment)
         entry["start_equipment"] = o["start_equipment"]
     print("\nAdd to Graphics/PlayerSelectionDict.json (players list; pick a free selection_position):")

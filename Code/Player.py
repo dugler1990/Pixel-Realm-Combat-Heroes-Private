@@ -1,4 +1,6 @@
 import pygame
+import sounds
+import temperature
 from Support import import_folder, position_surface_mask_midbottom_at
 from Settings import *
 from game_logging import get_debug_logger
@@ -12,9 +14,16 @@ from PlayerConfiguration import PlayerConfiguration
 from inputManager import InputManager
 from AttackSelection import AttackSelection
 from Settings import *
-from Support import frames_to_masks
+from Support import frames_to_masks, mesh_feet_world
+import hit_core
+import math
+import mesh_points
 from Interaction import InteractionContext
+from damage_data import body
+from conditions import speed_of
+import defence_profile
 from abilities.registry import build_action_controller, load_evasion_loadout
+from stamina import max_stamina, recover
 
 class BasePlayer(Entity):
     # Bare direction names are the walk cycles; every other status ("_idle", "_attack",
@@ -22,6 +31,10 @@ class BasePlayer(Entity):
     WALK_STATUSES = frozenset({"up", "down", "left", "right"})
     # Draw-only 3D mesh (player_mesh.PlayerMesh) when the selected hero has a mesh_pack; None = sprite.
     mesh_skin = None
+    # Body def (bodies.json) of every hero for now; one per hero when a second hero has a mesh.
+    BODY = "barb"
+    _hit_rect_key = None
+    _hit_rect_value = None
 
     def __init__(self,
                  pos,
@@ -47,9 +60,15 @@ class BasePlayer(Entity):
         self.is_dead = False
         self.previous_tile = None
         self.power_level = 1
+        # What is between a hit and the flesh (defence_profile.py); rebuilt on equip.
+        self.body_def = body(self.BODY)
+        self.defence = defence_profile.natural_profile(self.body_def)
+        self.detail = "full"   # the cold curve and every lightning arc; monsters default to simple
         self.inventory = Inventory(self, input_manager)
         
         self.level = level
+        if level is not None:
+            temperature.join(self, level, pygame.time.get_ticks())
         self.input_manager = input_manager
         self.last_p_press_time = 0
         self.last_i_press_time = 0
@@ -136,6 +155,8 @@ class BasePlayer(Entity):
         self.upgrade_stat_order = tuple(self.max_stats.keys())
         self.health = self.stats["health"]
         self.energy = self.stats["energy"]
+        self.stamina = max_stamina(self.stats)
+        self._stamina_recover_at = 0
         self.exp = 0
         self.gold = 0
         self.has_belt = False
@@ -143,14 +164,10 @@ class BasePlayer(Entity):
         self.speed = self.stats["speed"]
         self.speed_multiplier = 1 
         
-        # Damage Timer
-        self.vulnerable = True
-        self.hurt_time = None
-        self.invulnerability_duration = 0
+        self.hit_time = None  # when the last hit landed (ms), stamped by take_damage
 
         # Import Sound
-        self.weapon_attack_sound = pygame.mixer.Sound("../Audio/Sword.wav")
-        self.weapon_attack_sound.set_volume(0.2)
+        self.weapon_attack_sound = sounds.get("../Audio/Sword.wav", 0.2)
 
         self.action_controller = build_action_controller(
             self,
@@ -169,98 +186,24 @@ class BasePlayer(Entity):
         
     
 
-    def get_damage(self, amount, attack_type=None):
-        if self.vulnerable:
-            self.health -= amount
-            self.vulnerable = False
-            self.hurt_time = pygame.time.get_ticks()
-            
-            if attack_type:
-                if attack_type != 'melee': ## TODO : a at the moment this is recieving attack type to do attack particles, 
-                                                    # we do not have any attack particles for this so screw it.
-                    # LayoutManager is passed as obstacle_sprites; animation_player lives on level
-                    animation_player = getattr(self.level, "animation_player", None)
-                    if animation_player is not None and attack_type in getattr(animation_player, "frames", {}):
-                        animation_player.create_particles(
-                            attack_type, self.rect.center, [self.obstacle_sprites.visible_sprites]
-                        )
-
-    def can_receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            return True
-        if ctx.kind == "impulse":
-            if "friendly_fire_impulse" in ctx.tags:
-                return True
-            if ctx.source_team == self.team_id:
-                return False
-            return True
-        if ctx.kind != "damage":
-            return False
-        if ctx.source_team == self.team_id:
-            return False
-        return True
-
-    def receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "impulse":
-            force = pygame.math.Vector2(ctx.impulse_x or 0, ctx.impulse_y or 0)
-            follow_through = 0.5
-            if ctx.source is not None:
-                follow_through = float(getattr(ctx.source, "impulse_follow_through", 0.5))
-            self.apply_impulse(force, follow_through=follow_through)
-            return
-        if ctx.kind == "effect_state":
-            super().receive_interaction(ctx)
-            return
-        if ctx.kind != "damage":
-            return
-        amount = ctx.amount
-        if amount is None:
-            source = ctx.source
-            if source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
-                if ctx.attack_type == "weapon":
-                    amount = source.get_full_weapon_damage()
-                else:
-                    amount = source.get_full_magic_damage()
-        if amount is None:
-            return
-        health_before = self.health
-        if ctx.source_kind == "environment":
-            self.take_environmental_damage(amount, ctx.attack_type)
-            _combat_log.debug(
-                "player_damage_ingress source_kind=%r source_team=%r amount=%r attack_type=%r health_before=%r health_after=%r",
-                ctx.source_kind,
-                ctx.source_team,
-                amount,
-                ctx.attack_type,
-                health_before,
-                self.health,
-            )
-            return
-        self.get_damage(amount, ctx.attack_type)
+    def on_hurt(self, ctx: InteractionContext):
+        """Shows the attack's particles, if it has any."""
+        attack_type = ctx.attack_type
+        if attack_type and attack_type != "melee" and ctx.source_kind != "environment":
+            # LayoutManager is passed as obstacle_sprites; animation_player lives on level
+            animation_player = getattr(self.level, "animation_player", None)
+            if animation_player is not None and attack_type in getattr(animation_player, "frames", {}):
+                animation_player.create_particles(
+                    attack_type, self.rect.center, [self.obstacle_sprites.visible_sprites]
+                )
         _combat_log.debug(
-            "player_damage_ingress source_kind=%r source_team=%r amount=%r attack_type=%r health_before=%r health_after=%r",
+            "player_damage source_kind=%r source_team=%r amount=%r attack_type=%r health_after=%r",
             ctx.source_kind,
             ctx.source_team,
-            amount,
-            ctx.attack_type,
-            health_before,
+            ctx.amount,
+            attack_type,
             self.health,
         )
-
-    def take_environmental_damage(self, amount, damage_type):
-        """Apply environmental damage (e.g. heat); reuses vulnerability via get_damage. No attack_type so particle branch is skipped until environmental types are defined."""
-        self.get_damage(amount, None)
-
-    # def get_damage(self, player, attack_type):
-    #     if self.vulnerable:
-    #         self.hit_sound.play()
-    #         self.direction = self.get_player_distance_direction(player)[1]
-    #         if attack_type == "weapon":
-    #             self.health -= player.get_full_weapon_damage()
-    #         else:
-    #             self.health -= player.get_full_magic_damage()
-    #         self.hit_time = pygame.time.get_ticks()
-            
 
     def scale_animation(self):
         if hasattr(self, "TILESIZE"):
@@ -302,6 +245,7 @@ class BasePlayer(Entity):
     def update_derived_attributes(self):
         self.health = self.stats["health"]
         self.energy = self.stats["energy"]
+        self.stamina = max_stamina(self.stats)
         self.speed = self.stats["speed"]
         self.magic_power = self.stats["magic"]
 
@@ -321,6 +265,9 @@ class BasePlayer(Entity):
         if "mana" in effect:
             cap = self.stats.get("energy", self.energy)
             self.energy = min(self.energy + effect["mana"], cap)
+        if "stamina" in effect:
+            cap = max_stamina(self.stats)
+            self.stamina = min(float(self.stamina) + float(effect["stamina"]), cap)
 
     def pickup_item(self, item):
         _player_item_log.debug("item.effect_type:%s", item.effect_type)
@@ -337,9 +284,92 @@ class BasePlayer(Entity):
             return True
         return self.inventory.add_item(item)
 
+    # --- what attacks hit (hit_core) --------------------------------------------------------
+    # A mesh hero is hit where he is drawn: his posed body capsules, at the frame, yaw and size the
+    # camera draws him with, at the camera's feet (mesh_feet_world). The capsules can reach past the
+    # sprite's rect (a foot stepping toward the camera: 15 px below it), so hit_rect is their box,
+    # for hit_core's first test (listed there by _attach_mesh: hit_core.reaches_past_rect). A sprite hero, or a mesh hero the backend could not draw (CPU: the
+    # sprite is what you see), is hit on his sprite as before.
+
+    def _drawn_skin(self):
+        skin = self.mesh_skin
+        if skin is None or not (getattr(self, "_mesh_drew", True) or MESH_HIT_WHEN_UNDRAWN):
+            return None
+        return skin
+
+    def hit_points(self):
+        """True: hit on the mesh's own points (mesh_points); False: on body.json's capsules."""
+        return MESH_HERO_HIT_BODY == "points"
+
+    def _mesh_scale(self, skin):
+        return skin.height_px / max(skin.skin.pack.height_units, 1e-6)
+
+    @property
+    def hit_rect(self):
+        """A box holding his hit shape this pose; None: hit_core uses rect. Worked out when an attack
+        asks, kept until his pose or place changes. Points: the frame's reach at any facing (cheap, a
+        little big); capsules: their box."""
+        skin = self._drawn_skin()
+        if skin is None:
+            return None
+        body = skin.skin
+        yaw = round(skin.yaw_deg()) % 360
+        key = (self.rect.topleft, id(self.mask), body.frame_index, yaw, skin.height_px, self.hit_points(),
+               tuple(skin.pieces))
+        if key != self._hit_rect_key:
+            fx, fy = mesh_feet_world(self)
+            if self.hit_points():
+                dx, dy, w, h = self._worn_cloud(skin).reach_box(body.frame_index, self._mesh_scale(skin))
+            else:
+                dx, dy, w, h, _ = body.body_bounds(yaw, skin.height_px)
+            self._hit_rect_value = pygame.Rect(int(fx + dx), int(fy + dy), int(math.ceil(w)), int(math.ceil(h)))
+            self._hit_rect_key = key
+        return self._hit_rect_value
+
+    _outline_key = None
+    _outline_value = None
+
+    def _worn_cloud(self, skin):
+        """His body and the pieces he wears now, as one point cloud (mesh_points.worn_cloud)."""
+        return mesh_points.worn_cloud(skin.skin.pack, [(name, piece.pack) for name, piece in skin.pieces.items()])
+
+    def hit_outline(self):
+        """(mesh_points.Outline, feet) of his pose now, worn pieces in it, for the points path; None
+        otherwise. Kept until his pose, pieces or place change."""
+        skin = self._drawn_skin()
+        if skin is None or not self.hit_points():
+            return None
+        body = skin.skin
+        key = (body.frame_index, round(skin.yaw_deg()) % 360, skin.height_px, tuple(skin.pieces),
+               self.rect.topleft, id(self.mask))
+        if key != self._outline_key:
+            outline = self._worn_cloud(skin).outline(body.frame_index, skin.yaw_deg(), self._mesh_scale(skin))
+            self._outline_value = (outline, mesh_feet_world(self))
+            self._outline_key = key
+        return self._outline_value
+
+    def hit_shape(self):
+        """His mesh where it is drawn (its points, or its capsules); None: hit on the sprite."""
+        skin = self._drawn_skin()
+        if skin is None:
+            return None
+        if self.hit_points():
+            outline, (fx, fy) = self.hit_outline()
+            return hit_core.Shape(outline.mask, int(fx) + outline.dx, int(fy) + outline.dy)
+        mask, dx, dy = skin.skin.body_mask(round(skin.yaw_deg()) % 360, skin.height_px)
+        fx, fy = mesh_feet_world(self)
+        return hit_core.Shape(mask, int(fx + dx), int(fy + dy))
+
     def refresh_equipment(self):
-        """A mesh player wears the armour in its body slots (Inventory.worn_pieces); a sprite player: nothing
-        to draw. Called after every inventory change (Inventory.sync_belt_from_waist)."""
+        """What is worn changed. His defence profile and gear weight (knockback) follow every hero; a mesh
+        player also wears the pieces in its body slots (Inventory.worn_pieces). Called after every inventory
+        change (Inventory.sync_belt_from_waist)."""
+        worn = [s.item for s in self.inventory.body_slots() if not s.empty]
+        self.defence = defence_profile.build_profile(self.body_def, defence_profile.worn_from_items(worn))
+        self.gear_weight = self.defence.weight
+        temperature.refresh(self, pygame.time.get_ticks())
+        # mesh piece (as drawn: Graphics/Meshes/<piece>) -> its item's layer, for hits on the points
+        self.piece_layers = defence_profile.piece_layers(worn)
         skin = getattr(self, "mesh_skin", None)
         if skin is not None:
             skin.set_pieces(self.inventory.worn_pieces())
@@ -513,9 +543,6 @@ class BasePlayer(Entity):
             if current_time - self.magic_switch_time >= self.switch_duration_cooldown:
                 self.can_switch_magic = True
 
-        if not self.vulnerable:
-            if current_time - self.hurt_time >= self.invulnerability_duration:
-                self.vulnerable = True
 
     def animate(self):
        #print("\n\nANIMATIONS#print \n\n")
@@ -562,30 +589,14 @@ class BasePlayer(Entity):
             self._position_sprite_for_seat()
         else:
             self.plant_sprite_on_hitbox()
-        if not self.vulnerable:
-            alpha = self.wave_value()
-            self.image.set_alpha(alpha)
-        else:
-            self.image.set_alpha(255)
-
-    def get_full_weapon_damage(self):
-        base_damage = self.stats["attack"]
-        weapon_damage = weapon_data[self.weapon]["damage"]
-        return base_damage + weapon_damage
-
-    def get_full_magic_damage(self):
-        base_damage = self.stats["magic"]
-        spell_damage = magic_data[self.magic]["strength"]
-        return base_damage + spell_damage
 
     def get_value_by_index(self, index):
         key = self.upgrade_stat_order[index]
         return self.stats.get(key, self.max_stats.get(key, 0))
 
-    def player_death(self):
-        if self.health <= 0:
-            self.health = 0
-            self.is_dead = True
+    def on_death(self):
+        """The player stays on screen, dead (`is_dead`, set by die): co-op and the level read it."""
+        self.health = 0
 
     def get_cost_by_index(self, index):
         key = self.upgrade_stat_order[index]
@@ -598,6 +609,9 @@ class BasePlayer(Entity):
             self.energy += 0.05 * self.stats["magic"]
         else:
             self.energy = self.stats["energy"]
+
+    def stamina_recovery(self):
+        recover(self, self.stats, pygame.time.get_ticks())
 
 
     def health_recovery(self):
@@ -619,12 +633,12 @@ class BasePlayer(Entity):
         self.animate()
         self.action_controller.tick(self, dt, QuadTree, entity_quad_tree)
         if not self.action_controller.suppresses_locomotion(self):
-            self.move(self.stats["speed"], QuadTree, entity_quad_tree)
+            self.move(speed_of(self), QuadTree, entity_quad_tree)
         if self.mesh_skin is not None:
             self.mesh_skin.update(self, dt)
         self.energy_recovery()
+        self.stamina_recovery()
         self.health_recovery()
-        self.player_death()
 
     def _resolve_post_seat_status(self):
         if "left" in self.status:
@@ -752,6 +766,7 @@ class SpecificPlayer(BasePlayer):
             from player_mesh import PlayerMesh
             figure_px = self.image.get_bounding_rect().height
             self.mesh_skin = PlayerMesh(mesh_pack, figure_px)
+            hit_core.reaches_past_rect(self)
         except (OSError, ValueError, KeyError) as exc:
             _combat_log.warning("mesh_pack %r not loaded, sprite player: %s", mesh_pack, exc)
             self.mesh_skin = None

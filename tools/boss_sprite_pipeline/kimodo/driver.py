@@ -25,6 +25,7 @@ import sys
 import time
 import traceback
 
+import numpy as np
 import torch
 from kimodo import load_model
 from kimodo.constraints import load_constraints_lst
@@ -101,6 +102,9 @@ for i, c in enumerate(CELLS, 1):
         for s in range(n):
             jp = torch.from_numpy(out["posed_joints"][s]).to(DEV)
             jr = torch.from_numpy(out["global_rot_mats"][s]).to(DEV)
+            # the joints too (posed_joints, global_rot_mats, root ...): constraints for a second pass are built from them
+            np.savez(os.path.join(d, "%s_%02d.npz" % (c["name"], s)),
+                     **{k: v[s] for k, v in out.items() if hasattr(v, "shape") and len(v.shape) and v.shape[0] == n})
             save_motion_bvh(os.path.join(d, "%s_%02d.bvh" % (c["name"], s)),
                             global_rots_to_local_rots(jr, bskel),
                             jp[:, bskel.root_idx, :],

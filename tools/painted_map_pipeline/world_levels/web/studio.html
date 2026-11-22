@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Level studio</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1e1e1e; color: #ddd; font: 14px system-ui, sans-serif; }
+  header { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 8px 14px;
+           background: #2a2a2a; border-bottom: 1px solid #444; }
+  header a { color: #c9a227; }
+  button { background: #3a3a3a; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  button.on { background: #555; border-color: #ddd; }
+  button:disabled { opacity: .5; cursor: default; }
+  #go { background: #5a3a2d; }
+  #accept, #open { background: #2d5a2d; }
+  main { display: grid; grid-template-columns: 280px 1fr; height: calc(100% - 46px); }
+  #list { overflow: auto; border-right: 1px solid #444; padding: 8px; }
+  #work { overflow: auto; padding: 14px 18px 40px; }
+  .run, .level { display: block; width: 100%; text-align: left; margin: 2px 0; }
+  .level small { color: #aaa; }
+  h2 { margin: 0 0 8px; font-size: 16px; }
+  h3 { margin: 16px 0 6px; font-size: 13px; color: #c9a227; }
+  label { display: block; margin-top: 10px; color: #aaa; }
+  textarea, input, select { background: #1e1e1e; color: #eee; border: 1px solid #555; padding: 4px; }
+  textarea { width: 100%; max-width: 720px; box-sizing: border-box; height: 140px; }
+  input[type=number] { width: 72px; }
+  input[type=text] { width: 220px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .pair { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+  figure { margin: 0; }
+  figure img { max-width: 420px; max-height: 320px; background: #111; image-rendering: pixelated; }
+  figcaption { color: #888; font-size: 12px; }
+  #log { white-space: pre-wrap; font: 12px ui-monospace, monospace; color: #bbb; background: #161616;
+         padding: 8px; max-height: 160px; overflow: auto; }
+  .err { color: #ff7b7b; }
+  .muted { color: #888; }
+  .panel { display: none; }
+  .panel.on { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <b>Level studio</b>
+  <button class="on" data-step="source">1 Source</button>
+  <button data-step="compose">2 Compose</button>
+  <button data-step="grid">3 Scale and grid</button>
+  <button data-step="review">4 Cell review</button>
+  <span id="key" class="muted"></span>
+  <span id="busy" class="muted"></span>
+  <span style="margin-left:auto">
+    <a href="http://127.0.0.1:8765/">SAM</a>
+    <a href="http://127.0.0.1:8767/">Outfits</a>
+  </span>
+</header>
+<main>
+  <div id="list"></div>
+  <div id="work">
+    <section id="source" class="panel on">
+      <h2>Source</h2>
+      <p class="muted">A run is a folder under generated/world_levels. The image that gets recomposed is that level's accepted art, not the 1536 world map. The world map is only the locator.</p>
+      <label>World map</label>
+      <select id="world"></select>
+      <div class="pair"><figure><img id="worldimg" alt=""><figcaption id="worldcap"></figcaption></figure></div>
+      <p id="picked" class="muted">No level selected.</p>
+    </section>
+    <section id="compose" class="panel">
+      <h2>Compose</h2>
+      <p class="muted">One pass over the whole region, at its current size. The prompt is what keeps the outline and what may be invented. Plain ASCII. gpt-image-2.</p>
+      <label>Prompt</label>
+      <textarea id="prompt" spellcheck="false"></textarea>
+      <div class="row">
+        <label>Quality <select id="quality"><option>low</option><option selected>medium</option><option>high</option></select></label>
+        <label>Model <select id="model"><option>gpt-image-2</option></select></label>
+        <label>Player px <input id="player" type="number" min="1" max="64" value="8"></label>
+      </div>
+      <div class="row">
+        <button id="go">Generate</button>
+        <label>Attempt <select id="attempt"></select></label>
+        <button id="accept">Accept</button>
+      </div>
+      <div class="pair">
+        <figure><img id="before" alt=""><figcaption>Before, the accepted region</figcaption></figure>
+        <figure><img id="after" alt=""><figcaption>After, this attempt</figcaption></figure>
+        <figure><img id="playerimg" alt=""><figcaption>With the player, for scale</figcaption></figure>
+      </div>
+    </section>
+    <section id="grid" class="panel">
+      <h2>Scale and grid</h2>
+      <p class="muted">Uses the accepted composition when there is one, otherwise the accepted region. Snap is the slow step, a few minutes on a full-size map. Prepare is the button that creates the run the review page opens. Nothing is prepared until then.</p>
+      <label>Folder name <input id="name" type="text" placeholder="bitter_floe_grid"></label>
+      <h3>Scale</h3>
+      <div class="row">
+        <label>Tiles wide <input id="tw" type="number" value="33"></label>
+        <label>Tiles high <input id="th" type="number" value="18"></label>
+        <label>Tile px <input id="ts" type="number" value="681"></label>
+        <button id="scale">Scale</button>
+      </div>
+      <p class="muted">33 by 18 at 681 is 22473 by 12258, the size of the two full levels.</p>
+      <h3>Snap</h3>
+      <button id="snap">Snap landmass</button>
+      <h3>Grid</h3>
+      <div class="row">
+        <label>Cols <input id="cols" type="number" value="7"></label>
+        <label>Rows <input id="rows" type="number" value="6"></label>
+        <label>Region <input id="region" type="text"></label>
+        <label>Name prefix <input id="prefix" type="text" value="Level"></label>
+        <button id="gridbtn">Lay grid</button>
+      </div>
+      <p id="canvas" class="muted"></p>
+      <figure><img id="overlay" alt=""><figcaption>Grid overlay</figcaption></figure>
+      <h3>Prepare</h3>
+      <label>Style prompt for the cell pass. This pass sharpens; it does not invent.</label>
+      <textarea id="style" spellcheck="false"></textarea>
+      <div class="row"><button id="prepare">Prepare run</button></div>
+    </section>
+    <section id="review" class="panel">
+      <h2>Cell review</h2>
+      <p class="muted">Opens the existing review page on the run this studio just prepared. Use that page or the console review, not both, on the same run.</p>
+      <button id="open">Open cell review</button>
+      <p id="reviewmsg" class="muted"></p>
+    </section>
+    <h3>Log</h3>
+    <div id="msg"></div>
+    <div id="log"></div>
+  </div>
+</main>
+<script>
+const state = { run: "", level: "", levelName: "" };
+const $ = (id) => document.getElementById(id);
+
+function step(name) {
+  document.querySelectorAll("header button").forEach((b) => b.classList.toggle("on", b.dataset.step === name));
+  document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("on", p.id === name));
+  if (name === "compose") loadCompose();
+  if (name === "grid") loadJob();
+}
+document.querySelectorAll("header button").forEach((b) => b.onclick = () => step(b.dataset.step));
+
+async function api(path, body) {
+  const response = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || response.statusText);
+  return data;
+}
+
+function img(url) {
+  return url + (url.includes("?") ? "&" : "?") + "v=" + Date.now();
+}
+
+function showPair() {
+  if (!state.run || !state.level) return;
+  $("before").src = img(`/api/studio/img?run=${state.run}&level=${state.level}&kind=accepted`);
+  const attempt = $("attempt").value;
+  $("after").src = attempt ? img(`/api/studio/img?run=${state.run}&level=${state.level}&kind=composed&attempt=${attempt}`) : "";
+  $("playerimg").src = attempt ? img(`/api/studio/img?run=${state.run}&level=${state.level}&kind=player&attempt=${attempt}`) : "";
+}
+
+async function loadCompose() {
+  if (!state.run || !state.level) return;
+  const data = await api(`/api/studio/compose?run=${state.run}&level=${state.level}`);
+  if (data.prompt && !$("prompt").value) $("prompt").value = data.prompt;
+  const select = $("attempt");
+  select.innerHTML = "";
+  data.attempts.forEach((item) => {
+    const option = document.createElement("option");
+    option.value = item.attempt;
+    option.textContent = item.attempt + (item.attempt === data.accepted_attempt ? " accepted" : "");
+    select.appendChild(option);
+  });
+  if (data.attempts.length) select.value = data.attempts[data.attempts.length - 1].attempt;
+  showPair();
+}
+
+async function loadJob() {
+  const name = $("name").value.trim();
+  if (!name) return;
+  try {
+    const job = await api("/api/studio/job?name=" + encodeURIComponent(name));
+    if (job.grid) {
+      $("canvas").textContent = `${job.grid.levels} levels, canvas ${job.grid.canvas[0]} x ${job.grid.canvas[1]}`;
+      $("overlay").src = img(`/api/studio/img?job=${encodeURIComponent(name)}&kind=plan_overlay.png`);
+    }
+  } catch (error) { /* a new folder has no job yet */ }
+}
+
+async function load() {
+  const [runs, worlds, status] = await Promise.all([
+    api("/api/studio/runs"), api("/api/studio/worlds"), api("/api/studio/status"),
+  ]);
+  $("key").textContent = status.openai_key ? "OpenAI key is set" : "OpenAI key is not set";
+  const world = $("world");
+  const keep = world.value;
+  world.innerHTML = "";
+  worlds.worlds.forEach((item) => {
+    const option = document.createElement("option");
+    option.value = item.path;
+    option.textContent = item.name;
+    world.appendChild(option);
+  });
+  if (keep) world.value = keep;
+  showWorld();
+  const list = $("list");
+  list.innerHTML = "";
+  runs.runs.forEach((run) => {
+    const title = document.createElement("div");
+    title.className = "muted";
+    title.style.marginTop = "10px";
+    title.textContent = run.name;
+    list.appendChild(title);
+    run.levels.forEach((level) => {
+      const button = document.createElement("button");
+      button.className = "level" + (state.run === run.name && state.level === level.id ? " on" : "");
+      button.innerHTML = `${level.id} ${level.name}` + (level.composed ? " <small>composed</small>" : "");
+      button.onclick = () => {
+        state.run = run.name;
+        state.level = level.id;
+        state.levelName = level.name;
+        $("picked").textContent = `${run.name} / ${level.id} ${level.name}` + (level.locator ? "" : " (no locator)");
+        $("region").value = $("region").value || level.name;
+        if (!$("name").value) $("name").value = (level.name || level.id).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") + "_grid";
+        load();
+        if ($("compose").classList.contains("on")) loadCompose();
+      };
+      list.appendChild(button);
+    });
+  });
+}
+
+function showWorld() {
+  const path = $("world").value;
+  $("worldimg").src = path ? img("/api/studio/img?path=" + encodeURIComponent(path)) : "";
+  $("worldcap").textContent = path ? path.split(/[/\\]/).pop() : "";
+}
+$("world").onchange = showWorld;
+
+$("go").onclick = async () => {
+  $("msg").textContent = "";
+  try {
+    await api("/api/studio/compose", {
+      run: state.run, level: state.level, prompt: $("prompt").value,
+      quality: $("quality").value, model: $("model").value, player_px: Number($("player").value),
+    });
+  } catch (error) { $("msg").textContent = error.message; $("msg").className = "err"; }
+};
+$("accept").onclick = async () => {
+  try {
+    await api("/api/studio/accept", { run: state.run, level: state.level, attempt: Number($("attempt").value) });
+    loadCompose();
+    load();
+  } catch (error) { $("msg").textContent = error.message; $("msg").className = "err"; }
+};
+$("attempt").onchange = showPair;
+
+function post(path, body) {
+  $("msg").textContent = "";
+  $("msg").className = "";
+  return api(path, body).catch((error) => { $("msg").textContent = error.message; $("msg").className = "err"; });
+}
+$("scale").onclick = () => post("/api/studio/scale", {
+  run: state.run, level: state.level, name: $("name").value.trim(),
+  width_tiles: Number($("tw").value), height_tiles: Number($("th").value), tile_size: Number($("ts").value),
+});
+$("snap").onclick = () => post("/api/studio/snap", { name: $("name").value.trim() });
+$("gridbtn").onclick = () => post("/api/studio/grid", {
+  name: $("name").value.trim(), cols: Number($("cols").value), rows: Number($("rows").value),
+  region: $("region").value, name_prefix: $("prefix").value,
+});
+$("style").value = "Richly detailed top-down / slightly 2.5D painted pixel-art RPG ground, finished game-art quality. Preserve the layout exactly; do not invent or remove structures. Even lighting, no cast shadows, no text or labels.";
+$("prepare").onclick = () => post("/api/studio/prepare", {
+  name: $("name").value.trim(), quality: $("quality").value, model: $("model").value, style_prompt: $("style").value,
+});
+$("open").onclick = async () => {
+  try {
+    const data = await api("/api/studio/review", { name: $("name").value.trim() });
+    location.href = data.url;
+  } catch (error) { $("reviewmsg").textContent = error.message; $("reviewmsg").className = "err"; }
+};
+
+let seen = "";
+async function poll() {
+  try {
+    const status = await api("/api/studio/status");
+    $("busy").textContent = status.running ? (status.label || "working") : (status.error || "");
+    $("busy").className = status.error ? "err" : "muted";
+    $("log").textContent = (status.log || []).join("\n");
+    document.querySelectorAll("#work button").forEach((button) => { button.disabled = !!status.running; });
+    const message = status.running ? "" : (status.message || "");
+    if (message && message !== seen) {
+      seen = message;
+      if (message.startsWith("attempt")) loadCompose();
+      if ($("grid").classList.contains("on")) loadJob();
+    }
+  } catch (error) { /* the page is still opening */ }
+  setTimeout(poll, 800);
+}
+
+load();
+poll();
+</script>
+</body>
+</html>

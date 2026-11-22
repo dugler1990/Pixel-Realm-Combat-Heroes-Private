@@ -1,7 +1,7 @@
 """The outfit pipeline's driver: one command per character + outfit (PROCESS_outfit.md).
 
     python -m tools.boss_sprite_pipeline.outfit <character> <outfit> [--status] [--backfill]
-        [--from STEP] [--only STEP] [--host IP --port PORT] [--models a,b] [--view V]
+        [--from STEP] [--only STEP] [--to STEP] [--host IP --port PORT] [--models a,b] [--view V]
         [--retry R | --accept N | --pick M | --redo VIEW...]
 
 Runs the outfit's steps in order from the first one not done, recording each in
@@ -35,15 +35,26 @@ import sys
 import time
 from pathlib import Path
 
+from tools.boss_sprite_pipeline import characters, outfit_fields
+
 TOOLS = Path(__file__).resolve().parent
 REPO = TOOLS.parents[1]
 STEPS = {
-    "body": ["front", "back", "sides", "trellis", "skeleton", "paint", "export"],
+    "body": ["front", "back", "sides", "trellis", "skeleton", "paint", "export", "install"],
     "armour": ["front", "back", "sides", "trellis", "skeleton", "paint", "views", "sam3", "cut", "holopart", "merge",
-               "worn", "slots", "sheet", "export"],
-    "cut": ["views", "sam3", "cut", "holopart", "merge", "worn", "slots", "sheet", "export"],
+               "worn", "slots", "sheet", "export", "install"],
+    "cut": ["views", "sam3", "cut", "holopart", "merge", "worn", "slots", "sheet", "export", "install"],
+    # A new character (new_character.plan.md): what it makes is written into its character file.
+    "character": ["concept", "front", "back", "sides", "trellis", "rig", "reweight", "roles", "paint", "game_rig",
+                  "clips", "sprites", "export", "install"],
+    # A weapon held by the outfit's character: drawn and built on its own, then put in his hand (grip).
+    "weapon": ["concept", "front", "back", "sides", "trellis", "grip", "export", "install"],
 }
-POD_STEPS = {"trellis", "sam3", "holopart"}
+# Steps of the character kind not built yet (new_character.plan.md, in order): they stop saying so.
+NOT_BUILT = {"character": {"clips", "sprites", "export", "install"}, "weapon": {"export", "install"}}
+SHARED_GREEDY = "generated/shared/greedy_dirs_f75.json"     # the cut's camera directions, one file for every character
+BARB_GREEDY = "generated/bosses/barb/explode2/fullplate/greedy_dirs_f75.json"   # where it was made
+POD_STEPS = {"trellis", "sam3", "holopart", "rig"}
 # TRELLIS models and the drawings each needs. The default is a setting: an outfit's "trellis_models" or --models
 # overrides it (2026-11-13, naked barb: front + back + sides and 8 views both better than front + back by eye).
 MODEL_VIEWS = {
@@ -69,16 +80,34 @@ class Stop(Exception):
 class Ctx:
     def __init__(self, character: str, outfit: str):
         self.character, self.outfit = character, outfit
-        self.file = TOOLS / "outfits" / character / f"{outfit}.json"
-        if not self.file.is_file():
+        self.file = characters.OUTFITS / character / f"{outfit}.json"
+        if outfit == characters.FILE[:-5] or not self.file.is_file():
             sys.exit(f"no outfit file {self.file}")
-        self.o = json.loads(self.file.read_text(encoding="utf-8"))
+        # The character file under the outfit file: an outfit key overrides the character's (outfit_fields.py).
+        self.o = {**characters.load(character), **json.loads(self.file.read_text(encoding="utf-8"))}
+        bad = outfit_fields.problems(self.o)
+        if bad:
+            sys.exit(f"{character}/{outfit}: " + "; ".join(bad))
         self.root = Path(os.environ.get("OUTFIT_DATA_ROOT") or REPO)
         self.bpy = Path(os.environ.get("OUTFIT_BPY") or TOOLS / ".venv-bpy" / "Scripts" / "python.exe")
         self.work = self.root / "generated" / "bosses" / character / "outfits" / outfit
         self.run_json = self.work / "run.json"
         self.run = json.loads(self.run_json.read_text(encoding="utf-8")) if self.run_json.is_file() else {
             "character": character, "outfit": outfit, "steps": {}}
+
+    def rel(self, p) -> str:
+        """A path as the files keep it: relative to the data root when inside it."""
+        p = Path(p)
+        try:
+            return p.resolve().relative_to(self.root.resolve()).as_posix()
+        except ValueError:
+            return str(p)
+
+    def own(self, step: str, key: str, field: str) -> Path:
+        """A new character's own file from its base run (step output), else the character file's field."""
+        if self.o["kind"] == "character":
+            return self.out(step, key)
+        return self.data(self.o[field])
 
     def data(self, rel: str) -> Path:
         p = Path(rel)
@@ -120,6 +149,18 @@ class Ctx:
         """The TRELLIS models this run builds: --models (kept in run.json), else the outfit's, else the default."""
         return list(self.run.get("models") or self.o.get("trellis_models") or DEFAULT_MODELS)
 
+    def given(self, view: str) -> Path | None:
+        """Your own image for a view (the outfit's "images"), else None: used instead of drawing it."""
+        rel = (self.o.get("images") or {}).get(view)
+        if not rel and view == "front" and self.o["kind"] in ("character", "weapon") and self.done("concept"):
+            rel = self.step("concept").get("outputs", {}).get("concept")   # a new character / weapon: its concept
+        if not rel:
+            return None
+        p = self.data(rel)
+        if not p.is_file():
+            raise Stop(f"images.{view}: no file {p}")
+        return p
+
     def views(self) -> list[str]:
         """The drawings the chosen models need."""
         need = {v for m in self.models() for v in MODEL_VIEWS[m]}
@@ -157,13 +198,27 @@ def view_gate(ctx: Ctx, view: str, a) -> None:
     gate_json = gate_dir / f"gate_{view}.json"
     base = [sys.executable, "-m", "tools.boss_sprite_pipeline.view_gate", view, "--out", gate_dir,
             "--outfit", ctx.file]
+    given = ctx.given(view)
+    mirrored = view == "back" and not given and o.get("back_from_front")
+    if mirrored:                                     # a symmetric item: its back is its front flipped (no drawing)
+        from PIL import Image, ImageOps
+        gate_dir.mkdir(parents=True, exist_ok=True)
+        given = gate_dir / "back_from_front.png"
+        ImageOps.mirror(Image.open(ctx.out("front", "draw"))).save(given)
     if view == "front":
-        base += ["--input", ctx.data(o["concept"])]
+        # The front check compares with the concept; a given front with no concept is its own (nothing to compare).
+        base += ["--input", ctx.data(o["concept"]) if o.get("concept") else given]
     else:
         base += ["--front", ctx.out("front", "draw")]
+    if o.get("view_config"):                         # the image model for front / back (default: view_gate's)
+        base += ["--config", ctx.tool(o["view_config"])]
     gate = json.loads(gate_json.read_text(encoding="utf-8")) if gate_json.is_file() else {}
     if a.accept is not None:
         call(base + ["--accept", a.accept], ok="accepted attempt")
+    elif a.use:                                      # an image you have as the next attempt (same checks)
+        call(base + ["--use", ctx.data(a.use)], ok="PENDING")
+    elif gate.get("status") != "accepted" and given and not a.retry:
+        use_given(base, gate_json, gate, given, always=(view == "front" and not o.get("concept")) or bool(mirrored))
     elif gate.get("status") != "accepted":
         call(base + ["--no-ask"] + (["--retry", a.retry] if a.retry else []), ok="PENDING")
     gate = json.loads(gate_json.read_text(encoding="utf-8"))
@@ -177,6 +232,118 @@ def view_gate(ctx: Ctx, view: str, a) -> None:
     draw = next(t["draw"] for t in gate["attempts"] if t["attempt"] == n)
     ctx.record(view, status="done", accepted=n, outputs={"draw": draw, "cutout": str(gate_dir / f"{view}.png"),
                                                          "gate": str(gate_json)})
+
+
+def s_concept(ctx: Ctx, a) -> None:
+    """A new character's concept (concept_gate.py): candidates from its description, checked; you accept one. Your
+    own front image (images.front) is the concept instead."""
+    if (ctx.o.get("images") or {}).get("front"):
+        ctx.record("concept", status="skipped", note="images.front is the concept")
+        return
+    out = ctx.work / "concept"
+    base = [sys.executable, "-m", "tools.boss_sprite_pipeline.concept_gate", "--out", out, "--outfit", ctx.file]
+    gate_json = out / "gate_concept.json"
+    gate = json.loads(gate_json.read_text(encoding="utf-8")) if gate_json.is_file() else {}
+    if a.accept is not None:
+        call(base + ["--accept", a.accept], ok="accepted attempt")
+    elif gate.get("status") != "accepted" and (a.retry or not gate.get("attempts")):
+        call(base + (["--retry", a.retry] if a.retry else []), ok="PENDING")
+    gate = json.loads(gate_json.read_text(encoding="utf-8"))
+    if gate.get("status") != "accepted":
+        ctx.record("concept", status="gate", attempts=len(gate["attempts"]), sheet=gate.get("sheet"))
+        raise Stop(f"concept candidates: look at {gate.get('sheet')}\n"
+                   f"  accept:  outfit.py {ctx.character} {ctx.outfit} --only concept --accept N\n"
+                   f"  again:   outfit.py {ctx.character} {ctx.outfit} --only concept --retry \"r <why>\"")
+    ctx.record("concept", status="done", accepted=gate["accepted"],
+               outputs={"concept": gate["concept"], "sheet": gate.get("sheet"), "gate": str(gate_json)})
+
+
+def s_rig(ctx: Ctx, a) -> None:
+    """UniRig on the pod (pod.py unirig): the picked TRELLIS mesh gets a skeleton and skin weights."""
+    mesh = ctx.out("trellis", "picked")
+    minutes = pod(ctx, "unirig", a, extra=["--mesh", mesh])
+    rigged = ctx.work / "rig" / "rigged.glb"
+    if not rigged.is_file():
+        raise Stop(f"UniRig gave no {rigged}")
+    ctx.record("rig", status="done", pod_minutes=minutes, outputs={"rigged": str(rigged)})
+
+
+def s_reweight(ctx: Ctx, a) -> None:
+    """Bone-heat weights (rigfix/rig_reweight.py heat 0.5, the barb's best: PROCESS_rigfix.md)."""
+    out = ctx.work / "rig" / "reweighted.glb"
+    call([ctx.bpy, TOOLS / "rigfix" / "rig_reweight.py", ctx.out("rig", "rigged"), out, "heat", 0.5])
+    if not out.is_file():
+        raise Stop(f"rig_reweight.py wrote no {out}")
+    ctx.record("reweight", status="done", outputs={"rigged": str(out)})
+
+
+def s_roles(ctx: Ctx, a) -> None:
+    """Which bone is which (rigfix/anun_roles.py, from the skeleton's shape), then the body posed with them
+    (explode2/pose_render.py): look at it, accept; wrong roles: edit roles.json and run the step again."""
+    rigged, roles = ctx.out("reweight", "rigged"), ctx.work / "rig" / "roles.json"
+    check = ctx.work / "rig" / "ROLES_CHECK.png"
+    if a.accept is None or not roles.is_file():
+        if not roles.is_file() or ctx.step("roles").get("status") != "gate":
+            call([ctx.bpy, TOOLS / "rigfix" / "anun_roles.py", rigged, roles])
+        call([ctx.bpy, TOOLS / "explode2" / "pose_render.py", rigged, roles, check])
+        ctx.record("roles", status="gate", outputs={"roles": str(roles), "check": str(check)})
+        raise Stop(f"bone roles: look at {check} (rest and the cut pose: arms raised, legs apart)\n"
+                   f"  accept:  outfit.py {ctx.character} {ctx.outfit} --only roles --accept 1\n"
+                   f"  wrong:   edit {roles}, then outfit.py {ctx.character} {ctx.outfit} --only roles")
+    ctx.record("roles", status="done", outputs={"roles": str(roles), "check": str(check)})
+    characters.update(ctx.character, roles=ctx.rel(roles))
+
+
+def s_game_rig(ctx: Ctx, a) -> None:
+    """The rig the game, the slots and the retarget use: the painted body with its neutral-bone vertices rehomed
+    (explode2/fix_neutral_bone.py). Also gives the character the shared cut camera directions."""
+    out = ctx.work / "rig" / "game_rig_nb.glb"
+    call([ctx.bpy, TOOLS / "explode2" / "fix_neutral_bone.py", ctx.out("paint", "painted"), out])
+    if not out.is_file():
+        raise Stop(f"fix_neutral_bone.py wrote no {out}")
+    shared = ctx.data(SHARED_GREEDY)
+    if not shared.is_file():
+        shared.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ctx.data(BARB_GREEDY), shared)
+    ctx.record("game_rig", status="done", outputs={"rig_game": str(out)})
+    have = characters.load(ctx.character)
+    characters.update(ctx.character, rig_game=ctx.rel(out),
+                      **({} if "greedy_dirs" in have else {"greedy_dirs": SHARED_GREEDY}),
+                      **({} if "views" in have else {"views": 32}))
+
+
+def s_grip(ctx: Ctx, a) -> None:
+    """A weapon in its holder's hand (explode2/weapon_grip.py): the handle found from its shape, sized to him, held
+    in the hand bone; the check sheet shows it at rest and with the arms raised. Change weapon_length / grip_offset /
+    grip_turn / grip_hand in the outfit settings and run again; accept when it looks held."""
+    o, out = ctx.o, ctx.work / "grip"
+    check = out / "GRIP_CHECK.png"
+    if a.accept is not None and check.is_file():
+        ctx.record("grip", status="done", outputs={"grip": str(out / "grip.json"), "check": str(check)})
+        return
+    call([ctx.bpy, TOOLS / "explode2" / "weapon_grip.py", ctx.out("trellis", "picked"), ctx.data(o["rig_fit"]),
+          ctx.data(o["roles"]), out, "--length", o["weapon_length"], "--offset", o.get("grip_offset", 0.12),
+          "--turn", o.get("grip_turn", 0), "--hand", o.get("grip_hand", "r")], ok="GRIP_OK")
+    ctx.record("grip", status="gate", outputs={"grip": str(out / "grip.json"), "check": str(check)})
+    raise Stop(f"grip: look at {check}\n"
+               f"  accept:  outfit.py {ctx.character} {ctx.outfit} --only grip --accept 1\n"
+               f"  adjust:  weapon_length / grip_offset / grip_turn / grip_hand in the outfit file, then --only grip")
+
+
+def not_built(ctx: Ctx, a) -> None:
+    raise Stop("not built yet (.cursor/plans/new_character.plan.md)")
+
+
+def use_given(cmd: list, gate_json: Path, gate: dict, given: Path, always: bool = False) -> None:
+    """A view's own image (the outfit's "images"): checked like a drawing, accepted when the check passes (always:
+    nothing to check it against). Once tried it is not tried again: a failed check waits at the gate (accept it
+    anyway, use another image, or redraw)."""
+    if any(t.get("supplied") == str(given.resolve()) for t in gate.get("attempts", [])):
+        return
+    call(cmd + ["--use", given], ok="PENDING")
+    last = json.loads(gate_json.read_text(encoding="utf-8"))["attempts"][-1]
+    if always or (last.get("scores") or {}).get("passed"):
+        call(cmd + ["--accept", last["attempt"]], ok="accepted attempt")
 
 
 def s_sides(ctx: Ctx, a) -> None:
@@ -198,7 +365,7 @@ def s_sides(ctx: Ctx, a) -> None:
         cutout = gate_dir / f"side_{v}.png"
         if cutout.is_file():
             continue
-        if v in MIRROR_OF and mirror:
+        if v in MIRROR_OF and mirror and not ctx.given(v):     # a right-hand view of your own is not mirrored
             src = gate_dir / f"side_{MIRROR_OF[v]}.png"
             from PIL import Image, ImageOps
             ImageOps.mirror(Image.open(src)).save(cutout)
@@ -215,6 +382,14 @@ def s_sides(ctx: Ctx, a) -> None:
         if mine and a.accept is not None:
             call(cmd + ["--accept", a.accept], ok="accepted attempt")
             continue
+        if mine and a.use:
+            call(cmd + ["--use", ctx.data(a.use)], ok="PENDING")
+            gate = json.loads(gate_json.read_text(encoding="utf-8"))
+        elif ctx.given(v) and not (mine and a.retry):
+            use_given(cmd, gate_json, gate, ctx.given(v))
+            if (gate_dir / f"side_{v}.png").is_file():
+                continue
+            gate = json.loads(gate_json.read_text(encoding="utf-8"))
         if not gate.get("attempts") or (mine and a.retry):
             call(cmd + ["--no-ask"] + (["--retry", a.retry] if mine and a.retry else []), ok="PENDING")
             gate = json.loads(gate_json.read_text(encoding="utf-8"))
@@ -306,9 +481,12 @@ def s_paint(ctx: Ctx, a) -> None:
         painted = next(iter(glob.glob(str(paint / "result" / "*_painted.glb"))), None)
         ctx.record("paint", status="done", outputs={"painted": painted,
                                                     "check": str(paint / "result" / "after_0_body_0.png")})
+        if o["kind"] == "character" and painted:          # its painted, reweighted body: what outfits fit onto
+            characters.update(ctx.character, rig_fit=ctx.rel(painted))
         return
-    cmd = [ctx.bpy, TOOLS / "repaint" / "paint_outfit.py", ctx.out("skeleton", "rigged"), paint,
-           ctx.out("front", "draw"), ctx.data(o["roles"]), ctx.tool(o["paint_look"])]
+    rigged = ctx.out("reweight", "rigged") if o["kind"] == "character" else ctx.out("skeleton", "rigged")
+    cmd = [ctx.bpy, TOOLS / "repaint" / "paint_outfit.py", rigged, paint,
+           ctx.out("front", "draw"), ctx.own("roles", "roles", "roles"), ctx.tool(o["paint_look"])]
     call(cmd + (["--redo"] + a.redo if a.redo else []), ok="PAINT_OUTFIT_DONE")
     check = paint / "result" / "after_0_body_0.png"
     ctx.record("paint", status="gate", outputs={"check": str(check)})
@@ -410,10 +588,38 @@ def s_export(ctx: Ctx, a) -> None:
     ctx.record("export", status="done", result=out.split("EXPORT_OK", 1)[1].strip()[:400])
 
 
-RUN = {"front": lambda c, a: view_gate(c, "front", a), "back": lambda c, a: view_gate(c, "back", a),
+def s_install(ctx: Ctx, a) -> None:
+    """Into the game (install_outfit.py): body: the hero entry, written once accepted; armour / cut: the pieces'
+    stats must exist, then equip_install.py makes the packs, icons and items."""
+    from tools.boss_sprite_pipeline import install_outfit as io
+    if ctx.o["kind"] == "body":
+        entry = io.hero(ctx)
+        there = io.listed(entry)
+        if there is None and a.accept is None:
+            ctx.record("install", status="gate", entry=entry)
+            raise Stop(f"the hero entry to add to {io.SELECTION.name}:\n{json.dumps(entry, indent=1)}\n"
+                       f"  write it: outfit.py {ctx.character} {ctx.outfit} --only install --accept 1")
+        if there is None:
+            entry = io.add_hero(entry)
+        ctx.record("install", status="done", entry=entry, note=None if there is None else "already listed")
+        return
+    missing = io.missing_bases(ctx)
+    if missing:
+        ctx.record("install", status="gate", missing_bases=missing)
+        raise Stop(f"no stats yet for {', '.join(missing)}: fill them in on the page (install) or in "
+                   f"{io.BASES.name}, then run install again")
+    out = call([sys.executable, "-m", "tools.boss_sprite_pipeline.equip_install", ctx.character, ctx.outfit],
+               ok="EQUIP_INSTALL_OK")
+    items = json.loads(out.split("EQUIP_INSTALL_OK", 1)[1].strip().splitlines()[0])["items"]
+    ctx.record("install", status="done", missing_bases=[], items=items)
+
+
+RUN = {"concept": s_concept, "rig": s_rig, "reweight": s_reweight, "roles": s_roles, "game_rig": s_game_rig,
+       "clips": not_built, "sprites": not_built, "grip": s_grip,
+       "front": lambda c, a: view_gate(c, "front", a), "back": lambda c, a: view_gate(c, "back", a),
        "sides": s_sides, "trellis": s_trellis, "skeleton": s_skeleton, "paint": s_paint, "views": s_views, "sam3": s_sam3,
        "cut": s_cut, "holopart": s_holopart, "merge": s_merge, "worn": s_worn, "slots": s_slots, "sheet": s_sheet,
-       "export": s_export}
+       "export": s_export, "install": s_install}
 
 
 def backfill(ctx: Ctx) -> None:
@@ -458,6 +664,7 @@ def main(argv=None) -> None:
     ap.add_argument("--backfill", action="store_true")
     ap.add_argument("--from", dest="start")
     ap.add_argument("--only")
+    ap.add_argument("--to", help="stop before this step (the page's run-on: up to the next pod or local step)")
     ap.add_argument("--host")
     ap.add_argument("--port")
     ap.add_argument("--retry")
@@ -467,6 +674,8 @@ def main(argv=None) -> None:
                                      f"(default: the outfit's trellis_models, else {DEFAULT_MODELS})")
     ap.add_argument("--view", choices=SIDE_ORDER, help="sides: the view --accept / --retry answers")
     ap.add_argument("--redo", nargs="+")
+    ap.add_argument("--use", help="front / back / sides (--view): an image you have as the next attempt, checked and "
+                                  "shown like a drawing (path: absolute or relative to the data root)")
     a = ap.parse_args(argv)
     ctx = Ctx(a.character, a.outfit)
     if a.models:
@@ -482,10 +691,12 @@ def main(argv=None) -> None:
         status(ctx)
         return
     steps = STEPS[ctx.o["kind"]]
-    for s in (a.only, a.start):
+    for s in (a.only, a.start, a.to):
         if s and s not in steps:
             sys.exit(f"{s} is not a step of a {ctx.o['kind']} outfit: {steps}")
     todo = [a.only] if a.only else steps[steps.index(a.start):] if a.start else [s for s in steps if not ctx.done(s)]
+    if a.to and not a.only:
+        todo = [s for s in todo if steps.index(s) < steps.index(a.to)]
     global LOG
     for name in todo:
         print(f"=== {name}", flush=True)
@@ -494,6 +705,12 @@ def main(argv=None) -> None:
         LOG.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} {name} {' '.join(sys.argv[1:])}\n")
         COST[0] = 0.0
         try:
+            miss = outfit_fields.missing(ctx.o, name)
+            if miss:
+                raise Stop("this step needs settings the files do not have (Outfit / character settings):\n  "
+                           + "\n  ".join(miss))
+            if name in NOT_BUILT.get(ctx.o["kind"], ()):
+                not_built(ctx, a)
             RUN[name](ctx, a)
         except Stop as stop:
             LOG.write(f"STOPPED: {stop}\n")
@@ -507,7 +724,7 @@ def main(argv=None) -> None:
             print("\nstop the pod  (no pod step left for this outfit)", flush=True)
         if a.only:
             break
-        a.accept = a.retry = a.pick = a.redo = a.view = None   # those answered the first step only
+        a.accept = a.retry = a.pick = a.redo = a.view = a.use = None   # those answered the first step only
     print("\nOUTFIT_DONE" if not a.only else f"\nSTEP_DONE {a.only}")
 
 

@@ -26,7 +26,8 @@ def existing_levels(repo: Path) -> dict[int, str]:
 
 def taken_slots(repo: Path) -> set[tuple[int, int]]:
     text = (repo / SELECTION).read_text(encoding="utf-8")
-    block = re.search(r"level_map = \{(.*?)\n\s*\}", text, re.DOTALL)
+    # The grid dict was renamed from level_map to LEVEL_AT. Either name is the same table.
+    block = re.search(r"(?:level_map|LEVEL_AT) = \{(.*?)\n\s*\}", text, re.DOTALL)
     if not block:
         return set()
     # Commented-out entries are free slots, not taken ones -- the block is full of them.
@@ -133,3 +134,27 @@ def register(repo: Path, *, slug: str, number: int, slot: tuple[int, int],
     return {"slug": slug, "level_number": number, "slot": list(slot),
             "layout": layout, "changed": changed, "ternary_refactored": refactored,
             "thumbnail": thumbnail}
+
+
+def ensure_name(repo: Path, number: int, name: str) -> bool:
+    """The title on the level card. Returns whether Code/level_layouts.py changed.
+
+    A slot with no name shows a blank heading. Replacing the same text changes nothing.
+    """
+    if not name or '"' in name or "\n" in name:
+        raise ValueError("the card name needs text and no quotes")
+    path = repo / LAYOUTS
+    text = path.read_text(encoding="utf-8")
+    block = re.search(r"LEVEL_NAMES = \{.*?\n\}", text, re.DOTALL)
+    if not block:
+        raise RuntimeError(f"{LAYOUTS}: could not find LEVEL_NAMES")
+    inner = block.group(0)
+    line = f'    {number}: "{name}",'
+    if re.search(rf'^\s*{number}: "{re.escape(name)}",?\s*$', inner, re.M):
+        return False
+    if re.search(rf"^\s*{number}: \"", inner, re.M):
+        inner = re.sub(rf'^\s*{number}: "[^"]*",?\s*$', line, inner, count=1, flags=re.M)
+    else:
+        inner = inner[:-1] + f"\n{line}\n" + "}"
+    path.write_text(text[:block.start()] + inner + text[block.end():], encoding="utf-8")
+    return True

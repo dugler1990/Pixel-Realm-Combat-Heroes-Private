@@ -1,0 +1,205 @@
+[
+ {
+  "name": "spear_thrust_v1",
+  "prompt": "A warrior holding a spear with both hands thrusts it straight forward with a step, then pulls it back to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "spear_sweep_v1",
+  "prompt": "A warrior holding a long spear with both hands sweeps it in a wide low arc in front of him, then returns to a ready stance.",
+  "duration": "2.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "dagger_stab_v1",
+  "prompt": "A man holding a dagger in his right hand stabs quickly forward twice, then returns to a ready stance.",
+  "duration": "1.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "mace_swing_v1",
+  "prompt": "A warrior holding a heavy mace in his right hand swings it in a big overhead arc down in front of him, then returns to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "staff_spin_v1",
+  "prompt": "A fighter holding a long staff with both hands spins it in front of him and strikes forward with one end, then returns to a ready stance.",
+  "duration": "3.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "dual_slash_v1",
+  "prompt": "A warrior holding a sword in each hand slashes with the right sword and then the left sword in quick succession, then returns to a ready stance.",
+  "duration": "2.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "shield_block_v1",
+  "prompt": "A warrior raises a shield on his left arm in front of his body to block a blow, braces, then lowers it to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "shield_bash_v1",
+  "prompt": "A warrior steps forward and slams a shield on his left arm into an enemy in front of him, then returns to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "dodge_roll_v1",
+  "prompt": "A big man dives into a forward roll on the ground and comes back up into a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "sidestep_v1",
+  "prompt": "A fighter quickly sidesteps to his left to dodge an attack, then returns to a ready stance.",
+  "duration": "1.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "backstep_v1",
+  "prompt": "A fighter hops quickly backward to dodge an attack, then stands ready.",
+  "duration": "1.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "hit_react_v1",
+  "prompt": "A big man is hit hard in the chest, staggers back two steps, then recovers to a ready stance.",
+  "duration": "1.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "hit_react_v2",
+  "prompt": "A warrior is struck on the head from the side, his head and body jerk to the side, then he recovers.",
+  "duration": "1.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "knockdown_v1",
+  "prompt": "A big man is knocked off his feet, falls onto his back on the ground, then gets back up.",
+  "duration": "3.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "death_v1",
+  "prompt": "A big warrior is fatally wounded, drops to his knees and falls face down on the ground and lies still.",
+  "duration": "3.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "cast_push_v1",
+  "prompt": "A man thrusts both open hands forward to cast a powerful spell, then returns to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "cast_overhead_v1",
+  "prompt": "A man raises both hands above his head gathering energy, then slams them down to cast a spell at the ground.",
+  "duration": "2.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "roar_v1",
+  "prompt": "A huge barbarian spreads his arms wide, leans forward and roars at his enemies, then returns to a ready stance.",
+  "duration": "2.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "ground_pound_v1",
+  "prompt": "A huge barbarian raises both fists high and pounds them into the ground in front of him, then stands up.",
+  "duration": "2.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "grab_throw_v1",
+  "prompt": "A big man grabs an enemy in front of him with both hands, lifts him and throws him to the side, then returns to a ready stance.",
+  "duration": "3.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "jab_cross_v2_v1",
+  "prompt": "A boxer bobs slightly and fires a quick jab and a strong cross, then returns to his guard.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "body_hook_v1",
+  "prompt": "A boxer dips and throws a left hook to the body, then returns to his guard.",
+  "duration": "1.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "slip_counter_v1",
+  "prompt": "A boxer slips his head to the side to dodge a punch and counters with a right hook, then returns to his guard.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "low_kick_v1",
+  "prompt": "A kickboxer throws a low right roundhouse kick to the thigh, then returns to his guard.",
+  "duration": "1.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "spinning_kick_v1",
+  "prompt": "A martial artist spins around and throws a spinning back kick, then returns to his guard.",
+  "duration": "2.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "flying_knee_v1",
+  "prompt": "A fighter jumps forward and drives a flying knee up into an enemy, then lands in his guard.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "teep_combo_v1",
+  "prompt": "A kickboxer pushes forward with a front kick, follows with a right cross and a left hook, then returns to his guard.",
+  "duration": "2.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "elbow_v1",
+  "prompt": "A fighter steps in and throws a horizontal right elbow strike, then returns to his guard.",
+  "duration": "1.5",
+  "samples": 3,
+  "seed": 23456
+ },
+ {
+  "name": "victory_v1",
+  "prompt": "A big barbarian raises his fist in the air in victory and beats his chest.",
+  "duration": "3.0",
+  "samples": 3,
+  "seed": 23456
+ }
+]

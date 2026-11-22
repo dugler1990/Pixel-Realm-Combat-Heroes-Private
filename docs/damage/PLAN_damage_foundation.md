@@ -1,0 +1,109 @@
+# Plan: damage foundation cleanup
+
+Branch `refactor/damage-path` (`..\Pixel-Realm-damage-path`), on top of `a5e6aa45` (one damage path).
+One commit per step. Targeted test set run before and after each step; FAILED names compared to baseline.
+Each step updates `NOTES_damage_and_armour.md` (Log, Known errors, deletions with commit hash).
+Each step has a "done when" grep; the key ones become one guard test (step 7).
+Performance: crowd bench before step 1 and after step 7 (real Level4 headless, 40 units in two
+hostile crowds, 600 frames: mean/p95 ms per frame; plus `strike` over the crowd, µs per call).
+Script and numbers in the notes' Method and Log.
+
+## Rules agreed
+- No legacy folder. Git history is the archive. Each deletion: one line in the notes with the hash
+  and the restore command `git show <hash>^:<path>`.
+- One damage path: every hit goes through `InteractionResolver`; no fallbacks that subtract health directly.
+- One team check: the faction policy in `apply`. Nothing else filters by team.
+- No invulnerability by default. It is a condition a source grants (a boss trait, a passive ability),
+  never a general post-hit grace. Repeat hits stay with `rehit_ms`.
+- Invulnerable blocks all damage, heat and cold included. `over_time` goes.
+- Attacker memory: one fact on every body, two distinct rules read it.
+- Damage numbers live only in attack defs (`Code/config/damage/attacks.json`). A hit = the def's
+  damage + the attacker's stat (`scales_with`), player and monster alike. A strong monster has a
+  higher stat, not its own copy of the number.
+
+## Status (2026-11-21)
+All 7 steps done. Steps 1-6 one commit each: `202fdcfd`, `d87dc708`, `e429ea58`, `31649c6f`,
+`faea0307`, `0849cecb`; guard test, bench and notes `51033da9`; step 7 its own commit after.
+Changes from the plan as written:
+- Step 7: monsters keep today's hits through an attack stat (`monster_data` `stats.attack`, the
+  difference from the def), not through 20 new defs. Answer from Douglas 2026-11-21: the number
+  belongs in the def; how hard a monster hits is its stat.
+- Step 4: default hit/death sounds stay in code (CombatUnit, NeutralCharacter); a monster's data may
+  override them. Putting the same two paths in ~30 `monster_data` entries would be the duplication.
+- Step 3: tribe members leave the entity tree on death always (the worker-only guard flag is gone).
+- Step 2: `interaction_validation.py` lost its 2 `effect_state` scenarios; the benchmark's
+  `effect_state` column is gone.
+
+## Steps
+1. **Deletions**
+   - `Code/Enemy.py`, `Code/friendly.py`, `tribey_geom_probe.py` (TEMP probe), and their use in
+     `test_walk_animation_phasing.py`.
+   - The 30 inert `'damage_player': True` keys in `Settings.py` `combat_context`.
+   - The dead multiplier/bonus in `Level4_tmxdev._resolve_projectile_damage_payload`.
+     (Level4_tmxdev is the live level; only this part is dead.)
+   - Done when: `rg "import Enemy|from Enemy|friendly import|damage_player" Code tests` → 0.
+2. **Resolver only, one team check**
+   - Remove no-resolver fallbacks: `Entity` lava path, `IceClone`, `leap_slam` x2.
+   - `effect_state` (slippery and similar) is not a hit: set it directly on the body; delete the
+     `effect_state` kind from the resolver and its Entity fallback.
+   - Team: one rule (the faction policy), run once per hit. `apply` = policy, then `land()`.
+     `strike` keeps its early skip (crowds) but runs the policy itself and calls `land()` directly,
+     so no second check and no throwaway context. Remove leap_slam's own prefilter and the same-team
+     check in `Entity.can_receive_interaction` (body gate checks health > 0 only).
+     Direct `land()` callers (relay, puppet) carry no team, so nothing is lost.
+   - Done when: `rg "\.health -=" Code` → only `Entity.take_damage`; `rg "effect_state" Code` → 0;
+     `rg "team_id" Code/Entity.py` shows no check in `can_receive_interaction`.
+3. **Death in one place**
+   - `Entity.die()`: does nothing if already dead; sets `is_dead` once, condition-clock notice,
+     then `on_death()`.
+   - Base `on_death()`: removal from the lookup tree, `kill()`. Overrides add extras (XP, particles,
+     death sound, RTS notice). Player overrides it and stays alive with `is_dead` set (co-op and the level read it).
+   - `take_damage` calls `die()` when health reaches 0.
+   - Replaces: `check_death` in Eskimo, PolarBear, combat_unit, tribe_member; `Player.player_death`;
+     the death in `Trap.on_hurt`.
+   - Check: health set without a hit (restores, net snapshots, heals) must not need a death check;
+     co-op deaths still arrive by host message (`EnemyPuppet`, `RemotePlayer`).
+     A body dying mid-`strike` (tree removal during the loop): crowd test.
+   - Done when: `rg "check_death|player_death" Code` → 0.
+4. **Sounds**
+   - Shared cache: each file loaded once (`sounds.get(path)`).
+   - Paths in existing entity data: `hit_sound`, `death_sound` next to `attack_sound` in `Settings`
+     `monster_data` (Eskimo, PolarBear entries too). No new file.
+   - Attribute names stay `hit_sound`, `death_sound`, `attack_sound`, so `on_hurt` is unchanged.
+   - Later: player hit/impact sound from the weapon or attack def.
+   - Done when: `rg "mixer.Sound\(" Code` → only the cache.
+5. **Attacker memory**
+   - One record on every body: `last_attacker` (team, until_ms), written by the resolver.
+     The writer touches nothing else (no `_aggro_target_cache` reset; the AI notices the change itself).
+   - Two named readers, each comparing `until_ms` to now:
+     permission in `FactionPolicy.should_aggro` (a `retaliate_only` faction may only attack its attacker);
+     preference in `CombatUnit` (target the team that hit me). Both documented in the notes.
+   - Fixes the bug: `should_aggro` checks `retaliate_until > 0`, not `> now` (`Interaction.py:336`),
+     so retaliation never expires today.
+   - Done when: `rg "recent_attacker_|retaliate_team_id|retaliate_until_ms" Code` → 0.
+6. **Invulnerability as a condition**
+   - `invulnerable` timed condition on the `ConditionClock`; the resolver checks it in `land()`.
+   - Granted only by sources that declare it (boss trait, passive ability). No default grace.
+   - Blocks all damage; `InteractionContext.over_time` removed.
+   - Remove `vulnerable` and `invulnerability_duration` from Player, combat_unit, NeutralCharacter,
+     the reset code, the dead flicker, the `land()` check; update `combat_validation_driver.py`.
+   - `apply` / `land` return an explicit result: landed / spent (invulnerable) / refused.
+   - Done when: `rg "\bvulnerable\b|invulnerability_duration|over_time" Code` → 0.
+7. **Damage numbers from defs only**
+   - A hit carries an attack def or an amount, never both; neither is an error. An amount is
+     already priced (co-op relay, lightning hop, lava per second).
+   - Price: def damage + the attacker's stat, times `InteractionContext.scale` (blast falloff,
+     leap charge, meteor size). A body card: `hit_resolve.resolve`. No card, or holy/unholy alone:
+     `hit_resolve.flat` (blow + every magic power + bolt + stat, once).
+   - Removed copies: `damage` in `weapon_data` and every monster attack, `strength` of flame and
+     ice_ball (heal keeps its own), leap_slam `base_damage`, meteor `burst_damage`/`dot_damage`,
+     the projectile payload lookup, trap/ice-clone `amount`, `Player.get_full_*_damage`.
+   - Monsters: `CombatUnit.stats` from `monster_data` `stats`; every monster attack def
+     `scales_with` attack (blows) or magic (spells).
+   - Guard rule: no `damage` key in code data, no `get_full_*_damage`, no copied base numbers.
+
+## Next (not this plan)
+- Temperature rebuild: `temperature.py`, sources table, weighted pull, `settle` through the resolver.
+- Eskimo / PolarBear move to CombatUnit + roam driver + tile-job driver (RTS-style nomad).
+  Own initiative. Now they only get shared death and sounds.
+- Dash invulnerability: a possible later source for step 6's condition.

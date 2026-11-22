@@ -13,11 +13,13 @@ from Settings import (
     DEBUG_DRAW_MASKS,
     DEBUG_DRAW_EFFECT_RECTS,
     DEBUG_DRAW_FACTION_OUTLINES,
+    DEBUG_DRAW_CONTACTS,
 )
+import contact_debug
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from Entity import Entity
-from Support import mask_midbottom_world, sprite_feet_sort_y
+from Support import mask_midbottom_world, mesh_feet_world, sprite_feet_sort_y
 from AnimatedEnvironmentSprite import AnimatedEnvironmentSprite
 from Torch import Torch
 from Building import VIEW_DOOR, VIEW_IN, VIEW_OUT
@@ -105,9 +107,11 @@ class YSortCameraGroup(pygame.sprite.Group):
         # Door frames as (rect, surface, building), held by reference like buildings.
         self.door_covers = door_covers if door_covers is not None else []
         self.debug_effect_areas = []  # For debug visualization of effect collision rects
+        self.floor_patches = []       # (world rect, colour): filled on the ground, under the sprites
         self.runtime_debug_effect_rects = DEBUG_DRAW_EFFECT_RECTS
         self.runtime_debug_player_highlight = DEBUG_DRAW_MASKS
         self.runtime_debug_faction_outlines = DEBUG_DRAW_FACTION_OUTLINES
+        self.runtime_debug_contacts = DEBUG_DRAW_CONTACTS
         self.height_overlay = None
         self.height_overlay_origin = (0, 0)
 
@@ -352,6 +356,10 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.grass_offset.y = fy - self.grass_half_height
         self._apply_screen_shake()
 
+        hole = getattr(self, "water_hole", None)
+        if hole is not None:
+            hole.draw(self)
+
         if self.ground_chunks:
             # Only the chunks the camera can see. cache_key stays id(surface) to match
             # backend.invalidate_texture, which looks the cache up that way.
@@ -385,9 +393,7 @@ class YSortCameraGroup(pygame.sprite.Group):
             rot_function = lambda x, y, angle=shared_angle: angle
         else:
             rot_function = lambda x, y: int(math.sin(self.t / 60 + x / 100) * 15)
-        
-        # if player on grass
-        
+
         player_center = player.rect.center
         if self._grass_disturbance_enabled():
             if self.last_player_grass_force_center is None:
@@ -401,12 +407,7 @@ class YSortCameraGroup(pygame.sprite.Group):
                     self.last_player_grass_force_center = player_center
         else:
             self.last_player_grass_force_center = player_center
-        
-        
-        #print( self.grass_offset )
-        #print( self.offset )
-        
-        # Draw grass relative to player
+
         if self._grass_clip_rect is not None:
             # GPU mode: blit each tile directly to the backend — no intermediate surface.
             if not getattr(self, "_grass_path_logged", False):
@@ -469,6 +470,8 @@ class YSortCameraGroup(pygame.sprite.Group):
 
         self._update_buildings(focus, dt)
         self._draw_building_interiors()
+        for rect, colour in self.floor_patches:
+            self.backend.draw_rect(colour, rect.move(-self.offset.x, -self.offset.y), 0)
         # Buildings the subject is inside: bodies standing on floor not yet explored are not
         # drawn, shadows included.
         fogged = self._fogged_buildings()
@@ -582,6 +585,15 @@ class YSortCameraGroup(pygame.sprite.Group):
                 )
                 team_id = getattr(sprite, "team_id", None)
                 self.backend.draw_rect(_faction_outline_color(team_id), rect_screen, 2)
+
+        # Where recent hits landed (InteractionContext.contact).
+        if self.runtime_debug_contacts:
+            # grey: a worn piece (plate), red: skin or any other body
+            for x, y, kind in contact_debug.recent(pygame.time.get_ticks()):
+                color = (190, 200, 220) if kind == "plate" else (255, 40, 40)
+                self.backend.draw_circle(
+                    color, (int(x - self.offset.x), int(y - self.offset.y)), 3
+                )
 
     #@profile
     
@@ -719,15 +731,7 @@ class YSortCameraGroup(pygame.sprite.Group):
             self._draw_sorted_sprite(sprite, offset_pos)
 
     def _mesh_feet_screen(self, sprite):
-        hitbox = getattr(sprite, "hitbox", None)
-        if getattr(sprite, "sprite_anchor_px", None) is not None and hitbox is not None:
-            feet = hitbox.midbottom
-        elif getattr(sprite, "mask", None) is not None:
-            feet = mask_midbottom_world(sprite.rect, sprite.mask)
-        elif hitbox is not None:
-            feet = hitbox.midbottom
-        else:
-            feet = sprite.rect.midbottom
+        feet = mesh_feet_world(sprite)
         return (feet[0] - self.offset.x, feet[1] - self.offset.y)
 
     def _draw_sorted_sprite(self, sprite, offset_pos):
@@ -738,7 +742,7 @@ class YSortCameraGroup(pygame.sprite.Group):
         while the mesh draws (the weapon sprite itself, and its hit mask, are untouched)."""
         skin = getattr(sprite, "mesh_skin", None)
         if skin is not None:
-            drew = skin.draw(self.backend, self._mesh_feet_screen(sprite))      # body + worn pieces
+            drew = skin.draw(self.backend, self._mesh_feet_screen(sprite), wearer=sprite)
             sprite._mesh_drew = bool(drew)
             if drew:
                 return
@@ -937,6 +941,8 @@ class YSortCameraGroup(pygame.sprite.Group):
     ):
         updated_sprites = []
         for sprite in batch:
+            if not sprite.alive():
+                continue  # died earlier this frame (a hit lands and kills at once)
             self._update_single_sprite(
                 sprite,
                 obstacle_quad_tree,

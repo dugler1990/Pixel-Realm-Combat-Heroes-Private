@@ -95,28 +95,9 @@ PART_SHOTS = [
 ]
 
 
-# What the prompts say about the character. Default: the bare barb (pass 1/2 wording, unchanged).
-# A look file (looks/*.json, given to `views --look`, remembered in cams.json) overrides any key, can
-# limit the views ("views": names) and re-word close-ups ("shots": {name: {"shows", "paint"}}).
-# "part_res": close-up size in px (default PART_RES); "quality": gpt-image-2 quality (default high);
-# "provider": "openai" (default, gpt-image-2) or "leonardo" with "model" (e.g. "nano-banana-2": $0.039 at
-# 1024 vs gpt-image-2 medium $0.099 on the barb's face, quality_test.py 2026-11-02);
-# "regions": {"arm": {"scale": 1.3, "shift_up": 0.04}} widens / raises a close-up frame (shift in heights).
-DEFAULT_LOOK = {
-    "subject": "barbarian hero",
-    "design": "warm tanned skin, dark brown hair tied in a top knot, full dark brown beard, brown leather loincloth "
-              "on a leather belt, bare feet",
-    "match_part": "skin tone, hair, beard and leather colours",
-    "match_body": "skin tone, hair and beard colour, leather colour and painting style",
-    "body_paint": "Paint it in the hand-painted style of image 3: painterly skin with colour variation (warmer on the "
-                  "cheeks, shoulders, elbows, knees and knuckles, cooler and darker in the creases between muscles), clear "
-                  "muscle definition, individual hair and beard locks, readable fingers and toes, crisp eyes, nose and "
-                  "mouth where visible.",
-    "part_variation": "with painterly colour variation (warmer on the high points, cooler and darker in the creases)",
-    "safety": "He is a non-sexual, family-friendly game character wearing a leather loincloth. ",
-    "finish_part": "Matte and evenly lit: no cast shadows, no directional light, no shiny or oily highlights.",
-    "finish_body": "Keep it evenly lit: no cast shadows, no directional light, no shiny highlights painted in.",
-}
+# What the prompts say about the character: a look file, required (look_file.py, looks/*.json).
+from look_file import load_look  # noqa: E402
+
 # gpt-image-2 Standard, USD per 1M tokens (developers.openai.com/api/docs/pricing, read 2026-11-02)
 PRICE = {"text_in": 5.0, "image_in": 8.0, "image_out": 30.0}
 
@@ -127,13 +108,6 @@ def usd(usage):
     i, o = usage.get("input_tokens_details", {}), usage.get("output_tokens_details", {})
     return (i.get("text_tokens", 0) * PRICE["text_in"] + i.get("image_tokens", 0) * PRICE["image_in"]
             + o.get("image_tokens", 0) * PRICE["image_out"] + o.get("text_tokens", 0) * PRICE["text_in"]) / 1e6
-
-
-def load_look(path):
-    look = dict(DEFAULT_LOOK)
-    if path:
-        look.update(json.load(open(path, encoding="utf-8")))
-    return look
 
 
 # A painting is used only if it lines up with the model: gen repaints a view that fails (up to
@@ -620,7 +594,7 @@ if MODE == "gen":
             usage, cost = None, info.get("cost_usd")
         else:
             info = edit_image(prompt=p, input_images=ims, mask=None, output_path=out, width=w, height=h,
-                              config={"quality": L.get("quality", "high"), "config_source": "barb_paint"})
+                              config={"quality": L.get("quality", "high"), "config_source": "repaint"})
             usage = info.get("usage")
             cost = usd(usage)
         alpha = np.asarray(Image.open(os.path.join(WORK, v["name"] + "_flat.png")).convert("RGBA"))[..., 3] > 8

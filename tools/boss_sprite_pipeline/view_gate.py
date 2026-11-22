@@ -60,21 +60,11 @@ GPT_IMAGE = Path(__file__).resolve().parents[1] / "painted_map_pipeline" / "open
 DEFAULT_CONFIG = {("front", "reference"): GPT_IMAGE, ("front", "mask"): GPT_IMAGE,
                   ("back", "reference"): LEONARDO, ("back", "mask"): GPT_IMAGE, ("side", "reference"): LEONARDO}
 
-# Heights above the floor, as a share of the figure's height (explode2/outline_check.py). Below the hips a band
-# measures one leg: the right half of the figure.
-BANDS = [("shoulder", .80), ("chest", .72), ("waist", .60), ("hips", .52), ("thigh", .42), ("knee", .30),
-         ("calf", .20), ("ankle", .08)]
-# Pass rules. Measured 2026-11-08 on Leonardo draws lined up after the fact (explode2/PROCESS_explode2.md); the
-# masked edits land in the target's own frame, so these are a starting point until measured on them.
-BACK_MIN_IOU = 0.95       # nano-banana-2.1 back with the outline as image 2: 0.964-0.973
-BACK_MAX_BAND = 1.0       # % h
-MARGIN = 0.005            # front: his bare outline grown by this share of his height is the outline to cover
-HEAD, SOLES = 0.13, 0.02  # front: left out of the score (the head stays bare, the soles stand on the floor);
-                          # --draw mask: the head is left out of the mask
-FRONT_MAX_MISSING = 0.02  # front, uncovered, head and soles out. Measured on Leonardo fronts: flare_3_extrahigh
-                          # 1.37 %; flare_2 2.74, flare_4 3.52, flare_1 4.81, the first fitted front 5.38. A width
-                          # check only: depth is not in the image. --draw mask: share of the mask left unpainted
-SIDE_MAX_OFF = 0.02       # side: head top, feet and height each within this share of the front's height
+# Pass rules and measuring heights: view_checks/<name>.json (default.json: today's, measured on the barb's fronts
+# and backs, explode2/PROCESS_explode2.md). load_checks sets these.
+CHECKS = Path(__file__).resolve().parent / "view_checks"
+BANDS: list = []          # heights above the floor, a share of the figure's height; below the hips one leg
+BACK_MIN_IOU = BACK_MAX_BAND = MARGIN = HEAD = SOLES = FRONT_MAX_MISSING = SIDE_MAX_OFF = 0.0
 MARK_PX = 4               # the overlay's error marks are widened by this many pixels each side to be seen at 1024
 UNPAINTED = 12            # back: a pixel of the black placeholder still this dark was not painted (as fill_unpainted)
 UNPAINTED_PX = 3          # ... if it is in a patch at least about twice this wide: ink lines are thinner
@@ -82,49 +72,21 @@ UNPAINTED_PX = 3          # ... if it is in a patch at least about twice this wi
 POSE_PYTHON = Path(__file__).resolve().parent / ".venv-pose" / "Scripts" / "python.exe"
 POSE_SCRIPT = Path(__file__).resolve().parent / "pose_heights.py"
 JOINT_COLOURS = {"shoulder": (0, 160, 255), "hip": (255, 0, 255), "knee": (0, 200, 0), "ankle": (255, 140, 0)}
-JOINT_MAX_OFF = 1.5       # % of his height, draw minus image 1; judged on hip and knee only -- the shoulder point
-JOINT_JUDGED = ("hip", "knee")  # rises with the pauldrons (+3 % h on armoured fronts that keep his shoulders)
+JOINT_MAX_OFF = 0.0       # % of his height, draw minus image 1 (view_checks)
+JOINT_JUDGED: tuple = ()
 JOINT_NOTE = ("The coloured lines labelled SHOULDER, HIP, KNEE and ANKLE across the images mark his joint heights. "
               "Keep his shoulders, hips, knees and ankles exactly on those lines. Do not draw the lines or the labels.")
 # Leonardo: reference strength per image -- the inputs are followed; an attached marked copy of the last
 # attempt is only a hint of where it went wrong (at HIGH the model copies its own mistake).
 INPUT_STRENGTH, ATTACHED_STRENGTH = "HIGH", "LOW"
 
-BIGGER = ("Make the armour realistically big enough to cover his large chest, shoulders and arms: thick plate "
-          "standing well clear of his muscles everywhere, never tight to the body.")
-PROMPTS = {
-    "front": (
-        "Dress the man in Image 1 in a full suit of steel plate armour worn over a thick padded gambeson. Keep his "
-        "pose, proportions, head, beard, framing, camera and white background identical. The armour sits over his "
-        "body: every plate stands clear of the skin by about a finger's width, so the armoured outline is larger "
-        "than his bare outline everywhere, including shoulders, arms, chest, waist, hips, legs and feet. If unsure, "
-        "make the armour slightly too big rather than too tight. No skin visible except the head. Image 2 is the "
-        "outline his armour must cover: every part of the black shape is inside the armour; the armour may reach "
-        "past it."),
-    "front_masked": (
-        "Image 1 is a man. Repaint the masked area: dress him in a full suit of steel plate armour worn over a thick "
-        "padded gambeson. The armour fills the whole masked area right up to its edge: its outline is the mask's "
-        "outline, so no skin shows anywhere in the masked area. Keep his pose, proportions, head, beard, lighting "
-        "and the white background exactly as they are."),
-    "back": (
-        "Draw the man in Image 1 seen from behind. Image 2 is his exact outline from behind: fill it exactly, with "
-        "the same pose, size and position, nothing outside it and no gaps. Show his back, hair bun, backplate, the "
-        "backs of his arms, legs and heels. Same armour, white background."),
-    "back_masked": (
-        "Image 1 is a placeholder: the black shape is exactly where the man must be. Repaint the masked area: draw "
-        "the man in Image 2 seen from directly behind, filling the black shape completely and exactly, with no black "
-        "left. Show his back, hair bun, backplate, the backs of his arms, legs and heels. Same armour as Image 2: "
-        "the same design, colours, lighting and painting style. Plain white background."),
-    "side": (
-        "Draw the man in Image 1 seen from exactly his {side} side, a 90 degree side view facing the {edge} edge of "
-        "the image. Image 2 is the same man from behind. Same armour, same height and pose, head and feet at the "
-        "same height in the image as in Image 1, full body, orthographic, white background. Every plate stands "
-        "clear of his body."),
-    "quarter": (
-        "Draw the man in Image 1 seen from {view}: a 45 degree three-quarter view, turned toward the {edge} edge of "
-        "the image. Image 2 is the same man from behind. Same armour, same height and pose, head and feet at the "
-        "same height in the image as in Image 1, full body, orthographic, white background."),
-}
+# Prompts: view_prompts/<name>.json, named by the outfit's "view_prompts" (or --prompts); the outfit's own
+# front / back / side / quarter / retry_bigger win. No file and no own prompt: a view to draw stops naming it.
+VIEW_PROMPTS = Path(__file__).resolve().parent / "view_prompts"
+REPO = Path(__file__).resolve().parents[2]
+BIGGER = None             # the 'rb' redraw line (armour too tight)
+PROMPTS: dict = {}
+TEXTS: dict = {}          # retry: (what the attached marked image is, the directive after it)
 # The 3/4 views (`side --side <corner>`): where the camera stands. Each is turned toward the image's left edge
 # when the camera is on his left (as his left side view), right edge on his right.
 CORNERS = {"front_left": "in front of him and to his left, halfway between his front and his left side",
@@ -133,33 +95,34 @@ CORNERS = {"front_left": "in front of him and to his left, halfway between his f
            "back_right": "behind him and to his right, halfway between his back and his right side"}
 # Images sent before an attachment: an attachment is image FIRST_INDEX.
 FIRST_INDEX = {"front": 3, "front_masked": 2, "back": 3, "back_masked": 3, "side": 3, "quarter": 3}
-TEXTS = {
-    "front": (
-        "your previous attempt with its shape error marked: magenta is where his bare outline (the black shape in "
-        "image 2) is not covered by the armour",
-        "This image shows where your armour leaves his body uncovered. Every part of the black shape in image 2 must "
-        "be inside the armour; the armour may always be bigger, never smaller. If it is not covered the image is "
-        "not valid and cannot be used, this is the most important directive it takes precedence over any other "
-        "contradictory statements earlier in the prompt, thanks."),
-    "front_masked": (
-        "your previous attempt with its shape error marked: magenta is where the masked area was not filled with "
-        "armour",
-        "Fill the whole masked area with armour, right up to its edge. If it is not filled the image is not valid "
-        "and cannot be used, this is the most important directive it takes precedence over any other "
-        "contradictory statements earlier in the prompt, thanks."),
-    "back": (
-        shape_note("white"),
-        "This image represents how you have differed from his outline in image 2, which your drawing must fill "
-        "exactly, this shape needs to be pixel perfect relative to that outline, if not the image is not valid and "
-        "cannot be used, this is the most important directive it takes precedence over any other contradictory "
-        "statements earlier in the prompt, thanks."),
-    "back_masked": (
-        shape_note("white"),
-        "This image represents how you have differed from the black shape in image 1, which your drawing must fill "
-        "exactly, this shape needs to be pixel perfect relative to that shape, if not the image is not valid and "
-        "cannot be used, this is the most important directive it takes precedence over any other contradictory "
-        "statements earlier in the prompt, thanks."),
-}
+
+
+def load_checks(path: Path) -> None:
+    c = json.loads(Path(path).read_text(encoding="utf-8"))
+    g = globals()
+    g["BANDS"] = [tuple(b) for b in c["bands"]]
+    for k in ("back_min_iou", "back_max_band", "margin", "head", "soles", "front_max_missing", "side_max_off",
+              "joint_max_off"):
+        g[k.upper()] = float(c[k])
+    g["JOINT_JUDGED"] = tuple(c["joint_judged"])
+
+
+def load_prompts(path: Path) -> None:
+    p = json.loads(Path(path).read_text(encoding="utf-8"))
+    PROMPTS.update(p.get("prompts", {}))
+    TEXTS.update({m: (shape_note(n.split(":", 1)[1]) if n.startswith("shape_note:") else n, d)
+                  for m, (n, d) in p.get("retry_texts", {}).items()})
+    if p.get("retry_bigger"):
+        globals()["BIGGER"] = p["retry_bigger"]
+
+
+def repo_file(rel: str) -> Path:
+    """A prompt / check file named in an outfit: this repo first (as outfit.py's Ctx.tool)."""
+    p = Path(rel)
+    return p if p.is_absolute() else REPO / p
+
+
+load_checks(CHECKS / "default.json")
 
 
 def frame(mask: np.ndarray) -> tuple[int, int, int, float]:
@@ -390,15 +353,24 @@ def main() -> None:
     ap.add_argument("--config", type=Path, help="the image model; default per view and --draw (DEFAULT_CONFIG)")
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--outfit", type=Path, help="outfit file: prompts and settings (PROCESS_outfit.md)")
+    ap.add_argument("--prompts", type=Path, help="a view_prompts file (default: the outfit's view_prompts)")
     ap.add_argument("--dry-run", action="store_true", help="print the prompt and the images it would send; no call")
     ap.add_argument("--no-ask", action="store_true", help="draw once, record it as pending in gate_<view>.json, exit")
     ap.add_argument("--retry", help="with --no-ask / --dry-run: r | r1 | rb | 'r <why> @img', as at the gate, on the "
                                     "last recorded attempt")
     ap.add_argument("--accept", type=int, help="accept attempt N recorded in gate_<view>.json; no draw")
+    ap.add_argument("--use", type=Path, help="an image you have, as the next attempt: no call; the same checks, sheet "
+                                              "and gate as a drawing (recorded as supplied); then --accept N")
     a = ap.parse_args()
+    outfit = json.loads(a.outfit.read_text(encoding="utf-8")) if a.outfit else {}
+    if a.prompts or outfit.get("view_prompts"):
+        load_prompts(a.prompts or repo_file(outfit["view_prompts"]))
+    if outfit.get("view_checks"):
+        load_checks(repo_file(outfit["view_checks"]))
+        if a.margin == ap.get_default("margin"):
+            a.margin = MARGIN
     check, bigger = "cover", BIGGER
     if a.outfit:
-        outfit = json.loads(a.outfit.read_text(encoding="utf-8"))
         for key in ("front", "back", "front_masked", "back_masked", "side", "quarter"):
             if outfit.get(key):
                 PROMPTS[key] = outfit[key]
@@ -417,6 +389,8 @@ def main() -> None:
         ap.error("a side has no outline to use as a mask")
     if a.display_joints and a.draw == "mask":
         ap.error("--display-joints is for --draw reference: a masked edit repaints image 1, lines included")
+    if a.use and (a.draw == "mask" or not a.use.is_file()):
+        ap.error("--use needs an image file, and --draw reference")
     a.config = a.config or DEFAULT_CONFIG[(a.view, a.draw)]
     a.out.mkdir(parents=True, exist_ok=True)
 
@@ -434,7 +408,9 @@ def main() -> None:
     masked = a.draw == "mask"
     exact = None                             # front: his outline with no margin, for the last panel
     mode = a.view + ("_masked" if masked else "")
-    prompt = PROMPTS[mode]
+    if mode not in PROMPTS and not a.use:
+        sys.exit(f"no {mode} prompt: the outfit sets neither its own {mode!r} nor a view_prompts file")
+    prompt = PROMPTS.get(mode, "")
     if a.view == "front":
         from scipy import ndimage
 
@@ -467,7 +443,9 @@ def main() -> None:
         target = score_mask(Image.open(a.front))
         if a.side in CORNERS:
             mode = "quarter"
-            prompt = PROMPTS[mode].format(view=CORNERS[a.side], edge=a.side.split("_")[1])
+            if mode not in PROMPTS and not a.use:
+                sys.exit("no quarter prompt: the outfit sets neither its own 'quarter' nor a view_prompts file")
+            prompt = PROMPTS.get(mode, "").format(view=CORNERS[a.side], edge=a.side.split("_")[1])
         else:
             prompt = prompt.format(side=a.side, edge=a.side)
         refs, name = [a.front.resolve(), a.back.resolve()], f"side_{a.side}"
@@ -508,6 +486,26 @@ def main() -> None:
         print(with_criticism(prompt, criticism, attach,
                              first_index=FIRST_INDEX[mode] + (len(refs) - 2 if a.view == "side" else 0)), end="")
         print("\n--- images: " + ", ".join(str(p) for p in extra), file=sys.stderr)
+        return
+    if a.use:                                # a supplied image: the next attempt, checked as a drawing would be
+        n += 1
+        tag = a.out / f"{a.view}_attempt_{n:02d}"
+        draw_path = tag.with_suffix(".png")
+        on_white(Image.open(a.use)).save(draw_path)
+        joints = None
+        if ref_joints is not None and a.view != "side":
+            got = joint_heights([draw_path])[str(draw_path)] or {}
+            joints = {k: (v["y"], got[k]["height_pct"] - v["height_pct"]) for k, v in ref_joints.items() if k in got}
+        s, lines, sheet_png, shape_png = evaluate(a.view, Image.open(draw_path), target, tag, sent=refs,
+                                                  joints=joints, exact=exact, check=check)
+        attempts.append({"attempt": n, "draw": str(draw_path), "supplied": str(a.use.resolve()), "prompt": None,
+                         "images_sent": [], "scores": s, "shape": str(shape_png) if shape_png else None})
+        gate.update({"view": a.view, "draw": a.draw, "refs": [str(p) for p in refs], "config": str(a.config),
+                     "attempts": attempts, "status": "pending", "sheet": str(sheet_png),
+                     "front_input": str(a.front) if a.front else None})
+        gate_json.write_text(json.dumps(gate, indent=1), encoding="utf-8")
+        print("\n  " + "\n  ".join(lines) + f"\n  {sheet_png}")
+        print(f"  PENDING attempt {n} (supplied {a.use}): --accept {n}, or draw again: --no-ask --retry r")
         return
     client = make_image_client(config)
     while True:
@@ -599,6 +597,16 @@ def retry_from(answer: str, last: dict | None, mode: str, masked: bool, bigger: 
     note, directive = TEXTS[mode] if mode in TEXTS else ("", "")
     shape = Path(last["shape"]) if last.get("shape") else None
     return parse_gate_retry(answer, shape, note, directive)
+
+
+def on_white(im: Image.Image) -> Image.Image:
+    """A supplied image as RGB: a cut-out's transparent background becomes white, as a drawing's is."""
+    if im.mode in ("RGBA", "LA", "P"):
+        im = im.convert("RGBA")
+        bg = Image.new("RGB", im.size, (255, 255, 255))
+        bg.paste(im, mask=im.getchannel("A"))
+        return bg
+    return im.convert("RGB")
 
 
 def accept(a, gate: dict, gate_json: Path, draw_path: Path, n: int, name: str) -> None:

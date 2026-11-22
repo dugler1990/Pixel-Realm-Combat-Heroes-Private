@@ -1,4 +1,8 @@
 import pygame
+import sounds
+from damage_data import attack_of, body_of
+import temperature
+from defence_profile import natural_profile
 import math
 from Settings import *
 from Entity import Entity
@@ -10,7 +14,6 @@ from CombatStrategy import MeleeCombatStrategy,RangedCombatStrategy,MixedCombatS
 import random
 import os
 import cv2
-from Interaction import InteractionContext
 from game_logging import get_debug_logger
 
 _mesh_log = get_debug_logger("mesh")
@@ -29,7 +32,6 @@ class CombatUnit(Entity):
                  groups,
                  obstacle_sprites,
                  combat_context,
-                 #damage_player,
                  #redirect_projectile_callback,
                  #trigger_death_particles,
                  #add_exp,
@@ -67,8 +69,6 @@ class CombatUnit(Entity):
         self.groups = groups
         self.team_id = team_id
         self.sprite_type = sprite_type if sprite_type is not None else "enemy"
-        self.recent_attacker_team_id = None
-        self.recent_attacker_until_ms = 0
         # --- aggro target cache ---
         # None = never scanned; False = cached empty; else real target sprite
         self._aggro_target_cache = None
@@ -161,7 +161,14 @@ class CombatUnit(Entity):
         self.health = monster_info["health"]
         self.exp = monster_info["exp"]
         self.speed = monster_info["speed"]
-        self.resistance = monster_info["resistance"]
+        self.mass = monster_info["mass"]  # knockback_scale (Entity.py)
+        # What it adds to each attack def that scales with a stat (hit_resolve): a strong monster
+        # hits harder with the same attack.
+        self.stats = dict(monster_info.get("stats", {}))
+        # What is between a hit and the flesh (defence_profile.py): its hide, shared per body.
+        self.body_def = body_of(monster_info)
+        self.defence = natural_profile(self.body_def)
+        self.detail = monster_info.get("detail", "simple")
         # Enemy mana (player uses energy). Default 0 = specials with mana_cost never fire.
         self.max_energy = float(monster_info.get("energy", monster_info.get("mana", 0)))
         self.energy = self.max_energy
@@ -169,7 +176,6 @@ class CombatUnit(Entity):
         
         #### All in combat config now
         self.combat_config = monster_info["combat_config"]
-        # self.attack_damage = monster_info["damage"]
         # self.attack_radius = monster_info["attack_radius"]
         # self.notice_radius = monster_info["notice_radius"]
         # self.melee_attack_radius = monster_info.get("melee_attack_radius", self.attack_radius)
@@ -221,7 +227,6 @@ class CombatUnit(Entity):
         # TODO: cooldowns just takes the max cooldown from all attacks, i can do better than this
         
         self.attack_cooldown = max([attack["cooldown"] for attack in self.melee_attacks + self.ranged_attacks], default=400)
-        #self.damage_player = damage_player
         #self.trigger_death_particles = trigger_death_particles
         #self.add_exp = add_exp
         self.persistent = persistent
@@ -236,18 +241,12 @@ class CombatUnit(Entity):
         self.frozen = False  
         self.freeze_time = 0
 
-        # Invincibility Timer
-        self.vulnerable = True
-        self.hit_time = None
-        self.invincibility_duration = 300
+        self.hit_time = None  # when the last hit landed (ms), stamped by take_damage
 
-        # Sounds
-        self.death_sound = pygame.mixer.Sound("../Audio/Death.wav")
-        self.hit_sound = pygame.mixer.Sound("../Audio/Hit.wav")
-        self.attack_sound = pygame.mixer.Sound(monster_info["attack_sound"])
-        self.death_sound.set_volume(0.6)
-        self.hit_sound.set_volume(0.6)
-        self.attack_sound.set_volume(0.3)
+        # Sounds: the monster's data may name its own hit and death sounds.
+        self.death_sound = sounds.get(monster_info.get("death_sound", "../Audio/Death.wav"), 0.6)
+        self.hit_sound = sounds.get(monster_info.get("hit_sound", "../Audio/Hit.wav"), 0.6)
+        self.attack_sound = sounds.get(monster_info["attack_sound"], 0.3)
         
         # Combat Strategy Setup
         parry_effects = {
@@ -427,9 +426,6 @@ class CombatUnit(Entity):
         
 
 
-    def is_dead(self):
-        """Check if the enemy is dead."""
-        return self.health <= 0
 
     
     
@@ -507,12 +503,10 @@ class CombatUnit(Entity):
         return float(self.combat_config.get("notice_radius", math.inf))
 
     def _current_prefer_team(self, now):
-        retaliate_until = getattr(self, "retaliate_until_ms", 0)
-        retaliate_team = getattr(self, "retaliate_team_id", None)
-        if retaliate_team and now < retaliate_until:
-            return retaliate_team
-        if now < self.recent_attacker_until_ms:
-            return self.recent_attacker_team_id
+        """Preference: target the team that hit me while the memory lasts (permission is
+        FactionPolicy.should_aggro's, from the same fact)."""
+        if now < self.last_attacker_until_ms:
+            return self.last_attacker_team
         return None
 
     def _aggro_cache_valid(self, now, frame_number):
@@ -531,7 +525,7 @@ class CombatUnit(Entity):
             return False
         return True
 
-    def _pick_best_hostile(self, resolver, candidates, prefer_team, notice_radius, restrict_prefer_team):
+    def _pick_best_hostile(self, resolver, candidates, prefer_team, notice_radius, restrict_prefer_team, now):
         best_target = None
         best_distance = math.inf
         for candidate in candidates:
@@ -540,7 +534,7 @@ class CombatUnit(Entity):
             if restrict_prefer_team and prefer_team is not None:
                 if getattr(candidate, "team_id", None) != prefer_team:
                     continue
-            if not resolver.can_aggro(self, candidate):
+            if not resolver.can_aggro(self, candidate, now):
                 continue
             distance, _ = self.get_target_distance_direction(candidate)
             if distance > notice_radius:
@@ -581,11 +575,11 @@ class CombatUnit(Entity):
             candidates = visible.sprites() if visible is not None else []
 
         best_target = self._pick_best_hostile(
-            resolver, candidates, prefer_team, notice_radius, restrict_prefer_team=True
+            resolver, candidates, prefer_team, notice_radius, restrict_prefer_team=True, now=now
         )
         if best_target is None and prefer_team is not None:
             best_target = self._pick_best_hostile(
-                resolver, candidates, prefer_team, notice_radius, restrict_prefer_team=False
+                resolver, candidates, prefer_team, notice_radius, restrict_prefer_team=False, now=now
             )
 
         self._aggro_target_cache = best_target if best_target is not None else False
@@ -621,8 +615,8 @@ class CombatUnit(Entity):
         if self.status != "Summoning":
             self.combat_strategy.decide_action(self, player)
             self.combat_strategy.move(self, player)
-            if self.status == "attack":
-                self.combat_strategy.execute_attack(self, player)
+            if self.status == "attack" and getattr(self, "holding", None) is not player:
+                self.combat_strategy.execute_attack(self, player)   # a hold replaces the strike
             self.combat_strategy.parry(self, player, quadtree)
         else:
             self.combat_strategy.execute_attack(self, player)
@@ -771,12 +765,7 @@ class CombatUnit(Entity):
             if self.mesh_boss is not None:
                 self._sync_mesh_layout()
             self.plant_sprite_on_hitbox()
-    
-            if not self.vulnerable:
-                alpha = self.wave_value()
-                self.image.set_alpha(alpha)
-            else:
-                self.image.set_alpha(255)
+
                 
                 
     #@profile
@@ -785,98 +774,14 @@ class CombatUnit(Entity):
         if not self.can_attack:
             if current_time - self.attack_time >= self.attack_cooldown:
                 self.can_attack = True
-
-        if not self.vulnerable:
-            if current_time - self.hit_time >= self.invincibility_duration:
-                self.vulnerable = True
     #@profile
-    def get_damage(self, player, attack_type):
-        if self.vulnerable:
-            self.hit_sound.play()
-            self.direction = self.get_player_distance_direction(player)[1] # Faces you when hit ? not sure about this
-            if attack_type == "weapon":
-                self.health -= player.get_full_weapon_damage()
-            else:
-                self.health -= player.get_full_magic_damage()
-            self.hit_time = pygame.time.get_ticks()
-            #self.vulnerable = False
-
-    def can_receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            return True
-        if ctx.kind == "impulse":
-            if "friendly_fire_impulse" in ctx.tags:
-                return True
-            if ctx.source_team == self.team_id:
-                return False
-            return True
-        if ctx.kind != "damage":
-            return False
-        if ctx.source_team == self.team_id:
-            return False
-        return True
-
-    def receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "impulse":
-            force = pygame.math.Vector2(ctx.impulse_x or 0, ctx.impulse_y or 0)
-            follow_through = 0.5
-            if ctx.source is not None:
-                follow_through = float(getattr(ctx.source, "impulse_follow_through", 0.5))
-            self.apply_impulse(force, follow_through=follow_through)
-            return
-        if ctx.kind == "effect_state":
-            super().receive_interaction(ctx)
-            return
-        if ctx.kind != "damage":
-            return
-        source_team = ctx.source_team
-        if source_team and source_team != self.team_id:
-            self.recent_attacker_team_id = source_team
-            retaliation_window_ms = 12000
-            level = self.combat_context.get("level") if isinstance(self.combat_context, dict) else None
-            resolver = getattr(level, "interaction_resolver", None) if level is not None else None
-            policy = getattr(resolver, "faction_policy", None) if resolver is not None else None
-            if policy is not None and hasattr(policy, "resolve_faction"):
-                faction_def = policy.resolve_faction(getattr(self, "team_id", None))
-                if isinstance(faction_def, dict):
-                    configured_window = faction_def.get("retaliation_window_ms")
-                    if isinstance(configured_window, int) and configured_window >= 0:
-                        retaliation_window_ms = configured_window
-            self.recent_attacker_until_ms = pygame.time.get_ticks() + retaliation_window_ms
-            self._aggro_target_cache = None
-        source = ctx.source
-        if source is not None and hasattr(source, "get_full_weapon_damage") and hasattr(source, "get_full_magic_damage"):
-            attack_type = "weapon" if ctx.attack_type == "weapon" else "magic"
-            self.get_damage(source, attack_type)
-            return
-        amount = ctx.amount
-        if amount is None:
-            return
-        if self.vulnerable:
-            self.health -= amount
-            self.hit_time = pygame.time.get_ticks()
-    #@profile
-    def take_environmental_damage(self, amount, damage_type):
-        """Apply environmental damage (e.g. heat); uses same vulnerability and invincibility as get_damage."""
-        if self.vulnerable:
-            self.health -= amount
-            self.hit_time = pygame.time.get_ticks()
-            self.check_death()
-    #@profile
-    def check_death(self):
-        if self.health <= 0:
-            self.layout_callback_update_quad_tree( obstacle_sprite = HashableRect( self.rect, self.id ),
-                                                   remove_existing= True,
-                                                   alive = False )# confusing its a callback passed to all entities, this is child , it can use it right ? 
-            self.kill()
-            #### TODO , add frozen or not end to monster name for frozen death particles.
-            self.combat_context["trigger_death_particles"](self.rect.center, self.monster_name)
-            self.combat_context["add_exp"](self.exp)
-            self.death_sound.play()
+    def on_death(self):
+        super().on_death()
+        #### TODO , add frozen or not end to monster name for frozen death particles.
+        self.combat_context["trigger_death_particles"](self.rect.center, self.monster_name)
+        self.combat_context["add_exp"](self.exp)
+        self.death_sound.play()
             
-    def hit_reaction(self):
-        if not self.vulnerable:
-            self.direction *= -self.resistance
 
     def _sync_mesh_layout(self):
         """Refresh capsule AABB when frame / facing / height change. Clears sheet mask."""
@@ -939,7 +844,6 @@ class CombatUnit(Entity):
             self.move(speed = self.speed,
                       QuadTree = QuadTree ,
                       entity_quad_tree = entity_quad_tree)
-            self.hit_reaction()
         self._update_mesh_facing(dt)
         self.animate()
         self.cooldowns()
@@ -949,7 +853,6 @@ class CombatUnit(Entity):
             energy = float(getattr(self, "energy", 0) or 0)
             if energy < max_e:
                 self.energy = min(max_e, energy + max_e * 0.0008)
-        self.check_death()
 
 
     def resume_default(self):
@@ -957,16 +860,54 @@ class CombatUnit(Entity):
         self.direction = pygame.math.Vector2(0, 0)
 
     def combat_update(self, player=None, quadtree=None, frame_number=0, entity_id_map=None):
-        if not self.frozen:
-            target = self.select_hostile_target(
-                frame_number=frame_number,
-                entity_id_map=entity_id_map,
-                entity_quad_tree=quadtree,
-            )
-            if target is None:
-                self.resume_default()
-                return
-            self.actions(target, quadtree)
+        if self.frozen:
+            self._hold(None)
+            return
+        target = self.select_hostile_target(
+            frame_number=frame_number,
+            entity_id_map=entity_id_map,
+            entity_quad_tree=quadtree,
+        )
+        self._hold(target)
+        if target is None:
+            self.resume_default()
+            return
+        self.actions(target, quadtree)
+
+    def _hold_of(self):
+        """(T, k) of this unit's holding melee attack (the ice ghost's touch), or None. Once."""
+        cached = getattr(self, "_hold_cache", False)
+        if cached is False:
+            cached = None
+            for entry in self.melee_attacks or ():
+                defn = attack_of(entry)
+                if defn is not None and defn.hold is not None:
+                    cached = defn.hold
+                    break
+            self._hold_cache = cached
+        return cached
+
+    def _hold(self, target):
+        """In melee reach of a body with a temperature, a holding attack holds it (a source on its
+        outer layer) instead of striking. Out of reach, another target, frozen, none: it lets go.
+        Its death lets go too (temperature.forget)."""
+        hold = self._hold_of()
+        if hold is None:
+            return
+        want = None
+        if target is not None and getattr(target, "warmth", None) is not None:
+            distance, _ = self.get_target_distance_direction(target)
+            if distance <= self.combat_config.get("melee_attack_radius", 0):
+                want = target
+        held = getattr(self, "holding", None)
+        if want is held:
+            return
+        now = pygame.time.get_ticks()
+        if held is not None:
+            temperature.remove_source(held, ("hold", self.id), now, placed_by=self)
+        if want is not None:
+            temperature.add_source(want, ("hold", self.id), hold[0], hold[1], now, placed_by=self)
+        self.holding = want
 
     def enemy_update(self, player=None, quadtree=None, frame_number=0, entity_id_map=None):
         """Deprecated: use combat_update."""

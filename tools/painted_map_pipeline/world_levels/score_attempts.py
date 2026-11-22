@@ -73,7 +73,7 @@ def score_level(root: str | Path, level_id: str) -> dict[str, Any]:
             entry["note"] = f"size {image.size[0]}x{image.size[1]} != mask {mask.size[0]}x{mask.size[1]}"
             attempts.append(entry)
             continue
-        entry["footprint_iou"] = round(footprint_iou(image, mask), 4)
+        entry["footprint_iou"] = round(footprint_iou(image, mask, enclosed_is_art=True), 4)
         attempts.append(entry)
 
     scored = [item["footprint_iou"] for item in attempts if item.get("footprint_iou") is not None]

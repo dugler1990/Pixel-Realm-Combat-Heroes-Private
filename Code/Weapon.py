@@ -1,6 +1,7 @@
 import pygame
 from Settings import weapon_data
 from attack_sprite import AttackSprite
+from damage_data import attack_of
 import hit_core
 
 # path -> (image, mask). Loaded once; every swing of that weapon in that direction shares it.
@@ -27,6 +28,7 @@ class Weapon(AttackSprite, pygame.sprite.Sprite):
             attack_type="weapon",
             tags={"weapon", "player_attack"},
             rehit_ms=weapon_data.get(player.weapon, {}).get("rehit_ms"),
+            attack_def=attack_of(weapon_data.get(player.weapon)),
         )
         direction = player.status.split("_")[0]
         direction = direction.capitalize()

@@ -26,6 +26,8 @@ from Trap import Trap
 from PolarBear import PolarBear
 from Settings import monster_data
 import SpecialAttacks
+import temperature
+from damage_data import attack_of
 from enemy_drop_defaults import get_default_item_drop_for_monster
 
 CHARACTER_CLASSES = {
@@ -91,6 +93,7 @@ class Spawner:
                 exp_value=trap_config.get('exp_value', 0)
             )
             trap.owner = trap_config.get('owner')
+            trap.resolver = self.level.interaction_resolver
             trap.source_team = self._resolve_source_team(
                 owner=trap.owner,
                 explicit_team=trap_config.get('source_team'),
@@ -98,8 +101,8 @@ class Spawner:
             )
             trap.source_kind = trap_config.get('source_kind', 'special')
             trap.attack_type = trap_config.get('attack_type', trap_config.get('effect_type', 'special'))
-            trap.amount = trap_config.get('amount')
             trap.tags = set(trap_config.get('tags', {'special'}))
+            trap.attack_def = attack_of(trap_config)
             #print(trap_config)
         else:
             # Default to the general Trap class if no specific class is required
@@ -118,6 +121,7 @@ class Spawner:
                 exp_value=trap_config.get('exp_value', 50)
             )
             trap.owner = trap_config.get('owner')
+            trap.resolver = self.level.interaction_resolver
             trap.source_team = self._resolve_source_team(
                 owner=trap.owner,
                 explicit_team=trap_config.get('source_team'),
@@ -125,8 +129,8 @@ class Spawner:
             )
             trap.source_kind = trap_config.get('source_kind', 'trap')
             trap.attack_type = trap_config.get('attack_type', trap_config.get('effect_type', 'trap'))
-            trap.amount = trap_config.get('amount')
             trap.tags = set(trap_config.get('tags', {'trap'}))
+            trap.attack_def = attack_of(trap_config)
     
         # Adding the trap to sprite groups is handled in the Trap's __init__, so we just return the trap
         return trap
@@ -540,8 +544,6 @@ class Spawner:
             "level": level,
             "default_target": level.player,
         }
-        if 'damage_player' in combat_config.keys():# keys is not the best, its got True False atm for no reason , no biggy TODO:
-            context['damage_player'] = level.damage_player
         if 'fire_projectile' in combat_config.keys():
             context['fire_projectile'] = level.fire_projectile
         if 'redirect_projectile' in combat_config.keys():
@@ -680,6 +682,8 @@ class Spawner:
         )
         enemy._spawn_source_object_id = config.get('_spawn_source_object_id')
         enemy._spawn_type = str(config.get('type', ''))
+        if enemy.detail == "full":
+            temperature.join(enemy, self.level, pygame.time.get_ticks())
         self.enemies.append(enemy)
         _spawner_log.debug(
             "Spawned enemy type=%s tile_pos=(%.2f, %.2f) pixel_pos=(%.1f, %.1f) persistent=%s source_object_id=%r team_id=%r",

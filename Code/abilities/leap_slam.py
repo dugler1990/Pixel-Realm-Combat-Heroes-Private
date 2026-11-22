@@ -10,8 +10,10 @@ from abilities.base import PlayerAbility
 from abilities.dash import entity_speed
 from abilities.protocol import PlayerAbilityContext
 import hit_core
+from damage_data import attack_of
 from Interaction import InteractionContext
 from Settings import VIEW_ELEVATION_DEG
+from stamina import pay
 
 
 class ChargedLeapSlamAbility(PlayerAbility):
@@ -160,9 +162,6 @@ class ChargedLeapSlamAbility(PlayerAbility):
             return False
         if getattr(entity, "_dash_runtime", None) is not None:
             return False
-        cost = int(self.config.get("cost", 0))
-        if getattr(entity, "energy", 0) < cost:
-            return False
         entity._charge_runtime = {
             "start_time": pygame.time.get_ticks(),
             "direction": direction,
@@ -234,11 +233,8 @@ class ChargedLeapSlamAbility(PlayerAbility):
         return max(min_ratio, raw)
 
     def _launch(self, entity, context, direction, charge_ratio) -> bool:
-        cost = int(self.config.get("cost", 0))
-        energy = getattr(entity, "energy", 0)
-        if energy < cost:
-            return False
-        entity.energy = energy - cost
+        # Stamina: an empty bar still leaps, the unpaid part is health.
+        pay(entity, self.config.get("cost", 0), pygame.time.get_ticks())
 
         distance = self._leap_distance(direction, charge_ratio)
         dx, dy = self._leap_delta(direction, distance)
@@ -306,9 +302,9 @@ class ChargedLeapSlamAbility(PlayerAbility):
         min_radius = float(self.config.get("min_impact_radius", 40))
         max_radius = float(self.config.get("max_impact_radius", 120))
         radius = min_radius + (max_radius - min_radius) * charge_ratio
-        base_damage = float(self.config.get("base_damage", 0))
         base_knockback = float(self.config.get("base_knockback", 0))
         attack_type = self.config.get("damage_attack_type", "weapon")
+        attack_def = attack_of(self.config)
         follow_through = float(self.config.get("velocity_follow_through", 0.5))
         entity.impulse_follow_through = follow_through
 
@@ -319,7 +315,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
         blast = hit_core.ground_disc(ground, radius, VIEW_ELEVATION_DEG)
         nearby = hit_core.find_hits(blast, attackable, exclude=(entity,), body=hit_core.foot_shape)
 
-        resolver = getattr(level, "interaction_resolver", None)
+        resolver = level.interaction_resolver
 
         presentation = self.config.get("presentation") or {}
         particle_template = presentation.get("particle_template")
@@ -345,7 +341,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
             # Falloff by ground distance to the footprint's edge: the circle the hit test used.
             reach = hit_core.ground_reach(ground, foot, VIEW_ELEVATION_DEG)
             falloff = max(0.0, 1.0 - min(reach, radius) / radius) if radius > 0 else 0.0
-            damage_amount = base_damage * charge_ratio * falloff
+            share = charge_ratio * falloff
             knockback_mag = base_knockback * charge_ratio * falloff
             if dist == 0:
                 nx, ny = 1.0, 0.0
@@ -353,7 +349,7 @@ class ChargedLeapSlamAbility(PlayerAbility):
                 nx = (tx - gx) / dist
                 ny = (ty - gy) / dist
 
-            if damage_amount > 0:
+            if share > 0:
                 dmg_ctx = InteractionContext(
                     kind="damage",
                     source_kind="leap_slam",
@@ -361,18 +357,11 @@ class ChargedLeapSlamAbility(PlayerAbility):
                     owner=entity,
                     source_team=getattr(entity, "team_id", None),
                     target=target,
-                    amount=damage_amount,
+                    scale=share,
                     attack_type=attack_type,
+                    attack_def=attack_def,
                 )
-                if resolver is not None:
-                    if resolver.can_potentially_affect(
-                        getattr(entity, "team_id", None),
-                        getattr(target, "team_id", None),
-                        "damage",
-                    ):
-                        resolver.apply(dmg_ctx)
-                elif hasattr(target, "can_receive_interaction") and target.can_receive_interaction(dmg_ctx):
-                    target.receive_interaction(dmg_ctx)
+                resolver.apply(dmg_ctx)
 
             if knockback_mag > 0:
                 imp_ctx = InteractionContext(
@@ -384,11 +373,9 @@ class ChargedLeapSlamAbility(PlayerAbility):
                     target=target,
                     impulse_x=nx * knockback_mag,
                     impulse_y=ny * knockback_mag,
+                    attack_def=attack_def,
                 )
-                if resolver is not None:
-                    resolver.apply(imp_ctx)
-                elif hasattr(target, "can_receive_interaction") and target.can_receive_interaction(imp_ctx):
-                    target.receive_interaction(imp_ctx)
+                resolver.apply(imp_ctx)
 
     def _end(self, entity, runtime) -> None:
         entity._leap_runtime = None

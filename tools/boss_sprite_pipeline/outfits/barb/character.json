@@ -1,0 +1,54 @@
+{
+ "_about": "What every barb outfit shares (outfit_fields.py: what each field is). Paths relative to the data root (OUTFIT_DATA_ROOT, the Boss folder). Made: one gpt-image-2.5 'flare' image -> TRELLIS -> UniRig -> rig_reweight heat 0.5 -> anun_roles -> fix_neutral_bone (rig_game) -> retarget_bvh --source anunaki -> player_clips (PROCESS_rigfix.md, explode2/PROCESS_explode2.md).",
+ "rig_fit": "generated/bosses/barb/rigfix/barb_final.glb",
+ "rig_game": "generated/bosses/barb/rigfix/barb_final_nb.glb",
+ "roles": "generated/bosses/barb/gear_test/barb_roles.json",
+ "clips_blend": "generated/bosses/barb/anim_test/retarget_player/player.blend",
+ "greedy_dirs": "generated/bosses/barb/explode2/fullplate/greedy_dirs_f75.json",
+ "views": 32,
+ "clips_from": "barb",
+ "roster": {
+  "display_name": "Barbarian",
+  "painting": "barbarian.png",
+  "player_info_dir": "../Graphics/barb/",
+  "roster_stats": [
+   "strength",
+   "vitality"
+  ],
+  "evasion_loadout": [
+   "slide",
+   "leap_slam"
+  ],
+  "base_stats": {
+   "health": 2000,
+   "energy": 20,
+   "attack": 10,
+   "magic": 7,
+   "speed": 5,
+   "strength": 20,
+   "vitality": 20,
+   "agility": 4,
+   "charisma": 3
+  }
+ },
+ "clips": {
+  "idle": "settle_01",
+  "move": "jokesillyrun",
+  "attack": "overheadchop",
+  "attack_frames": [
+   [
+    45,
+    60
+   ],
+   [
+    108,
+    138
+   ]
+  ]
+ },
+ "retarget": {
+  "bind_match": true,
+  "arm_elev_cap": 90.0,
+  "digitigrade": false
+ }
+}

@@ -5,8 +5,7 @@ import pygame
 
 from Support import import_folder, normalize_animation_frames
 from combat_unit import CombatUnit
-from hashRect import HashableRect
-from Interaction import InteractionContext
+from Entity import Entity
 
 from ..assets import load_sprite, normalize_faction_id
 from ..behavior_drivers import WALK_STATUSES, pick_driver, DriverContext
@@ -15,6 +14,8 @@ from ..tribe_monsters import monster_name_for_faction
 
 class RtsTribeMember(CombatUnit):
     """RTS worker/chief using CombatUnit locomotion and pluggable behavior drivers."""
+
+    takes_impulse = False
 
     def __init__(
         self,
@@ -41,7 +42,7 @@ class RtsTribeMember(CombatUnit):
         if layout_callback_update_quad_tree is None and isinstance(combat_context, dict):
             layout_callback_update_quad_tree = combat_context.get("update_quad_tree")
         if layout_callback_update_quad_tree is None:
-            layout_callback_update_quad_tree = lambda **_kwargs: None
+            layout_callback_update_quad_tree = lambda *_args, **_kwargs: None
 
         placeholder = load_sprite(sprite_key)
         topleft = pos
@@ -135,50 +136,13 @@ class RtsTribeMember(CombatUnit):
         driver.steer(self, dt, ctx)
         if self._should_walk():
             self.move(self.speed, QuadTree, entity_quad_tree)
-            self.hit_reaction()
         self.animate()
         self.cooldowns()
-        self.check_death()
 
-    def can_receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            return True
-        if ctx.kind != "damage":
-            return False
-        if ctx.source_team == self.team_id:
-            return False
-        return self.health > 0
-
-    def receive_interaction(self, ctx: InteractionContext):
-        if ctx.kind == "effect_state":
-            super().receive_interaction(ctx)
-            return
-        if ctx.kind != "damage":
-            return
-        amount = ctx.amount
-        if amount is None:
-            source = ctx.source
-            if source is not None and hasattr(source, "get_full_weapon_damage"):
-                if ctx.attack_type == "weapon":
-                    amount = source.get_full_weapon_damage()
-                elif hasattr(source, "get_full_magic_damage"):
-                    amount = source.get_full_magic_damage()
-        if amount is None:
-            return
-        if self.vulnerable:
-            self.health -= int(amount)
-            self.check_death()
-
-    def check_death(self):
-        if self.health > 0:
-            return
-        if getattr(self, "_quad_tree_callback_provided", False):
-            self.layout_callback_update_quad_tree(
-                obstacle_sprite=HashableRect(self.rect, self.id),
-                remove_existing=True,
-                alive=False,
-            )
+    def on_death(self):
+        """Leaves the world like any body (Entity's, not CombatUnit's: no XP, particles or death
+        sound), and tells the world sim."""
+        Entity.on_death(self)
         sim = getattr(self, "world_sim", None)
         if sim is not None:
             sim.on_worker_death(self)
-        self.kill()
