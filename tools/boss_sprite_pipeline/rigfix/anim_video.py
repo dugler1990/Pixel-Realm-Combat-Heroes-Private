@@ -32,8 +32,22 @@ for s in mesh.material_slots:                       # the metallic map renders h
         nt.links.remove(l)
     b.inputs["Metallic"].default_value = 0
 
-sc.render.engine = "BLENDER_EEVEE_NEXT"
-sc.eevee.taa_render_samples = 8
+# ANIM_FAST=1: previews without the corrective smooth (25 iterations over the whole body every frame: most of the
+# time per frame on a 700k-vertex body), only for judging motion.
+if os.environ.get("ANIM_FAST"):
+    for o in bpy.data.objects:
+        for m in getattr(o, "modifiers", []):
+            if m.type == "CORRECTIVE_SMOOTH":
+                m.show_render = m.show_viewport = False
+# ANIM_ENGINE=BLENDER_WORKBENCH: far faster without a GPU context (a pod's headless bpy renders EEVEE on the CPU,
+# ~2.5 s a frame); flat studio light, texture colour: enough to judge motion.
+sc.render.engine = os.environ.get("ANIM_ENGINE", "BLENDER_EEVEE_NEXT")
+if sc.render.engine == "BLENDER_WORKBENCH":
+    sc.display.shading.light = "STUDIO"
+    sc.display.shading.color_type = "TEXTURE"
+    sc.display.shading.show_specular_highlight = False
+else:
+    sc.eevee.taa_render_samples = 8
 sc.render.film_transparent = False
 sc.render.resolution_x = sc.render.resolution_y = PX
 sc.view_settings.view_transform = "Standard"

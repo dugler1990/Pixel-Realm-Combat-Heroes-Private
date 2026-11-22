@@ -1,0 +1,282 @@
+[
+ {
+  "name": "ma_backfist",
+  "prompt": "A big strong man in a fighting stance spins and throws a spinning backfist, then returns to his guard.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "ma_side_kick",
+  "prompt": "A big strong man in a fighting stance throws a powerful side kick to the front, then returns to his guard.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "ma_axe_kick",
+  "prompt": "A big strong man raises his right leg high and brings his heel straight down in an axe kick, then returns to his guard.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "ma_palm_strike",
+  "prompt": "A big strong man steps forward and drives an open palm strike forward with his right hand, then returns to his guard.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "ma_shoulder_throw",
+  "prompt": "A big strong man grabs an enemy in front of him, turns and throws him over his shoulder, then stands ready.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "ma_headbutt",
+  "prompt": "A big strong man grabs an enemy by the shoulders and slams a headbutt forward, then steps back to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "ma_combo",
+  "prompt": "A big strong man throws a jab, a cross, a hook, then a spinning heel kick, and returns to his guard.",
+  "duration": "3.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "jump_up",
+  "prompt": "A big strong man crouches and jumps straight up as high as he can, then lands and stands ready.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "jump_long",
+  "prompt": "A big strong man runs two steps and makes a long jump forward, landing on both feet, then stands ready.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "jump_attack",
+  "prompt": "A big strong man jumps high and comes down swinging both fists into the ground in front of him.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "roll_back",
+  "prompt": "A big strong man rolls backward on the ground and comes back up into a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "roll_side",
+  "prompt": "A big strong man dives and rolls to his left side and comes back up into a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "evade_duck",
+  "prompt": "A big strong man ducks low under a swing and comes back up into a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "evade_lean",
+  "prompt": "A big strong man leans back quickly to dodge a blow at his head, then returns to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "evade_dive",
+  "prompt": "A big strong man dives sideways to the ground to avoid an attack, then gets up quickly.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "climb_vault",
+  "prompt": "A big strong man runs forward and vaults over a low obstacle with one hand, then keeps running.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "w_axe_sweep",
+  "prompt": "A big strong man holding a heavy axe in both hands swings it in a wide low sweep at knee height, then returns to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "w_hammer_spin",
+  "prompt": "A big strong man holding a war hammer spins around once with the hammer out and strikes, then returns to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "w_flail",
+  "prompt": "A big strong man swings a flail in a circle above his head and whips it down in front of him, then returns to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "w_spear_throw",
+  "prompt": "A big strong man pulls a spear back over his right shoulder and throws it forward with force, then stands ready.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "w_twin_daggers",
+  "prompt": "A big strong man holding a dagger in each hand stabs forward with both in quick alternation, then returns to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "w_sword_uppercut",
+  "prompt": "A big strong man holding a sword low in his right hand slashes it upward in a rising cut, then returns to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "w_sword_spin",
+  "prompt": "A big strong man holding a sword spins all the way around with a horizontal slash, then returns to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "w_shield_charge",
+  "prompt": "A big strong man with a shield on his left arm charges forward three steps shield first, then stops in a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_idle",
+  "prompt": "A thin man in long robes stands still with his hands loosely clasped in front of him, breathing calmly.",
+  "duration": "4.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_walk",
+  "prompt": "A thin man in long robes walks forward at a calm steady pace.",
+  "duration": "3.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_run",
+  "prompt": "A thin man in long robes runs forward, his arms close to his body.",
+  "duration": "2.5",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_cast_throw",
+  "prompt": "A thin man in long robes draws his right hand back and throws a ball of magic forward from his palm, then returns to standing.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_cast_beam",
+  "prompt": "A thin man in long robes pushes both hands forward and holds them there, channeling a beam of magic, then lowers them.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_cast_summon",
+  "prompt": "A thin man in long robes raises both arms slowly above his head, then sweeps them down toward the ground to summon something.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_cast_shield",
+  "prompt": "A thin man in long robes crosses his arms in front of his chest and spreads them outward to raise a magic shield.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_cast_point",
+  "prompt": "A thin man in long robes points his right index finger forward sharply to cast a quick spell, then lowers his hand.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_gesture",
+  "prompt": "A thin man in long robes weaves his hands in front of his chest in slow circular gestures, gathering magic.",
+  "duration": "3.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_staff_slam",
+  "prompt": "A thin man in long robes holding a staff in both hands raises it and slams its end into the ground, then stands.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_wand_flick",
+  "prompt": "A thin man in long robes flicks a wand in his right hand forward twice, then lowers it.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_hit",
+  "prompt": "A thin man in long robes is hit in the chest by a blast, staggers backward, then recovers.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_knockdown",
+  "prompt": "A thin man in long robes is blown off his feet, falls onto his back, then gets back up.",
+  "duration": "3.0",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "wz_death",
+  "prompt": "A thin man in long robes is fatally struck, clutches his chest, falls to his knees and collapses face down.",
+  "duration": "3.5",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "barb_death_back",
+  "prompt": "A big strong man is fatally wounded, staggers back and falls flat on his back and lies still.",
+  "duration": "3.5",
+  "samples": 3,
+  "seed": 34567
+ },
+ {
+  "name": "barb_hit_heavy",
+  "prompt": "A big strong man takes a heavy blow to the side, stumbles sideways, then recovers to a ready stance.",
+  "duration": "2.0",
+  "samples": 3,
+  "seed": 34567
+ }
+]

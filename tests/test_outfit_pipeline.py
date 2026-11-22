@@ -30,6 +30,9 @@ def test_outfit_files_have_what_their_steps_read(path):
     ctx = of.Ctx(path.parent.name, path.stem)
     o = ctx.o
     assert outfit_fields.problems(o) == []
+    if o["kind"] not in outfit_fields.ALL:          # weapon / character: the field table says what each step needs
+        assert [f.name for f in outfit_fields.needed(o)] == []
+        return
     need = {"character", "kind", "roles", "rig_fit", "clips_blend", "pack"}
     need |= {"concept", "front", "back", "paint_look"} if o["kind"] in ("body", "armour") else {"source_mesh"}
     need |= {"greedy_dirs", "sam", "rig_game"} if o["kind"] in ("armour", "cut") else {"clips_from", "roster"}
@@ -57,7 +60,7 @@ def test_a_missing_field_is_named_never_filled_in():
          "rig_game": "g.glb"}
     assert outfit_fields.problems(o) == []                              # the rig is asked for by its steps
     bad = outfit_fields.missing(o, "skeleton")
-    assert len(bad) == 1 and bad[0].startswith("no rig_fit (character file, read by skeleton, worn)")
+    assert len(bad) == 1 and bad[0].startswith("no rig_fit (character file, read by skeleton, worn, grip)")
     assert outfit_fields.missing(o, "front") == [] and [f.name for f in outfit_fields.needed(o)] == ["rig_fit"]
     assert outfit_fields.problems({**o, "colour": 1}) == ["unknown field 'colour'"]
     assert outfit_fields.problems({**o, "views": "32"}) == ["views must be a number"]
@@ -77,6 +80,7 @@ def test_barb_character_rows_for_retarget_and_clips():
 
 def test_retry_choices_match_the_terminal_gate():
     from tools.boss_sprite_pipeline import view_gate as vg
+    vg.load_prompts(vg.VIEW_PROMPTS / "barb_plate_armour.json")
 
     assert vg.retry_from("r", None, "front", False, vg.BIGGER, "front") == ("", [])
     assert vg.retry_from("rb", None, "front", False, vg.BIGGER, "front") == (vg.BIGGER, [])
@@ -203,6 +207,29 @@ def test_a_step_stops_naming_the_fields_it_reads(tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit) as stop:
         of.main(["barb", "naked", "--only", "skeleton"])
     assert stop.value.code == 2 and "no rig_fit (character file, read by skeleton" in capsys.readouterr().out
+
+
+def test_view_prompts_and_checks_come_from_files_not_the_code(tmp_path):
+    import subprocess
+    import sys
+    from tools.boss_sprite_pipeline import view_gate as vg
+    src = Path(vg.__file__).read_text(encoding="utf-8")
+    for barb in ("beard", "plate armour", "large chest", "gambeson"):            # no barb text left in the code
+        assert barb not in src, barb
+    checks = json.loads((Path(vg.CHECKS) / "default.json").read_text(encoding="utf-8"))
+    vg.load_checks(Path(vg.CHECKS) / "default.json")
+    assert vg.FRONT_MAX_MISSING == checks["front_max_missing"] == 0.02 and vg.HEAD == 0.13
+    for o in ("fullplate", "naked"):                                             # the drawn barb outfits name it
+        assert json.loads((OUTFITS / "barb" / f"{o}.json").read_text(encoding="utf-8"))["view_prompts"]
+    outfit = tmp_path / "plain.json"
+    outfit.write_text(json.dumps({"kind": "body"}), encoding="utf-8")
+    img = tmp_path / "x.png"
+    from PIL import Image
+    Image.new("RGB", (64, 128), "white").save(img)
+    r = subprocess.run([sys.executable, "-m", "tools.boss_sprite_pipeline.view_gate", "back", "--front", str(img),
+                        "--out", str(tmp_path / "o"), "--outfit", str(outfit), "--dry-run"],
+                       cwd=of.REPO, capture_output=True, text=True)
+    assert r.returncode != 0 and "no back prompt" in r.stderr                    # named, never a barb default
 
 
 def test_pod_step_stops_without_a_pod(monkeypatch):

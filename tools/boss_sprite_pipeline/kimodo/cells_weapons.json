@@ -1,0 +1,9 @@
+[
+ {"name": "th_overhead", "prompt": "A person grips a heavy greatsword with both hands together on the hilt, raises it high over the head and chops it straight down in front, both hands staying together on the hilt the whole time.", "duration": "3.5", "samples": 3, "seed": 12345},
+ {"name": "th_side", "prompt": "A person grips a heavy greatsword with both hands together on the hilt and swings it horizontally from the right side across to the left, both hands staying together on the hilt the whole time.", "duration": "3.0", "samples": 3, "seed": 12345},
+ {"name": "th_idle", "prompt": "A person stands still holding a heavy greatsword upright in front of the body with both hands together on the hilt.", "duration": "4.0", "samples": 3, "seed": 12345},
+ {"name": "th_walk", "prompt": "A person walks forward holding a heavy greatsword in front of the body with both hands together on the hilt.", "duration": "3.0", "samples": 3, "seed": 12345},
+ {"name": "bow_shoot", "prompt": "A person holds a bow in the left hand with the left arm straight out in front, draws the string back to the cheek with the right hand, aims, and releases the arrow.", "duration": "4.0", "samples": 3, "seed": 12345},
+ {"name": "bow_idle", "prompt": "A person stands still holding a bow down at the left side in the left hand.", "duration": "4.0", "samples": 3, "seed": 12345},
+ {"name": "bow_walk", "prompt": "A person walks forward holding a bow in the left hand down at the side.", "duration": "3.0", "samples": 3, "seed": 12345}
+]

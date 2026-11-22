@@ -63,6 +63,8 @@ Files:
 |---|---|
 | character settings | `outfits/<character>/character.json`: rig, roles, clips, game entry (`outfit_fields.py`) |
 | outfit settings and prompts | `outfits/<character>/<outfit>.json`, merged over the character file (paths relative to the data root) |
+| view prompts | `view_prompts/<name>.json` (prompts, retry_bigger, retry_texts), named by the outfit's `view_prompts`; its own `front` / `back` / `side` / `quarter` / `retry_bigger` win. None for a view to draw: view_gate stops naming it. Barb: `barb_plate_armour.json` (the old code defaults) |
+| view pass rules | `view_checks/default.json` (bands, IoU / band / missing / side / joint limits, head and soles shares); an outfit's `view_checks` names another |
 | field table | `outfit_fields.py`: every setting, its file, the kinds that need it; a missing one stops with its name |
 | paint looks | `repaint/looks/*.json` (required; `"extends"` another; the barb's extend `barb_bare.json`) |
 | run state | `<data>/generated/bosses/<character>/outfits/<outfit>/run.json` |
@@ -92,6 +94,7 @@ Settings that matter:
 | TRELLIS reinstalled on every run (~2.5 min when cached) | install check `import trellis2` fails outside the TRELLIS.2 folder | fixed: installed = `setup.log` holds INSTALL_OK |
 | Leonardo: generation FAILED, `moderationClassification: ['NSFW']` | naked side view / pelvis_back close-up | sides: `side_config` gpt-image-2; paint: reworded pelvis shots (to check) |
 | OpenAI 429 `credit_balance_exhausted` | no credit on the key's organisation | add credit (billing of the organisation that owns the key) |
+| reweight killed at exit 143 after 15 min; reweighted.glb already written | once, while the disk stalled (a one-file search timed out too); cause not found | ran again: 45 s, exit 0 |
 
 ## Log
 
@@ -122,6 +125,23 @@ Settings that matter:
   `_checks/barb_unchanged.py <tree> <out.json>` on main vs the branch: every step's commands, the looks, the naked
   export entry + clips.json, the retarget row and clip choice identical; merged outfits only gain the character
   keys; `install` is a new step. `--use` with the naked front drawing: cut-out pixel-identical, scores identical.
+- 2026-11-14: view_gate's prompts and check values moved to `view_prompts/barb_plate_armour.json` and
+  `view_checks/default.json` (`feat/new-character`). `_checks/view_prompts_unchanged.py`, 16 barb dry-run cases
+  (fullplate, naked: front, front rb, front r, back, 2 sides, 2 3/4s): identical before / after, the 3 expected
+  errors included. `_checks/barb_unchanged.py`: same but the 2 drawn outfits gain `view_prompts`. 30 tests.
+- 2026-11-14: kind `character` (new character), concept to TRELLIS: `concept_gate.py` (description + the A-pose
+  stick figure `view_prompts/a_pose.png` + look images → candidates; pose_heights `--arms`: one person, arms 18-40
+  degrees, clear of the edges, white background), the accepted concept is the front, back / sides from
+  `view_prompts/character.json`. Barb front checked: PASS, arms 28.7 / 28.0. 36 tests (`test_new_character.py`
+  + the outfit ones). No paid concept call yet.
+- 2026-11-14: character kind rig steps: rig (pod.py unirig, not run yet), reweight / roles / game_rig run through
+  the driver on the barb's `gear_test/barb_base_rigged.glb` (rig backfilled) and `rigfix/barb_final.glb` (paint
+  backfilled): reweight 45 s = `barb_heat0.5.glb`, roles = `barb_roles.json`, game_rig = `barb_final_nb.glb`,
+  exact. 37 tests.
+- 2026-11-14: kind `weapon` (first attempt): concept / views / TRELLIS as a new character, `grip` step
+  (`explode2/weapon_grip.py`, ~30 s). Test sword in the barb's hand through the driver: handle end found (radius
+  0.098 vs 0.153 at the tip), 45 % of his height, tip forward of the grip (y -0.40 vs -0.03; his toes point -Y),
+  follows the raised arm. 39 tests. Export / install not built.
 
 ## Tried and dropped
 

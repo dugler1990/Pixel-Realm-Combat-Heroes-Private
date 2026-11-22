@@ -1,0 +1,14 @@
+{
+ "_about": "Swordsman base body from the user's sprite (look_ref.png): concept in the A-pose with his scimitar, views, TRELLIS.",
+ "character": "swordsman",
+ "kind": "character",
+ "pack": "swordsman_base",
+ "concept_prompt": "A lean desert swordsman warrior: a brown hooded robe and cloak, a cloth mask over his face below the eyes, layered brown and tan wrappings, a sash at the waist, wrapped forearms, simple boots. A curved scimitar held in his right hand, pointing down. Hand-painted fantasy game art style, the same colours and look as Image 2.",
+ "concept_refs": ["generated/bosses/swordsman/inputs/look_ref.png"],
+ "concept_count": 4,
+ "view_prompts": "tools/boss_sprite_pipeline/view_prompts/character.json",
+ "concept_config": "tools/painted_map_pipeline/openai.gpt-image-2.json",
+ "view_config": "tools/painted_map_pipeline/openai.gpt-image-2.json",
+ "side_config": "tools/painted_map_pipeline/openai.gpt-image-2.json",
+ "trellis_models": ["front_back_sides", "eight_views"]
+}

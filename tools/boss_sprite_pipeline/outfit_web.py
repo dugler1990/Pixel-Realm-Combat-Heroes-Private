@@ -178,6 +178,11 @@ def run_detail(character: str, outfit: str) -> dict:
             sheet = Path(t["draw"]).with_name(Path(t["draw"]).stem + "_sheet.png")
             t["sheet"] = str(sheet) if sheet.is_file() else None
         out[g.stem[5:]] = {"status": d.get("status"), "accepted": d.get("accepted"), "attempts": d.get("attempts", [])}
+    cg = ctx.work / "concept" / "gate_concept.json"            # a new character's concept candidates
+    if cg.is_file():
+        d = json.loads(cg.read_text(encoding="utf-8"))
+        out["concept"] = {"status": d.get("status"), "accepted": d.get("accepted"), "attempts": d.get("attempts", []),
+                          "sheet": d.get("sheet")}
     paint = sorted((ctx.work / "paint" / "result").glob("after_*.png"), key=lambda p: int(p.stem.split("_")[1]))
     trellis = {m: str(ctx.work / "trellis" / f"{m}_from_front.glb")
                for m in of.MODEL_VIEWS if (ctx.work / "trellis" / f"{m}_from_front.glb").is_file()}
@@ -267,7 +272,8 @@ def build_args(ctx: of.Ctx, body: dict, pod: Pod) -> tuple[str | None, list[str]
 
 EXT = {"image": (".png", ".jpg", ".jpeg", ".webp"), "glb": (".glb",), "blend": (".blend",), "json": (".json",)}
 REPO_JSON = ("tools/boss_sprite_pipeline/repaint/looks", "tools/boss_sprite_pipeline/explode2",
-             "tools/painted_map_pipeline")          # repo folders a json field may point into (looks, configs)
+             "tools/painted_map_pipeline", "tools/boss_sprite_pipeline/view_prompts",
+             "tools/boss_sprite_pipeline/view_checks")          # repo folders a json field may point into (looks, configs)
 FILES_MAX = 400
 
 
@@ -278,9 +284,15 @@ KIND_UI = {
                              "it in 3D on his rig."),
     "armour": ("Armour set", "Draw armour over a character, build it in 3D, cut it into wearable pieces."),
     "cut": ("Pieces from a mesh", "Cut wearable pieces out of a painted mesh you already have; nothing is drawn."),
+    "character": ("New character", "An original character: concept from a description (or your image), views, 3D "
+                                   "model, rig, clips, its own sprites, into the game. Its rig is then used by its "
+                                   "armour sets."),
+    "weapon": ("Weapon", "A weapon from a description (or your image): views, 3D model, then put in this "
+                         "character's hand (grip), sized to him. Export to the game comes later."),
 }
-PHASES = [("views", "Views"), ("model", "3D model"), ("pieces", "Pieces"), ("game", "Game")]
+PHASES = [("views", "Views"), ("model", "3D model"), ("pieces", "Pieces"), ("animation", "Animation"), ("game", "Game")]
 STEP_UI = {  # step: (label, phase, what it does)
+    "concept": ("Concept", "views", "Candidates from the description, in the A-pose, checked; pick one (or your image)."),
     "front": ("Front", "views", "The front view: drawn from the concept, or your image."),
     "back": ("Back", "views", "The back view: drawn from the front, or your image."),
     "sides": ("Sides & 3/4", "views", "Side and 3/4 views the TRELLIS models need: drawn, mirrored, or yours."),
@@ -296,6 +308,14 @@ STEP_UI = {  # step: (label, phase, what it does)
     "slots": ("Sort into slots", "pieces", "Parts grouped into the game's slots (helmet, chest, ...), skinned to "
                                            "the game rig."),
     "sheet": ("Pieces sheet", "pieces", "One picture of every piece."),
+    "rig": ("Rig", "model", "UniRig gives the 3D model a skeleton and skin weights (pod)."),
+    "grip": ("Grip", "model", "The weapon in his hand: handle found from its shape, sized to him; adjust "
+                              "weapon_length / grip_offset / grip_turn in Outfit settings and run again."),
+    "reweight": ("Reweight", "model", "Smoother skin weights (bone heat)."),
+    "roles": ("Bone roles", "model", "Which bone is which: shoulder, elbow, knee ..."),
+    "game_rig": ("Game rig", "model", "The rig the game and the armour use (neutral bone fixed)."),
+    "clips": ("Clips", "animation", "The anunaki clips put on its rig; pick idle, move, attack."),
+    "sprites": ("Sprite body", "game", "Its own sprite folder and portrait, rendered from the mesh."),
     "export": ("Export", "game", "The game's mesh pack."),
     "install": ("Install", "game", "Into the game: piece stats and items, or the hero entry."),
 }
