@@ -42,6 +42,7 @@ PROPERTIES = (
     Property("insulation", "Insulation", "element", "percent", "higher", "detail", "Insulation {v}"),
     Property("sun_absorb", "Sun", "element", "percent", "lower", "detail", "Soaks up {v} of the sun"),
     Property("sealed", "Sealed", "physical", "yes-no", "higher", "line", "Sealed: stops gas"),
+    Property("catches", "Catches arrows", "physical", "yes-no", "lower", "line", "Arrows stick in it"),
     Property("durability", "Durability", "state", "int", "higher", "line", "Durability {now} / {v}"),
 )
 BY_ID = {p.id: p for p in PROPERTIES}
