@@ -7,17 +7,22 @@ Goal: every technique that made a character usable is a named step with declared
 anim page, recorded per rig version, and checked by numbers. No character code, no bone numbers in code,
 no hidden defaults.
 
-## State today (feat/anim-suite)
+## State today (feat/anim-suite, end of 2026-11-21)
 
-| Part | Where | State |
+| Order | Part | State |
 |---|---|---|
-| role list, labellers, `match` | `rigmap/label.py`, `match.py` | built, tested, used by the page's match readout |
-| `fit`, `edits` | `rigmap/fit.py` | built, tested, not used by any bake |
-| bake settings | `rigmap/recipe.py` | stopgap human / creature recipes, all 9 knobs sent as env |
-| motion transfer | `retarget_bvh.py` | 900-line script; takes only the bone table from `rigmap.legacy` |
-| pose check | `retarget_bvh.py` | every driven bone vs the stick, worst per bone in `run.json` |
-| rig fixes | `rigfix/*.py`, `face_parts.py`, `explode2/fix_neutral_bone.py` | one-off scripts, demon paths and bone numbers typed in |
-| lost | scratch | `add_wing_bones.py`, `sam_face.py`, head render, `jaw_check.py`; swordsman bind only in `%TEMP%\bind_barb_rig.py` |
+| 1 | rig/version.py, settings.py, v1 imports | done: barb, demon, icewiz, anun0-3 |
+| 2 | character files + migration | done; characters.json, fits/, DEFAULT_CHARACTERS, recipe.py, legacy.py gone |
+| 3 | bind / transfer / pose_check pure, driver | done; locks equal the old bake within 0.1 (chest segment rule changed) |
+| 4 | proportions at the reference pose | done (shoulder width from upper-arm heads) |
+| 5 | runner, roles_walk, reweight, rehome_orphans, manual, Rig section, stale flags | done |
+| 6 | add_bone, move_pivot | move_pivot done (demon oracle 1 mm); add_bone joint done; geometry + sam not built |
+| 7 | transfer_weights, blur_weights, reparent, copy_skeleton | not started |
+| 8 | experiments | 1 measured (bind_axis joint: hips 0.0 all bound; setting, not default); 2, 3 not run |
+| - | PROCESS_rigging.md | not written; method + tried-and-dropped so far in PROCESS_anim_web.md |
+
+Data lives under generated/bosses/characters/<id>/ (generated/bosses/** is git-ignored in every
+worktree; a new top-level generated/characters/ showed untracked in the Boss worktree).
 
 Measured 2026-11-21, first 40 of the 312 Kimodo clips: `Jaw` rotates at most 1.1° (median 0.4), eyes
 3.7° (0.5), `Head` 46° (20). Kimodo does not move the jaw or eyes. An added jaw or eye bone is posed

@@ -1,0 +1,52 @@
+{
+ "clip": "barb_hit_heavy_01",
+ "settings_old_env": {
+  "bind_match": true,
+  "mode": "rot",
+  "ik_body": 0.35,
+  "bind_ref": "frame1",
+  "jaw_closed": 0.0,
+  "arm_elev_cap": 90.0,
+  "root_loc": true,
+  "clav_damp": 1.0,
+  "bind_skip": [
+   "bone_4"
+  ]
+ },
+ "old_code": "",
+ "old_bones": {
+  "Hips>bone_0": [
+   149.3,
+   1
+  ],
+  "Neck1>bone_4": [
+   29.4,
+   11
+  ],
+  "Chest>bone_3": [
+   25.8,
+   41
+  ]
+ },
+ "by_role": {
+  "root": 149.3,
+  "neck": 29.4,
+  "chest": 9.7,
+  "clavicle.R": 0.0,
+  "ankle.R": 0.0,
+  "forearm.L": 0.0,
+  "ankle.L": 0.0,
+  "clavicle.L": 0.0,
+  "forearm.R": 0.0,
+  "shin.R": 0.0,
+  "upper_arm.L": 0.0,
+  "spine": 0.0,
+  "upper_arm.R": 0.0,
+  "spine2": 0.0,
+  "thigh.R": 0.0,
+  "shin.L": 0.0,
+  "thigh.L": 0.0
+ },
+ "bones_driven": 22,
+ "note": "by_role is the lock (new segment rule: chest->neck/head). old_bones: pre-split code, same bake; differs only where the old check picked another child segment."
+}

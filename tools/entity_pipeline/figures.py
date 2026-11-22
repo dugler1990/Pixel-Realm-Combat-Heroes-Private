@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -343,17 +343,19 @@ def matte_parchment(image: Image.Image, colour: tuple[int, int, int] | np.ndarra
     return Image.fromarray(rgba, "RGBA")
 
 
-def cut_sheet(image: Image.Image, out_dir: Path) -> list[Figure]:
+def cut_sheet(image: Image.Image, out_dir: Path, *, prefix: str) -> list[Figure]:
     """Write layout.json, crop with the existing cutter, and save clean cells.
 
     ``out_dir`` receives layout.json, contact.png, and cells/<name>.png.
+    Every name starts with prefix (the session): a name is also the Graphics/Monsters folder and the
+    monster_data key, shared by every session.
     """
     out_dir = Path(out_dir)
     cells_dir = out_dir / "cells"
     cells_dir.mkdir(parents=True, exist_ok=True)
 
     if is_light_sheet(image):
-        figures = find_light_figures(image)
+        figures = [replace(fig, name=f"{prefix}_{fig.name}") for fig in find_light_figures(image)]
         if not figures:
             raise RuntimeError("no figures found on the light sheet")
         layout = {"named_boxes": [[fig.name, list(fig.box)] for fig in figures]}
@@ -392,7 +394,7 @@ def cut_sheet(image: Image.Image, out_dir: Path) -> list[Figure]:
         else:
             sprite = matte_parchment(crop, colour)
         sprite = trim_transparent(sprite)
-        name = f"warrior_{i:02d}"
+        name = f"{prefix}_warrior_{i:02d}"
         sprite.save(cells_dir / f"{name}.png")
         clean.append(sprite)
         figures.append(Figure(name=name, box=cell.box, caption=""))

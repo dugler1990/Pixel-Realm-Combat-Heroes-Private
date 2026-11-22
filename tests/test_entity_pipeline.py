@@ -337,7 +337,7 @@ def test_necron_cut_matches_the_hand_boxes_and_drops_the_parchment(tmp_path: Pat
     for name, delta in deltas:
         assert max(delta) <= BOX_TOLERANCE_PX, f"{name} off by {delta}"
 
-    cut_sheet(sheet, tmp_path)
+    cut_sheet(sheet, tmp_path, prefix="t")
     cells = list((tmp_path / "cells").glob("*.png"))
     assert len(cells) == 15
     assert (tmp_path / "contact.png").exists()
@@ -379,7 +379,7 @@ def test_stats_reply_maps_onto_entries():
     rows = [{"cell": i, "label": "x", "speed": 5, "damage": 5, "bulk": 5, "reach": "melee", "size": 1} for i in range(20)]
     rows[0].update(speed=10, reach="ranged")
     rows[1].update(speed=1, damage=10, bulk=10)
-    scores = parse_scores(json.dumps({"warriors": rows}), names)
+    scores = parse_scores(json.dumps({"warriors": rows}), names, prefix="s")
 
     entry = template_entry("tribey_spear")
     before = copy.deepcopy(entry)
@@ -399,7 +399,7 @@ def test_stats_reply_maps_onto_entries():
     assert entry == before
 
     with pytest.raises(StatsClientError):
-        parse_scores(json.dumps({"warriors": rows[:19]}), names)
+        parse_scores(json.dumps({"warriors": rows[:19]}), names, prefix="s")
 
 
 def test_folder_name_comes_back_in_the_score_and_renames_the_cell(tmp_path):
@@ -410,9 +410,9 @@ def test_folder_name_comes_back_in_the_score_and_renames_the_cell(tmp_path):
         {"cell": 0, "label": "Egyptian Spearman", "name": "Egyptian Spearman", "speed": 5, "damage": 6, "bulk": 4, "reach": "melee", "size": 1},
         {"cell": 1, "label": "Camel Archer", "name": "camel archer", "speed": 6, "damage": 4, "bulk": 3, "reach": "ranged", "size": 1.6},
     ]
-    scores = parse_scores(json.dumps({"warriors": rows}), names)
-    assert scores["warrior_00"]["name"] == "egyptian_spearman"
-    assert scores["warrior_01"]["name"] == "camel_archer"
+    scores = parse_scores(json.dumps({"warriors": rows}), names, prefix="s")
+    assert scores["warrior_00"]["name"] == "s_egyptian_spearman"
+    assert scores["warrior_01"]["name"] == "s_camel_archer"
 
     work = tmp_path / "session"
     cells_dir = work / "cells"
@@ -426,14 +426,14 @@ def test_folder_name_comes_back_in_the_score_and_renames_the_cell(tmp_path):
     (work / "layout.json").write_text(json.dumps(layout), encoding="utf-8")
     cells = [("warrior_00", (0, 0, 1, 1)), ("warrior_01", (2, 0, 3, 1))]
     new_cells, new_scores, renamed = adopt_names(work, cells, scores, monsters)
-    assert renamed == [("warrior_00", "egyptian_spearman"), ("warrior_01", "camel_archer")]
-    assert (cells_dir / "egyptian_spearman.png").read_bytes() == b"a"
-    assert (work / "anim" / "egyptian_spearman").is_dir()
-    assert (monsters / "camel_archer").is_dir()
-    assert new_scores["camel_archer"]["label"] == "Camel Archer"
-    assert new_cells[0][0] == "egyptian_spearman"
+    assert renamed == [("warrior_00", "s_egyptian_spearman"), ("warrior_01", "s_camel_archer")]
+    assert (cells_dir / "s_egyptian_spearman.png").read_bytes() == b"a"
+    assert (work / "anim" / "s_egyptian_spearman").is_dir()
+    assert (monsters / "s_camel_archer").is_dir()
+    assert new_scores["s_camel_archer"]["label"] == "Camel Archer"
+    assert new_cells[0][0] == "s_egyptian_spearman"
     saved = json.loads((work / "layout.json").read_text(encoding="utf-8"))
-    assert saved["named_boxes"][1][0] == "camel_archer"
+    assert saved["named_boxes"][1][0] == "s_camel_archer"
 
 
 def test_rescore_rewrites_an_existing_copy(tmp_path, monkeypatch):

@@ -117,7 +117,7 @@ def ask_scores(image, prompt, config, model):
     return content
 
 
-def parse_scores(text, names):
+def parse_scores(text, names, *, prefix):
     body = text.strip()
     if body.startswith("```"):                     # some endpoints wrap JSON in a fence
         body = body.split("\n", 1)[1] if "\n" in body else ""
@@ -153,7 +153,7 @@ def parse_scores(text, names):
         size = float(size)
         if not 0.5 <= size <= 2.5:
             raise StatsClientError(f"cell {cell}: size must be from 0.5 to 2.5, got {size!r}")
-        folder = _unique_folder(row.get("name") or row.get("label"), cell, scores)
+        folder = _unique_folder(row.get("name") or row.get("label"), cell, scores, prefix)
         scores[name] = {
             "label": str(row.get("label") or ""),
             "name": folder,
@@ -171,11 +171,12 @@ def _folder_token(raw):
     return text[:48].strip("_")
 
 
-def _unique_folder(raw, cell, scores):
+def _unique_folder(raw, cell, scores, prefix):
     token = _folder_token(raw)
     if not token:
         raise StatsClientError(f"cell {cell}: name must be a short folder name, got {raw!r}")
     used = {row.get("name") for row in scores.values()}
+    token = f"{prefix}_{token}"
     folder = token
     n = 2
     while folder in used:

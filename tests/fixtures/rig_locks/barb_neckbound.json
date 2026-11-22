@@ -1,0 +1,27 @@
+{
+ "clip": "barb_hit_heavy_01",
+ "map_bind": {
+  "root": false
+ },
+ "by_role": {
+  "shin.R": 22.0,
+  "shin.L": 21.8,
+  "thigh.L": 20.9,
+  "thigh.R": 20.7,
+  "upper_arm.L": 15.4,
+  "upper_arm.R": 11.7,
+  "root": 11.7,
+  "forearm.L": 10.6,
+  "forearm.R": 9.8,
+  "chest": 9.7,
+  "neck": 1.3,
+  "clavicle.R": 0.0,
+  "ankle.R": 0.0,
+  "ankle.L": 0.0,
+  "clavicle.L": 0.0,
+  "spine": 0.0,
+  "spine2": 0.0
+ },
+ "bones_driven": 22,
+ "note": "neck bound (not skipped). Proves bind flags reach the bake; the old code skipped the neck unconditionally."
+}
