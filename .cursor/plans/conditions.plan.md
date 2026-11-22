@@ -121,7 +121,7 @@ Regression: the targeted set in the master doc. Same 11 known failures. Perf: em
 
 ## Check in play
 
-Scene `haste` on the combat validation driver (no enemies). `setup` reads `stats["speed"]` and
+Scene `haste` on the test suite driver (no enemies). `setup` reads `stats["speed"]` and
 calls `clock.start(hero, "haste", now)`. The hero still walks from the keys. Overlay: the speed
 (`speed_of`) and the seconds left. `SECONDS` 10, `FAST_SECONDS` 9, so the end (8 s) happens while
 it is still running, then the hold shows the slow walk.
@@ -133,7 +133,7 @@ normal.
 gone and `speed_of` is the base. Headless passes on those numbers with the hero standing still.
 The window is for the eyes.
 
-`combat_validation.py --scenario haste --hold-seconds 6` from `Pixel-Realm-conditions\Code`.
+`test_suite.py --scenario haste --hold-seconds 6` from `Pixel-Realm-conditions\Code`.
 
 ## Commits
 

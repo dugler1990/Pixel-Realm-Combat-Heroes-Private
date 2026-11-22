@@ -45,8 +45,8 @@ well contained, committed, then merged when Douglas says.
 
 ### 3. Water combat
 - `feat/water-combat` (`..\Pixel-Realm-water-combat`), on `visual-hits` (carries 30 damage commits);
-  its own work uncommitted: 5 hole shapes in the combat_validation arena (keys 1-5),
-  `PROCESS_combat_validation.md`, a time-of-day pin in Weather.
+  its own work uncommitted: 5 hole shapes in the test_suite arena (keys 1-5),
+  `PROCESS_test_suite.md`, a time-of-day pin in Weather.
 - `feat/water-hole`: the older copy, superseded.
 - Swimming and motion parked.
 

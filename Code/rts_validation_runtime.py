@@ -47,7 +47,7 @@ class ScenarioResult:
 
 @dataclass
 class RtsValidationRuntime:
-    TAG = "RTS_VAL"         # log prefix (combat_validation_runtime reuses this class)
+    TAG = "RTS_VAL"         # log prefix (test_suite_runtime reuses this class)
 
     enabled: bool = False
     layout_dir: str = "../levels/tmx"

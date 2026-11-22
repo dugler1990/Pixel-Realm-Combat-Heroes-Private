@@ -171,7 +171,7 @@ resolve, microseconds, beside the hit. Not the 200-enemy scene (nobody in it wea
 
 ## Check in play
 
-Extend `combat_validation.py` with `plate_stops` (pass/fail, not a probe): the plated barb, arrows
+Extend `test_suite.py` with `plate_stops` (pass/fail, not a probe): the plated barb, arrows
 from `arrows_where_drawn`'s ring. A hit `kind_of` calls plate deals 0 health and does not clear
 `vulnerable`. A hit it calls skin deals damage. Then watch it: grey dots, no health loss; red dots
 on the bare head, health drops. Demon claw on the plated barb still takes a large bite (about 37,

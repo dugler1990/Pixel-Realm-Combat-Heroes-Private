@@ -191,7 +191,7 @@ Scene `elemental`. The hero is full detail. Three beats, 6 s (`SECONDS` 18, `FAS
    that line clears, then today's speed and colour.
 
 Headless checks the health drops, the shade, and that the slow is gone at the end.
-`combat_validation.py --scenario elemental --hold-seconds 6` from `Pixel-Realm-elemental\Code`.
+`test_suite.py --scenario elemental --hold-seconds 6` from `Pixel-Realm-elemental\Code`.
 
 A second headless check, no window: one storm bolt with the numbers above, a plate body and a wet
 hide 100 px away, and the charges match the table. A simple body beside them is offered a second

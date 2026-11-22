@@ -1,4 +1,4 @@
-"""Combat validation scenes, run in the benchmark arena with the mesh hero (combat_validation.py).
+"""Test suite scenes, run in the benchmark arena with the mesh hero (test_suite.py).
 
 Each scene sets itself up, runs, decides PASS / FAIL (checked by numbers) or PROBE (for Douglas to
 watch: the numbers are reported, not judged), then stays on screen for hold_seconds. The overlay says
@@ -17,7 +17,7 @@ import contact_debug
 import temperature
 import Player as player_module
 from abilities.leap_slam import ChargedLeapSlamAbility
-from combat_validation_runtime import COMBAT_VALIDATION_RUNTIME as RUNTIME
+from test_suite_runtime import TEST_SUITE_RUNTIME as RUNTIME
 from conditions import condition, speed_of
 from damage_data import attack
 from Entity import knockback_scale
@@ -212,7 +212,7 @@ class PlateShove(Scene):
         hero = level.player
         start = pygame.math.Vector2(hero.hitbox.center)
         level.interaction_resolver.apply(InteractionContext(
-            kind="impulse", source_kind="combat_validation", source_team="enemy_1", target=hero,
+            kind="impulse", source_kind="test_suite", source_team="enemy_1", target=hero,
             impulse_x=64.0, impulse_y=0.0, attack_def=attack("demon_claw")))
         moved = start.distance_to(hero.hitbox.center)
         hero.hitbox.center = (int(start.x), int(start.y))
@@ -617,7 +617,7 @@ def clear_scene_conditions(level, saved):
 
 # --- the driver ----------------------------------------------------------------------------------
 
-class CombatValidationDriver:
+class TestSuiteDriver:
     """Level4 calls tick(level, dt) every frame; True when every scene is done."""
 
     def __init__(self):
@@ -640,7 +640,7 @@ class CombatValidationDriver:
 
     def _overlay(self, phase, extra=()):
         index = self.total - len(self.queue)
-        lines = ["COMBAT VALIDATION", f"{index}/{self.total}  {self.scene.NAME}", self.scene.WATCH,
+        lines = ["TEST SUITE", f"{index}/{self.total}  {self.scene.NAME}", self.scene.WATCH,
                  f"t = {self.scene.t:4.1f} s"]
         lines += list(self.scene.lines) + list(extra)
         RUNTIME.set_overlay(lines, phase)

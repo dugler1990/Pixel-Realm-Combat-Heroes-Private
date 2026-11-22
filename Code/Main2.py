@@ -23,7 +23,7 @@ from SettingsMenu import SettingsMenu
 from DeathMenu import DeathMenu
 from benchmark_runtime import BENCHMARK_RUNTIME
 from rts_validation_runtime import RTS_VALIDATION_RUNTIME
-from combat_validation_runtime import COMBAT_VALIDATION_MESH_PACK, COMBAT_VALIDATION_RUNTIME
+from test_suite_runtime import TEST_SUITE_MESH_PACK, TEST_SUITE_RUNTIME
 from multiplayer_runtime import MULTIPLAYER_RUNTIME, default_spawn_offset
 from network import MultiplayerClient
 from level_layouts import DEFAULT_LAYOUT, LEVEL_TO_LAYOUT, MP_LEVEL_NUMBER
@@ -110,8 +110,8 @@ class Game:
 
         if RTS_VALIDATION_RUNTIME.enabled:
             self._bootstrap_rts_validation_run()
-        elif COMBAT_VALIDATION_RUNTIME.enabled:
-            self._bootstrap_combat_validation_run()
+        elif TEST_SUITE_RUNTIME.enabled:
+            self._bootstrap_test_suite_run()
         elif BENCHMARK_RUNTIME.enabled:
             self._bootstrap_benchmark_run()
         elif MULTIPLAYER_RUNTIME.enabled:
@@ -139,14 +139,14 @@ class Game:
         self.in_level_selection = False
         self.start_level(6)
 
-    def _bootstrap_combat_validation_run(self):
-        """Straight into the benchmark arena as the mesh hero (COMBAT_VALIDATION_MESH_PACK)."""
+    def _bootstrap_test_suite_run(self):
+        """Straight into the benchmark arena as the mesh hero (TEST_SUITE_MESH_PACK)."""
         from PlayerSelection import unlocked_player_mesh_packs
-        if COMBAT_VALIDATION_MESH_PACK not in unlocked_player_mesh_packs:
-            raise RuntimeError(f"combat validation: no selectable hero with mesh_pack {COMBAT_VALIDATION_MESH_PACK!r}")
-        idx = unlocked_player_mesh_packs.index(COMBAT_VALIDATION_MESH_PACK)
+        if TEST_SUITE_MESH_PACK not in unlocked_player_mesh_packs:
+            raise RuntimeError(f"test suite: no selectable hero with mesh_pack {TEST_SUITE_MESH_PACK!r}")
+        idx = unlocked_player_mesh_packs.index(TEST_SUITE_MESH_PACK)
         self.player_selection.selected_player_info_dir = unlocked_player_directory[idx]
-        self.player_selection.selected_mesh_pack = COMBAT_VALIDATION_MESH_PACK
+        self.player_selection.selected_mesh_pack = TEST_SUITE_MESH_PACK
         base = unlocked_player_base_stats[idx].copy()
         self.player_configuration = PlayerConfiguration(
             input_manager=self.input_manager,
@@ -489,8 +489,8 @@ class Game:
             mesh_pack = getattr(self.player_selection, "selected_mesh_pack", None)
             if RTS_VALIDATION_RUNTIME.enabled:
                 layouts_dir = RTS_VALIDATION_RUNTIME.layout_dir
-            elif COMBAT_VALIDATION_RUNTIME.enabled:
-                layouts_dir = COMBAT_VALIDATION_RUNTIME.layout_dir
+            elif TEST_SUITE_RUNTIME.enabled:
+                layouts_dir = TEST_SUITE_RUNTIME.layout_dir
             elif BENCHMARK_RUNTIME.enabled:
                 layouts_dir = BENCHMARK_RUNTIME.layout_dir
             else:
@@ -709,8 +709,8 @@ class Game:
                     exit_code = 0
                     if RTS_VALIDATION_RUNTIME.shutdown_requested:
                         exit_code = RTS_VALIDATION_RUNTIME.shutdown_exit_code
-                    elif COMBAT_VALIDATION_RUNTIME.shutdown_requested:
-                        exit_code = COMBAT_VALIDATION_RUNTIME.shutdown_exit_code
+                    elif TEST_SUITE_RUNTIME.shutdown_requested:
+                        exit_code = TEST_SUITE_RUNTIME.shutdown_exit_code
                     self._close_multiplayer()
                     pygame.quit()
                     sys.exit(exit_code)

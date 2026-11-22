@@ -86,7 +86,7 @@ Changes from the plan as written:
    - Granted only by sources that declare it (boss trait, passive ability). No default grace.
    - Blocks all damage; `InteractionContext.over_time` removed.
    - Remove `vulnerable` and `invulnerability_duration` from Player, combat_unit, NeutralCharacter,
-     the reset code, the dead flicker, the `land()` check; update `combat_validation_driver.py`.
+     the reset code, the dead flicker, the `land()` check; update `test_suite_driver.py`.
    - `apply` / `land` return an explicit result: landed / spent (invulnerable) / refused.
    - Done when: `rg "\bvulnerable\b|invulnerability_duration|over_time" Code` → 0.
 7. **Damage numbers from defs only**

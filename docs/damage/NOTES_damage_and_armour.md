@@ -462,13 +462,13 @@ hit on a body card uses the elemental rule.
 
 **Next, in order:**
 1. **Watch `plate_stops`** (Douglas), if you still want the window. Headless already passed.
-   `combat_validation.py --scenario plate_stops --hold-seconds 12` from `Pixel-Realm-physical\Code`.
+   `test_suite.py --scenario plate_stops --hold-seconds 12` from `Pixel-Realm-physical\Code`.
 2. **Watch `haste`** (Douglas). Headless checks the speed. The window is the walk: hold a direction,
    he is faster until the line says the buff ended.
-   `combat_validation.py --scenario haste --hold-seconds 6` from `Pixel-Realm-conditions\Code`.
+   `test_suite.py --scenario haste --hold-seconds 6` from `Pixel-Realm-conditions\Code`.
 3. **Watch `elemental`** (Douglas). Headless already passed: plate −3 and hot red, cloth −15 and
    searing red, then a chill −9, severe blue, slower, then back to speed 5.
-   `combat_validation.py --scenario elemental --hold-seconds 6` from `Pixel-Realm-elemental\Code`.
+   `test_suite.py --scenario elemental --hold-seconds 6` from `Pixel-Realm-elemental\Code`.
 4. Then 8 / 9 (venom, holy and the weakness), 10 (wear), 11 (stuck arrows), 12 (item card
    verdicts), 13 (boss with layers). Merge of 1–7 is still Douglas's call. Nothing is pushed.
 
@@ -723,7 +723,7 @@ hit on a body card uses the elemental rule.
 - **Coverage roll for holes**: not precise enough; replaced by exact lookup at the contact pixel.
 - **Magic physical / magic elemental as types**: a spell is a delivery plus a category; no extra type.
 - 2026-11-21: temperature 5, scenes `fire`, `ice`, `ice_naked`, `desert`, `lava` (probes) in
-  `combat_validation_driver.py`; hero gets a fresh temperature each scene. Headless (4-12 s): fire lost 3
+  `test_suite_driver.py`; hero gets a fresh temperature each scene. Headless (4-12 s): fire lost 3
   skin +5.1; ice skin -4.9 no blue; ice_naked skin -2.1; desert skin +1.8; lava lost 33 skin +15.1.
   Hit log now wraps `land` (strike skips `apply` since cleanup 2): `arrows_stop`, `plate_stops` pass
   again. `elemental` still expects the old instant fire/cold: fails. Not watched.
