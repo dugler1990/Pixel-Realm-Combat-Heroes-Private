@@ -95,5 +95,10 @@ built on today's code. Douglas checks it before any code.
 - `KIND_MULT` starting numbers as above.
 - Gas (`venom_cloud`, dose per second in a cloud): later, with the venom plant's special.
 
+## Log
+- 2026-11-22: built, steps 1-6 (`feat/venom-holy`): 00ff5d78 holy and weakness, f4657ed3 venom and
+  cures, b092e872 scenes, then notes and guard. Found on the way: `resist_of` clamped negatives to
+  0, so no weakness worked; now signed, through `past_resist`.
+
 ## Tried and dropped
 - (none yet)
