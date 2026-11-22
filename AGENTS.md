@@ -26,6 +26,10 @@ and leave the user in charge of it.
 - Facing a decision about how the repo is handled (a workaround, leaving something behind):
   stop and tell the user first.
 
+## In-game test suite
+Default: combat validation. Read `Code/PROCESS_combat_validation.md`
+(and `Code/INTERACTION_TESTING_WORKFLOW.md`). Not `rts_validation`.
+
 ## Process docs
 Every initiative keeps one: `PROCESS_*.md` or `NOTES_*.md` in its folder. Read it before
 starting. Terse lines, no narrative: facts, commands, numbers.
