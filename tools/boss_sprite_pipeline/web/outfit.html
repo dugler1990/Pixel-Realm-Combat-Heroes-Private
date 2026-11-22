@@ -47,6 +47,24 @@
               justify-content:center; z-index:9; cursor:zoom-out; }
   .lightbox img { max-width:96vw; max-height:96vh; background:#fff; }
   img.zoom { cursor:zoom-in; }
+  img.thumb { max-height:120px; background:#fff; border-radius:4px; }
+  .char { border-top:1px solid var(--line); padding-top:8px; margin-top:8px; }
+  .char > .row b { cursor:pointer; font-size:15px; } .char > .row b:hover { text-decoration:underline; }
+  .tag { font-size:11px; padding:1px 7px; border-radius:8px; border:1px solid var(--line); color:var(--dim); }
+  .phases { display:flex; flex-wrap:wrap; gap:3px; margin-top:5px; }
+  .ph { font-size:11px; padding:1px 6px; border-radius:8px; background:#2a2e36; color:var(--dim); }
+  .ph.done { background:#1f3b2c; color:var(--ok); } .ph.gate { background:#3d3020; color:var(--gate); }
+  .ph.running { background:#1e3248; color:var(--run); } .ph.bad { background:#3d2224; color:var(--bad); }
+  .phase { display:inline-block; vertical-align:top; margin:0 14px 8px 0; }
+  .phase > .dim { font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+  .kinds { display:flex; gap:8px; flex-wrap:wrap; }
+  .kindcard { border:1px solid var(--line); border-radius:8px; padding:8px; width:260px; cursor:pointer; }
+  .kindcard.sel { border-color:var(--run); background:#1e2a3a; } .kindcard:hover { background:var(--panel); }
+  h4 { margin:16px 0 4px; font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); }
+  table.tbl { border-collapse:collapse; } table.tbl td, table.tbl th { padding:3px 10px 3px 0; text-align:left;
+    border-bottom:1px solid var(--line); vertical-align:top; }
+  .slots { display:flex; flex-wrap:wrap; gap:10px; }
+  .slot { border:1px solid var(--line); border-radius:6px; padding:6px; width:230px; }
   #toast { position:fixed; right:16px; bottom:16px; background:var(--bad); color:#fff; padding:10px 14px;
            border-radius:6px; display:none; max-width:520px; white-space:pre-wrap; z-index:10; }
 </style>
@@ -60,7 +78,7 @@
 </header>
 <main>
   <nav id="nav"></nav>
-  <section id="main"><p class="dim">Pick an outfit on the left.</p></section>
+  <section id="main"><p class="dim">Pick a character or an outfit on the left.</p></section>
 </main>
 <div class="lightbox" id="lb" onclick="this.style.display='none'"><img id="lbimg"></div>
 <div id="toast" onclick="this.style.display='none'"></div>
@@ -70,6 +88,20 @@ const POD_STEPS = new Set(["trellis", "sam3", "holopart"]);
 const LABEL = { front_only:"front only", front_back:"front + back", front_back_sides:"front + back + sides",
                 eight_views:"8 views (front, back, sides, 3/4s)" };
 
+function kindName(k) { return S.fields && S.fields.kind_ui[k] ? S.fields.kind_ui[k][0] : k; }
+function stepName(s) { return S.fields && S.fields.step_ui[s] ? S.fields.step_ui[s][0] : s; }
+function stepHelp(s) { return S.fields && S.fields.step_ui[s] ? S.fields.step_ui[s][2] : ""; }
+// A run's steps by phase: [[phase id, label, [step rows]]], empty phases left out.
+function byPhase(steps) {
+  return S.fields.phases.map(([id, label]) => [id, label, steps.filter(x => (S.fields.step_ui[x.name] || [])[1] === id)])
+    .filter(p => p[2].length);
+}
+function phaseState(rows, r) {
+  if (r && rows.some(x => x.name === r.step)) return "running";
+  if (rows.some(x => ["missing", "failed"].includes(x.status))) return "bad";
+  if (rows.some(x => x.status === "gate")) return "gate";
+  return rows.every(x => ["done", "skipped"].includes(x.status)) ? "done" : "";
+}
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function img(path, cls="") { return path ? `<img class="zoom ${cls}" src="/img?path=${encodeURIComponent(path)}&t=${S.detailAt}" onclick="zoom(this.src)">` : ""; }
 function zoom(src) { document.getElementById("lbimg").src = src; document.getElementById("lb").style.display = "flex"; }
@@ -85,9 +117,10 @@ function cur() { return S.state && S.sel ? S.state.outfits.find(o => o.character
 function running(key) { return S.state ? S.state.jobs.running.find(j => j.outfit === key) : null; }
 
 async function refresh() {
-  try { S.state = await api("/api/state"); } catch (e) { return; }
+  try { S.state = await api("/api/state"); await fieldsTable(); } catch (e) { return; }
   drawHeader(); drawNav();
   const o = cur();
+  if (S.form || S.charPage) return;                     // a settings form or a character page: leave it alone
   if (o) {
     const r = running(S.sel);
     const stale = Date.now() - (S.fetchedAt || 0) > (r ? 2500 : 6000);
@@ -112,14 +145,24 @@ function drawHeader() {
 setInterval(async () => { if (S.state && S.state.pod.host) { try { await api("/api/pod/status"); } catch (e) {} } }, 10000);
 
 function drawNav() {
-  document.getElementById("nav").innerHTML = S.state.outfits.map(o => {
-    const key = o.character + "/" + o.outfit, r = running(key);
-    return `<div class="outfit ${key === S.sel ? "sel" : ""}" onclick="select('${key}')">
-      <div class="name">${esc(key)}</div><div class="kind">${o.kind}${o.models.length ? " · " + o.models.join(", ") : ""}</div>
-      <div class="chips">${o.steps.map(s => `<span class="chip ${r && r.step === s.name ? "running" : s.status}">${s.name}</span>`).join("")}</div></div>`;
-  }).join("");
+  // One block per character: its name, its settings and new-outfit buttons, then its outfits by name.
+  const chars = [...new Set([...(S.state.characters || []), ...S.state.outfits.map(o => o.character)])].sort();
+  document.getElementById("nav").innerHTML = `<div class="row"><button onclick="newCharacter()">New character</button></div>` +
+    chars.map(c => `<div class="char"><div class="row"><b onclick="charPage('${c}')" title="the character's page">${esc(c)}</b>
+      <button onclick="newOutfit('${c}')">+ outfit</button></div>` +
+      S.state.outfits.filter(o => o.character === c).map(o => {
+        const key = o.character + "/" + o.outfit, r = running(key);
+        const click = o.error ? `editBroken('${o.character}', '${o.outfit}')` : `select('${key}')`;
+        return `<div class="outfit ${key === S.sel ? "sel" : ""}" onclick="${click}">
+          <div class="name">${esc(o.outfit)}</div><div class="kind">${esc(kindName(o.kind))}${o.next ? " · next: " + esc(stepName(o.next)) : o.steps.length ? " · all done" : ""}</div>
+          ${o.error ? `<div class="err" style="font-size:12px">${esc(o.error)}</div>` : ""}
+          <div class="phases">${byPhase(o.steps).map(([id, label, rows]) => {
+            const n = rows.filter(x => ["done", "skipped"].includes(x.status)).length;
+            return `<span class="ph ${phaseState(rows, r)}" title="${rows.map(x => stepName(x.name) + ": " + x.status).join("\n")}">${label} ${n}/${rows.length}</span>`;
+          }).join("")}</div></div>`;
+      }).join("") + `</div>`).join("");
 }
-async function select(key) { S.sel = key; S.step = null; S.detail = null; S.sig = null; await loadDetail(); }
+async function select(key) { S.form = null; S.charPage = null; S.sel = key; S.step = null; S.detail = null; S.sig = null; await loadDetail(); }
 async function loadDetail() {
   const o = cur(); if (!o) return;
   let d;
@@ -153,18 +196,38 @@ async function setPod() {
 function drawMain() {
   const o = cur(), d = S.detail; if (!o || !d) return;
   const key = o.character + "/" + o.outfit, r = running(key), s = o.steps.find(x => x.name === S.step);
-  let h = `<h2>${esc(key)} <span class="dim">(${o.kind})</span></h2><div class="dim">${esc(o.about)}</div>`;
+  let h = `<h2>${esc(o.outfit)} <span class="tag" title="${esc(S.fields.kind_ui[o.kind][1])}">${esc(kindName(o.kind))}</span>
+    <span class="dim" style="font-size:13px; font-weight:400">of <a href="#" onclick="charPage('${o.character}'); return false" style="color:inherit">${esc(o.character)}</a></span>
+    <span style="font-size:13px; font-weight:400"><button onclick="editSettings('outfit')">Outfit settings</button></span></h2>
+    <div class="dim">${esc(S.fields.kind_ui[o.kind][1])}</div><div class="dim">${esc(o.about)}</div>`;
+  if (o.missing && o.missing.length) {
+    h += `<div class="attempt"><b>Still to fill in</b> <span class="dim">(each is asked for when its step runs)</span>: ` +
+      o.missing.map(m => `${m.field} <span class="dim">(${m.level}; ${m.steps.join(", ")})</span>`).join(" · ") + `</div>`;
+  }
   if (o.kind !== "cut") {
     h += `<h3>TRELLIS models</h3><div class="row">` + d.all_models.map(m =>
       `<label><input type="checkbox" class="mdl" value="${m}" ${d.models.includes(m) ? "checked" : ""}> ${LABEL[m]}</label>`).join("") +
-      `<button onclick="saveModels()">Save</button></div><div class="dim">Drawings needed: ${d.views.join(", ")}</div>`;
+      `<button onclick="saveModels()">Save</button></div>`;
+    // The views the models need: your image (from Outfit settings > images), the accepted cut-out, or drawn.
+    h += `<div class="row" style="align-items:flex-start">` + d.views.map(v => {
+      // done: the gate's cut-out, else the step's recorded drawing (outfits backfilled from before the driver)
+      const mine = o.images[v], cut = d.cutouts[v] || ((d.run.steps[v] || {}).outputs || {}).draw
+        || ((d.run.steps.sides || {}).outputs || {})[v];
+      const how = mine ? "your image" : (v in d.mirror_of && d.mirror_right ? "mirrored from " + d.mirror_of[v] : "drawn from the prompt");
+      return `<div style="text-align:center"><b>${v}</b><br>${cut ? img(cut, "thumb") : mine ? thumbImg(mine) : `<div class="dim" style="height:120px;width:80px"></div>`}<br>
+        <span class="dim">${how}${cut ? " · done" : ""}</span></div>`;
+    }).join("") + `</div><div class="dim">Give your own images in Outfit settings → images; views without one are drawn.</div>`;
   }
-  h += `<div class="chips" style="margin:12px 0">${o.steps.map(x => `<span class="chip ${r && r.step === x.name ? "running" : x.status} ${x.name === S.step ? "sel" : ""}" onclick="pickStep('${x.name}')">${x.name}</span>`).join("")}</div>`;
+  h += `<div style="margin:12px 0">` + byPhase(o.steps).map(([id, label, rows]) => `<div class="phase"><div class="dim">${label}</div><div class="chips">` +
+    rows.map(x => `<span class="chip ${r && r.step === x.name ? "running" : x.status} ${x.name === S.step ? "sel" : ""}" title="${esc(stepHelp(x.name))} (step ${x.name})" onclick="pickStep('${x.name}')">${esc(stepName(x.name))}</span>`).join("") +
+    `</div></div>`).join("") + `</div>`;
   const busy = !!r, laneBusy = S.state.jobs.running.some(j => j.lane === (POD_STEPS.has(S.step) ? "pod" : "local"));
-  h += `<div class="row"><b>${S.step}</b> <span class="${s.status === "done" ? "okc" : s.status === "gate" ? "gatec" : "dim"}">${s.status}</span>
+  h += `<div class="row"><b>${esc(stepName(S.step))}</b> <span class="${s.status === "done" ? "okc" : s.status === "gate" ? "gatec" : "dim"}">${s.status}</span>
         ${s.cost_usd ? `<span class="dim">$${s.cost_usd}</span>` : ""} ${s.pod_minutes ? `<span class="dim">${s.pod_minutes} pod min</span>` : ""}
-        <button class="main" ${busy || laneBusy ? "disabled" : ""} onclick="act({action:'run', step:'${S.step}'})">Run ${S.step}${POD_STEPS.has(S.step) ? " (pod)" : ""}</button>
-        ${busy ? `<span class="dim">running: ${esc(r.label)}</span>` : ""}</div>`;
+        <button class="main" ${busy || laneBusy ? "disabled" : ""} onclick="act({action:'run', step:'${S.step}'})">Run ${esc(stepName(S.step))}${POD_STEPS.has(S.step) ? " (pod)" : ""}</button>
+        ${o.next ? `<button ${busy ? "disabled" : ""} onclick="act({action:'on'})" title="from ${esc(stepName(o.next))} until a gate, a failed step or a pod / local switch">Run on from ${esc(stepName(o.next))}</button>` : ""}
+        ${busy ? `<span class="dim">running: ${esc(r.label)}</span>` : ""}</div>
+        <div class="dim">${esc(stepHelp(S.step))} <span style="opacity:.6">(step ${S.step})</span></div>`;
   h += panel(S.step, d, busy);
   h += `<h3>Log</h3><pre id="log"></pre>`;
   document.getElementById("main").innerHTML = h;
@@ -181,7 +244,19 @@ function retryForm(step, view, attempt) {
   return `<div class="row"><select id="rk_${id}"><option value="r">r (redraw)</option>${step === "sides" ? "" : `<option value="r1">r1 (show its error)</option>`}${step === "front" ? `<option value="rb">rb (bigger armour)</option>` : ""}</select>
     <input type="text" id="rw_${id}" size="50" placeholder="why (optional): what to fix">
     <input type="file" id="rf_${id}" accept="image/png,image/jpeg">
-    <button onclick="retry('${step}', '${view || ""}')">Redraw</button></div>`;
+    <button onclick="retry('${step}', '${view || ""}')">Redraw</button></div>
+    <div class="row"><span class="dim">or use an image you have (checked like a drawing, then Accept):</span>
+    <input type="file" id="uf_${id}" accept="image/png,image/jpeg,image/webp">
+    <button onclick="useImage('${step}', '${view || ""}')">Use this image</button></div>`;
+}
+async function useImage(step, view) {
+  const o = cur(), f = document.getElementById(`uf_${step}_${view}`).files[0];
+  if (!f) return toast("choose an image first");
+  const data = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(f); });
+  try {
+    const up = await api("/api/upload", { character:o.character, input:true, name:f.name, data });
+    act({ action:"use", step, view: view || undefined, image:up.path });
+  } catch (e) { toast(e.message); }
 }
 async function retry(step, view) {
   const id = `${step}_${view}`, o = cur();
@@ -212,6 +287,8 @@ function panel(step, d, busy) {
   const run = d.run.steps[step] || {};
   if (step === "front" || step === "back") {
     const g = d.gates[step];
+    if (!g && run.status === "done" && (run.outputs || {}).draw)   // made before the driver (backfilled): no gate file here
+      return `<p class="dim">Done before the pipeline (backfilled).</p>` + img(run.outputs.draw, "thumb");
     return (g && g.status === "accepted" ? "" : retryForm(step, null)) + attempts(step, null, g, busy);
   }
   if (step === "sides") {
@@ -223,7 +300,7 @@ function panel(step, d, busy) {
       const mir = d.mirror_right && d.mirror_of[v];
       const g = d.gates["side_" + v];
       let h = `<h3>${v} ${d.cutouts[v] ? `<span class="okc">done</span>` : `<span class="gatec">to do</span>`}</h3>`;
-      if (mir) return h + `<p class="dim">The ${d.mirror_of[v]} view mirrored (Run sides writes it).</p>`;
+      if (mir) return h + `<p class="dim">The ${d.mirror_of[v]} view mirrored (Run Sides & 3/4 writes it).</p>`;
       if (d.cutouts[v] && !(g && g.attempts.length)) return h + `<p class="dim">Accepted earlier (one gate file for every side then).</p>`;
       return h + (d.cutouts[v] ? "" : retryForm("sides", v)) + attempts("sides", v, g, busy);
     }).join("");
@@ -233,7 +310,7 @@ function panel(step, d, busy) {
     let h = `<p>Built: ${made.map(m => LABEL[m]).join(", ") || "none"}${picked ? ` · <span class="okc">picked ${LABEL[picked]}</span>` : ""}</p>`;
     h += `<div class="row">` + d.models.filter(m => made.includes(m)).map(m =>
       `<button class="${picked === m ? "" : "main"}" ${busy ? "disabled" : ""} onclick="act({action:'pick', step:'trellis', model:'${m}'})">Pick ${LABEL[m]}</button>`).join("") + `</div>`;
-    return h + (d.images.trellis_sheet ? img(d.images.trellis_sheet, "big") : `<p class="dim">No sheet yet: Run trellis (pod) builds the ticked models and the sheet.</p>`);
+    return h + (d.images.trellis_sheet ? img(d.images.trellis_sheet, "big") : `<p class="dim">No sheet yet: Run 3D model (pod) builds the ticked models and the sheet.</p>`);
   }
   if (step === "paint") {
     let h = `<div class="row"><button class="main" ${busy ? "disabled" : ""} onclick="act({action:'accept', step:'paint', n:1})">Accept paint</button>
@@ -241,12 +318,70 @@ function panel(step, d, busy) {
       <button ${busy ? "disabled" : ""} onclick="act({action:'redo', step:'paint', views:document.getElementById('redo').value.split(/[\\s,]+/).filter(Boolean)})">Repaint</button></div>`;
     return h + `<div class="grid">${d.paint.map(p => img(p)).join("")}</div>`;
   }
+  if (step === "install") return installPanel(d, run, busy);
   const pics = { cut:["cut_front", "cut_back", "cut_sheet"], merge:["cut_front", "cut_back"], worn:["worn"],
                  slots:["slots_sheet"], sheet:["slots_sheet"] }[step] || [];
   let h = pics.filter(k => d.images[k]).map(k => img(d.images[k], "big")).join("");
   if (step === "export" && run.result) h += `<pre>${esc(run.result)}</pre>`;
   if (step === "skeleton" && run.outputs) h += `<pre>${esc(JSON.stringify(run.outputs, null, 1))}</pre>`;
   return h || `<p class="dim">${run.status === "done" ? "Done." : "Run it."}</p>`;
+}
+
+// --- install: the hero entry (body) or the pieces' stats (armour, cut) --------------------------------------------
+function installPanel(d, run, busy) {
+  if (d.kind === "body") {
+    if (!run.entry) return `<p class="dim">Run install: it shows the hero entry for PlayerSelectionDict.json.</p>`;
+    let h = `<pre>${esc(JSON.stringify(run.entry, null, 1))}</pre>`;
+    if (run.status === "gate") h += `<div class="row"><button class="main" ${busy ? "disabled" : ""} onclick="act({action:'accept', step:'install', n:1})">Write it to PlayerSelectionDict.json</button>
+      <span class="dim">Start gear: the outfit settings' start_equipment.</span></div>`;
+    return h + (run.note ? `<p class="dim">${esc(run.note)}</p>` : "");
+  }
+  if (run.items && run.status === "done") return `<p class="okc">Installed: ${run.items.map(esc).join(", ")}</p>`;
+  const missing = run.missing_bases || [];
+  if (!missing.length) return `<p class="dim">Run install: it checks every piece has stats (item_bases.json), then puts the packs, icons and items in the game.</p>`;
+  setTimeout(() => basesForm(missing), 0);
+  return `<h3>Stats for the new pieces</h3><p class="dim">Each piece names a base (left and right share one). First numbers; the item card and combat read them.</p><div id="bases"></div>`;
+}
+async function basesForm(missing) {
+  const el = document.getElementById("bases"); if (!el || el.dataset.for === missing.join()) return;
+  el.dataset.for = missing.join();
+  const P = await api("/api/item_properties"), known = Object.keys(P.bases);
+  let h = `<div class="row"><span class="dim">Start each from</span> <select id="b_from"><option value="">blank</option>${known.map(k => `<option>${k}</option>`).join("")}</select>
+    <button onclick="fillBases()">Fill</button></div>`;
+  for (const b of missing) {
+    h += `<div class="attempt"><b>${esc(b)}</b><div class="grid" style="grid-template-columns:repeat(3, 1fr)">`;
+    h += P.identity.map(k => `<label>${k} <input type="text" id="b_${b}_${k}" size="24"></label>`).join("");
+    h += P.properties.map(p => p.format === "list"
+      ? `<label>${p.label} <span class="dim">(${P.regions.join(", ")})</span> <input type="text" id="b_${b}_${p.id}" size="30"></label>`
+      : p.format === "yes-no" ? `<label>${p.label} <select id="b_${b}_${p.id}"><option>false</option><option>true</option></select></label>`
+      : `<label>${p.label}${p.format === "percent" ? " (0-1)" : ""} <input type="number" step="any" id="b_${b}_${p.id}" style="width:90px"></label>`).join("");
+    h += `</div></div>`;
+  }
+  h += `<div class="row"><button class="main" onclick="saveBases()">Save stats</button> <span class="dim">then Run install</span></div><pre id="baseserr" class="err" style="display:none"></pre>`;
+  el.innerHTML = h;
+  S.basesP = P; S.basesMissing = missing;
+}
+function fillBases() {
+  const P = S.basesP, from = P.bases[document.getElementById("b_from").value]; if (!from) return;
+  for (const b of S.basesMissing) for (const [k, v] of Object.entries(from)) {
+    const el = document.getElementById(`b_${b}_${k}`); if (!el) continue;
+    el.value = Array.isArray(v) ? v.join(", ") : String(v ?? "");
+  }
+}
+async function saveBases() {
+  const P = S.basesP, bases = {};
+  for (const b of S.basesMissing) {
+    const base = {};
+    for (const k of P.identity) { const v = document.getElementById(`b_${b}_${k}`).value.trim(); if (v) base[k] = v; }
+    for (const p of P.properties) {
+      const v = document.getElementById(`b_${b}_${p.id}`).value.trim(); if (v === "") continue;
+      base[p.id] = p.format === "list" ? v.split(",").map(x => x.trim()).filter(Boolean) : p.format === "yes-no" ? v === "true" : Number(v);
+    }
+    bases[b] = base;
+  }
+  const err = document.getElementById("baseserr");
+  try { await api("/api/bases", { bases }); err.style.display = "none"; toast("stats saved: Run install"); }
+  catch (e) { err.textContent = e.message.split("; ").join("\n"); err.style.display = "block"; }
 }
 
 async function drawLog() {
@@ -267,10 +402,274 @@ async function drawLog() {
   el.textContent = (lines || []).join("\n") || "(no log yet)";
   if (atEnd) el.scrollTop = el.scrollHeight;
 }
-// #barb/naked/trellis opens that outfit at that step
+// --- settings: character and outfit files, forms from the field table (outfit_fields.py) -------------------------
+const LONG = new Set(["front", "back", "side", "quarter", "retry_bigger"]);
+const FILE_TYPES = ["image", "glb", "blend", "json"];
+async function fieldsTable() { if (!S.fields) S.fields = await api("/api/fields"); return S.fields; }
+function isNote(k) { return k.startsWith("_") || k.endsWith("_note"); }
+
+// New character / outfit: the name and "start from" are typed in the form itself. A new character needs nothing to
+// be saved: its fields are asked for by the steps that read them (the rig only from the skeleton step on).
+async function newCharacter() {
+  const cfg = await api("/api/config");
+  openForm({ level:"character", character:"", data:{}, isNew:true, copies:Object.keys(cfg.characters) });
+}
+async function newOutfit(c, kind) {
+  const cfg = await api("/api/config");
+  const copies = Object.entries(cfg.characters).flatMap(([ch, os]) => os.map(o => ch + "/" + o));
+  openForm({ level:"outfit", character:c, outfit:"", data:{ kind: kind || "armour", trellis_models:["front_back_sides"] },
+             isNew:true, copies });
+}
+async function charPage(c) {
+  S.form = null; S.sel = null; S.charPage = c; drawNav();
+  history.replaceState(null, "", "#character/" + c);
+  let info;
+  try { info = await api(`/api/character?character=${encodeURIComponent(c)}`); } catch (e) { return toast(e.message); }
+  const groups = [["model", "3D model"], ["pieces", "Pieces"], ["game", "Game"], ["animation", "Animation (retarget, clips)"]];
+  let h = `<h2>${esc(c)} <span style="font-size:13px; font-weight:400"><button onclick="charSettings('${c}')">Character settings</button>
+      <button onclick="newOutfit('${c}')">+ outfit</button></span></h2><div class="dim">${esc(info.about)}</div>
+    <p class="dim">What every outfit of ${esc(c)} shares. A field is needed only when a step that reads it runs.</p>`;
+  for (const [g, label] of groups) {
+    const rows = info.fields.filter(f => (S.fields.character_phase[f.field] || "game") === g);
+    if (!rows.length) continue;
+    h += `<h4>${label}</h4><table class="tbl">` + rows.map(f => `<tr><td><b>${f.field}</b></td>
+      <td>${f.set ? (f.exists === false ? `<span class="err">file missing</span>` : `<span class="okc">set</span>`) : `<span class="dim">not set</span>`}</td>
+      <td class="dim">${f.steps.length ? "read by " + f.steps.map(stepName).join(", ") : ""}${f.kinds.length ? " · needed by " + f.kinds.map(kindName).join(", ") : ""}</td>
+      <td class="dim">${esc(f.help)}</td></tr>`).join("") + `</table>`;
+  }
+  const mine = S.state.outfits.filter(o => o.character === c);
+  h += `<h4>Outfits</h4>` + (mine.length ? `<table class="tbl">` + mine.map(o => `<tr><td><a href="#" onclick="select('${c}/${o.outfit}'); return false" style="color:inherit"><b>${esc(o.outfit)}</b></a></td>
+      <td><span class="tag">${esc(kindName(o.kind))}</span></td><td class="dim">${o.next ? "next: " + esc(stepName(o.next)) : "all done"}</td></tr>`).join("") + `</table>`
+    : `<p class="dim">None yet: + outfit.</p>`);
+  document.getElementById("main").innerHTML = h;
+}
+async function charSettings(c) {
+  S.sel = null; S.charPage = null;
+  const cfg = await api(`/api/config?character=${encodeURIComponent(c)}`);
+  openForm({ level:"character", character:c, data: cfg.character || {} });
+}
+async function copyFrom(src) {
+  if (!src) return;
+  const F = S.form, [cc, co] = src.split("/");
+  const cfg = await api(`/api/config?character=${encodeURIComponent(cc)}${co ? "&outfit=" + encodeURIComponent(co) : ""}`);
+  keepNames();
+  F.data = JSON.parse(JSON.stringify((co ? cfg.outfit : cfg.character) || {}));
+  delete F.data.existing; delete F.data.images;            // the other run's outputs and images: not this one's
+  delete F.data.pack;
+  drawForm();
+}
+function keepNames() {                                     // the new form's name / character boxes into S.form
+  const F = S.form, n = document.getElementById("nf_name"), c = document.getElementById("nf_char");
+  if (n) { if (F.level === "outfit") F.outfit = n.value.trim(); else F.character = n.value.trim(); }
+  if (c) F.character = c.value;
+}
+async function editSettings(level) {
+  const o = cur();
+  const cfg = await api(`/api/config?character=${o.character}${level === "outfit" ? "&outfit=" + o.outfit : ""}`);
+  openForm({ level, character:o.character, outfit: level === "outfit" ? o.outfit : undefined,
+             data: (level === "outfit" ? cfg.outfit : cfg.character) || {} });
+}
+async function editBroken(c, o) {
+  S.sel = c + "/" + o;
+  const cfg = await api(`/api/config?character=${c}&outfit=${o}`);
+  openForm({ level:"outfit", character:c, outfit:o, data: cfg.outfit || {} });
+}
+async function openForm(F) { S.form = F; S.charPage = null; await fieldsTable(); drawForm(); }
+function closeForm() { const c = S.form.character, back = !S.sel && S.form.level === "character" && !S.form.isNew;
+                       S.form = null; S.sig = null; if (back) return charPage(c); refresh(); }
+
+const FIRST = ["kind", "trellis_models", "images"];        // an outfit form starts with what it is and its images
+// The fields this form shows: a character's, or the outfit fields its kind's steps read (and any already set).
+function formRows() {
+  const F = S.form, kind = F.data.kind || "armour", steps = S.fields.kind_steps[kind] || [];
+  const rows = S.fields.fields.filter(f => f.name !== "character" && (F.level === "character" ? f.level === "character"
+    : f.name in F.data || (f.level === "outfit" && f.name !== "existing" && (!f.steps.length || f.steps.some(x => steps.includes(x))))));
+  const rank = f => FIRST.includes(f.name) ? FIRST.indexOf(f.name) : FIRST.length;
+  return rows.map((f, i) => [rank(f), i, f]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[2]);
+}
+// Which heading a field goes under: the phase of the first step that reads it (trellis_models: with the views it decides).
+function fieldPhase(f) {
+  if (S.form.level === "character") return S.fields.character_phase[f.name] || "game";
+  if (f.name === "trellis_models") return "views";
+  const steps = S.fields.kind_steps[S.form.data.kind || "armour"] || [];
+  const first = f.steps.find(x => steps.includes(x)) || f.steps[0];
+  return first ? S.fields.step_ui[first][1] : "general";
+}
+function drawForm() {
+  const F = S.form, kind = F.level === "outfit" ? (F.data.kind || "armour") : null;
+  let h = `<h2>${F.isNew ? "New " : ""}${F.level}${F.isNew ? "" : ": " + esc(F.character) + (F.outfit ? "/" + esc(F.outfit) : "")}</h2>`;
+  if (F.isNew) {
+    const chars = S.state ? S.state.characters : [];
+    h += `<div class="attempt"><div class="row"><b>name</b> <input type="text" id="nf_name" size="30"
+        value="${esc(F.level === "outfit" ? F.outfit : F.character)}" placeholder="letters, digits, _ and -">` +
+      (F.level === "outfit" ? ` <b>character</b> <select id="nf_char">${chars.map(c => `<option ${c === F.character ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>` : "") +
+      ` <b>start from</b> <select onchange="copyFrom(this.value)"><option value="">blank</option>${(F.copies || []).map(c => `<option>${esc(c)}</option>`).join("")}</select></div></div>`;
+  }
+  h += `<p class="dim">${F.level === "character" ? "What every outfit of this character shares (its character.json). Nothing is needed to save: each field is asked for by the step that reads it."
+      : "What this outfit sets; the character file gives the rest."}
+      * = needed by ${kind ? "a " + kind + " outfit" : "some outfit kind"}, when the steps named run. File paths: relative to the data root (${esc(S.state ? S.state.data_root : "")}), looks and configs to the repo.</p>`;
+  h += `<div class="attempt"><div class="row"><b>about</b> <span class="dim">a note: what this is</span></div>
+    <textarea id="f__about" rows="2" cols="100">${esc(F.data._about || "")}</textarea></div>`;
+  const heads = [["general", ""], ...S.fields.phases, ["animation", "Animation (retarget, clips)"]], rows = formRows();
+  for (const [id, label] of heads) {
+    const here = rows.filter(f => fieldPhase(f) === id);
+    if (!here.length) continue;
+    if (label) h += `<h4>${label}</h4>`;
+    h += here.map(f => fieldRow(f, F.data[f.name], kind)).join("");
+  }
+  h += `<div class="row"><button class="main" onclick="saveForm()">Save</button> <button onclick="closeForm()">Cancel</button></div>
+    <pre id="formerr" class="err" style="display:none"></pre>`;
+  document.getElementById("main").innerHTML = h;
+}
+function fieldRow(f, v, kind) {
+  const given = S.form.data.images || {}, byImage = S.fields.given_by_image[f.name];
+  const need = (kind ? f.kinds.includes(kind) : f.kinds.length > 0) && !(byImage && given[byImage]), id = "f_" + f.name;
+  let input;
+  if (f.type === "views") {                                // one slot per view: your image, or empty (drawn)
+    const models = S.form.data.trellis_models || [], want = new Set(models.flatMap(m => S.fields.model_views[m] || []));
+    input = `<div class="slots">` + f.choices.map(view => {
+      const n = "images__" + view, val = (v || {})[view] || "";
+      return `<div class="slot"><b>${view}</b> ${want.has(view) ? `<span class="okc">needed</span>` : `<span class="dim">not needed by the models</span>`}<br>
+        <input type="text" id="f_${n}" size="28" value="${esc(val)}" placeholder="${want.has(view) ? "empty: drawn" : ""}" onchange="thumb('${n}', 'image')"><br>
+        <select onfocus="fillFiles(this, 'image')" onchange="if (this.value) { document.getElementById('f_${n}').value = this.value; thumb('${n}', 'image'); }"><option value="">pick a file…</option></select>
+        <input type="file" accept="image/png,image/jpeg,image/webp" onchange="uploadInput(this, '${n}', 'image')">
+        <div id="th_${n}">${val ? thumbImg(val) : ""}</div></div>`;
+    }).join("") + `</div>`;
+  } else if (FILE_TYPES.includes(f.type)) {
+    input = `<input type="text" id="${id}" size="80" value="${esc(v || "")}" onchange="thumb('${f.name}', '${f.type}')">
+      <select onfocus="fillFiles(this, '${f.type}')" onchange="if (this.value) { document.getElementById('${id}').value = this.value; thumb('${f.name}', '${f.type}'); }"><option value="">pick a file…</option></select>
+      <label class="dim">or upload <input type="file" onchange="uploadInput(this, '${f.name}', '${f.type}')"></label>
+      <span id="th_${f.name}">${f.type === "image" && v ? thumbImg(v) : ""}</span>`;
+  } else if (f.name === "kind") {                         // what the outfit is: one card per kind
+    input = `<input type="hidden" id="${id}" value="${esc(v || "armour")}"><div class="kinds">` + f.choices.map(k =>
+      `<div class="kindcard ${k === (v || "armour") ? "sel" : ""}" onclick="keepForm(); S.form.data.kind = '${k}'; drawForm()">
+        <b>${esc(kindName(k))}</b> <span class="dim" style="font-size:11px">(${k})</span><br><span class="dim">${esc(S.fields.kind_ui[k][1])}</span></div>`).join("") + `</div>`;
+  } else if (f.type === "choice") {
+    const on = "";
+    input = `<select id="${id}"${on}><option value=""></option>${f.choices.map(c => `<option ${c === v ? "selected" : ""}>${c}</option>`).join("")}</select>`;
+  } else if (f.type === "bool") {
+    input = `<select id="${id}"><option value=""></option><option ${v === true ? "selected" : ""}>true</option><option ${v === false ? "selected" : ""}>false</option></select>`;
+  } else if (f.type === "list" && f.choices.length) {
+    const on = f.name === "trellis_models" ? ` onchange="keepForm(); drawForm()"` : "";
+    input = f.choices.map(c => `<label><input type="checkbox" class="${id}" value="${c}" ${(v || []).includes(c) ? "checked" : ""}${on}> ${LABEL[c] || c}</label>`).join(" ");
+  } else if (f.type === "list") {
+    input = `<input type="text" id="${id}" size="80" value="${esc((v || []).join(", "))}"> <span class="dim">comma-separated</span>`;
+  } else if (f.type === "dict") {
+    const text = v ? JSON.stringify(v, null, 1) : "";
+    input = `<textarea id="${id}" rows="${Math.max(2, Math.min(14, text.split("\n").length))}" cols="100">${esc(text)}</textarea> <span class="dim">JSON</span>`;
+  } else if (f.type === "number") {
+    input = `<input type="number" step="any" id="${id}" value="${v ?? ""}">`;
+  } else if (LONG.has(f.name)) {
+    input = `<textarea id="${id}" rows="4" cols="100">${esc(v || "")}</textarea>`;
+  } else {
+    input = `<input type="text" id="${id}" size="50" value="${esc(v || "")}">`;
+  }
+  return `<div class="attempt"><div class="row"><b>${f.name}${need ? " *" : ""}</b> <span class="dim">${esc(f.help)}${f.steps.length ? " · read by: " + f.steps.join(", ") : ""}</span></div>
+    <div class="row">${input}</div></div>`;
+}
+function absPath(p) { return /^[A-Za-z]:|^\//.test(p) ? p : S.state.data_root + "/" + p; }
+function thumbImg(p) { return `<img class="zoom" style="max-height:120px" src="/img?path=${encodeURIComponent(absPath(p))}" onclick="zoom(this.src)">`; }
+function thumb(name, type) {
+  const v = document.getElementById("f_" + name).value.trim();
+  document.getElementById("th_" + name).innerHTML = type === "image" && v ? thumbImg(v) : "";
+}
+async function fillFiles(sel, type) {
+  if (sel.dataset.filled) return;
+  sel.dataset.filled = "1"; keepNames();
+  if (!S.form.character) { sel.dataset.filled = ""; return toast("type the name first"); }
+  try {
+    const r = await api(`/api/files?character=${encodeURIComponent(S.form.character)}&type=${type}`);
+    sel.innerHTML = `<option value="">pick a file… (${r.files.length})</option>` + r.files.map(f => `<option>${esc(f)}</option>`).join("");
+  } catch (e) { toast(e.message); }
+}
+async function uploadInput(input, name, type) {
+  const f = input.files[0]; if (!f) return;
+  keepNames(); if (!S.form.character) return toast("type the name first");
+  const data = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(f); });
+  try {
+    const up = await api("/api/upload", { character:S.form.character, input:true, name:f.name, data });
+    document.getElementById("f_" + name).value = up.rel;
+    thumb(name, type);
+  } catch (e) { toast(e.message); }
+}
+function collect() {
+  const F = S.form, out = {};
+  for (const [k, v] of Object.entries(F.data)) if (isNote(k) && k !== "_about") out[k] = v;   // other notes kept
+  const about = document.getElementById("f__about").value.trim();
+  if (about) out._about = about;
+  for (const f of formRows()) {
+    if (f.type === "views") {
+      const got = {};
+      for (const view of f.choices) {
+        const el = document.getElementById("f_images__" + view), s = el ? el.value.trim() : "";
+        if (s) got[view] = s;
+      }
+      if (Object.keys(got).length) out[f.name] = got;
+      continue;
+    }
+    if (f.type === "list" && f.choices.length) {
+      const ticked = [...document.querySelectorAll(".f_" + f.name + ":checked")].map(x => x.value);
+      if (ticked.length) out[f.name] = ticked;
+      continue;
+    }
+    const el = document.getElementById("f_" + f.name); if (!el) continue;
+    const s = el.value.trim(); if (s === "") continue;
+    if (f.type === "number") out[f.name] = Number(s);
+    else if (f.type === "bool") out[f.name] = s === "true";
+    else if (f.type === "dict") {
+      try { out[f.name] = JSON.parse(s); } catch (e) { throw new Error(`${f.name}: not valid JSON (${e.message})`); }
+    }
+    else if (f.type === "list") out[f.name] = s.split(",").map(x => x.trim()).filter(Boolean);
+    else out[f.name] = s;
+  }
+  return out;
+}
+// Keep what is typed when the form is redrawn (a kind change hides fields: their values are kept, not lost).
+function keepForm() {
+  keepNames();
+  try {
+    const d = { ...S.form.data };
+    for (const f of formRows()) delete d[f.name];
+    S.form.data = Object.assign(d, collect());
+  } catch (e) {}
+}
+async function saveForm() {
+  const F = S.form, err = document.getElementById("formerr");
+  keepNames();
+  try {
+    const data = collect();
+    if (F.level === "outfit" && !data.pack) data.pack = F.character + "_" + F.outfit;
+    if (F.isNew) {                                         // never over another one's file
+      const cfg = await api("/api/config");
+      if (F.level === "character" ? F.character in cfg.characters : (cfg.characters[F.character] || []).includes(F.outfit))
+        throw new Error(`${F.character}${F.level === "outfit" ? "/" + F.outfit : ""} already exists`);
+    }
+    if (F.level === "character") await api("/api/character", { character:F.character, data });
+    else await api("/api/outfit", { character:F.character, outfit:F.outfit, data });
+  } catch (e) {
+    err.textContent = e.message.split("; ").join("\n"); err.style.display = "block";
+    return;
+  }
+  const key = F.outfit ? F.character + "/" + F.outfit : null, newChar = F.isNew && F.level === "character";
+  S.form = null;
+  await refresh();
+  if (newChar) return newOutfit(F.character, "body");      // a new character: its first outfit, its body
+  if (key && S.state.outfits.some(o => o.character + "/" + o.outfit === key && !o.error)) await select(key);
+  else drawNav();
+}
+
+// #<character>/<outfit>/<step> opens that outfit at that step; #settings/<character>[/<outfit>] its settings form
 (async () => {
   await refresh();
   const h = decodeURIComponent(location.hash.slice(1)).split("/");
+  if (h[0] === "settings" && h[1]) {                    // #settings/<character>[/<outfit>]: its settings form
+    const cfg = await api(`/api/config?character=${h[1]}${h[2] ? "&outfit=" + h[2] : ""}`);
+    if (h[2]) S.sel = h[1] + "/" + h[2];
+    return openForm({ level: h[2] ? "outfit" : "character", character:h[1], outfit:h[2],
+                      data: (h[2] ? cfg.outfit : cfg.character) || {} });
+  }
+  if (h[0] === "new") return h[1] ? newOutfit(h[1]) : newCharacter();   // #new: a character; #new/<character>: an outfit
+  if (h[0] === "character" && h[1]) return charPage(h[1]);              // #character/<c>: its page
   if (h.length >= 2) { await select(h[0] + "/" + h[1]); if (h[2]) pickStep(h[2]); }
 })();
 </script>

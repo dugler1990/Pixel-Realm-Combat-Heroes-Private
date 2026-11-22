@@ -135,3 +135,79 @@ def test_models_choice_is_kept_in_run_json(server):
     assert code == 200, r
     wait_idle(jobs)
     assert jobs.done[-1]["args"] == ["--models", "front_back_sides,eight_views", "--status"]
+
+
+# --- settings files made from the page ----------------------------------------------------------------------------
+
+def test_a_new_character_and_outfit_from_the_page(server, tmp_path, monkeypatch):
+    from tools.boss_sprite_pipeline import characters
+    monkeypatch.setattr(characters, "OUTFITS", tmp_path / "outfits")
+    base, *_ = server
+    fields = json.loads(get(base + "/api/fields")[1])
+    assert next(f for f in fields["fields"] if f["name"] == "rig_fit")["level"] == "character"
+    code, r = post(base + "/api/character", {"character": "wizard", "data": {"rig_fit": "w.glb", "kind": "body"}})
+    assert code == 400 and "kind belongs in an outfit file" in r["error"]
+    char = {"_about": "test", "rig_fit": "generated/bosses/wizard/rig.glb", "roles": "r.json", "clips_blend": "c.blend",
+            "clips_from": "barb", "roster": {"display_name": "Wizard"}}
+    assert post(base + "/api/character", {"character": "wizard", "data": char})[0] == 200
+    assert json.loads((tmp_path / "outfits" / "wizard" / "character.json").read_text(encoding="utf-8")) == char
+    robe = {"kind": "body", "pack": "wizard_robe", "front": "f", "back": "b", "paint_look": "l.json"}
+    code, r = post(base + "/api/outfit", {"character": "wizard", "outfit": "robe", "data": robe})
+    assert code == 200 and any(m.startswith("no concept") for m in r["missing"])   # named, never filled in
+    code, r = post(base + "/api/outfit", {"character": "wizard", "outfit": "robe",
+                                          "data": {**robe, "images": {"front": "generated/none.png"}}})
+    assert code == 400 and "images.front: no file" in r["error"]
+    code, r = post(base + "/api/upload", {"character": "wizard", "input": True, "name": "front.png",
+                                          "data": "data:image/png;base64,iVBORw0KGgo="})
+    assert code == 200 and r["rel"].startswith("generated/bosses/wizard/inputs/") and Path(r["path"]).is_file()
+    assert r["rel"] in json.loads(get(base + "/api/files?character=wizard&type=image")[1])["files"]
+    code, r = post(base + "/api/outfit", {"character": "wizard", "outfit": "robe", "data": {**robe, "concept": r["rel"]}})
+    assert code == 200, r
+    saved = json.loads((tmp_path / "outfits" / "wizard" / "robe.json").read_text(encoding="utf-8"))
+    assert saved["character"] == "wizard" and saved["concept"].endswith("front.png")
+    state = json.loads(get(base + "/api/state")[1])
+    row = next(o for o in state["outfits"] if o["outfit"] == "robe")
+    assert row["kind"] == "body" and "error" not in row
+    cfg = json.loads(get(base + "/api/config?character=wizard&outfit=robe")[1])
+    assert cfg["characters"] == {"wizard": ["robe"]} and cfg["outfit"]["pack"] == "wizard_robe"
+
+
+def test_names_and_broken_files(server, tmp_path, monkeypatch):
+    from tools.boss_sprite_pipeline import characters
+    monkeypatch.setattr(characters, "OUTFITS", tmp_path / "outfits")
+    base, *_ = server
+    for name in ("../x", "character", "a b"):
+        assert post(base + "/api/character", {"character": name, "data": {}})[0] == 400, name
+    assert post(base + "/api/outfit", {"character": "nobody", "outfit": "x", "data": {"kind": "body"}})[0] == 400
+    (tmp_path / "outfits" / "w").mkdir(parents=True)
+    (tmp_path / "outfits" / "w" / "character.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "outfits" / "w" / "hat.json").write_text('{"kind": "armour"}', encoding="utf-8")
+    row = json.loads(get(base + "/api/state")[1])["outfits"][0]
+    assert row["outfit"] == "hat" and "no character" in row["error"]       # listed with what is missing
+
+
+def test_run_on_stays_in_its_lane(server):
+    from tools.boss_sprite_pipeline import outfit as of
+    _, _, _, pod = server
+    ctx = of.Ctx("barb", "naked")                       # front done, back at its gate
+    assert ow.build_args(ctx, {"action": "on"}, pod) == ("back", ["--to", "trellis"], "local")
+    for s in ("back", "sides"):
+        ctx.run["steps"][s] = {"status": "done"}
+    with pytest.raises(ValueError, match="pod"):
+        ow.build_args(ctx, {"action": "on"}, pod)
+    pod.host, pod.port = "1.2.3.4", "22"
+    assert ow.build_args(ctx, {"action": "on"}, pod) == ("trellis", ["--to", "skeleton", "--host", "1.2.3.4",
+                                                                     "--port", "22"], "pod")
+
+
+def test_use_an_image_for_a_view(server, tmp_path):
+    base, run, jobs, _ = server
+    o = {"character": "barb", "outfit": "naked"}
+    code, r = post(base + "/api/do", {**o, "action": "use", "step": "front", "image": str(run / "pic.png")})
+    assert code == 200, r
+    wait_idle(jobs)
+    assert jobs.done[-1]["args"] == ["--only", "front", "--use", str(run / "pic.png")]
+    outside = tmp_path / "x.png"
+    outside.write_bytes(b"x")
+    for b in ({"step": "front", "image": str(outside)}, {"step": "trellis", "image": str(run / "pic.png")}):
+        assert post(base + "/api/do", {**o, "action": "use", **b})[0] == 400, b

@@ -1,0 +1,12 @@
+{
+ "_about": "The bare barb (with his loincloth): the wording of paint passes 1/2, once repaint.py's built-in default. The barb's outfit looks extend it (look_file.py).",
+ "subject": "barbarian hero",
+ "design": "warm tanned skin, dark brown hair tied in a top knot, full dark brown beard, brown leather loincloth on a leather belt, bare feet",
+ "match_part": "skin tone, hair, beard and leather colours",
+ "match_body": "skin tone, hair and beard colour, leather colour and painting style",
+ "body_paint": "Paint it in the hand-painted style of image 3: painterly skin with colour variation (warmer on the cheeks, shoulders, elbows, knees and knuckles, cooler and darker in the creases between muscles), clear muscle definition, individual hair and beard locks, readable fingers and toes, crisp eyes, nose and mouth where visible.",
+ "part_variation": "with painterly colour variation (warmer on the high points, cooler and darker in the creases)",
+ "safety": "He is a non-sexual, family-friendly game character wearing a leather loincloth. ",
+ "finish_part": "Matte and evenly lit: no cast shadows, no directional light, no shiny or oily highlights.",
+ "finish_body": "Keep it evenly lit: no cast shadows, no directional light, no shiny highlights painted in."
+}

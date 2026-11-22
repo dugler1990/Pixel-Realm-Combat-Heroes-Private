@@ -335,16 +335,10 @@ TARGETS = {
         roles="generated/bosses/anunaki/rig/anun3_roles.json",
         bind_match=False, arm_elev_cap=90.0, digitigrade=False,
     ),
-    # The barb (explode v2 armour tests, 2026-11-02): UniRig with literal roles from anun_roles.py,
-    # like the anunaki, so use --source anunaki. Painted, bone-heat rig; a human build with a real
-    # armpit, so the arm cap stays open.
-    "barb": dict(
-        # barb_final with its 752 neutral_bone (loincloth) vertices rehomed (explode2/fix_neutral_bone.py):
-        # they streaked behind him once the root travels (run, backstep)
-        rig="generated/bosses/barb/rigfix/barb_final_nb.glb",
-        roles="generated/bosses/barb/gear_test/barb_roles.json",
-        bind_match=False, arm_elev_cap=90.0, digitigrade=False,
-    ),
+    # Player characters (the barb, ...) are not here: their row comes from their character file
+    # (outfits/<c>/character.json "retarget" + rig_game + roles; characters.retarget_target). The barb's:
+    # UniRig with literal roles from anun_roles.py, so --source anunaki; bone-heat rig, a real armpit (cap
+    # open); rig_game = barb_final with its 752 neutral_bone vertices rehomed (explode2/fix_neutral_bone.py).
 }
 
 PAIRS = {
@@ -357,6 +351,12 @@ PAIRS = {
 
 SOURCE = (CLI_SOURCE or os.environ.get("SOURCE", "") or "soma").lower()
 TARGET = (CLI_TARGET or os.environ.get("TARGET", "") or "").lower()
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import characters  # noqa: E402
+if TARGET and TARGET not in TARGETS:
+    _row = characters.retarget_target(TARGET)
+    if _row is not None:
+        TARGETS[TARGET] = _row
 if SOURCE not in SOURCES:
     raise SystemExit("unknown --source %r; have %s" % (SOURCE, sorted(SOURCES)))
 if TARGET and TARGET not in TARGETS:
