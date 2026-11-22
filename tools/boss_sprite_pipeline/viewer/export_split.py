@@ -75,7 +75,9 @@ for a in acts:
     select([arm])
     p = os.path.join(OUT, "clips", "%s.glb" % a.name)
     bpy.ops.export_scene.gltf(filepath=p, export_format="GLB", use_selection=True,
-                              export_animations=True, export_animation_mode="ACTIONS",
+                              # ACTIVE_ACTIONS: this clip only. "ACTIONS" put every action of the blend in each
+                              # file (a 20-clip batch -> 20 per file, and the page played the first: wrong clip)
+                              export_animations=True, export_animation_mode="ACTIVE_ACTIONS",
                               export_nla_strips=False, export_bake_animation=True,
                               export_optimize_animation_size=False, export_apply=False)
     print("CLIP %-34s %5d frames  %6.1f KB"

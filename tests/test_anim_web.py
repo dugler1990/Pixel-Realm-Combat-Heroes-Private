@@ -5,21 +5,16 @@ import json
 import threading
 import urllib.error
 import urllib.request
-from pathlib import Path
 
 import pytest
 
 from tools.boss_sprite_pipeline import anim_web as aw
+from tools.boss_sprite_pipeline.rigging.map import character as C
+from tools.boss_sprite_pipeline.rigging.rig import version as V
+
+from test_rigging import _tiny_glb
 
 BVH = "HIERARCHY\nROOT Hips\n{\n  OFFSET 0 100 0\n  CHANNELS 6 Xposition Yposition Zposition Zrotation Yrotation Xrotation\n  JOINT Head\n  {\n    OFFSET 0 20 0\n    CHANNELS 3 Zrotation Yrotation Xrotation\n  }\n}\nMOTION\nFrames: 0\n"
-ROLES = {
-    "root": "bone_0", "spine": "bone_1", "spine2": "bone_2", "chest": "bone_3",
-    "neck": "bone_4", "head": "bone_5",
-    "arm_l": {"shoulder": "b6", "elbow": "b7", "wrist": "b8", "hand": "b9"},
-    "arm_r": {"shoulder": "b13", "elbow": "b14", "wrist": "b15", "hand": "b16"},
-    "leg_l": {"hip": "b20", "knee": "b21", "ankle": "b22", "foot": "b23"},
-    "leg_r": {"hip": "b24", "knee": "b25", "ankle": "b26", "foot": "b27"},
-}
 
 
 @pytest.fixture()
@@ -30,15 +25,13 @@ def server(tmp_path, monkeypatch):
     lib.mkdir(parents=True)
     (bosses / "clips").mkdir()
     (bosses / "clips" / "walk_v1_00.bvh").write_text(BVH, encoding="utf-8")
-    (bosses / "barb_roles.json").write_text(json.dumps(ROLES), encoding="utf-8")
     (lib / "index.json").write_text(json.dumps([
-        {"id": "walk_v1_00", "bvh": "bosses/clips/walk_v1_00.bvh", "prompt": None,
+        {"id": "walk_v1_00", "bvh": "bosses/clips/walk_v1_00.bvh", "source": "soma", "prompt": None,
          "model": None, "duration": None, "maps": {}}
     ]), encoding="utf-8")
-    (lib / "characters.json").write_text(json.dumps([
-        {"id": "barb", "recipe": "human", "target": "barb", "source": "soma",
-         "roles": "bosses/barb_roles.json", "base": None, "view": "bosses/barb/viewer/anim_suite"}
-    ]), encoding="utf-8")
+    glb = _tiny_glb(bosses / "barb" / "rig.glb", ["bone_0", "bone_5"])
+    V.import_v1("barb", str(glb), {"root": "bone_0", "head": "bone_5"}, "test")
+    C.create("barb", "human", rig=1)
     aw.JOBS = aw.Jobs()
     srv = aw.make_server(0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -68,10 +61,18 @@ def wait_idle(timeout=5):
         time.sleep(0.02)
 
 
-def test_list_and_bvh_and_the_path_jail(server, tmp_path):
+def test_state_lists_characters_from_their_files_with_versions_and_schema(server):
     base, _ = server
     state = json.loads(get(base + "/api/state")[1])
-    assert state["clips"][0]["id"] == "walk_v1_00"
+    barb = state["characters"][0]
+    assert barb["id"] == "barb" and barb["rig"] == 1 and barb["template"] == "human"
+    assert barb["versions"][0]["step"] == "import" and barb["versions"][0]["accepted"]
+    assert barb["settings"]["mode"] == {"value": "ik", "from": "character"}
+    assert {s["name"] for s in state["schema"]} >= {"mode", "bind", "arm_cap", "jaw_closed"}
+
+
+def test_list_and_bvh_and_the_path_jail(server, tmp_path):
+    base, _ = server
     assert get(base + "/bvh?id=walk_v1_00")[0] == 200
     with pytest.raises(urllib.error.HTTPError) as e:
         get(base + "/glb?path=../secret.glb")
@@ -83,14 +84,13 @@ def test_list_and_bvh_and_the_path_jail(server, tmp_path):
     assert e.value.code == 404
 
 
-def test_one_map_at_a_time_and_the_index_records_it(server, monkeypatch):
+def test_one_map_at_a_time_and_the_index_records_the_rig_version(server, monkeypatch):
     base, lib = server
     import time
 
     def fake(clip_id, character_id, lines):
-        lines.append("mapping " + clip_id)
         time.sleep(0.4)
-        return f"bosses/barb/viewer/anim_suite/clips/{clip_id}.glb"
+        return {"glb": f"characters/barb/view/v1/clips/{clip_id}.glb", "rig": 1, "bone_hash": "h", "bake": "x"}
 
     monkeypatch.setattr(aw, "run_map", fake)
     code, r = post(base + "/api/map", {"clip": "walk_v1_00", "character": "barb"})
@@ -99,22 +99,34 @@ def test_one_map_at_a_time_and_the_index_records_it(server, monkeypatch):
     assert code == 400 and "busy" in r["error"]
     wait_idle()
     index = json.loads((lib / "index.json").read_text(encoding="utf-8"))
-    assert index[0]["maps"]["barb"].endswith("walk_v1_00.glb")
-    assert aw.JOBS.done[-1]["rc"] == 0
+    assert index[0]["maps"]["barb"]["rig"] == 1
 
 
-def test_fit_patch_is_what_the_rebake_will_read(server, monkeypatch):
-    base, lib = server
-    monkeypatch.setattr(aw, "run_map", lambda c, k, lines: "bosses/barb/viewer/anim_suite/clips/walk_v1_00.glb")
-    code, r = post(base + "/api/fit", {"character": "barb", "clip": "walk_v1_00",
-                                      "patch": {"barrel_chest": 1, "arm_cap": 90, "bind_match": False,
-                                                "nope": 5}})
+def test_panel_edits_are_decisions_in_the_character_file(server, monkeypatch):
+    base, _ = server
+    monkeypatch.setattr(aw, "run_map", lambda c, k, lines: {"glb": "x", "rig": 1, "bone_hash": "h", "bake": "x"})
+    code, r = post(base + "/api/character", {"character": "barb",
+                                            "patch": {"arm_cap": 80, "bind": {"neck": True, "root": None}}})
     assert code == 200, r
-    saved = json.loads((lib / "fits" / "barb.json").read_text(encoding="utf-8"))
-    assert saved == {"barrel_chest": 1, "arm_cap": 90, "bind_match": False}
+    m = C.load("barb")["map"]
+    assert m["arm_cap"] == 80 and m["bind"] == {"neck": True}
+    code, r = post(base + "/api/character", {"character": "barb", "patch": {"arm_cap": 500}})
+    assert code == 400
+    code, r = post(base + "/api/character", {"character": "barb", "patch": {"barrel": 1}})
+    assert code == 400 and "unknown" in r["error"]
+    code, r = post(base + "/api/character", {"character": "barb", "patch": {}, "clip": "walk_v1_00"})
+    assert code == 200 and r["rebake"]
     wait_idle()
-    from tools.boss_sprite_pipeline.rigmap.fit import knob_env
-    assert knob_env(saved)["CLAVICLE_DAMP"] == "0.0000"
+
+
+def test_bake_report_flags_a_stale_bake(server, tmp_path):
+    base, _ = server
+    run = aw.bake_dir("barb", "walk_v1_00") / "run.json"
+    run.parent.mkdir(parents=True)
+    run.write_text(json.dumps({"rig": {"version": 1, "bone_hash": "old"}, "clips": {"walk_v1_00": {
+        "pose_check": {"worst": None}, "proportions": {}}}}), encoding="utf-8")
+    r = json.loads(get(base + "/api/bake?clip=walk_v1_00&character=barb")[1])
+    assert r["baked"] and r["stale"] and not r["older_rig"]
 
 
 def test_prompt_needs_a_pod_and_a_finished_cell_joins_the_list(server, monkeypatch):
@@ -133,16 +145,36 @@ def test_prompt_needs_a_pod_and_a_finished_cell_joins_the_list(server, monkeypat
     wait_idle()
     index = json.loads((lib / "index.json").read_text(encoding="utf-8"))
     row = next(c for c in index if c["id"] == "haymaker")
-    assert row["model"] == "Kimodo-SOMA-RP-v1"
-    assert row["bvh"].endswith("haymaker.bvh")
-    assert (lib / "bvh" / "haymaker.bvh").is_file()
+    assert row["model"] == "Kimodo-SOMA-RP-v1" and row["source"] == "soma"
 
 
-def test_match_on_the_fixture_reports_a_human_pair_count(server):
+def test_stop_kills_the_running_process_and_marks_the_job_stopped(server, monkeypatch):
+    import sys
+    import time
     base, _ = server
-    # The fixture BVH only has Hips and Head, so the pair set is the overlap, not 22.
+
+    def slow(clip_id, character_id, lines):
+        aw._run([sys.executable, "-c", "import time\nfor i in range(60):\n print(i, flush=True); time.sleep(0.5)"], lines)
+
+    monkeypatch.setattr(aw, "run_map", slow)
+    assert post(base + "/api/map", {"clip": "walk_v1_00", "character": "barb"})[0] == 200
+    for _ in range(50):                               # wait until the child is running and printing
+        job = aw.JOBS.lanes["local"]
+        if job and job.get("proc") and job["lines"][-1:] != [] and job["lines"][-1].strip().isdigit():
+            break
+        time.sleep(0.1)
+    t0 = time.time()
+    code, r = post(base + "/api/stop", {})
+    assert code == 200 and r["stopped"]
+    wait_idle()
+    assert time.time() - t0 < 5
+    done = aw.JOBS.done[-1]
+    assert done["rc"] == 2 and "STOPPED" in done["lines"][-1]
+
+
+def test_match_reads_the_rig_version_roles(server):
+    base, _ = server
     status, body = get(base + "/api/match?clip=walk_v1_00&character=barb")
     assert status == 200
     report = json.loads(body)
-    assert "head" in report["roles"]
-    assert report["recipe"] == "human"
+    assert set(report["roles"]) == {"root", "head"} and report["rig"] == 1
