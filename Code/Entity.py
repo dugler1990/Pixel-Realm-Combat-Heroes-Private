@@ -1153,6 +1153,8 @@ class Entity(pygame.sprite.Sprite):
         temperature.forget(self, pygame.time.get_ticks())
         import venom
         venom.forget(self)
+        import stuck_arrows
+        stuck_arrows.forget(self)
         self.on_death()
 
     def on_death(self):

@@ -527,6 +527,8 @@ class InteractionResolver:
             ctx.amount = landed(priced)
             apply_element(ctx, priced, self._now_ms())
             apply_venom(ctx, priced, self._now_ms())
+            import stuck_arrows
+            stuck_arrows.keep(ctx, priced, self._now_ms())
             return
         ctx.amount = flat(ctx)
 

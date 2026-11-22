@@ -51,6 +51,8 @@ RULES = [
      {"damage_rules.py": "sacred", "damage_data.py": "the loader"}),
     ("no venom has code of its own: venoms are rows in venoms.json",
      r"[\"'](snake|plant|scorpion|frog)_venom[\"']", {}),
+    ("stuck arrows are stored only by stuck_arrows.py", r"\.stuck_arrows\s*=(?!=)|stuck_arrows\.append",
+     {"stuck_arrows.py": "the store"}),
 ]
 
 

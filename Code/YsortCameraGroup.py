@@ -545,6 +545,10 @@ class YSortCameraGroup(pygame.sprite.Group):
             if area.colliderect(player.rect) and building.depth(feet) >= 0:
                 self.backend.blit(image_section, (area.x - self.offset.x, area.y - self.offset.y))
 
+        if getattr(player, "stuck_arrows", None):
+            import stuck_arrows
+            stuck_arrows.draw(self, player, pygame.time.get_ticks())
+
         # Sky layer: descending rocks (and similar) over units / roofs while still high.
         for sprite in aerial_sprites:
             offset_pos = sprite.rect.topleft - self.offset

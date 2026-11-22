@@ -736,3 +736,11 @@ hit on a body card uses the elemental rule.
   belt potion (snake class). Snake and venom plant immune. Tests: test_venom 9, test_rules_magic
   14, the touched files 62, guard 10 (2 new rules). Headless: holy 16 per bolt on the demon, 4 on
   the barb in plate; venom none on plate, snake + frog on skin, potion drunk 3 -> 2. Not watched.
+- 2026-11-22: damage 11, stuck arrows (`feat/stuck-arrows`, plan `PLAN_stuck_arrows.md`). Player
+  only. `stuck_arrows.py`: kept when a pierce that stops (`stops`) went in: flesh, or a layer that
+  `catches` (new layer bool, default true; plate false). Stored as the worn-cloud point and the
+  travel in the body frame; placed each frame from the posed points with the mesh's own projection,
+  drawn when the point is in front (depth against the outline's front point, 3 px). 8 kept, 60 s,
+  dropped on death or a change of worn pieces. Tests: test_stuck_arrows 5; touched files 69; guard
+  11. Headless `stuck_arrows`: 12 landed (plate and skin), 8 stuck, 5 drawn. Not watched.
+  The scene runner is now `test_suite.py` / `test_suite_driver.py` (renamed on main by another chat).

@@ -153,6 +153,7 @@ class BasePlayer(Entity):
         self.upgrade_cost = {"health": 100, "energy": 100, "attack": 100, "magic": 100, "speed": 100}
         # Upgrade UI must match max_stats / upgrade_cost keys (not len(self.stats), which may include vitality etc.)
         self.upgrade_stat_order = tuple(self.max_stats.keys())
+        self.keeps_arrows = True          # arrows that go in stay stuck on his mesh (stuck_arrows.py)
         self.health = self.stats["health"]
         self.energy = self.stats["energy"]
         self.stamina = max_stamina(self.stats)

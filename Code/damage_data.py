@@ -269,7 +269,7 @@ LAYER_NUMBERS = ("stopping_power", "absorb", "flammability", "conductivity", "in
 LAYER_SHARES = ("absorb", "flammability", "conductivity", "insulation", "sun_absorb")   # 0..1
 # A missing number is 0, except these: skin and hides soak up half the sun.
 LAYER_DEFAULTS = {"sun_absorb": 0.5}
-_LAYER_FIELDS = frozenset(LAYER_NUMBERS + ("sealed",))
+_LAYER_FIELDS = frozenset(LAYER_NUMBERS + ("sealed", "catches"))
 _BODY_FIELDS = frozenset(("kind", "natural", "resist", "starts"))
 
 
@@ -277,13 +277,14 @@ class LayerDef:
     """One layer between a hit and the flesh: a worn piece's base or a body's natural hide.
     Shared: never change one after load (wear, chunk 10, keeps its own state)."""
 
-    __slots__ = LAYER_NUMBERS + ("sealed", "name")
+    __slots__ = LAYER_NUMBERS + ("sealed", "catches", "name")
 
     def __init__(self, name, **fields):
         self.name = name
         for field in LAYER_NUMBERS:
             setattr(self, field, fields.get(field, LAYER_DEFAULTS.get(field, 0)))
         self.sealed = fields.get("sealed", False)
+        self.catches = fields.get("catches", True)     # an arrow that stops in it stays stuck (chunk 11)
 
     def __repr__(self):
         return f"LayerDef({self.name!r})"
@@ -325,7 +326,10 @@ def layer_def(name, fields, where, extra=()):
     sealed = fields.get("sealed", False)
     if not isinstance(sealed, bool):
         raise DamageDataError(f"{where}: sealed must be true or false")
-    return LayerDef(name, sealed=sealed, **clean)
+    catches = fields.get("catches", True)
+    if not isinstance(catches, bool):
+        raise DamageDataError(f"{where}: catches must be true or false")
+    return LayerDef(name, sealed=sealed, catches=catches, **clean)
 
 
 def load_kinds(path=KINDS_PATH):

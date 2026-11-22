@@ -32,6 +32,10 @@ class Physical:
                 f"flesh={self.reached_flesh}, stopped={self.stopped_at!r})")
 
 
+STUCK_MAX = 8          # stuck arrows kept on one body (chunk 11); the oldest goes
+STUCK_MS = 60_000      # how long one stays
+
+
 def landed(result):
     """The int subtracted from health: the blow, then the elemental wound, each rounded."""
     extra = getattr(result, "elemental_wound", 0.0) or 0.0
